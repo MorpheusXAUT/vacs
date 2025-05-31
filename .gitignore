@@ -142,3 +142,6 @@ Cargo.lock
 *.mp3
 *.ogg
 *.opus
+
+# Local configuration
+config.toml
