@@ -4,6 +4,7 @@ use crate::ws::message::send_message;
 use axum::extract::ws;
 use axum::extract::ws::WebSocket;
 use futures_util::stream::SplitSink;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use vacs_shared::signaling::Message;
 
@@ -12,7 +13,7 @@ pub async fn handle_application_message(
     client: &ClientSession,
     websocket_tx: &mut SplitSink<WebSocket, ws::Message>,
     message: Message,
-) {
+) -> ControlFlow<(), ()> {
     tracing::trace!(?message, "Handling application message");
 
     match message {
@@ -22,27 +23,33 @@ pub async fn handle_application_message(
             if let Err(err) = send_message(websocket_tx, Message::ClientList { clients }).await {
                 tracing::warn!(?err, "Failed to send client list");
             }
+            ControlFlow::Continue(())
         }
         Message::Logout => {
             tracing::trace!("Logging out client");
-            // TODO logout client
+            ControlFlow::Break(())
         }
         Message::CallOffer { peer_id, sdp } => {
             handle_call_offer(&state, &client, websocket_tx, &peer_id, &sdp).await;
+            ControlFlow::Continue(())
         }
         Message::CallAnswer { peer_id, sdp } => {
             handle_call_answer(&state, &client, websocket_tx, &peer_id, &sdp).await;
+            ControlFlow::Continue(())
         }
         Message::CallReject { peer_id } => {
             handle_call_reject(&state, &client, websocket_tx, &peer_id).await;
+            ControlFlow::Continue(())
         }
         Message::CallIceCandidate { peer_id, candidate } => {
             handle_call_ice_candidate(&state, &client, websocket_tx, &peer_id, &candidate).await;
+            ControlFlow::Continue(())
         }
         Message::CallEnd { peer_id } => {
             handle_call_end(&state, &client, websocket_tx, &peer_id).await;
+            ControlFlow::Continue(())
         }
-        _ => {}
+        _ => ControlFlow::Continue(()),
     }
 }
 

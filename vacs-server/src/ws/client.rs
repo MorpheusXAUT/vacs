@@ -5,6 +5,7 @@ use crate::ws::message::{MessageResult, send_message};
 use axum::extract::ws;
 use axum::extract::ws::WebSocket;
 use futures_util::stream::{SplitSink, SplitStream};
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, watch};
 use vacs_shared::signaling;
@@ -65,7 +66,13 @@ impl ClientSession {
                 message_result = receive_message(websocket_rx) => {
                     match message_result {
                         MessageResult::ApplicationMessage(message) => {
-                            handle_application_message(app_state, self, websocket_tx, message).await;
+                            match handle_application_message(app_state, self, websocket_tx, message).await {
+                                ControlFlow::Continue(()) => continue,
+                                ControlFlow::Break(()) => {
+                                    tracing::debug!("Breaking interaction loop");
+                                    break;
+                                },
+                            }
                         }
                         MessageResult::ControlMessage => continue,
                         MessageResult::Disconnected => {
@@ -82,6 +89,7 @@ impl ClientSession {
                 message = rx.recv() => {
                     match message {
                         Some(message) => {
+                            tracing::trace!("Received direct message");
                             if let Err(err) = send_message(websocket_tx, message).await {
                                 tracing::warn!(?err, "Failed to send direct message");
                             }
@@ -96,6 +104,7 @@ impl ClientSession {
                 message = broadcast_rx.recv() => {
                     match message {
                         Ok(message) => {
+                            tracing::trace!("Received broadcast message");
                             if let Err(err) = send_message(websocket_tx, message).await {
                                 tracing::warn!(?err, "Failed to send broadcast message");
                             }

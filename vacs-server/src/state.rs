@@ -53,7 +53,7 @@ impl AppState {
             .await
             .insert(client_id.to_string(), client.clone());
 
-        if self.broadcast_tx.receiver_count() > 1 {
+        if self.broadcast_tx.receiver_count() > 0 {
             tracing::trace!("Broadcasting client connected message");
             if let Err(err) = self.broadcast_tx.send(Message::ClientConnected {
                 client: client.get_client_info().clone(),

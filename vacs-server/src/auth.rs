@@ -36,12 +36,11 @@ pub async fn handle_login(
                         }
                         return None;
                     }
-                    tracing::Span::current().record("client_id", &id);
                     tracing::trace!("Login flow completed");
                     Some(id)
                 }
                 MessageResult::ApplicationMessage(message) => {
-                    tracing::debug!(?message, "Received unexpected message during login flow");
+                    tracing::debug!(msg = ?message, "Received unexpected message during login flow");
                     let login_failure_message = signaling::Message::LoginFailure {
                         reason: signaling::LoginFailureReason::InvalidLoginFlow,
                     };
