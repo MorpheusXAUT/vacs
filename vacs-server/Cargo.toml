@@ -8,7 +8,7 @@ publish.workspace = true
 axum = { version = "0.8.4", features = ["ws"] }
 futures-util = "0.3.31"
 tokio = { workspace = true }
-tower-http = { version = "0.6.5", features = ["trace"] }
+tower-http = { version = "0.6.5", features = ["trace", "timeout"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 vacs-shared = { path = "../vacs-shared" }

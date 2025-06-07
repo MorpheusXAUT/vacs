@@ -22,13 +22,11 @@ pub enum ClientStatus {
 
 /// Represents a client as observed by the signaling server.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Client {
+pub struct ClientInfo {
     /// ID of the client.
     pub id: String,
     /// Display (station) name of the client.
     pub display_name: String,
-    /// Current status of the client.
-    pub status: ClientStatus,
 }
 
 /// Represents a message exchanged between the signaling server and clients.
@@ -111,6 +109,16 @@ pub enum Message {
     },
     /// A message sent by the signaling server if no peer with the given ID was found.
     PeerNotFound,
+    /// A message broadcasted by the signaling server when a new client connects.
+    ClientConnected {
+        /// Information about the newly connected client.
+        client: ClientInfo,
+    },
+    /// A message broadcasted by the signaling server when a client disconnects.
+    ClientDisconnected {
+        /// ID of the disconnected client.
+        id: String,
+    },
     /// A message sent by a client to request a list of all currently connected clients.
     ListClients,
     /// A message sent by the signaling server, containing a full list of all currently connected clients.
@@ -119,14 +127,7 @@ pub enum Message {
     /// and as a response to [`Message::ListClients`] requests.
     ClientList {
         /// List of all currently connected clients.
-        clients: Vec<Client>,
-    },
-    /// A message broadcasted by the signaling server to all connected clients, containing an update of a specific client.
-    ///
-    /// This will trigger whenever a client connects or disconnects.
-    ClientUpdate {
-        /// Updated client.
-        client: Client,
+        clients: Vec<ClientInfo>,
     },
     /// Generic error message sent by either a client or the signaling server.
     /// This could indicate an error processing the last received message or signals a failure with the last request.
@@ -310,6 +311,52 @@ mod tests {
     }
 
     #[test]
+    fn test_serialize_deserialize_client_connected() {
+        let message = Message::ClientConnected {
+            client: ClientInfo {
+                id: "client1".to_string(),
+                display_name: "station1".to_string(),
+            },
+        };
+
+        let serialized = Message::serialize(&message).unwrap();
+        assert_eq!(
+            serialized,
+            "{\"ClientConnected\":{\"client\":{\"id\":\"client1\",\"display_name\":\"station1\"}}}"
+        );
+
+        let deserialized = Message::deserialize(&serialized).unwrap();
+        match deserialized {
+            Message::ClientConnected { client } => {
+                assert_eq!(client.id, "client1");
+                assert_eq!(client.display_name, "station1");
+            }
+            _ => panic!("Expected ClientConnected message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_deserialize_client_disconnected() {
+        let message = Message::ClientDisconnected {
+            id: "client1".to_string(),
+        };
+
+        let serialized = Message::serialize(&message).unwrap();
+        assert_eq!(
+            serialized,
+            "{\"ClientDisconnected\":{\"id\":\"client1\"}}"
+        );
+
+        let deserialized = Message::deserialize(&serialized).unwrap();
+        match deserialized {
+            Message::ClientDisconnected { id } => {
+                assert_eq!(id, "client1");
+            }
+            _ => panic!("Expected ClientDisconnected message"),
+        }
+    }
+
+    #[test]
     fn test_serialize_deserialize_list_clients() {
         let message = Message::ListClients {};
 
@@ -324,15 +371,13 @@ mod tests {
     fn test_serialize_deserialize_client_list() {
         let message = Message::ClientList {
             clients: vec![
-                Client {
+                ClientInfo {
                     id: "client1".to_string(),
                     display_name: "station1".to_string(),
-                    status: ClientStatus::Connected,
                 },
-                Client {
+                ClientInfo {
                     id: "client2".to_string(),
                     display_name: "station2".to_string(),
-                    status: ClientStatus::Disconnected,
                 },
             ],
         };
@@ -340,7 +385,7 @@ mod tests {
         let serialized = Message::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"ClientList\":{\"clients\":[{\"id\":\"client1\",\"display_name\":\"station1\",\"status\":\"Connected\"},{\"id\":\"client2\",\"display_name\":\"station2\",\"status\":\"Disconnected\"}]}}"
+            "{\"ClientList\":{\"clients\":[{\"id\":\"client1\",\"display_name\":\"station1\"},{\"id\":\"client2\",\"display_name\":\"station2\"}]}}"
         );
 
         let deserialized = Message::deserialize(&serialized).unwrap();
@@ -348,37 +393,9 @@ mod tests {
             Message::ClientList { clients } => {
                 assert_eq!(clients.len(), 2);
                 assert_eq!(clients[0].id, "client1");
-                assert_eq!(clients[0].status, ClientStatus::Connected);
                 assert_eq!(clients[1].id, "client2");
-                assert_eq!(clients[1].status, ClientStatus::Disconnected);
             }
             _ => panic!("Expected CallIceCandidate message"),
-        }
-    }
-
-    #[test]
-    fn test_serialize_deserialize_client_update() {
-        let message = Message::ClientUpdate {
-            client: Client {
-                id: "client1".to_string(),
-                display_name: "station1".to_string(),
-                status: ClientStatus::Connected,
-            },
-        };
-
-        let serialized = Message::serialize(&message).unwrap();
-        assert_eq!(
-            serialized,
-            "{\"ClientUpdate\":{\"client\":{\"id\":\"client1\",\"display_name\":\"station1\",\"status\":\"Connected\"}}}"
-        );
-
-        let deserialized = Message::deserialize(&serialized).unwrap();
-        match deserialized {
-            Message::ClientUpdate { client } => {
-                assert_eq!(client.id, "client1");
-                assert_eq!(client.status, ClientStatus::Connected);
-            }
-            _ => panic!("Expected ClientUpdate message"),
         }
     }
 
