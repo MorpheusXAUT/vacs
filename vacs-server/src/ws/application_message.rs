@@ -1,17 +1,15 @@
 use crate::state::AppState;
-use crate::ws::ClientSession;
 use crate::ws::message::send_message;
-use axum::extract::ws;
-use axum::extract::ws::WebSocket;
-use futures_util::stream::SplitSink;
+use crate::ws::ClientSession;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use vacs_shared::signaling::Message;
+use crate::ws::traits::WebSocketSink;
 
-pub async fn handle_application_message(
+pub async fn handle_application_message<T: WebSocketSink>(
     state: &Arc<AppState>,
     client: &ClientSession,
-    websocket_tx: &mut SplitSink<WebSocket, ws::Message>,
+    websocket_tx: &mut T,
     message: Message,
 ) -> ControlFlow<(), ()> {
     tracing::trace!(?message, "Handling application message");
@@ -53,10 +51,10 @@ pub async fn handle_application_message(
     }
 }
 
-async fn handle_call_offer(
+async fn handle_call_offer<T: WebSocketSink>(
     state: &AppState,
     client: &ClientSession,
-    websocket_tx: &mut SplitSink<WebSocket, ws::Message>,
+    websocket_tx: &mut T,
     peer_id: &str,
     sdp: &str,
 ) {
@@ -73,10 +71,10 @@ async fn handle_call_offer(
         .await;
 }
 
-async fn handle_call_answer(
+async fn handle_call_answer<T: WebSocketSink>(
     state: &AppState,
     client: &ClientSession,
-    websocket_tx: &mut SplitSink<WebSocket, ws::Message>,
+    websocket_tx: &mut T,
     peer_id: &str,
     sdp: &str,
 ) {
@@ -93,10 +91,10 @@ async fn handle_call_answer(
         .await;
 }
 
-async fn handle_call_reject(
+async fn handle_call_reject<T: WebSocketSink>(
     state: &AppState,
     client: &ClientSession,
-    websocket_tx: &mut SplitSink<WebSocket, ws::Message>,
+    websocket_tx: &mut T,
     peer_id: &str,
 ) {
     tracing::trace!(?peer_id, "Handling call rejection");
@@ -111,10 +109,10 @@ async fn handle_call_reject(
         .await;
 }
 
-async fn handle_call_ice_candidate(
+async fn handle_call_ice_candidate<T: WebSocketSink>(
     state: &AppState,
     client: &ClientSession,
-    websocket_tx: &mut SplitSink<WebSocket, ws::Message>,
+    websocket_tx: &mut T,
     peer_id: &str,
     candidate: &str,
 ) {
@@ -131,10 +129,10 @@ async fn handle_call_ice_candidate(
         .await;
 }
 
-async fn handle_call_end(
+async fn handle_call_end<T: WebSocketSink>(
     state: &AppState,
     client: &ClientSession,
-    websocket_tx: &mut SplitSink<WebSocket, ws::Message>,
+    websocket_tx: &mut T,
     peer_id: &str,
 ) {
     tracing::trace!(?peer_id, "Handling call end");

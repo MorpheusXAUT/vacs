@@ -1,10 +1,7 @@
 use crate::state::AppState;
 use crate::ws::application_message::handle_application_message;
-use crate::ws::message::receive_message;
-use crate::ws::message::{MessageResult, send_message};
-use axum::extract::ws;
-use axum::extract::ws::WebSocket;
-use futures_util::stream::{SplitSink, SplitStream};
+use crate::ws::message::{receive_message, send_message, MessageResult};
+use crate::ws::traits::{WebSocketSink, WebSocketStream};
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, watch};
@@ -37,11 +34,11 @@ impl ClientSession {
             .map_err(|err| anyhow::anyhow!(err).context("Failed to send message"))
     }
 
-    pub async fn handle_interaction(
+    pub async fn handle_interaction<R: WebSocketStream, T: WebSocketSink>(
         &mut self,
         app_state: &Arc<AppState>,
-        websocket_rx: &mut SplitStream<WebSocket>,
-        websocket_tx: &mut SplitSink<WebSocket, ws::Message>,
+        websocket_rx: &mut R,
+        websocket_tx: &mut T,
         broadcast_rx: &mut broadcast::Receiver<Message>,
         rx: &mut mpsc::Receiver<Message>,
         shutdown_rx: &mut watch::Receiver<()>,
