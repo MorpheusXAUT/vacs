@@ -26,12 +26,12 @@ pub async fn ws_handler(
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     tracing::trace!("Handling new websocket connection");
 
-    let (mut websocket_sender, mut websocket_receiver) = socket.split();
+    let (mut websocket_tx, mut websocket_rx) = socket.split();
 
     let client_id = match handle_login(
         &state.config.auth,
-        &mut websocket_receiver,
-        &mut websocket_sender,
+        &mut websocket_rx,
+        &mut websocket_tx,
     )
     .await
     {
@@ -45,7 +45,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         Ok(client) => client,
         Err(_) => {
             if let Err(err) = send_message(
-                &mut websocket_sender,
+                &mut websocket_tx,
                 Message::LoginFailure {
                     reason: LoginFailureReason::IdTaken,
                 },
@@ -63,8 +63,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     client
         .handle_interaction(
             &state,
-            &mut websocket_receiver,
-            &mut websocket_sender,
+            websocket_rx,
+            websocket_tx,
             &mut broadcast_rx,
             &mut rx,
             &mut shutdown_rx,

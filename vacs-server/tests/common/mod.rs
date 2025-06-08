@@ -1,4 +1,5 @@
 use futures_util::{SinkExt, StreamExt};
+use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -212,23 +213,6 @@ pub async fn setup_test_clients(
         test_clients.insert(client.id.clone(), client);
     }
     test_clients
-}
-
-#[allow(unused)]
-pub fn init_test_tracing() {
-    static INIT: std::sync::Once = std::sync::Once::new();
-    INIT.call_once(|| {
-        let subscriber = tracing_subscriber::fmt()
-            .with_env_filter(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| "trace".parse().unwrap()),
-            )
-            .with_test_writer()
-            .finish();
-
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("Failed to set global default tracing_subscriber");
-    });
 }
 
 #[allow(unused)]

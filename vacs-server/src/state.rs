@@ -1,12 +1,12 @@
 use crate::config;
 use crate::config::AppConfig;
 use crate::ws::ClientSession;
+use crate::ws::traits::WebSocketSink;
 use axum::extract::ws;
 use futures_util::SinkExt;
 use std::collections::HashMap;
 use tokio::sync::{RwLock, broadcast, mpsc, watch};
 use vacs_shared::signaling::{ClientInfo, Message};
-use crate::ws::traits::WebSocketSink;
 
 pub struct AppState {
     pub config: AppConfig,
@@ -110,7 +110,7 @@ impl AppState {
         self.clients.read().await.get(client_id).cloned()
     }
 
-    pub async fn send_message_to_peer<T:WebSocketSink>(
+    pub async fn send_message_to_peer<T: WebSocketSink>(
         &self,
         client_websocket_tx: &mut T,
         peer_id: &str,

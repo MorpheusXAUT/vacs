@@ -1,7 +1,8 @@
 use axum::extract::ws;
-use futures_util::{Sink, SinkExt};
-use futures_util::{Stream, StreamExt};
+use futures_util::SinkExt;
+use futures_util::StreamExt;
 use vacs_shared::signaling;
+use crate::ws::traits::{WebSocketSink, WebSocketStream};
 
 /// Represents the outcome of [`receive_message`], indicating whether the message received should be handled, skipped or receiving errored.
 #[derive(Debug)]
@@ -30,13 +31,10 @@ impl PartialEq for MessageResult {
     }
 }
 
-pub async fn send_message<S>(
-    websocket_tx: &mut S,
+pub async fn send_message<T: WebSocketSink>(
+    websocket_tx: &mut T,
     message: signaling::Message,
 ) -> anyhow::Result<()>
-where
-    S: Sink<ws::Message> + Unpin,
-    S::Error: std::error::Error + Send + Sync + 'static,
 {
     let serialized_message = signaling::Message::serialize(&message)
         .map_err(|e| anyhow::anyhow!(e).context("Failed to serialize message"))?;
@@ -47,9 +45,7 @@ where
     Ok(())
 }
 
-pub async fn receive_message<S>(websocket_rx: &mut S) -> MessageResult
-where
-    S: Stream<Item = Result<ws::Message, axum::Error>> + Unpin,
+pub async fn receive_message<R: WebSocketStream>(websocket_rx: &mut R) -> MessageResult
 {
     match websocket_rx.next().await {
         Some(Ok(ws::Message::Text(raw_message))) => {
@@ -85,8 +81,9 @@ where
 mod tests {
     use super::*;
     use crate::ws::test_util::*;
+    use pretty_assertions::assert_eq;
     use std::sync::Arc;
-    use tokio::sync::{mpsc, Mutex};
+    use tokio::sync::{Mutex, mpsc};
     use tokio_tungstenite::tungstenite;
 
     #[tokio::test]

@@ -1,5 +1,5 @@
-use axum::extract::ws::Message;
 use axum::Error;
+use axum::extract::ws::Message;
 use futures_util::{Sink, Stream};
 
 pub trait WebSocketSink: Sink<Message, Error = Error> + Unpin + Send {}

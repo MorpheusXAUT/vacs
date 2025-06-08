@@ -20,3 +20,7 @@ directories = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+test-log = { version = "0.2.17", features = ["trace"] }

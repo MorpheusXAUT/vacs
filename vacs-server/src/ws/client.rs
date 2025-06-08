@@ -5,6 +5,7 @@ use crate::ws::traits::{WebSocketSink, WebSocketStream};
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, watch};
+use tracing::Instrument;
 use vacs_shared::signaling;
 use vacs_shared::signaling::Message;
 
@@ -34,11 +35,11 @@ impl ClientSession {
             .map_err(|err| anyhow::anyhow!(err).context("Failed to send message"))
     }
 
-    pub async fn handle_interaction<R: WebSocketStream, T: WebSocketSink>(
+    pub async fn handle_interaction<R: WebSocketStream + 'static, T: WebSocketSink + 'static>(
         &mut self,
         app_state: &Arc<AppState>,
-        websocket_rx: &mut R,
-        websocket_tx: &mut T,
+        mut websocket_rx: R,
+        mut websocket_tx: T,
         broadcast_rx: &mut broadcast::Receiver<Message>,
         rx: &mut mpsc::Receiver<Message>,
         shutdown_rx: &mut watch::Receiver<()>,
@@ -47,9 +48,33 @@ impl ClientSession {
 
         tracing::trace!("Sending initial client list");
         let clients = app_state.list_clients().await;
-        if let Err(err) = send_message(websocket_tx, Message::ClientList { clients }).await {
+        if let Err(err) = send_message(&mut websocket_tx, Message::ClientList { clients }).await {
             tracing::warn!(?err, "Failed to send initial client list");
         }
+
+        let (ws_tx, mut ws_rx) = mpsc::channel(10);
+        tokio::spawn(async move {
+            loop {
+                let message_result = receive_message(&mut websocket_rx).await;
+                match message_result {
+                    MessageResult::ApplicationMessage(message) => {
+                        tracing::trace!("Forwarding message to application");
+                        if let Err(err) = ws_tx.send(message).await {
+                            tracing::warn!(?err, "Failed to forward message to application");
+                        }
+                    }
+                    MessageResult::ControlMessage => continue,
+                    MessageResult::Disconnected => {
+                        tracing::debug!("Client disconnected");
+                        break;
+                    }
+                    MessageResult::Error(err) => {
+                        tracing::warn!(?err, "Error while receiving message from client");
+                        break;
+                    }
+                }
+            }
+        }.instrument(tracing::Span::current()));
 
         loop {
             tokio::select! {
@@ -60,10 +85,10 @@ impl ClientSession {
                     break;
                 }
 
-                message_result = receive_message(websocket_rx) => {
-                    match message_result {
-                        MessageResult::ApplicationMessage(message) => {
-                            match handle_application_message(app_state, self, websocket_tx, message).await {
+                message = ws_rx.recv() => {
+                    match message {
+                        Some(message) => {
+                            match handle_application_message(app_state, self, &mut websocket_tx, message).await {
                                 ControlFlow::Continue(()) => continue,
                                 ControlFlow::Break(()) => {
                                     tracing::debug!("Breaking interaction loop");
@@ -71,13 +96,8 @@ impl ClientSession {
                                 },
                             }
                         }
-                        MessageResult::ControlMessage => continue,
-                        MessageResult::Disconnected => {
-                            tracing::debug!("Client disconnected");
-                            break;
-                        }
-                        MessageResult::Error(err) => {
-                            tracing::warn!(?err, "Error while receiving message from client");
+                        None => {
+                            tracing::debug!("Application receiver closed, disconnecting client");
                             break;
                         }
                     }
@@ -87,7 +107,7 @@ impl ClientSession {
                     match message {
                         Some(message) => {
                             tracing::trace!("Received direct message");
-                            if let Err(err) = send_message(websocket_tx, message).await {
+                            if let Err(err) = send_message(&mut websocket_tx, message).await {
                                 tracing::warn!(?err, "Failed to send direct message");
                             }
                         }
@@ -102,7 +122,7 @@ impl ClientSession {
                     match message {
                         Ok(message) => {
                             tracing::trace!("Received broadcast message");
-                            if let Err(err) = send_message(websocket_tx, message).await {
+                            if let Err(err) = send_message(&mut websocket_tx, message).await {
                                 tracing::warn!(?err, "Failed to send broadcast message");
                             }
                         }
@@ -121,78 +141,11 @@ impl ClientSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::AppConfig;
-    use crate::ws::test_util::{MockSink, MockStream};
+    use crate::ws::test_util::TestSetup;
     use axum::extract::ws;
     use axum::extract::ws::Utf8Bytes;
-    use std::sync::Mutex;
+    use pretty_assertions::assert_eq;
     use vacs_shared::signaling::ClientInfo;
-
-    struct TestSetup {
-        pub app_state: Arc<AppState>,
-        pub session: ClientSession,
-        pub mock_sink: MockSink,
-        pub mock_stream: MockStream,
-        pub websocket_rx: Arc<Mutex<mpsc::UnboundedReceiver<ws::Message>>>,
-        pub rx: mpsc::Receiver<Message>,
-        pub broadcast_rx: broadcast::Receiver<Message>,
-        pub shutdown_tx: watch::Sender<()>,
-    }
-
-    impl TestSetup {
-        fn new() -> Self {
-            let (shutdown_tx, shutdown_rx) = watch::channel(());
-            let app_state = Arc::new(AppState::new(AppConfig::default(), shutdown_rx));
-            let client_info = ClientInfo {
-                id: "client1".to_string(),
-                display_name: "Client 1".to_string(),
-            };
-            let (tx, rx) = mpsc::channel(10);
-            let session = ClientSession::new(client_info, tx);
-            let (websocket_tx, websocket_rx) = mpsc::unbounded_channel();
-            let mock_sink = MockSink::new(websocket_tx);
-            let mock_stream = MockStream::new(vec![]);
-            let (_broadcast_tx, broadcast_rx) = broadcast::channel(10);
-
-            Self {
-                app_state,
-                session,
-                mock_sink,
-                mock_stream,
-                websocket_rx: Arc::new(Mutex::new(websocket_rx)),
-                rx,
-                broadcast_rx,
-                shutdown_tx,
-            }
-        }
-
-        fn with_messages(mut self, messages: Vec<Result<ws::Message, axum::Error>>) -> Self {
-            self.mock_stream = MockStream::new(messages);
-            self
-        }
-
-        async fn register_client(
-            &self,
-            client_id: &str,
-        ) -> anyhow::Result<(ClientSession, mpsc::Receiver<Message>)> {
-            self.app_state.register_client(client_id).await
-        }
-
-        fn spawn_handle_interaction(mut self) -> tokio::task::JoinHandle<()> {
-            tokio::spawn(async move {
-                self.session
-                    .handle_interaction(
-                        &self.app_state,
-                        &mut self.mock_stream,
-                        &mut self.mock_sink,
-                        &mut self.broadcast_rx,
-                        &mut self.rx,
-                        &mut self.shutdown_tx.subscribe(),
-                    )
-                    .await
-            })
-        }
-    }
 
     #[tokio::test]
     async fn new_client_session() {
@@ -253,10 +206,10 @@ mod tests {
     #[tokio::test]
     async fn initial_client_list() {
         let setup = TestSetup::new();
-        setup.register_client("client1").await.unwrap();
+        setup.register_client("client1").await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_handle_interaction();
+        let handle_task = setup.spawn_session_handle_interaction();
 
         let message = websocket_rx.lock().unwrap().recv().await;
         match message {
@@ -279,10 +232,10 @@ mod tests {
         let setup = TestSetup::new().with_messages(vec![Ok(ws::Message::Text(
             Utf8Bytes::from_static(r#"{"CallOffer":{"peer_id":"client2","sdp":"sdp1"}}"#),
         ))]);
-        let (_, mut client2_rx) = setup.register_client("client2").await.unwrap();
+        let (_, mut client2_rx) = setup.register_client("client2").await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_handle_interaction();
+        let handle_task = setup.spawn_session_handle_interaction();
 
         let message = websocket_rx.lock().unwrap().recv().await;
         match message {
@@ -314,16 +267,14 @@ mod tests {
         let setup = TestSetup::new().with_messages(vec![Err(axum::Error::new("Test error"))]);
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_handle_interaction();
+        let handle_task = setup.spawn_session_handle_interaction();
 
         let message = websocket_rx.lock().unwrap().recv().await;
         match message {
             Some(ws::Message::Text(text)) => {
                 assert_eq!(
                     text,
-                    Utf8Bytes::from_static(
-                        r#"{"ClientList":{"clients":[]}}"#
-                    )
+                    Utf8Bytes::from_static(r#"{"ClientList":{"clients":[]}}"#)
                 );
             }
             _ => panic!("Expected client list message"),
