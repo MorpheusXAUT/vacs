@@ -21,7 +21,7 @@ pub enum ClientStatus {
 }
 
 /// Represents a client as observed by the signaling server.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct ClientInfo {
     /// ID of the client.
     pub id: String,
@@ -30,7 +30,7 @@ pub struct ClientInfo {
 }
 
 /// Represents a message exchanged between the signaling server and clients.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Message {
     /// A login message sent by the client upon initial connection, providing its ID and auth token.
     ///
