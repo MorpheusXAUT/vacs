@@ -108,8 +108,8 @@ async fn login_timeout() {
 
     let mut ws_stream = connect_to_websocket(test_app.addr()).await;
 
-    tokio::time::sleep(Duration::from_secs(
-        test_app.state.config.auth.login_flow_timeout_secs,
+    tokio::time::sleep(Duration::from_millis(
+        test_app.state.config.auth.login_flow_timeout_millis,
     ))
     .await;
 

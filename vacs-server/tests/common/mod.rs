@@ -6,9 +6,9 @@ use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::sync::watch;
 use tokio::time::timeout;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite};
+use tokio_tungstenite::{connect_async, tungstenite, MaybeTlsStream, WebSocketStream};
 use vacs_server::app::create_app;
-use vacs_server::config::{AppConfig, AuthConfig, ServerConfig};
+use vacs_server::config::{AppConfig, AuthConfig};
 use vacs_server::state::AppState;
 use vacs_shared::signaling;
 
@@ -24,11 +24,9 @@ impl TestApp {
     pub async fn new() -> Self {
         let config = AppConfig {
             auth: AuthConfig {
-                login_flow_timeout_secs: 1,
+                login_flow_timeout_millis: 250,
             },
-            server: ServerConfig {
-                bind_addr: "127.0.0.1:0".to_string(),
-            },
+            ..Default::default()
         };
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let app_state = Arc::new(AppState::new(config, shutdown_rx));

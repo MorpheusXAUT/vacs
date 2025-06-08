@@ -23,7 +23,7 @@ pub async fn handle_login(
     websocket_sender: &mut SplitSink<WebSocket, ws::Message>,
 ) -> Option<String> {
     tracing::trace!("Handling login flow");
-    tokio::time::timeout(Duration::from_secs(auth_config.login_flow_timeout_secs), async {
+    tokio::time::timeout(Duration::from_millis(auth_config.login_flow_timeout_millis), async {
         loop {
             return match receive_message(websocket_receiver).await {
                 MessageResult::ApplicationMessage(signaling::Message::Login { id, token }) => {
