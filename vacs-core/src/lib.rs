@@ -4,5 +4,7 @@ pub mod audio;
 pub mod config;
 #[cfg(feature = "signaling")]
 pub mod signaling;
+#[cfg(feature = "vatsim")]
+pub mod vatsim;
 #[cfg(feature = "webrtc")]
 pub mod webrtc;
