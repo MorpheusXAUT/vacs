@@ -108,7 +108,10 @@ pub enum Message {
         peer_id: String,
     },
     /// A message sent by the signaling server if no peer with the given ID was found.
-    PeerNotFound,
+    PeerNotFound {
+        /// ID of the peer that was not found.
+        peer_id: String,
+    },
     /// A message broadcasted by the signaling server when a new client connects.
     ClientConnected {
         /// Information about the newly connected client.
@@ -134,6 +137,8 @@ pub enum Message {
     Error {
         /// Message describing the error.
         message: String,
+        /// Optional ID of the peer that caused the error.
+        peer_id: Option<String>,
     },
 }
 
@@ -402,15 +407,43 @@ mod tests {
     fn test_serialize_deserialize_error() {
         let message = Message::Error {
             message: "error1".to_string(),
+            peer_id: None,
         };
 
         let serialized = Message::serialize(&message).unwrap();
-        assert_eq!(serialized, "{\"Error\":{\"message\":\"error1\"}}");
+        assert_eq!(
+            serialized,
+            "{\"Error\":{\"message\":\"error1\",\"peer_id\":null}}"
+        );
 
         let deserialized = Message::deserialize(&serialized).unwrap();
         match deserialized {
-            Message::Error { message } => {
+            Message::Error { message, peer_id } => {
                 assert_eq!(message, "error1");
+                assert!(peer_id.is_none());
+            }
+            _ => panic!("Expected Error message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_deserialize_error_with_peer_id() {
+        let message = Message::Error {
+            message: "error1".to_string(),
+            peer_id: Some("client1".to_string()),
+        };
+
+        let serialized = Message::serialize(&message).unwrap();
+        assert_eq!(
+            serialized,
+            "{\"Error\":{\"message\":\"error1\",\"peer_id\":\"client1\"}}"
+        );
+
+        let deserialized = Message::deserialize(&serialized).unwrap();
+        match deserialized {
+            Message::Error { message, peer_id } => {
+                assert_eq!(message, "error1");
+                assert_eq!(peer_id, Some("client1".to_string()));
             }
             _ => panic!("Expected Error message"),
         }

@@ -118,11 +118,25 @@ impl AppState {
                 tracing::trace!(?peer_id, "Sending message to peer");
                 if let Err(err) = peer.send_message(message).await {
                     tracing::warn!(?err, "Failed to send message to peer");
+                    if let Err(e) = client
+                        .send_message(Message::Error {
+                            message: "Failed to send message to peer".to_string(),
+                            peer_id: Some(peer_id.to_string()),
+                        })
+                        .await
+                    {
+                        tracing::warn!(?peer_id, orig_err = ?err, err = ?e, "Failed to send error message to client");
+                    }
                 }
             }
             None => {
                 tracing::warn!(peer_id, "Peer not found");
-                if let Err(err) = client.send_message(Message::PeerNotFound).await {
+                if let Err(err) = client
+                    .send_message(Message::PeerNotFound {
+                        peer_id: peer_id.to_string(),
+                    })
+                    .await
+                {
                     tracing::warn!(
                         ?peer_id,
                         ?err,

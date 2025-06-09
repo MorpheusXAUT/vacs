@@ -179,3 +179,73 @@ async fn call_offer_answer() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test(tokio::test)]
+async fn peer_not_found() -> anyhow::Result<()> {
+    let test_app = TestApp::new().await;
+    let mut clients = setup_n_test_clients(test_app.addr(), 5).await;
+
+    let mut client1 = clients.remove(0);
+    let mut client2 = clients.remove(0);
+
+    client1
+        .send(Message::CallOffer {
+            peer_id: "client69".to_string(),
+            sdp: "sdp1".to_string(),
+        })
+        .await?;
+
+    let call_offer_messages = client2
+        .receive_until_timeout_with_filter(Duration::from_millis(100), |m| {
+            matches!(m, Message::CallOffer { .. })
+        })
+        .await;
+
+    assert!(
+        call_offer_messages.is_empty(),
+        "client2 should have received no messages, but received: {:?}",
+        call_offer_messages
+    );
+
+    let peer_not_found_messages = client1
+        .receive_until_timeout_with_filter(Duration::from_millis(100), |m| {
+            matches!(m, Message::PeerNotFound { .. })
+        })
+        .await;
+
+    assert_eq!(
+        peer_not_found_messages.len(),
+        1,
+        "client1 should have received exactly one PeerNotFound message"
+    );
+
+    match &peer_not_found_messages[0] {
+        Message::PeerNotFound { peer_id } => {
+            assert_eq!(
+                peer_id, "client69",
+                "PeerNotFound targeted the wrong client"
+            );
+        }
+        message => panic!(
+            "Unexpected message: {:?}, expected PeerNotFound for client2",
+            message
+        ),
+    };
+
+    for (i, client) in clients.iter_mut().enumerate() {
+        let call_offer_messages = client
+            .receive_until_timeout_with_filter(Duration::from_millis(100), |m| {
+                matches!(m, Message::CallOffer { .. } | Message::PeerNotFound { .. })
+            })
+            .await;
+
+        assert!(
+            call_offer_messages.is_empty(),
+            "client{} should have received no messages, but received: {:?}",
+            i + 3,
+            call_offer_messages
+        );
+    }
+
+    Ok(())
+}
