@@ -8,10 +8,10 @@ use tokio::net::TcpStream;
 use tokio::sync::watch;
 use tokio::time::timeout;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite};
+use vacs_core::signaling;
 use vacs_server::app::create_app;
 use vacs_server::config::{AppConfig, AuthConfig};
 use vacs_server::state::AppState;
-use vacs_core::signaling;
 
 #[allow(unused)]
 pub struct TestApp {
@@ -70,9 +70,10 @@ impl Drop for TestApp {
     }
 }
 
+#[derive(Debug)]
 #[allow(unused)]
 pub struct TestClient {
-    id: String,
+    pub id: String,
     ws_stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
 }
 
@@ -129,6 +130,13 @@ impl TestClient {
     }
 
     #[allow(unused)]
+    /// Sends a (raw) tungstenite message through the WebSocket connection.
+    pub async fn send_raw(&mut self, message: tungstenite::Message) -> anyhow::Result<()> {
+        self.ws_stream.send(message).await?;
+        Ok(())
+    }
+
+    #[allow(unused)]
     /// Waits for a single WebSocket message with a timeout, returning the deserialized message.
     pub async fn receive_with_timeout(
         &mut self,
@@ -138,6 +146,18 @@ impl TestClient {
             Ok(Some(Ok(tungstenite::Message::Text(response_text)))) => {
                 signaling::Message::deserialize(&response_text).ok()
             }
+            _ => None,
+        }
+    }
+
+    #[allow(unused)]
+    /// Waits for a single (raw) tungstenite WebSocket message with a timeout.
+    pub async fn receive_raw_with_timeout(
+        &mut self,
+        timeout_duration: Duration,
+    ) -> Option<tungstenite::Message> {
+        match timeout(timeout_duration, self.ws_stream.next()).await {
+            Ok(Some(Ok(message))) => Some(message),
             _ => None,
         }
     }
@@ -156,6 +176,22 @@ impl TestClient {
     }
 
     #[allow(unused)]
+    /// Waits for multiple WebSocket messages until a timeout has been reached, returning all received messages that match a predicate.
+    pub async fn receive_until_timeout_with_filter(
+        &mut self,
+        timeout_duration: Duration,
+        predicate: impl Fn(&signaling::Message) -> bool,
+    ) -> Vec<signaling::Message> {
+        let mut messages = Vec::new();
+        while let Some(message) = self.receive_with_timeout(timeout_duration).await {
+            if predicate(&message) {
+                messages.push(message);
+            }
+        }
+        messages
+    }
+
+    #[allow(unused)]
     /// Sends a message and waits for an expected response using pattern matching.
     pub async fn send_and_expect<F>(
         &mut self,
@@ -167,6 +203,25 @@ impl TestClient {
     {
         self.send(message).await?;
         let response = self.receive_with_timeout(Duration::from_secs(1)).await;
+        match response {
+            Some(msg) => verifier(msg),
+            None => panic!("Expected a response, but none was received"),
+        }
+        Ok(())
+    }
+
+    #[allow(unused)]
+    /// Sends a (raw) tungstenite message and waits for an expected response using pattern matching.
+    pub async fn send_raw_and_expect<F>(
+        &mut self,
+        message: tungstenite::Message,
+        verifier: F,
+    ) -> anyhow::Result<()>
+    where
+        F: FnOnce(tungstenite::Message),
+    {
+        self.send_raw(message).await?;
+        let response = self.receive_raw_with_timeout(Duration::from_secs(1)).await;
         match response {
             Some(msg) => verifier(msg),
             None => panic!("Expected a response, but none was received"),
@@ -211,6 +266,29 @@ pub async fn setup_test_clients(
         .await
         .expect("Failed to create test client");
         test_clients.insert(client.id.clone(), client);
+    }
+    test_clients
+}
+
+#[allow(unused)]
+pub async fn setup_n_test_clients(addr: &str, num_clients: usize) -> Vec<TestClient> {
+    let mut test_clients = Vec::new();
+    for n in 1..=num_clients {
+        let client = TestClient::new(
+            addr,
+            &format!("client{}", n),
+            &format!("token{}", n),
+            |clients| {
+                assert!(
+                    clients.iter().any(|c| c.id == format!("client{}", n)),
+                    "Client {} not found in client list",
+                    n
+                );
+            },
+        )
+        .await
+        .expect("Failed to create test client");
+        test_clients.push(client);
     }
     test_clients
 }
