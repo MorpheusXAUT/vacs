@@ -5,10 +5,10 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-axum = { version = "0.8.4", features = ["ws"] }
+axum = { workspace = true, features = ["ws"] }
 futures-util = { workspace = true }
 tokio = { workspace = true }
-tower-http = { version = "0.6.5", features = ["trace", "timeout"] }
+tower-http = { workspace = true, features = ["trace", "timeout"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
@@ -16,7 +16,7 @@ tokio-tungstenite = { workspace = true }
 serde = { workspace = true }
 config = { workspace = true }
 directories = { workspace = true }
-vacs-protocol = { path = "../vacs-protocol" }
+vacs-protocol = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true, features = ["unstable"] }

@@ -11,9 +11,9 @@ futures-util = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tokio-tungstenite = "0.26.2"
+tokio-tungstenite = { workspace = true }
 tracing = { workspace = true }
-vacs-protocol = { path = "../vacs-protocol" }
+vacs-protocol = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

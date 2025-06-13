@@ -7,9 +7,9 @@ publish.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 bytes = { workspace = true }
-cpal = "0.16.0"
-opus = "0.3.0"
-ringbuf = "0.4.8"
+cpal = { workspace = true }
+opus = { workspace = true }
+ringbuf = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

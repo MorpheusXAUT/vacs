@@ -10,22 +10,22 @@ path = "src/ws.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-base64 = "0.22.1"
-clap = { version = "4.5.39", features = ["derive"] }
+base64 = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
 config = { workspace = true }
 directories = { workspace = true }
 futures-util = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
-tokio-tungstenite = "0.26.2"
+tokio-tungstenite = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-tungstenite = "0.26.2"
-vacs-audio = { path = "../vacs-audio" }
-vacs-protocol = { path = "../vacs-protocol" }
-vacs-signaling = { path = "../vacs-signaling" }
-vacs-webrtc = { path = "../vacs-webrtc" }
-webrtc = "0.13.0"
+tungstenite = { workspace = true }
+vacs-audio = { workspace = true }
+vacs-protocol = { workspace = true }
+vacs-signaling = { workspace = true }
+vacs-webrtc = { workspace = true }
+webrtc = { workspace = true }
 
 [lints]
 workspace = true
