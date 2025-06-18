@@ -22,7 +22,6 @@ async fn login() {
         .build();
 
     let res = client.login("client1", "token1").await;
-    println!("{:?}", res);
     assert!(res.is_ok());
     assert_eq!(
         res.unwrap(),
@@ -108,4 +107,78 @@ async fn logout() {
 
     let res = client.send(SignalingMessage::Logout).await;
     assert!(res.is_ok());
+}
+
+#[test(tokio::test)]
+async fn login_multiple_clients() {
+    let test_rig = TestRig::new(5).await.unwrap();
+
+    for i in 0..5 {
+        let client = test_rig.client(i);
+        let (is_connected, is_logged_in) = client.status();
+        assert!(is_connected);
+        assert!(is_logged_in);
+    }
+}
+
+#[test(tokio::test)]
+async fn client_disconnects() {
+    let mut test_rig = TestRig::new(2).await.unwrap();
+
+    let res = test_rig.client_mut(0).logout().await;
+    assert!(res.is_ok());
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let (is_connected, is_logged_in) = test_rig.client(0).status();
+    assert!(!is_connected);
+    assert!(!is_logged_in);
+
+    let msg = test_rig
+        .client_mut(1)
+        .recv_with_timeout(Duration::from_millis(100))
+        .await
+        .unwrap();
+    assert_matches!(
+        msg,
+        SignalingMessage::ClientDisconnected { id } if id == "client0"
+    );
+}
+
+#[test(tokio::test)]
+async fn client_list_synchronization() {
+    let mut test_rig = TestRig::new(3).await.unwrap();
+
+    let res = test_rig.client_mut(0).logout().await;
+    assert!(res.is_ok());
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let (is_connected, is_logged_in) = test_rig.client(0).status();
+    assert!(!is_connected);
+    assert!(!is_logged_in);
+
+    let msg = test_rig
+        .client_mut(2)
+        .recv_with_timeout(Duration::from_millis(100))
+        .await;
+    assert_matches!(
+        msg.unwrap(),
+        SignalingMessage::ClientDisconnected { id } if id == "client0"
+    );
+
+    test_rig
+        .client_mut(2)
+        .send(SignalingMessage::ListClients)
+        .await
+        .unwrap();
+
+    let msg = test_rig
+        .client_mut(2)
+        .recv_with_timeout(Duration::from_millis(100))
+        .await;
+    assert_matches!(
+        msg.unwrap(),
+        SignalingMessage::ClientList { clients } if clients.len() == 2 && clients[0].id == "client1" && clients[1].id == "client2"
+    );
 }

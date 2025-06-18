@@ -100,13 +100,16 @@ impl AppState {
     }
 
     pub async fn list_clients(&self) -> Vec<ClientInfo> {
-        self.clients
+        let mut clients: Vec<ClientInfo> = self.clients
             .read()
             .await
             .values()
             .cloned()
             .map(|c| c.get_client_info().clone())
-            .collect()
+            .collect();
+        
+        clients.sort_by(|a, b| a.id.cmp(&b.id));
+        clients
     }
 
     pub async fn get_client(&self, client_id: &str) -> Option<ClientSession> {

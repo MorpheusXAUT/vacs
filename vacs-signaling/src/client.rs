@@ -40,6 +40,8 @@ impl<T: SignalingTransport> SignalingClientBuilder<T> {
             login_timeout: self.login_timeout,
             shutdown_rx: self.shutdown_rx,
             broadcast_tx: self.broadcast_tx,
+            is_connected: true,
+            is_logged_in: false,
         }
     }
 }
@@ -50,6 +52,8 @@ pub struct SignalingClient<T: SignalingTransport> {
     login_timeout: Duration,
     shutdown_rx: watch::Receiver<()>,
     broadcast_tx: broadcast::Sender<SignalingMessage>,
+    is_connected: bool,
+    is_logged_in: bool,
 }
 
 impl<T: SignalingTransport> SignalingClient<T> {
@@ -70,30 +74,52 @@ impl<T: SignalingTransport> SignalingClient<T> {
         self.broadcast_tx.subscribe()
     }
 
+    pub fn status(&self) -> (bool, bool) {
+        (self.is_connected, self.is_logged_in)
+    }
+
+    #[instrument(level = "info", skip(self))]
+    pub async fn disconnect(&mut self) -> Result<(), SignalingError> {
+        tracing::debug!("Disconnecting signaling client");
+        self.is_connected = false;
+        self.is_logged_in = false;
+        self.transport.close().await
+    }
+
     #[instrument(level = "debug", skip(self), err)]
     pub async fn send(&mut self, msg: SignalingMessage) -> Result<(), SignalingError> {
         tracing::debug!("Sending message to server");
-        tokio::select! {
+        let result = tokio::select! {
             biased;
             _ = self.shutdown_rx.changed() => {
                 tracing::debug!("Shutdown signal received, aborting send");
                 Err(SignalingError::Timeout("Shutdown signal received".to_string()))
             }
             result = self.transport.send(msg) => result,
+        };
+
+        if result.is_err() {
+            self.disconnect().await?;
         }
+        result
     }
 
     #[instrument(level = "debug", skip(self), err)]
     pub async fn recv(&mut self) -> Result<SignalingMessage, SignalingError> {
         tracing::debug!("Waiting for message from server");
-        tokio::select! {
+        let result = tokio::select! {
             biased;
             _ = self.shutdown_rx.changed() => {
                 tracing::debug!("Shutdown signal received, aborting recv");
                 Err(SignalingError::Timeout("Shutdown signal received".to_string()))
             }
             msg = self.transport.recv() => msg,
+        };
+
+        if let Err(SignalingError::Disconnected) = result {
+            self.disconnect().await?;
         }
+        result
     }
 
     #[instrument(level = "debug", skip(self), err)]
@@ -113,6 +139,10 @@ impl<T: SignalingTransport> SignalingClient<T> {
 
         match recv_result {
             Ok(Ok(msg)) => Ok(msg),
+            Ok(Err(SignalingError::Disconnected)) => {
+                self.disconnect().await?;
+                Err(SignalingError::Disconnected)
+            }
             Ok(Err(err)) => Err(err),
             Err(_) => {
                 tracing::warn!("Timeout waiting for message");
@@ -140,23 +170,34 @@ impl<T: SignalingTransport> SignalingClient<T> {
         match self.recv_with_timeout(self.login_timeout).await? {
             SignalingMessage::ClientList { clients } => {
                 tracing::info!(num_clients = ?clients.len(), "Login successful, received client list");
+                self.is_logged_in = true;
                 Ok(clients)
             }
             SignalingMessage::LoginFailure { reason } => {
                 tracing::warn!(?reason, "Login failed");
+                self.is_logged_in = false;
                 Err(SignalingError::LoginError(reason))
             }
             SignalingMessage::Error { reason, peer_id } => {
                 tracing::error!(?reason, ?peer_id, "Server returned error");
+                self.is_logged_in = false;
                 Err(SignalingError::ServerError(reason))
             }
             other => {
                 tracing::error!(?other, "Received unexpected message from server");
+                self.is_logged_in = false;
                 Err(SignalingError::ProtocolError(
                     "Expected ClientList after Login".to_string(),
                 ))
             }
         }
+    }
+
+    #[instrument(level = "info", skip(self))]
+    pub async fn logout(&mut self) -> Result<(), SignalingError> {
+        tracing::debug!("Sending Logout message to server");
+        self.send(SignalingMessage::Logout).await?;
+        self.disconnect().await
     }
 
     #[instrument(level = "info", skip(self))]

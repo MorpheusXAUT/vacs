@@ -81,4 +81,12 @@ impl SignalingTransport for TokioTransport {
         tracing::warn!("WebSocket stream closed");
         Err(SignalingError::Disconnected)
     }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn close(&mut self) -> Result<(), SignalingError> {
+        self.websocket_tx.close().await.map_err(|err| {
+            tracing::warn!(?err, "Failed to close WebSocket connection");
+            SignalingError::Transport(anyhow::anyhow!(err))
+        })
+    }
 }

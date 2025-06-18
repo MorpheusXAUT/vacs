@@ -58,4 +58,10 @@ impl SignalingTransport for MockTransport {
             }
         }
     }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn close(&mut self) -> Result<(), SignalingError> {
+        self.incoming.close();
+        Ok(())
+    }
 }

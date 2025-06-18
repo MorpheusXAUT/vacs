@@ -9,4 +9,5 @@ use vacs_protocol::SignalingMessage;
 pub trait SignalingTransport: Send + Sync {
     async fn send(&mut self, msg: SignalingMessage) -> Result<(), SignalingError>;
     async fn recv(&mut self) -> Result<SignalingMessage, SignalingError>;
+    async fn close(&mut self) -> Result<(), SignalingError>;
 }
