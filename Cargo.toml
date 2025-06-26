@@ -48,5 +48,8 @@ vacs-signaling = { path = "vacs-signaling" }
 vacs-webrtc = { path = "vacs-webrtc" }
 webrtc = "0.13.0"
 wiremock = "0.6.3"
+tauri = "2"
+tauri-build = "2"
+tauri-plugin-opener = "2"
 
 [workspace.lints]

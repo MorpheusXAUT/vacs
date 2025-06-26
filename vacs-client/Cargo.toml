@@ -4,28 +4,16 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
-[[bin]]
-name = "ws"
-path = "src/ws.rs"
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "vacs_client_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { workspace = true, features = [] }
 
 [dependencies]
-anyhow = { workspace = true }
-base64 = { workspace = true }
-clap = { workspace = true, features = ["derive"] }
-config = { workspace = true }
-directories = { workspace = true }
-futures-util = { workspace = true }
-serde = { workspace = true }
-tokio = { workspace = true }
-tokio-tungstenite = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-tungstenite = { workspace = true }
-vacs-audio = { workspace = true }
-vacs-protocol = { workspace = true }
-vacs-signaling = { workspace = true }
-vacs-webrtc = { workspace = true }
-webrtc = { workspace = true }
-
-[lints]
-workspace = true
+tauri = { workspace = true, features = [] }
+tauri-plugin-opener = { workspace = true }
