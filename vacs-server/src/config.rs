@@ -7,19 +7,12 @@ pub const CLIENT_WEBSOCKET_RECEIVE_CHANNEL_CAPACITY: usize = 100;
 pub const SERVER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Deserialize, Clone)]
+#[derive(Default)]
 pub struct AppConfig {
     pub server: ServerConfig,
     pub auth: AuthConfig,
 }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            auth: AuthConfig::default(),
-        }
-    }
-}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ServerConfig {

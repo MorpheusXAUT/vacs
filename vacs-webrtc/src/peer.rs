@@ -187,9 +187,3 @@ impl Peer {
         gather_complete_rx.recv().await;
     }
 }
-
-impl Drop for Peer {
-    fn drop(&mut self) {
-        let _ = self.peer_connection.close();
-    }
-}

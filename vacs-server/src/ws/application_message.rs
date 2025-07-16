@@ -30,23 +30,23 @@ pub async fn handle_application_message<T: WebSocketSink>(
             ControlFlow::Break(())
         }
         SignalingMessage::CallOffer { peer_id, sdp } => {
-            handle_call_offer(&state, &client, &peer_id, &sdp).await;
+            handle_call_offer(state, client, &peer_id, &sdp).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallAnswer { peer_id, sdp } => {
-            handle_call_answer(&state, &client, &peer_id, &sdp).await;
+            handle_call_answer(state, client, &peer_id, &sdp).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallReject { peer_id } => {
-            handle_call_reject(&state, &client, &peer_id).await;
+            handle_call_reject(state, client, &peer_id).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallIceCandidate { peer_id, candidate } => {
-            handle_call_ice_candidate(&state, &client, &peer_id, &candidate).await;
+            handle_call_ice_candidate(state, client, &peer_id, &candidate).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallEnd { peer_id } => {
-            handle_call_end(&state, &client, &peer_id).await;
+            handle_call_end(state, client, &peer_id).await;
             ControlFlow::Continue(())
         }
         _ => ControlFlow::Continue(()),

@@ -46,7 +46,7 @@ impl Device {
 
         let host = find_host(&config.host_name)?;
         let device = find_device(&host, &config.device_name, &device_type)?;
-        let stream_config = find_supported_stream_config(&device, &config, &device_type)?;
+        let stream_config = find_supported_stream_config(&device, config, &device_type)?;
         let device = Device {
             device_type,
             device,
@@ -114,7 +114,7 @@ fn find_device(
                 })
                 .collect::<Vec<_>>();
 
-            if matching_devices.len() == 0 {
+            if matching_devices.is_empty() {
                 anyhow::bail!(
                     "Unknown {} device '{}'. Available: {:?}",
                     device_type,
@@ -170,14 +170,12 @@ fn find_supported_stream_config(
         DeviceType::Input => Box::new(
             device
                 .supported_input_configs()
-                .context("Failed to get supported input stream configs")?
-                .map(|c| c.into()),
+                .context("Failed to get supported input stream configs")?,
         ),
         DeviceType::Output => Box::new(
             device
                 .supported_output_configs()
-                .context("Failed to get supported output stream configs")?
-                .map(|c| c.into()),
+                .context("Failed to get supported output stream configs")?,
         ),
     };
 

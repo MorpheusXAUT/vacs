@@ -83,7 +83,7 @@ impl SlurperClient {
             .context("Failed to create HTTP client")?;
         Ok(Self {
             client,
-            user_info_endpoint_url: format!("{}{}", api_base_url, SLURPER_USER_INFO_ENDPOINT),
+            user_info_endpoint_url: format!("{api_base_url}{SLURPER_USER_INFO_ENDPOINT}"),
         })
     }
 
