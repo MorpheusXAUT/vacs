@@ -32,7 +32,7 @@ function App() {
                     <div className="h-full flex flex-row gap-3">
                         <Button color="emerald" className="text-xl w-46 font-semibold rounded-md">Radio</Button>
                         <Button color="cyan" className="text-xl">CPL</Button>
-                        <Button color="cyan" className="text-xl w-46 text-slate-400" alwaysActive={true}>
+                        <Button color="cyan" className="text-xl w-46 text-slate-400" disabled={true}>
                             RADIO<br/>PRIO
                         </Button>
                         <Button color="gray" className="w-46 min-h-16 !font-semibold !text-xl !rounded-md">Phone</Button>

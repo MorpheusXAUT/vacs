@@ -4,7 +4,7 @@ import {clsx} from "clsx";
 
 function IncomingList() {
     const [showIncoming, setShowIncoming] = useState(false);
-    const [fixIncomingActive, setFixIncomingActive] = useState(false);
+    const [fixIncomingActive, _setFixIncomingActive] = useState(false);
 
     return (
         <div className="flex flex-col-reverse gap-3 pt-3 pr-[1px] overflow-y-auto" style={{scrollbarWidth: "none"}}>
