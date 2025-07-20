@@ -62,7 +62,6 @@ impl Backend {
     }
 }
 
-#[async_trait::async_trait]
 impl AuthnBackend for Backend {
     type User = User;
     type Credentials = Credentials;
@@ -170,8 +169,7 @@ pub mod mock {
             }
         }
     }
-
-    #[async_trait::async_trait]
+    
     impl AuthnBackend for MockBackend {
         type User = User;
         type Credentials = Credentials;
