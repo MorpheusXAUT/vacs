@@ -1,18 +1,30 @@
 use crate::state::AppState;
-use anyhow::Context;
-use tauri::{AppHandle, Manager, State};
+use keyring::Entry;
+use keyring::Error::NoEntry;
+use tauri::{AppHandle, Emitter, Manager};
 
 mod auth;
 mod config;
+mod secrets;
 mod signaling;
 mod state;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
-async fn greet(app_state: State<'_, AppState>) -> Result<(), String> {
-    auth::open_auth_url(&app_state)
-        .await
-        .expect("Failed to open auth url");
+async fn greet(app: AppHandle) -> Result<(), String> {
+    match secrets::get("cid") {
+        Ok(Some(cid)) => {
+            log::debug!("Found CID in secrets: {cid}");
+            app.emit("vatsim-cid", cid).unwrap()
+        }
+        Ok(None) => {
+            log::debug!("No CID found in secrets, starting auth flow");
+            auth::open_auth_url(&app.state::<AppState>())
+                .await
+                .expect("Failed to open auth url");
+        }
+        Err(err) => return Err(err.to_string()),
+    }
 
     Ok(())
 }

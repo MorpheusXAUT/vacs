@@ -1,11 +1,11 @@
 use crate::config::BackendEndpoint;
 use crate::state::AppState;
 use anyhow::Context;
+use keyring::Entry;
 use tauri::{AppHandle, Emitter, Manager};
 use url::Url;
-use vacs_protocol::http::auth::{
-    AuthExchangeToken, AuthResponse, InitVatsimLogin,
-};
+use vacs_protocol::http::auth::{AuthExchangeToken, AuthResponse, InitVatsimLogin};
+use crate::secrets;
 
 pub async fn open_auth_url(app_state: &AppState) -> anyhow::Result<()> {
     let auth_url = app_state
@@ -52,6 +52,8 @@ pub async fn handle_auth_callback(app: &AppHandle, url: &str) -> anyhow::Result<
         .cid;
 
     log::info!("Successfully authenticated as CID {cid}");
+
+    secrets::set("cid", cid.as_ref()).context("Failed to save CID to keyring")?;
 
     app.emit("vatsim-cid", cid).ok();
 
