@@ -1,24 +1,38 @@
-use crate::config::{APP_USER_AGENT, AppConfig, BackendEndpoint};
+use crate::config::{AppConfig, BackendEndpoint, APP_USER_AGENT};
+use crate::secrets::cookies::SecureCookieStore;
 use anyhow::Context;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
+use std::sync::Arc;
 use url::Url;
 
 pub struct AppState {
     pub config: AppConfig,
     pub http_client: reqwest::Client,
+    cookie_store: Arc<SecureCookieStore>,
 }
 
 impl AppState {
     pub fn new() -> anyhow::Result<Self> {
+        let cookie_store = Arc::new(SecureCookieStore::default());
+
         Ok(Self {
             config: AppConfig::parse()?,
             http_client: reqwest::ClientBuilder::new()
                 .user_agent(APP_USER_AGENT)
-                .cookie_store(true)
+                .cookie_provider(cookie_store.clone())
                 .build()
                 .context("Failed to build HTTP client")?,
+            cookie_store,
         })
+    }
+
+    pub fn persist(&self) -> anyhow::Result<()> {
+        self.cookie_store
+            .save()
+            .context("Failed to save cookie store")?;
+
+        Ok(())
     }
 
     fn parse_http_request_url(

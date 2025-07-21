@@ -1,7 +1,6 @@
 use anyhow::Context;
 use config::{Config, Environment, File};
 use serde::Deserialize;
-use url::Url;
 
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -21,7 +20,7 @@ impl AppConfig {
             .set_default("backend.endpoints.ws_token", "/ws/token")?
             .add_source(
                 File::with_name(
-                    directories::ProjectDirs::from("app", "vacs", "vacs-client")
+                    project_dirs()
                         .expect("Failed to get project dirs")
                         .config_local_dir()
                         .join("config.toml")
@@ -68,4 +67,8 @@ pub struct BackendEndpointsConfigs {
     pub init_auth: String,
     pub exchange_code: String,
     pub ws_token: String,
+}
+
+pub fn project_dirs() -> Option<directories::ProjectDirs> {
+    directories::ProjectDirs::from("app", "vacs", "vacs-client")
 }

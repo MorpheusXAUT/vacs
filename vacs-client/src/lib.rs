@@ -1,30 +1,18 @@
-use crate::state::AppState;
-use keyring::Entry;
-use keyring::Error::NoEntry;
-use tauri::{AppHandle, Emitter, Manager};
-
 mod auth;
 mod config;
 mod secrets;
 mod signaling;
 mod state;
 
+use crate::state::AppState;
+use tauri::{AppHandle, Manager};
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 async fn greet(app: AppHandle) -> Result<(), String> {
-    match secrets::get("cid") {
-        Ok(Some(cid)) => {
-            log::debug!("Found CID in secrets: {cid}");
-            app.emit("vatsim-cid", cid).unwrap()
-        }
-        Ok(None) => {
-            log::debug!("No CID found in secrets, starting auth flow");
-            auth::open_auth_url(&app.state::<AppState>())
-                .await
-                .expect("Failed to open auth url");
-        }
-        Err(err) => return Err(err.to_string()),
-    }
+    auth::open_auth_url(&app.state::<AppState>())
+        .await
+        .expect("Failed to open auth url");
 
     Ok(())
 }
@@ -59,6 +47,14 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![greet])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("Failed to build tauri application")
+        .run(move |app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                app_handle
+                    .state::<AppState>()
+                    .persist()
+                    .expect("Failed to persist app state");
+            }
+        });
 }
