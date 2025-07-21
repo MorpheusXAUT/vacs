@@ -16,8 +16,7 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/vatsim", get(get::vatsim))
         .route("/vatsim/callback", post(post::vatsim_callback))
-        .route("/user", get(get::user_info))
-        .route_layer(login_required!(Backend))
+        .route("/user", get(get::user_info).layer(login_required!(Backend)))
 }
 
 mod get {
