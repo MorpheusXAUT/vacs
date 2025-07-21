@@ -3,7 +3,9 @@ use crate::state::AppState;
 use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager};
 use url::Url;
-use vacs_protocol::http::auth::{AuthResponse, InitVatsimLogin};
+use vacs_protocol::http::auth::{
+    AuthExchangeToken, AuthResponse, InitVatsimLogin,
+};
 
 pub async fn open_auth_url(app_state: &AppState) -> anyhow::Result<()> {
     let auth_url = app_state
@@ -35,13 +37,19 @@ pub async fn handle_auth_callback(app: &AppHandle, url: &str) -> anyhow::Result<
     let code = code.context("Auth callback URL does not contain code")?;
     let state = state.context("Auth callback URL does not contain code")?;
 
-    let cid = app.state::<AppState>()
-        .http_get::<AuthResponse>(
+    let cid = app
+        .state::<AppState>()
+        .http_post::<AuthResponse, AuthExchangeToken>(
             BackendEndpoint::ExchangeCode,
-            Some(&[("code", code.as_ref()), ("state", state.as_ref())]),
+            None,
+            Some(AuthExchangeToken {
+                code: code.to_string(),
+                state: state.to_string(),
+            }),
         )
         .await
-        .context("Failed to exchange auth code")?.cid;
+        .context("Failed to exchange auth code")?
+        .cid;
 
     log::info!("Successfully authenticated as CID {cid}");
 

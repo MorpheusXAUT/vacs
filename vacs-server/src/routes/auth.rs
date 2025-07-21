@@ -1,26 +1,24 @@
 use crate::auth::users::{AuthSession, Credentials};
-use crate::http::ApiResult;
 use crate::http::error::AppError;
+use crate::http::ApiResult;
 use crate::state::AppState;
 use anyhow::Context;
-use axum::extract::Query;
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
 use std::sync::Arc;
 use tower_sessions::Session;
-use vacs_protocol::http::auth::{AuthResponse, InitVatsimLogin};
 
 const VATSIM_OAUTH_CSRF_TOKEN_KEY: &str = "vatsim.oauth.csrf_token";
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/vatsim", get(get::vatsim))
-        .route("/vatsim/callback", get(get::vatsim_callback))
+        .route("/vatsim/callback", post(post::vatsim_callback))
 }
 
 mod get {
     use super::*;
+    use vacs_protocol::http::auth::InitVatsimLogin;
 
     pub async fn vatsim(auth_session: AuthSession, session: Session) -> ApiResult<InitVatsimLogin> {
         let (url, csrf_token) = auth_session.backend.authorize_url();
@@ -34,20 +32,16 @@ mod get {
             url: url.to_string(),
         }))
     }
+}
 
-    #[derive(Debug, Deserialize)]
-    pub struct VatsimLoginCallbackQuery {
-        code: String,
-        state: String,
-    }
+mod post {
+    use super::*;
+    use vacs_protocol::http::auth::{AuthExchangeToken, AuthResponse};
 
     pub async fn vatsim_callback(
         mut auth_session: AuthSession,
         session: Session,
-        Query(VatsimLoginCallbackQuery {
-            code,
-            state: received_state,
-        }): Query<VatsimLoginCallbackQuery>,
+        Json(AuthExchangeToken { code, state }): Json<AuthExchangeToken>,
     ) -> ApiResult<AuthResponse> {
         let stored_state = session
             .remove::<String>(VATSIM_OAUTH_CSRF_TOKEN_KEY)
@@ -57,7 +51,7 @@ mod get {
 
         let creds = Credentials {
             code,
-            received_state,
+            received_state: state,
             stored_state,
         };
 

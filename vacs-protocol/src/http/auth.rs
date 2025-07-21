@@ -6,6 +6,12 @@ pub struct InitVatsimLogin {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct AuthExchangeToken {
+    pub code: String,
+    pub state: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AuthResponse {
     pub cid: String,
 }
