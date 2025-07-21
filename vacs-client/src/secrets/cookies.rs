@@ -94,6 +94,8 @@ impl SecureCookieStore {
         }
 
         log::trace!("Writing encrypted cookie store to disk");
+        fs::create_dir_all(self.path.parent().unwrap()).ok();
+
         fs::write(&self.path, encrypted)
             .context("Failed to write encrypted cookie store to disk")?;
 

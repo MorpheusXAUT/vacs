@@ -67,7 +67,7 @@ pub async fn check_auth_session(app: &AppHandle) -> anyhow::Result<bool> {
 
     if let Ok(user_info) = user_info {
         log::info!("Authenticated as CID {}", user_info.cid);
-        app.emit("vatsim-cid", user_info.cid)?;
+        app.emit("vatsim-cid", user_info.cid).ok();
         Ok(true)
     } else {
         log::info!("Not authenticated");

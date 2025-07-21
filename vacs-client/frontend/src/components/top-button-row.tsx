@@ -16,7 +16,7 @@ function TopButtonRow() {
             </Button>
             <Button color="cyan">TRANS</Button>
             <Button color="cyan">DIV</Button>
-            <Button color="cyan" onClick={() => invoke("check_auth_session")}>
+            <Button color="cyan">
                 PLAY<br/>BACK
             </Button>
             <Button color="cyan" className="text-slate-400" disabled={true}>
