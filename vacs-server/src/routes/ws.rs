@@ -23,7 +23,7 @@ mod get {
         auth_session: AuthSession,
         State(state): State<Arc<AppState>>,
     ) -> ApiResult<WebSocketToken> {
-        let user = auth_session.user.unwrap();
+        let user = auth_session.user.expect("User not logged in");
 
         tracing::debug!(?user, "Generating websocket token");
         let token = state.generate_ws_auth_token(user.cid.as_str()).await?;

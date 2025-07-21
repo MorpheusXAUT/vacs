@@ -6,14 +6,12 @@ use keyring::error::Error::NoEntry;
 use keyring::Entry;
 
 pub enum SecretKey {
-    Cid,
     CookieStoreEncryptionKey,
 }
 
 impl SecretKey {
     pub fn as_str(&self) -> &str {
         match self {
-            SecretKey::Cid => "cid",
             SecretKey::CookieStoreEncryptionKey => "cookie-store-encryption-key",
         }
     }

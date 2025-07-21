@@ -1,12 +1,14 @@
-use crate::auth::users::{AuthSession, Credentials};
+use crate::auth::users::{AuthSession, Backend, Credentials};
 use crate::http::error::AppError;
 use crate::http::ApiResult;
 use crate::state::AppState;
 use anyhow::Context;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use axum_login::login_required;
 use std::sync::Arc;
 use tower_sessions::Session;
+use vacs_protocol::http::auth::UserInfo;
 
 const VATSIM_OAUTH_CSRF_TOKEN_KEY: &str = "vatsim.oauth.csrf_token";
 
@@ -14,6 +16,8 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/vatsim", get(get::vatsim))
         .route("/vatsim/callback", post(post::vatsim_callback))
+        .route("/user", get(get::user_info))
+        .route_layer(login_required!(Backend))
 }
 
 mod get {
@@ -32,17 +36,25 @@ mod get {
             url: url.to_string(),
         }))
     }
+
+    pub async fn user_info(auth_session: AuthSession) -> ApiResult<UserInfo> {
+        let user = auth_session.user.expect("User not logged in");
+
+        Ok(Json(UserInfo {
+            cid: user.cid.to_string(),
+        }))
+    }
 }
 
 mod post {
     use super::*;
-    use vacs_protocol::http::auth::{AuthExchangeToken, AuthResponse};
+    use vacs_protocol::http::auth::AuthExchangeToken;
 
     pub async fn vatsim_callback(
         mut auth_session: AuthSession,
         session: Session,
         Json(AuthExchangeToken { code, state }): Json<AuthExchangeToken>,
-    ) -> ApiResult<AuthResponse> {
+    ) -> ApiResult<UserInfo> {
         let stored_state = session
             .remove::<String>(VATSIM_OAUTH_CSRF_TOKEN_KEY)
             .await
@@ -67,7 +79,7 @@ mod post {
             .await
             .context("Failed to login user")?;
 
-        Ok(Json(AuthResponse {
+        Ok(Json(UserInfo {
             cid: user.cid.to_string(),
         }))
     }
