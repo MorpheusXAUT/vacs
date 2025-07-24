@@ -11,6 +11,7 @@ import {useAuthStore} from "./stores/auth-store.ts";
 import {setupAuthListeners} from "./listeners/auth-listener.ts";
 import CallList from "./components/CallList.tsx";
 import ConnectPage from "./pages/ConnectPage.tsx";
+import SettingsPage from "./pages/SettingsPage.tsx";
 
 function App() {
     const authStatus = useAuthStore(state => state.status);
@@ -48,7 +49,7 @@ function App() {
                                     )
                                 )}
                             </Route>
-                            <Route path="/settings"/>
+                            <Route path="/settings" component={SettingsPage}/>
                         </Switch>
                     </div>
                     {/* Right Button Row */}
