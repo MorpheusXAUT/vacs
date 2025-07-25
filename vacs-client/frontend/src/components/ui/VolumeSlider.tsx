@@ -9,7 +9,7 @@ function VolumeSlider() {
     const isDragging = useRef<boolean>(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    function updatePositionFromClientY(clientY: number) {
+    const updatePositionFromClientY = (clientY: number)=> {
         const container = containerRef.current;
         if (!container) return;
 
@@ -24,18 +24,18 @@ function VolumeSlider() {
         setPosition(newPos);
     }
 
-    function handleMouseDown(event: MouseEvent | JSX.TargetedMouseEvent<HTMLDivElement>) {
+    const handleMouseDown = (event: MouseEvent | JSX.TargetedMouseEvent<HTMLDivElement>)=> {
         isDragging.current = true;
         setDragging(true);
         updatePositionFromClientY(event.clientY);
     }
 
-    function handleMouseMove(event: MouseEvent) {
+    const handleMouseMove = (event: MouseEvent)=> {
         if (!isDragging.current) return;
         updatePositionFromClientY(event.clientY);
     }
 
-    function handleMouseUp() {
+    const handleMouseUp = ()=> {
         isDragging.current = false;
         setDragging(false);
     }

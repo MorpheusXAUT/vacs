@@ -21,7 +21,7 @@ function TopButtonRow() {
             <Button color="cyan" className="text-slate-400" disabled={true}>
                 PLC<br/>LSP<br/>on/off
             </Button>
-            <Button color="cyan" onClick={() => invoke("logout")}>SPLIT</Button>
+            <Button color="cyan">SPLIT</Button>
             <Link to={location === "/settings" ? "/" : "/settings"} draggable={false}>
                 <Button color={location === "/settings" ? "blue" : "cyan"} className="h-full flex justify-center items-center">
                     <img src={wrenchAndDriver} alt="Settings" className="h-12 w-12" draggable={false} />

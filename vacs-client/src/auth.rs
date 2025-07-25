@@ -91,7 +91,7 @@ pub async fn logout(app: &AppHandle) -> anyhow::Result<()> {
         .context("Failed to clear cookie store")?;
 
     log::info!("Successfully logged out");
-    app.emit("vatsim-cid", "").ok();
+    app.emit("auth:unauthenticated", Value::Null).ok();
 
     Ok(())
 }
