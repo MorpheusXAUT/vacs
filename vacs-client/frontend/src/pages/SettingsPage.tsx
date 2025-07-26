@@ -5,16 +5,21 @@ import headphones from "../assets/headphones.svg";
 import mousePointerClick from "../assets/mouse-pointer-click.svg";
 import bellRing from "../assets/bell-ring.svg";
 import Select from "../components/ui/Select.tsx";
-import {invoke} from "@tauri-apps/api/core";
 import {navigate} from "wouter/use-browser-location";
 import {useAuthStore} from "../stores/auth-store.ts";
+import {invoke} from "@tauri-apps/api/core";
+import {openErrorOverlayFromUnknown} from "../error.ts";
 
 function SettingsPage() {
     const isAuthenticated = useAuthStore(state => state.status === "authenticated");
 
     const handleLogoutClick = async () => {
-        await invoke("logout");
-        navigate("/");
+        try {
+            await invoke("logout");
+            navigate("/");
+        } catch(e) {
+            openErrorOverlayFromUnknown(e);
+        }
     }
 
     return (

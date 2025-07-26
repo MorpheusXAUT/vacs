@@ -1,43 +1,38 @@
 import {invoke, InvokeArgs} from "@tauri-apps/api/core";
+import {useErrorOverlayStore} from "./stores/error-overlay-store.ts";
 
-export interface FrontendError {
+export type Error = {
     title: string;
     message: string;
     timeout_ms?: number;
-}
+};
 
-export const safeInvoke = async <T>(cmd: string, args?: InvokeArgs): Promise<T> => {
+export async function invokeWithErrorOverlay(cmd: string, args?: InvokeArgs) {
     try {
-        return await invoke<T>(cmd, args);
-    } catch (err) {
-        throw parseFrontendError(err);
+        await invoke(cmd, args);
+    } catch(e) {
+        openErrorOverlayFromUnknown(e);
     }
 }
 
-const parseFrontendError = (err: unknown): FrontendError => {
-    if (typeof err === "object" && err !== null && "title" in err && "message" in err) {
-        return {
-            title: err.title as string,
-            message: err.message as string,
-            timeout_ms: (err as any).timeout_ms ?? undefined,
-        }
-    }
+export function openErrorOverlayFromUnknown(e: unknown) {
+    const openErrorOverlay = useErrorOverlayStore.getState().open;
 
-    if (typeof err === "string") {
-        try {
-            return JSON.parse(err) as FrontendError;
-        } catch {
-            // not a JSON serialized error, fallthrough
-        }
-
-        return {
-            title: "Error",
-            message: err,
-        };
+    if (isError(e)) {
+        openErrorOverlay(e.title, e.message, e.timeout_ms);
+    } else {
+        console.error(e);
+        openErrorOverlay("Unexpected error", "An unknown error occurred");
     }
+}
 
-    return {
-        title: "Unexpected error",
-        message: "An unknown error occurred",
-    }
+export function isError(err: unknown): err is Error {
+    return (
+        typeof err === 'object' &&
+        err !== null &&
+        typeof (err as any).title === 'string' &&
+        typeof (err as any).message === 'string' &&
+        (typeof (err as any).timeout_ms === 'undefined' ||
+            typeof (err as any).timeout_ms === 'number')
+    );
 }

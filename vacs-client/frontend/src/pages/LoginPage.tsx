@@ -1,14 +1,9 @@
-import {FrontendError, safeInvoke} from "../error.ts";
+import {invokeWithErrorOverlay} from "../error.ts";
 
 function LoginPage() {
-    const handleLoginClick = async () => {
-        try {
-            await safeInvoke("open_auth_url");
-        } catch (e) {
-            const err = e as FrontendError;
-            console.error(err);
-        }
-    }
+    const handleLoginClick = () => {
+        void invokeWithErrorOverlay("open_auth_url");
+    };
 
     return (
         <div className="h-full w-full flex justify-center items-center p-4">

@@ -13,6 +13,7 @@ import CallList from "./components/CallList.tsx";
 import ConnectPage from "./pages/ConnectPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import telephone from "./assets/telephone.svg";
+import ErrorOverlay from "./components/ErrorOverlay.tsx";
 
 function App() {
     const authStatus = useAuthStore(state => state.status);
@@ -44,7 +45,7 @@ function App() {
                                     <></>
                                 ) : authStatus === "unauthenticated" ? (
                                     <LoginPage/>
-                                ) : false ? ( // connected?
+                                ) : true ? ( // connected?
                                     <CallList/>
                                 ) : (
                                     <ConnectPage/>
@@ -75,6 +76,7 @@ function App() {
                     <Button color="cyan" className="text-xl w-44 px-10">END</Button>
                 </div>
             </div>
+            <ErrorOverlay />
         </div>
     );
 }
