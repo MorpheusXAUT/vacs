@@ -342,7 +342,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"ClientConnected\":{\"client\":{\"id\":\"client1\",\"display_name\":\"station1\"}}}"
+            "{\"ClientConnected\":{\"client\":{\"id\":\"client1\",\"displayName\":\"station1\"}}}"
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -402,7 +402,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"ClientList\":{\"clients\":[{\"id\":\"client1\",\"display_name\":\"station1\"},{\"id\":\"client2\",\"display_name\":\"station2\"}]}}"
+            "{\"ClientList\":{\"clients\":[{\"id\":\"client1\",\"displayName\":\"station1\"},{\"id\":\"client2\",\"displayName\":\"station2\"}]}}"
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();

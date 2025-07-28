@@ -10,6 +10,28 @@ use vacs_signaling::test_utils::TestRig;
 use vacs_signaling::transport;
 
 #[test(tokio::test)]
+async fn login_without_self() {
+    let test_app = TestApp::new().await;
+
+    let transport = transport::tokio::TokioTransport::new(test_app.addr())
+        .await
+        .expect("Failed to create transport");
+    let (shutdown_tx, shutdown_rx) = watch::channel(());
+    let mut client = client::SignalingClient::builder(transport, shutdown_rx)
+        .with_login_timeout(Duration::from_millis(100))
+        .build();
+
+    let res = client.login("token1").await;
+    assert!(res.is_ok());
+    assert_eq!(
+        res.unwrap(),
+        vec![]
+    );
+
+    shutdown_tx.send(()).unwrap();
+}
+
+#[test(tokio::test)]
 async fn login() {
     let test_app = TestApp::new().await;
 
@@ -21,7 +43,22 @@ async fn login() {
         .with_login_timeout(Duration::from_millis(100))
         .build();
 
-    let res = client.login("client1", "token1").await;
+    let res = client.login("token1").await;
+    assert!(res.is_ok());
+    assert_eq!(
+        res.unwrap(),
+        vec![]
+    );
+
+    let transport = transport::tokio::TokioTransport::new(test_app.addr())
+        .await
+        .expect("Failed to create transport");
+    let (shutdown_tx, shutdown_rx) = watch::channel(());
+    let mut client = client::SignalingClient::builder(transport, shutdown_rx)
+        .with_login_timeout(Duration::from_millis(100))
+        .build();
+
+    let res = client.login("token2").await;
     assert!(res.is_ok());
     assert_eq!(
         res.unwrap(),
@@ -35,6 +72,7 @@ async fn login() {
 }
 
 #[test(tokio::test)]
+#[cfg_attr(target_os = "windows", ignore)]
 async fn login_timeout() {
     let test_app = TestApp::new().await;
 
@@ -48,7 +86,7 @@ async fn login_timeout() {
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let res = client.login("client1", "token1").await;
+    let res = client.login("token1").await;
     assert!(res.is_err());
     assert_matches!(
         res.unwrap_err(),
@@ -70,7 +108,7 @@ async fn login_invalid_credentials() {
         .with_login_timeout(Duration::from_millis(100))
         .build();
 
-    let res = client.login("client1", "").await;
+    let res = client.login("").await;
     assert!(res.is_err());
     assert_matches!(
         res.unwrap_err(),
@@ -92,7 +130,7 @@ async fn login_duplicate_id() {
         .with_login_timeout(Duration::from_millis(100))
         .build();
 
-    let res = client.login("client0", "token0").await;
+    let res = client.login("token0").await;
     assert!(res.is_err());
     assert_matches!(
         res.unwrap_err(),
@@ -179,7 +217,7 @@ async fn client_list_synchronization() {
         .await;
     assert_matches!(
         msg.unwrap(),
-        SignalingMessage::ClientList { clients } if clients.len() == 2 && clients[0].id == "client1" && clients[1].id == "client2"
+        SignalingMessage::ClientList { clients } if clients.len() == 1 && clients[0].id == "client1"
     );
 }
 

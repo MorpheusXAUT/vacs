@@ -22,7 +22,6 @@ impl TestRig {
             );
             client
                 .login(
-                    format!("client{}", i).as_str(),
                     format!("token{}", i).as_str(),
                 )
                 .await?;
