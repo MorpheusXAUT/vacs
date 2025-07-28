@@ -3,7 +3,7 @@ import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 
 function LoginPage() {
     const handleLoginClick = useAsyncDebounce(async () => {
-        await invokeSafe("open_auth_url");
+        await invokeSafe("auth_open_oauth_url");
     });
 
     return (

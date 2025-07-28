@@ -24,12 +24,12 @@ function App() {
     const authStatus = useAuthStore(state => state.status);
 
     useEffect(() => {
-        void invoke("frontend_ready");
+        void invoke("app_frontend_ready");
 
         setupErrorListener();
         setupAuthListeners();
 
-        void invokeSafe("check_auth_session");
+        void invokeSafe("auth_check_session");
     }, []);
 
     return (
@@ -51,7 +51,7 @@ function App() {
                                     <></>
                                 ) : authStatus === "unauthenticated" ? (
                                     <LoginPage/>
-                                ) : true ? ( // connected?
+                                ) : false ? ( // connected?
                                     <DAKeyArea/>
                                 ) : (
                                     <ConnectPage/>

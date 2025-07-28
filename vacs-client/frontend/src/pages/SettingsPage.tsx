@@ -15,7 +15,7 @@ function SettingsPage() {
 
     const handleLogoutClick = useAsyncDebounce(async () => {
         try {
-            await invokeStrict("logout");
+            await invokeStrict("auth_logout");
             navigate("/");
         } catch {}
     });

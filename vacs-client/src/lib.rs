@@ -1,12 +1,11 @@
 mod auth;
-mod commands;
 mod config;
 mod error;
 mod secrets;
 mod signaling;
-mod state;
+mod app;
 
-use crate::state::AppState;
+use crate::app::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
 use crate::error::FrontendError;
 
@@ -41,10 +40,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::app::frontend_ready,
-            commands::auth::open_auth_url,
-            commands::auth::check_auth_session,
-            commands::auth::logout,
+            app::commands::app_frontend_ready,
+            auth::commands::auth_open_oauth_url,
+            auth::commands::auth_check_session,
+            auth::commands::auth_logout,
         ])
         .build(tauri::generate_context!())
         .expect("Failed to build tauri application")
