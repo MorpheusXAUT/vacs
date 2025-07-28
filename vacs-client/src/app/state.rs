@@ -1,27 +1,35 @@
 use crate::config::{APP_USER_AGENT, AppConfig, BackendEndpoint};
 use crate::error::Error;
 use crate::secrets::cookies::SecureCookieStore;
+use crate::signaling;
 use anyhow::Context;
 use reqwest::StatusCode;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::{AppHandle, Emitter};
+use tokio::sync::Mutex;
 use url::Url;
+use vacs_protocol::http::ws::WebSocketToken;
 
-pub struct AppState {
+pub struct AppStateInner {
     pub config: AppConfig,
+    connection: Option<signaling::Connection>,
     pub http_client: reqwest::Client,
     cookie_store: Arc<SecureCookieStore>,
 }
 
-impl AppState {
+pub type AppState = Mutex<AppStateInner>;
+
+impl AppStateInner {
     pub fn new() -> anyhow::Result<Self> {
         let cookie_store = Arc::new(SecureCookieStore::default());
         let config = AppConfig::parse()?;
 
         Ok(Self {
             config: config.clone(),
+            connection: None,
             http_client: reqwest::ClientBuilder::new()
                 .user_agent(APP_USER_AGENT)
                 .cookie_provider(cookie_store.clone())
@@ -44,6 +52,44 @@ impl AppState {
         self.cookie_store
             .clear()
             .context("Failed to clear cookie store")
+    }
+
+    pub fn get_connection(&self) -> Option<&signaling::Connection> {
+        self.connection.as_ref()
+    }
+
+    pub async fn connect(&mut self, app: &AppHandle) -> Result<(), Error> {
+        log::info!("Connecting to signaling server");
+        log::debug!("Retrieving WebSocket auth token");
+        let token = self
+            .http_get::<WebSocketToken>(BackendEndpoint::WsToken, None)
+            .await?
+            .token;
+
+        log::debug!("Establishing signaling connection");
+        let mut connection = signaling::Connection::new(self.config.backend.ws_url.as_str()).await?;
+
+        log::debug!("Logging in to signaling server");
+        let client_list = connection.login(token.as_str()).await?;
+
+        log::debug!(
+            "Successfully connected to signaling server, {} clients connected",
+            client_list.len()
+        );
+        app.emit("signaling:client-list", client_list).ok();
+
+        self.connection = Some(connection);
+
+        Ok(())
+    }
+
+    pub async fn disconnect(&mut self) -> Result<(), Error> {
+        if let Some(connection) = self.connection.as_mut() {
+            connection.disconnect().await?
+        } else {
+            log::warn!("Tried to disconnect from signaling server, but not connected");
+        }
+        Ok(())
     }
 
     fn parse_http_request_url(

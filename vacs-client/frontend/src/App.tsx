@@ -19,8 +19,11 @@ import {setupErrorListener} from "./listeners/error-listener.ts";
 import MissionPage from "./pages/MissionPage.tsx";
 import TelephonePage from "./pages/TelephonePage.tsx";
 import LinkButton from "./components/ui/LinkButton.tsx";
+import {setupSignalingListeners} from "./listeners/signaling-listener.ts";
+import {useSignalingStore} from "./stores/signaling-store.ts";
 
 function App() {
+    const connected = useSignalingStore(state => state.connected);
     const authStatus = useAuthStore(state => state.status);
 
     useEffect(() => {
@@ -28,6 +31,7 @@ function App() {
 
         setupErrorListener();
         setupAuthListeners();
+        setupSignalingListeners();
 
         void invokeSafe("auth_check_session");
     }, []);
@@ -51,7 +55,7 @@ function App() {
                                     <></>
                                 ) : authStatus === "unauthenticated" ? (
                                     <LoginPage/>
-                                ) : false ? ( // connected?
+                                ) : connected ? (
                                     <DAKeyArea/>
                                 ) : (
                                     <ConnectPage/>

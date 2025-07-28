@@ -1,25 +1,37 @@
+pub(crate) mod commands;
+
 use tokio::sync::watch;
+use vacs_protocol::ws::ClientInfo;
 use vacs_signaling::client::SignalingClient;
+use vacs_signaling::error::SignalingError;
 use vacs_signaling::transport;
 
-pub struct Session {
+pub struct Connection {
     client: SignalingClient<transport::tokio::TokioTransport>,
     shutdown_tx: watch::Sender<()>,
 }
 
-impl Session {
-    pub async fn new() -> anyhow::Result<Self> {
+impl Connection {
+    pub async fn new(ws_url: &str) -> Result<Self, SignalingError> {
+        log::trace!("Creating watch channel");
         let (shutdown_tx, shutdown_rx) = watch::channel(());
-        let transport = transport::tokio::TokioTransport::new("wss://localhost:8080/ws").await?;
+        log::trace!("Creating tokio transport");
+        let transport = transport::tokio::TokioTransport::new(ws_url).await?;
+        log::trace!("Creating signaling client");
         let client = SignalingClient::new(transport, shutdown_rx);
 
+        log::trace!("Returning connection");
         Ok(Self {
             client,
             shutdown_tx,
         })
     }
 
-    pub async fn login(self, token: String) -> anyhow::Result<()> {
-        todo!()
+    pub async fn login(&mut self, token: &str)  -> Result<Vec<ClientInfo>, SignalingError> {
+        self.client.login(token).await
+    }
+
+    pub async fn disconnect(&mut self) -> Result<(), SignalingError> {
+        self.client.disconnect().await
     }
 }

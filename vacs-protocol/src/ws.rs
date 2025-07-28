@@ -37,6 +37,7 @@ pub enum ClientStatus {
 
 /// Represents a client as observed by the signaling server.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ClientInfo {
     /// ID of the client.
     pub id: String,

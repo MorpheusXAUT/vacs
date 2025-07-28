@@ -153,10 +153,9 @@ impl<T: SignalingTransport> SignalingClient<T> {
         }
     }
 
-    #[instrument(level = "info", skip(self, token), fields(%id))]
+    #[instrument(level = "info", skip(self, token))]
     pub async fn login(
         &mut self,
-        id: &str,
         token: &str,
     ) -> Result<Vec<ClientInfo>, SignalingError> {
         tracing::debug!("Sending Login message to server");
@@ -477,7 +476,7 @@ mod tests {
         let result = handle.incoming_tx.send(msg.clone()).await;
         assert!(result.is_ok());
 
-        let login_result = client.login("client1", "token1").await;
+        let login_result = client.login("token1").await;
         assert!(login_result.is_ok());
         assert_eq!(login_result.unwrap(), test_clients);
 
@@ -493,7 +492,7 @@ mod tests {
             .with_login_timeout(Duration::from_millis(100))
             .build();
 
-        let login_result = client.login("client1", "token1").await;
+        let login_result = client.login("token1").await;
         assert!(login_result.is_err());
         assert_matches!(login_result, Err(SignalingError::Timeout(_)));
 
@@ -513,7 +512,7 @@ mod tests {
         let result = handle.incoming_tx.send(msg.clone()).await;
         assert!(result.is_ok());
 
-        let login_result = client.login("client1", "token1").await;
+        let login_result = client.login("token1").await;
         assert!(login_result.is_err());
         assert_matches!(
             login_result,
@@ -536,7 +535,7 @@ mod tests {
         let result = handle.incoming_tx.send(msg.clone()).await;
         assert!(result.is_ok());
 
-        let login_result = client.login("client1", "token1").await;
+        let login_result = client.login("token1").await;
         assert!(login_result.is_err());
         assert_matches!(
             login_result,
@@ -561,7 +560,7 @@ mod tests {
         let result = handle.incoming_tx.send(msg.clone()).await;
         assert!(result.is_ok());
 
-        let login_result = client.login("client1", "token1").await;
+        let login_result = client.login("token1").await;
         assert!(login_result.is_err());
         assert_matches!(
             login_result,
@@ -585,7 +584,7 @@ mod tests {
         let result = handle.incoming_tx.send(msg.clone()).await;
         assert!(result.is_ok());
 
-        let login_result = client.login("client1", "token1").await;
+        let login_result = client.login("token1").await;
         assert!(login_result.is_err());
         assert_matches!(login_result, Err(SignalingError::ProtocolError(_)));
 
@@ -606,7 +605,7 @@ mod tests {
         let result = handle.incoming_tx.send(msg.clone()).await;
         assert!(result.is_ok());
 
-        let login_result = client.login("client1", "token1").await;
+        let login_result = client.login("token1").await;
         assert!(login_result.is_err());
         assert_matches!(login_result, Err(SignalingError::ServerError(_)));
 

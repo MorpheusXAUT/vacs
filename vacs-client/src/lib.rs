@@ -1,13 +1,14 @@
+mod app;
 mod auth;
 mod config;
 mod error;
 mod secrets;
 mod signaling;
-mod app;
 
-use crate::app::state::AppState;
-use tauri::{Emitter, Manager, RunEvent};
+use crate::app::state::{AppState, AppStateInner};
 use crate::error::FrontendError;
+use tauri::{Emitter, Manager, RunEvent};
+use tokio::sync::Mutex;
 
 pub fn run() {
     tauri::Builder::default()
@@ -22,8 +23,7 @@ pub fn run() {
                 let app = app.clone();
                 let url = url.clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(err) = auth::handle_auth_callback(&app, &url)
-                        .await {
+                    if let Err(err) = auth::handle_auth_callback(&app, &url).await {
                         app.emit::<FrontendError>("error", err.into()).ok();
                     }
                 });
@@ -35,24 +35,30 @@ pub fn run() {
             use tauri_plugin_deep_link::DeepLinkExt;
             app.deep_link().register_all()?;
 
-            app.manage(AppState::new()?);
+            app.manage(Mutex::new(AppStateInner::new()?));
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             app::commands::app_frontend_ready,
-            auth::commands::auth_open_oauth_url,
             auth::commands::auth_check_session,
             auth::commands::auth_logout,
+            auth::commands::auth_open_oauth_url,
+            signaling::commands::signaling_connect,
         ])
         .build(tauri::generate_context!())
         .expect("Failed to build tauri application")
         .run(move |app_handle, event| {
             if let RunEvent::ExitRequested { .. } = event {
-                app_handle
-                    .state::<AppState>()
-                    .persist()
-                    .expect("Failed to persist app state");
+                let app_handle = app_handle.clone();
+                tauri::async_runtime::block_on(async move {
+                    app_handle
+                        .state::<AppState>()
+                        .lock()
+                        .await
+                        .persist()
+                        .expect("Failed to persist app state");
+                });
             }
         });
 }

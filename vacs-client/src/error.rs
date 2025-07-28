@@ -11,6 +11,8 @@ pub enum Error {
     AudioDevice(String),
     #[error("Network error: {0}")]
     Network(String),
+    #[error("Signaling error: {0}")]
+    Signaling(#[from] vacs_signaling::error::SignalingError),
     #[error("HTTP error: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
@@ -109,6 +111,7 @@ impl From<&Error> for FrontendError {
             Error::AudioDevice(err) => FrontendError::new("Audio device error", err),
             Error::Reqwest(err) => FrontendError::new("HTTP error", err.to_string()),
             Error::Network(err) => FrontendError::new("Network error", err),
+            Error::Signaling(err) => FrontendError::new("Signaling error", err.to_string()),
             Error::Other(err) => FrontendError::new("Error", err.to_string()),
         }
     }

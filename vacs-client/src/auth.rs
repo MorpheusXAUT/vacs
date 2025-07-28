@@ -1,5 +1,6 @@
 pub(crate) mod commands;
 
+use std::sync::Mutex;
 use crate::config::BackendEndpoint;
 use crate::error::Error;
 use crate::app::state::AppState;
@@ -28,6 +29,8 @@ pub async fn handle_auth_callback(app: &AppHandle, url: &str) -> Result<(), Erro
 
     let cid = app
         .state::<AppState>()
+        .lock()
+        .await
         .http_post::<UserInfo, AuthExchangeToken>(
             BackendEndpoint::ExchangeCode,
             None,

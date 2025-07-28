@@ -1,16 +1,18 @@
+use crate::app::state::AppState;
 use crate::config::BackendEndpoint;
 use crate::error::{Error, HandleUnauthorizedExt};
-use crate::app::state::AppState;
 use anyhow::Context;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, Manager};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, State};
 use vacs_protocol::http::auth::{InitVatsimLogin, UserInfo};
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn auth_open_oauth_url(app: AppHandle) -> Result<(), Error> {
-    let auth_url = app
-        .state::<AppState>()
+pub async fn auth_open_oauth_url(app_state: State<'_, AppState>) -> Result<(), Error> {
+    let auth_url = app_state
+        .lock()
+        .await
         .http_get::<InitVatsimLogin>(BackendEndpoint::InitAuth, None)
         .await?
         .url;
@@ -25,10 +27,11 @@ pub async fn auth_open_oauth_url(app: AppHandle) -> Result<(), Error> {
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn auth_check_session(app: AppHandle) -> Result<(), Error> {
+pub async fn auth_check_session(app: AppHandle, app_state: State<'_, AppState>) -> Result<(), Error> {
     log::debug!("Fetching user info");
-    let response = app
-        .state::<AppState>()
+    let response = app_state
+        .lock()
+        .await
         .http_get::<UserInfo>(BackendEndpoint::UserInfo, None)
         .await;
 
@@ -53,16 +56,16 @@ pub async fn auth_check_session(app: AppHandle) -> Result<(), Error> {
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn auth_logout(app: AppHandle) -> Result<(), Error> {
+pub async fn auth_logout(app: AppHandle, app_state: State<'_, AppState>) -> Result<(), Error> {
     log::debug!("Logging out");
 
-    let app_state = &app.state::<AppState>();
-    app_state
+    let state = app_state.lock().await;
+    state
         .http_post::<(), ()>(BackendEndpoint::Logout, None, None)
         .await
         .handle_unauthorized(&app)?;
 
-    app_state
+    state
         .clear_cookie_store()
         .context("Failed to clear cookie store")?;
 
