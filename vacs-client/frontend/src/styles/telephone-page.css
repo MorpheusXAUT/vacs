@@ -1,0 +1,13 @@
+@reference "./main.css";
+
+.active-telephone-page:disabled::after {
+    content: "";
+    position: absolute;
+    height: calc(100%);
+    width: 9px;
+    left: -9px;
+    top: 0;
+    background-color: #B5BBC6;
+    opacity: 1;
+    z-index: 0;
+}

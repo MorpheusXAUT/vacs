@@ -1,0 +1,51 @@
+import {useRef, useState} from "preact/hooks";
+
+const getNextChar = (char: string, chars: string[]): string => {
+    const index = chars.indexOf(char);
+    if (index === chars.length - 1 || index === -1) {
+        return chars[0];
+    } else {
+        return chars[index + 1];
+    }
+};
+
+export function useDialPadInput() {
+    const [dialInput, setDialInput] = useState<string>("");
+    const multipleTapTimeout = useRef<number | undefined>(undefined);
+
+    const handleDialClick = (digit: string, buttonChars: string) => {
+        if (buttonChars === "") {
+            setDialInput(dialInput => dialInput + digit);
+            return;
+        }
+
+        const chars = [...buttonChars];
+        const lastChar = dialInput[dialInput.length - 1] ?? "";
+
+        if (multipleTapTimeout.current !== undefined) {
+            clearTimeout(multipleTapTimeout.current);
+
+            if (lastChar === digit || chars.includes(lastChar)) {
+                // Same button within 1 second
+                setDialInput(dialInput => dialInput.slice(0, -1) + getNextChar(lastChar, chars));
+            } else {
+                // Another button within 1 second
+                setDialInput(dialInput => dialInput + digit);
+            }
+        } else {
+            // No button within 1 second
+            setDialInput(dialInput => dialInput + digit);
+        }
+        multipleTapTimeout.current = setTimeout(() => multipleTapTimeout.current = undefined, 1000);
+    };
+
+    const clearLastChar = () => {
+        setDialInput(dialInput => dialInput.slice(0, -1));
+    };
+
+    const clearAll = () => {
+        setDialInput("");
+    };
+
+    return { dialInput, setDialInput, handleDialClick, clearLastChar, clearAll };
+}
