@@ -35,40 +35,41 @@ async fn login_without_self() {
 async fn login() {
     let test_app = TestApp::new().await;
 
-    let transport = transport::tokio::TokioTransport::new(test_app.addr())
+    let transport1 = transport::tokio::TokioTransport::new(test_app.addr())
         .await
         .expect("Failed to create transport");
-    let (_, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClient::builder(transport, shutdown_rx)
+    let (shutdown_tx1, shutdown_rx1) = watch::channel(());
+    let mut client1 = client::SignalingClient::builder(transport1, shutdown_rx1)
         .with_login_timeout(Duration::from_millis(100))
         .build();
 
-    let res = client.login("token1").await;
-    assert!(res.is_ok());
+    let res1 = client1.login("token1").await;
+    assert!(res1.is_ok());
     assert_eq!(
-        res.unwrap(),
+        res1.unwrap(),
         vec![]
     );
 
-    let transport = transport::tokio::TokioTransport::new(test_app.addr())
+    let transport2 = transport::tokio::TokioTransport::new(test_app.addr())
         .await
         .expect("Failed to create transport");
-    let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClient::builder(transport, shutdown_rx)
+    let (shutdown_tx2, shutdown_rx2) = watch::channel(());
+    let mut client2 = client::SignalingClient::builder(transport2, shutdown_rx2)
         .with_login_timeout(Duration::from_millis(100))
         .build();
 
-    let res = client.login("token2").await;
-    assert!(res.is_ok());
+    let res2 = client2.login("token2").await;
+    assert!(res2.is_ok());
     assert_eq!(
-        res.unwrap(),
+        res2.unwrap(),
         vec![ClientInfo {
             id: "client1".to_string(),
             display_name: "client1".to_string()
         }]
     );
 
-    shutdown_tx.send(()).unwrap();
+    shutdown_tx1.send(()).unwrap();
+    shutdown_tx2.send(()).unwrap();
 }
 
 #[test(tokio::test)]
