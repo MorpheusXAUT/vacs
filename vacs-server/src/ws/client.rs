@@ -6,7 +6,7 @@ use crate::ws::traits::{WebSocketSink, WebSocketStream};
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, watch};
-use tracing::Instrument;
+use tracing::{instrument, Instrument};
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 
 #[derive(Clone)]
@@ -35,6 +35,8 @@ impl ClientSession {
             .map_err(|err| anyhow::anyhow!(err).context("Failed to send message"))
     }
 
+    #[allow(clippy::too_many_arguments)]
+    #[instrument(level = "debug", skip_all, fields(client_id = %client_id))]
     pub async fn handle_interaction<R: WebSocketStream + 'static, T: WebSocketSink + 'static>(
         &mut self,
         app_state: &Arc<AppState>,
@@ -43,11 +45,12 @@ impl ClientSession {
         broadcast_rx: &mut broadcast::Receiver<SignalingMessage>,
         rx: &mut mpsc::Receiver<SignalingMessage>,
         shutdown_rx: &mut watch::Receiver<()>,
+        client_id: &str,
     ) {
         tracing::debug!("Starting to handle client interaction");
 
         tracing::trace!("Sending initial client list");
-        let clients = app_state.list_clients().await;
+        let clients = app_state.list_clients_without_self(client_id).await;
         if let Err(err) =
             send_message(&mut websocket_tx, SignalingMessage::ClientList { clients }).await
         {
@@ -212,12 +215,12 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn initial_client_list() {
+    async fn initial_client_list_without_self() {
         let setup = TestSetup::new();
         setup.register_client("client1").await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction();
+        let handle_task = setup.spawn_session_handle_interaction("client1".to_string());
 
         let message = websocket_rx.lock().unwrap().recv().await;
         match message {
@@ -225,7 +228,32 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"ClientList":{"clients":[{"id":"client1","display_name":"client1"}]}}"#
+                        r#"{"ClientList":{"clients":[]}}"#
+                    )
+                );
+            }
+            _ => panic!("Expected client list message"),
+        }
+
+        handle_task.await.unwrap();
+    }
+
+    #[test(tokio::test)]
+    async fn initial_client_list() {
+        let setup = TestSetup::new();
+        setup.register_client("client1").await;
+        setup.register_client("client2").await;
+        let websocket_rx = setup.websocket_rx.clone();
+
+        let handle_task = setup.spawn_session_handle_interaction("client2".to_string());
+
+        let message = websocket_rx.lock().unwrap().recv().await;
+        match message {
+            Some(ws::Message::Text(text)) => {
+                assert_eq!(
+                    text,
+                    Utf8Bytes::from_static(
+                        r#"{"ClientList":{"clients":[{"id":"client1","displayName":"client1"}]}}"#
                     )
                 );
             }
@@ -243,7 +271,7 @@ mod tests {
         let (_, mut client2_rx) = setup.register_client("client2").await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction();
+        let handle_task = setup.spawn_session_handle_interaction("client1".to_string());
 
         let message = websocket_rx.lock().unwrap().recv().await;
         match message {
@@ -251,7 +279,7 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"ClientList":{"clients":[{"id":"client2","display_name":"client2"}]}}"#
+                        r#"{"ClientList":{"clients":[{"id":"client2","displayName":"client2"}]}}"#
                     )
                 );
             }
@@ -275,7 +303,7 @@ mod tests {
         let setup = TestSetup::new().with_messages(vec![Err(axum::Error::new("Test error"))]);
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction();
+        let handle_task = setup.spawn_session_handle_interaction("client1".to_string());
 
         let message = websocket_rx.lock().unwrap().recv().await;
         match message {

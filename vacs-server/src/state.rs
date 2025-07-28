@@ -120,6 +120,10 @@ impl AppState {
         clients
     }
 
+    pub async fn list_clients_without_self(&self, self_client_id: &str) -> Vec<ClientInfo> {
+        self.list_clients().await.into_iter().filter(|c| c.id != self_client_id).collect()
+    }
+
     pub async fn get_client(&self, client_id: &str) -> Option<ClientSession> {
         self.clients.read().await.get(client_id).cloned()
     }

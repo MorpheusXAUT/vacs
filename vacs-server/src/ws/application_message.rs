@@ -17,7 +17,7 @@ pub async fn handle_application_message<T: WebSocketSink>(
     match message {
         SignalingMessage::ListClients => {
             tracing::trace!("Returning list of clients");
-            let clients = state.list_clients().await;
+            let clients = state.list_clients_without_self(client.get_id()).await;
             if let Err(err) =
                 send_message(websocket_tx, SignalingMessage::ClientList { clients }).await
             {
@@ -137,7 +137,7 @@ mod tests {
     use vacs_protocol::ws::LoginFailureReason;
 
     #[test(tokio::test)]
-    async fn handle_application_message_list_clients() {
+    async fn handle_application_message_list_clients_without_self() {
         let mut setup = TestSetup::new();
         setup.register_client("client1").await;
 
@@ -157,7 +157,34 @@ mod tests {
         assert_eq!(
             message,
             ws::Message::Text(Utf8Bytes::from_static(
-                r#"{"ClientList":{"clients":[{"id":"client1","display_name":"client1"}]}}"#
+                r#"{"ClientList":{"clients":[]}}"#
+            ))
+        )
+    }
+
+    #[test(tokio::test)]
+    async fn handle_application_message_list_clients() {
+        let mut setup = TestSetup::new();
+        setup.register_client("client1").await;
+        setup.register_client("client2").await;
+
+        let control_flow = handle_application_message(
+            &setup.app_state,
+            &setup.session,
+            &mut setup.mock_sink,
+            SignalingMessage::ListClients,
+        )
+            .await;
+        assert_eq!(control_flow, ControlFlow::Continue(()));
+
+        let message = setup
+            .take_last_websocket_message()
+            .await
+            .expect("No message received");
+        assert_eq!(
+            message,
+            ws::Message::Text(Utf8Bytes::from_static(
+                r#"{"ClientList":{"clients":[{"id":"client2","displayName":"client2"}]}}"#
             ))
         )
     }

@@ -145,7 +145,7 @@ impl TestSetup {
             .await
     }
 
-    pub fn spawn_session_handle_interaction(mut self) -> tokio::task::JoinHandle<()> {
+    pub fn spawn_session_handle_interaction(mut self, client_id: String) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             self.session
                 .handle_interaction(
@@ -155,6 +155,7 @@ impl TestSetup {
                     &mut self.broadcast_rx,
                     &mut self.rx,
                     &mut self.shutdown_tx.subscribe(),
+                    client_id.as_str(),
                 )
                 .await
         })

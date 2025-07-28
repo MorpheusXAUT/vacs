@@ -63,6 +63,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             &mut broadcast_rx,
             &mut rx,
             &mut shutdown_rx,
+            client_id.as_str()
         )
         .await;
 

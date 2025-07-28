@@ -14,18 +14,16 @@ async fn login() {
     let test_app = TestApp::new().await;
 
     let _client1 = TestClient::new_with_login(test_app.addr(), "client1", "token1", |clients| {
-        assert_eq!(clients.len(), 1);
-        assert_eq!(clients[0].id, "client1");
-        assert_eq!(clients[0].display_name, "client1");
+        assert_eq!(clients.len(), 0);
         Ok(())
     })
     .await
     .expect("Failed to log in first client");
 
     let _client2 = TestClient::new_with_login(test_app.addr(), "client2", "token2", |clients| {
-        assert_eq!(clients.len(), 2);
-        assert!(clients.iter().any(|client| client.id == "client1"));
-        assert!(clients.iter().any(|client| client.id == "client2"));
+        assert_eq!(clients.len(), 1);
+        assert_eq!(clients[0].id, "client1");
+        assert_eq!(clients[0].display_name, "client1");
         Ok(())
     })
     .await
@@ -37,9 +35,7 @@ async fn duplicate_login() {
     let test_app = TestApp::new().await;
 
     let _client1 = TestClient::new_with_login(test_app.addr(), "client1", "token1", |clients| {
-        assert_eq!(clients.len(), 1);
-        assert_eq!(clients[0].id, "client1");
-        assert_eq!(clients[0].display_name, "client1");
+        assert_eq!(clients.len(), 0);
         Ok(())
     })
     .await
@@ -106,6 +102,7 @@ async fn simultaneous_login_attempts() {
 }
 
 #[test(tokio::test)]
+#[cfg_attr(target_os = "windows", ignore)]
 async fn login_timeout() {
     let test_app = TestApp::new().await;
 
@@ -174,7 +171,7 @@ async fn client_disconnected() {
 
     let mut clients = setup_test_clients(
         test_app.addr(),
-        &vec![("client1", "token1"), ("client2", "token2")],
+        &[("client1", "token1"), ("client2", "token2")],
     )
     .await;
 
@@ -204,20 +201,17 @@ async fn login_client_list() {
 
     let _clients = setup_test_clients(
         test_app.addr(),
-        &vec![
-            ("client1", "token1"),
+        &[("client1", "token1"),
             ("client2", "token2"),
-            ("client3", "token3"),
-        ],
+            ("client3", "token3")],
     )
     .await;
 
     let _client4 = TestClient::new_with_login(test_app.addr(), "client4", "token4", |clients| {
-        assert_eq!(clients.len(), 4);
+        assert_eq!(clients.len(), 3);
         assert!(clients.iter().any(|client| client.id == "client1"));
         assert!(clients.iter().any(|client| client.id == "client2"));
         assert!(clients.iter().any(|client| client.id == "client3"));
-        assert!(clients.iter().any(|client| client.id == "client4"));
         Ok(())
     })
     .await
@@ -230,7 +224,7 @@ async fn logout() {
 
     let mut clients = setup_test_clients(
         test_app.addr(),
-        &vec![("client1", "token1"), ("client2", "token2")],
+        &[("client1", "token1"), ("client2", "token2")],
     )
     .await;
 

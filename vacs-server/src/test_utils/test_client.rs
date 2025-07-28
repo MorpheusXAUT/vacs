@@ -194,10 +194,6 @@ pub async fn setup_test_clients(
     let mut test_clients = HashMap::new();
     for (id, token) in clients {
         let client = TestClient::new_with_login(addr, id, token, |clients| {
-            assert!(
-                clients.iter().any(|c| c.id == *id),
-                "Client {id} not found in client list"
-            );
             Ok(())
         })
         .await
@@ -216,10 +212,6 @@ pub async fn setup_n_test_clients(addr: &str, num_clients: usize) -> Vec<TestCli
             &format!("client{n}"),
             &format!("token{n}"),
             |clients| {
-                assert!(
-                    clients.iter().any(|c| c.id == format!("client{n}")),
-                    "Client {n} not found in client list",
-                );
                 Ok(())
             },
         )
