@@ -9,8 +9,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
-use tokio::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::{oneshot, Mutex};
 use url::Url;
 use vacs_protocol::http::ws::WebSocketToken;
 
@@ -86,25 +86,45 @@ impl AppStateInner {
         app.emit("signaling:connected", "LOVV_CTR").ok(); // TODO: Update display name
         app.emit("signaling:client-list", client_list).ok();
 
-        connection.start(app.clone()).await;
+        let (on_disconnect_tx, on_disconnect_rx) = oneshot::channel();
+        connection.start(app.clone(), on_disconnect_tx).await;
+        
         self.connection = Some(connection);
+        
+        let app_clone = app.clone();
+        tokio::spawn(async move {
+            if on_disconnect_rx.await.is_ok() {
+                log::debug!("Signaling connection task ended, cleaning up state");
+                app_clone.state::<AppState>().lock().await.handle_connection_closed(&app_clone).await;
+                log::debug!("Finished cleaning up state after signaling connection task ended");
+            }
+        });
 
         Ok(())
     }
 
-    pub async fn disconnect(&mut self, app: &AppHandle) -> Result<(), Error> {
+    pub async fn disconnect(&mut self, app: &AppHandle) {
         log::info!("Disconnecting from signaling server");
-        if let Some(connection) = self.connection.as_mut() {
+        
+        let connection = self.connection.take();
+        if let Some(mut connection) = connection {
             connection.stop().await;
-            self.connection = None;
-
             app.emit("signaling:disconnected", Value::Null).ok();
+            log::debug!("Successfully disconnected from signaling server");
         } else {
-            log::warn!("Tried to disconnect from signaling server, but not connected");
+            log::info!("Tried to disconnection from signaling server, but not connected");
         }
-
-        log::debug!("Successfully disconnected from signaling server");
-        Ok(())
+    }
+    
+    pub async fn handle_connection_closed(&mut self, app: &AppHandle) {
+        log::info!("Handling closed signaling server connection");
+        
+        if self.connection.take().is_some() {
+            app.emit("signaling:disconnected", Value::Null).ok();
+            log::debug!("Successfully handled closed signaling server connection");
+        } else {
+            log::info!("Not connected to signaling server, nothing to handle");
+        }
     }
 
     fn parse_http_request_url(
@@ -190,6 +210,39 @@ impl AppStateInner {
         };
 
         log::trace!("HTTP POST request succeeded: {}", request_url.as_str());
+        Ok(result)
+    }
+
+    pub async fn http_delete<R>(
+        &self,
+        endpoint: BackendEndpoint,
+        query: Option<&[(&str, &str)]>,
+    ) -> Result<R, Error>
+    where
+        R: DeserializeOwned + Default,
+    {
+        let request_url = self.parse_http_request_url(endpoint, query)?;
+
+        log::trace!("Performing HTTP DELETE request: {}", request_url.as_str());
+        let response = self
+            .http_client
+            .delete(request_url.clone())
+            .send()
+            .await
+            .map_err(map_reqwest_error)?
+            .error_for_status()
+            .map_err(map_reqwest_status_code)?;
+
+        let result = if response.status() == StatusCode::NO_CONTENT {
+            R::default()
+        } else {
+            response
+                .json::<R>()
+                .await
+                .context("Failed to parse HTTP DELETE response")?
+        };
+
+        log::trace!("HTTP DELETE request succeeded: {}", request_url.as_str());
         Ok(result)
     }
 }

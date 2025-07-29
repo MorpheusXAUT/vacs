@@ -2,7 +2,7 @@ pub(crate) mod commands;
 
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{Mutex, watch, oneshot};
 use tokio::task::JoinSet;
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 use vacs_signaling::client::SignalingClient;
@@ -19,10 +19,7 @@ impl Connection {
     pub async fn new(ws_url: &str) -> Result<Self, SignalingError> {
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let transport = TokioTransport::new(ws_url).await?;
-        let client = Arc::new(Mutex::new(SignalingClient::new(
-            transport,
-            shutdown_rx,
-        )));
+        let client = Arc::new(Mutex::new(SignalingClient::new(transport, shutdown_rx)));
 
         Ok(Self {
             client,
@@ -35,15 +32,17 @@ impl Connection {
         self.client.lock().await.login(token).await
     }
 
-    pub async fn start(&mut self, app: AppHandle) {
+    pub async fn start(&mut self, app: AppHandle, on_disconnect: oneshot::Sender<()>) {
         let client = self.client.clone();
         let mut broadcast_rx = client.lock().await.subscribe();
-        
+
         self.tasks.spawn(async move {
             log::trace!("Signaling client interaction task started");
 
             let mut client = client.lock().await;
             client.handle_interaction().await;
+
+            let _ = on_disconnect.send(());
 
             log::trace!("Signaling client interaction task finished");
         });
@@ -81,10 +80,12 @@ impl Connection {
         log::info!("Stopping signaling connection");
         self.shutdown();
         while let Some(res) = self.tasks.join_next().await {
+            log::trace!("Signaling connection task joined: {res:?}");
             if let Err(err) = res {
                 log::warn!("Task join error while stopping signaling connection: {err:?}")
             }
         }
+        log::info!("Successfully stopped signaling connection");
     }
 
     pub fn shutdown(&self) {

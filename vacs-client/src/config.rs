@@ -20,6 +20,7 @@ impl AppConfig {
             .set_default("backend.endpoints.user_info", "/auth/user")?
             .set_default("backend.endpoints.logout", "/auth/logout")?
             .set_default("backend.endpoints.ws_token", "/ws/token")?
+            .set_default("backend.endpoints.terminate_ws_session", "/ws")?
             .set_default("backend.timeout_ms", 2000)?
             .add_source(
                 File::with_name(
@@ -57,6 +58,7 @@ impl BackendConfig {
             BackendEndpoint::UserInfo => &self.endpoints.user_info,
             BackendEndpoint::Logout => &self.endpoints.logout,
             BackendEndpoint::WsToken => &self.endpoints.ws_token,
+            BackendEndpoint::TerminateWsSession => &self.endpoints.terminate_ws_session,
         };
         format!("{}{}", self.base_url, path)
     }
@@ -68,6 +70,7 @@ pub enum BackendEndpoint {
     UserInfo,
     Logout,
     WsToken,
+    TerminateWsSession,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -77,6 +80,7 @@ pub struct BackendEndpointsConfigs {
     pub user_info: String,
     pub logout: String,
     pub ws_token: String,
+    pub terminate_ws_session: String,
 }
 
 pub fn project_dirs() -> Option<directories::ProjectDirs> {
