@@ -1,25 +1,26 @@
 pub(crate) mod commands;
 
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, watch, oneshot};
 use tokio::task::JoinSet;
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 use vacs_signaling::client::{InterruptionReason, SignalingClient};
 use vacs_signaling::error::SignalingError;
-use vacs_signaling::transport::tokio::TokioTransport;
+use vacs_signaling::transport;
+use crate::config::WS_LOGIN_TIMEOUT;
 
 pub struct Connection {
-    client: Arc<Mutex<SignalingClient<TokioTransport>>>,
+    client: SignalingClient,
     shutdown_tx: watch::Sender<()>,
     tasks: JoinSet<()>,
 }
 
 impl Connection {
-    pub async fn new(ws_url: &str) -> Result<Self, SignalingError> {
+    pub async fn new() -> Result<Self, SignalingError> {
         let (shutdown_tx, shutdown_rx) = watch::channel(());
-        let transport = TokioTransport::new(ws_url).await?;
-        let client = Arc::new(Mutex::new(SignalingClient::new(transport, shutdown_rx)));
+        let client = SignalingClient::new(shutdown_rx);
 
         Ok(Self {
             client,
@@ -29,18 +30,19 @@ impl Connection {
     }
 
     pub async fn login(&mut self, token: &str) -> Result<Vec<ClientInfo>, SignalingError> {
-        self.client.lock().await.login(token).await
+        self.client.login(token, WS_LOGIN_TIMEOUT).await
     }
 
-    pub async fn start(&mut self, app: AppHandle, on_disconnect: oneshot::Sender<()>) {
-        let client = self.client.clone();
-        let mut broadcast_rx = client.lock().await.subscribe();
+    pub async fn connect(&mut self, app: AppHandle, ws_url: &str, on_disconnect: oneshot::Sender<()>) -> Result<(), SignalingError> {
+        let mut client = self.client.clone();
+        let mut broadcast_rx = client.subscribe();
+
+        let (sender, receiver) = transport::tokio::create(ws_url).await?;
 
         self.tasks.spawn(async move {
             log::trace!("Signaling client interaction task started");
 
-            let mut client = client.lock().await;
-            let reason = client.handle_interaction().await;
+            let reason = client.start(sender, receiver).await;
             match reason {
                 InterruptionReason::Disconnected => {
                     log::debug!("Signaling client interaction ended due to disconnect, emitting event");

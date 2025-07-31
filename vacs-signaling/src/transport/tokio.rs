@@ -1,50 +1,46 @@
 use crate::error::SignalingError;
-use crate::transport::SignalingTransport;
+use crate::transport::{SignalingReceiver, SignalingSender};
 use async_trait::async_trait;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
+use tokio::sync::mpsc;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use vacs_protocol::ws::SignalingMessage;
 
-pub struct TokioTransport {
+pub struct TokioSender {
     websocket_tx: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, tungstenite::Message>,
+}
+
+pub struct TokioReceiver {
     websocket_rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 }
 
-impl TokioTransport {
-    #[tracing::instrument(level = "info")]
-    pub async fn new(url: &str) -> Result<Self, SignalingError> {
-        tracing::info!("Connecting to signaling server");
-        let (websocket_stream, response) =
-            tokio_tungstenite::connect_async(url).await.map_err(|err| {
-                tracing::error!(?err, "Failed to connect to signaling server");
-                SignalingError::ConnectionError(err)
-            })?;
-        tracing::debug!(?response, "WebSocket handshake response");
+#[tracing::instrument(level = "info")]
+pub async fn create(url: &str) -> Result<(TokioSender, TokioReceiver), SignalingError> {
+    tracing::info!("Connecting to signaling server");
+    let (websocket_stream, response) =
+        tokio_tungstenite::connect_async(url).await.map_err(|err| {
+            tracing::error!(?err, "Failed to connect to signaling server");
+            SignalingError::ConnectionError(err)
+        })?;
+    tracing::debug!(?response, "WebSocket handshake response");
 
-        let (websocket_tx, websocket_rx) = websocket_stream.split();
+    let (websocket_tx, websocket_rx) = websocket_stream.split();
 
-        tracing::info!("Successfully established connection to signaling server");
-        Ok(Self {
-            websocket_tx,
-            websocket_rx,
-        })
-    }
+    tracing::info!("Successfully established connection to signaling server");
+    Ok((TokioSender { websocket_tx }, TokioReceiver { websocket_rx }))
 }
 
 #[async_trait]
-impl SignalingTransport for TokioTransport {
+impl SignalingSender for TokioSender {
     #[tracing::instrument(level = "debug", skip(self, msg))]
-    async fn send(&mut self, msg: SignalingMessage) -> Result<(), SignalingError> {
-        let serialized = SignalingMessage::serialize(&msg).map_err(|err| {
-            tracing::warn!(?err, "Failed to serialize message");
-            SignalingError::SerializationError(err)
-        })?;
-
-        tracing::debug!("Sending message");
+    async fn send(&mut self, msg: tungstenite::Message) -> Result<(), SignalingError> {
+        tracing::debug!("Sending message to server");
         self.websocket_tx
-            .send(tungstenite::Message::from(serialized))
+            .send(msg)
             .await
             .map_err(|err| {
                 tracing::warn!(?err, "Failed to send message");
@@ -55,7 +51,22 @@ impl SignalingTransport for TokioTransport {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn recv(&mut self) -> Result<SignalingMessage, SignalingError> {
+    async fn close(&mut self) -> Result<(), SignalingError> {
+        let _ = self.websocket_tx.send(tungstenite::Message::Close(Some(CloseFrame{code: CloseCode::Normal, reason: "".into()}))).await.inspect_err(|err| {
+            tracing::warn!(?err, "Failed to send Close frame");
+        });
+
+        self.websocket_tx.close().await.map_err(|err| {
+            tracing::warn!(?err, "Failed to close WebSocket connection");
+            SignalingError::Transport(anyhow::anyhow!(err))
+        })
+    }
+}
+
+#[async_trait]
+impl SignalingReceiver for TokioReceiver {
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn recv(&mut self, send_tx: &mpsc::Sender<tungstenite::Message>) -> Result<SignalingMessage, SignalingError> {
         while let Some(msg) = self.websocket_rx.next().await {
             match msg {
                 Ok(tungstenite::Message::Text(text)) => {
@@ -70,8 +81,11 @@ impl SignalingTransport for TokioTransport {
                     return Err(SignalingError::Disconnected);
                 }
                 Ok(tungstenite::Message::Ping(data)) => {
-                    if let Err(err) = self.websocket_tx.send(tungstenite::Message::Pong(data)).await {
-                        tracing::warn!(?err, "Failed to send Pong");
+                    if let Err(err) = send_tx
+                        .send(tungstenite::Message::Pong(data))
+                        .await
+                    {
+                        tracing::warn!(?err, "Failed to send tokio Pong");
                         return Err(SignalingError::Disconnected);
                     }
                 }
@@ -86,13 +100,5 @@ impl SignalingTransport for TokioTransport {
         }
         tracing::warn!("WebSocket stream closed");
         Err(SignalingError::Disconnected)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    async fn close(&mut self) -> Result<(), SignalingError> {
-        self.websocket_tx.close().await.map_err(|err| {
-            tracing::warn!(?err, "Failed to close WebSocket connection");
-            SignalingError::Transport(anyhow::anyhow!(err))
-        })
     }
 }
