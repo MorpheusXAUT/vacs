@@ -1,15 +1,13 @@
 pub(crate) mod commands;
 
-use std::sync::Arc;
-use std::time::Duration;
+use crate::config::{WS_LOGIN_TIMEOUT, WS_READY_TIMEOUT};
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{Mutex, watch, oneshot};
+use tokio::sync::{oneshot, watch};
 use tokio::task::JoinSet;
-use vacs_protocol::ws::{ClientInfo, SignalingMessage};
+use vacs_protocol::ws::SignalingMessage;
 use vacs_signaling::client::{InterruptionReason, SignalingClient};
 use vacs_signaling::error::SignalingError;
 use vacs_signaling::transport;
-use crate::config::WS_LOGIN_TIMEOUT;
 
 pub struct Connection {
     client: SignalingClient,
@@ -29,24 +27,28 @@ impl Connection {
         })
     }
 
-    pub async fn login(&mut self, token: &str) -> Result<Vec<ClientInfo>, SignalingError> {
-        self.client.login(token, WS_LOGIN_TIMEOUT).await
-    }
+    pub async fn connect(
+        &mut self,
+        app: AppHandle,
+        ws_url: &str,
+        token: &str,
+        on_disconnect: oneshot::Sender<()>,
+    ) -> Result<(), SignalingError> {
+        log::info!("Connecting to signaling server");
 
-    pub async fn connect(&mut self, app: AppHandle, ws_url: &str, on_disconnect: oneshot::Sender<()>) -> Result<(), SignalingError> {
-        let mut client = self.client.clone();
-        let mut broadcast_rx = client.subscribe();
-
+        log::debug!("Creating signaling connection");
         let (sender, receiver) = transport::tokio::create(ws_url).await?;
 
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let mut client = self.client.clone();
         self.tasks.spawn(async move {
             log::trace!("Signaling client interaction task started");
 
-            let reason = client.start(sender, receiver).await;
+            let reason = client.start(sender, receiver, ready_tx).await;
             match reason {
                 InterruptionReason::Disconnected => {
                     log::debug!("Signaling client interaction ended due to disconnect, emitting event");
-                    on_disconnect.send(()).ok();
+                    let _ = on_disconnect.send(());
                 },
                 InterruptionReason::ShutdownSignal => {
                     log::trace!("Signaling client interaction ended due to shutdown signal, not emitting further");
@@ -59,6 +61,8 @@ impl Connection {
             log::trace!("Signaling client interaction task finished");
         });
 
+        let app_clone = app.clone();
+        let mut broadcast_rx = self.client.subscribe();
         let mut shutdown_rx = self.shutdown_tx.subscribe();
         self.tasks.spawn(async move {
             log::trace!("Signaling connection interaction task started");
@@ -74,7 +78,7 @@ impl Connection {
 
                     msg = broadcast_rx.recv() => {
                         match msg {
-                            Ok(msg) => Self::handle_signaling_message(msg, &app),
+                            Ok(msg) => Self::handle_signaling_message(msg, &app_clone),
                             Err(err) => {
                                 log::warn!("Received error from signaling client broadcast receiver: {err:?}");
                                 break;
@@ -86,22 +90,61 @@ impl Connection {
 
             log::trace!("Signaling connection interaction task finished");
         });
-    }
 
-    pub async fn stop(&mut self) {
-        log::info!("Stopping signaling connection");
-        self.shutdown();
-        while let Some(res) = self.tasks.join_next().await {
-            if let Err(err) = res {
-                log::warn!("Task join error while stopping signaling connection: {err:?}")
+        log::debug!("Waiting for signaling connection to be ready");
+        if tokio::time::timeout(WS_READY_TIMEOUT, ready_rx).await.is_err() {
+            log::warn!(
+                "Signaling connection did not become ready in time, aborting remaining tasks"
+            );
+            self.tasks.abort_all();
+            return Err(SignalingError::Timeout(
+                "Signaling client did not become ready in time".to_string(),
+            ));
+        }
+
+        log::debug!("Signaling connection is ready, logging in");
+        let clients = match self.client.login(token, WS_LOGIN_TIMEOUT).await {
+            Ok(clients) => clients,
+            Err(err) => {
+                log::warn!("Login failed, aborting connection: {err:?}");
+                self.tasks.abort_all();
+                return Err(err);
+            }
+        };
+        log::debug!(
+            "Successfully connected to signaling server, {} clients connected",
+            clients.len()
+        );
+
+        app.emit("signaling:connected", "LOVV_CTR").ok(); // TODO: Update display name
+        app.emit("signaling:client-list", clients).ok();
+
+        /*match self.tasks.join_next().await {
+            Some(Ok(_)) => {
+                log::debug!("Signaling connection task ended cleanly");
+            }
+            Some(Err(err)) => {
+                log::error!("Task panicked or failed to join: {err:?}");
+            }
+            None => {
+                log::warn!("All tasks completed unexpectedly");
             }
         }
-        log::info!("Successfully stopped signaling connection");
+
+        log::debug!("Signaling connection task completed, aborting remaining tasks");
+        self.tasks.abort_all();*/
+
+        Ok(())
     }
 
-    pub fn shutdown(&self) {
-        log::trace!("Shutdown requested for signaling connection");
+    pub fn disconnect(&mut self) {
+        log::trace!("Disconnect requested for signaling connection");
         let _ = self.shutdown_tx.send(());
+        self.tasks.abort_all();
+    }
+    
+    pub async fn send(&mut self, msg: SignalingMessage) -> Result<(), SignalingError> {
+        self.client.send(msg).await
     }
 
     fn handle_signaling_message(msg: SignalingMessage, app: &AppHandle) {
@@ -126,6 +169,6 @@ impl Connection {
 impl Drop for Connection {
     fn drop(&mut self) {
         log::debug!("Signaling connection dropped, sending shutdown signal");
-        self.shutdown();
+        self.disconnect();
     }
 }

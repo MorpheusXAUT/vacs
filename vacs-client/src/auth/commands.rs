@@ -60,7 +60,7 @@ pub async fn auth_logout(app: AppHandle, app_state: State<'_, AppState>) -> Resu
 
     let mut state = app_state.lock().await;
 
-    state.disconnect(&app).await;
+    state.disconnect_signaling(&app).await;
 
     state
         .http_post::<(), ()>(BackendEndpoint::Logout, None, None)

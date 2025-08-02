@@ -202,8 +202,7 @@ impl ClientSession {
             }
 
             tracing::trace!("WebSocket writer task finished");
-        }
-            .instrument(tracing::Span::current()));
+        }.instrument(tracing::Span::current()));
 
         (join_handle, ws_outbound_tx)
     }
@@ -263,8 +262,7 @@ impl ClientSession {
                 }
             }
             tracing::trace!("WebSocket reader task finished");
-        }
-            .instrument(tracing::Span::current()));
+        }.instrument(tracing::Span::current()));
 
         (join_handle, ws_inbound_rx)
     }
@@ -304,9 +302,7 @@ impl ClientSession {
                     }
                 }
                 tracing::trace!("WebSocket ping task finished");
-            }
-            .instrument(tracing::Span::current()),
-        );
+            }.instrument(tracing::Span::current()));
 
         (join_handle, ping_shutdown_rx)
     }
