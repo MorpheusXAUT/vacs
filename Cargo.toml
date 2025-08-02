@@ -50,7 +50,7 @@ tauri-plugin-opener = "2.4.0"
 tauri-plugin-single-instance = "2.3.1"
 test-log = { version = "0.2.18", features = ["trace"] }
 thiserror = "2.0.12"
-tokio = { version = "1.46.1", features = ["rt", "rt-multi-thread", "macros", "signal"] }
+tokio = { version = "1.46.1", features = ["rt", "rt-multi-thread", "macros", "signal", "sync", "time"] }
 tokio-tungstenite = { version = "0.27.0", features = ["native-tls"] }
 tower-http = "0.6.6"
 tower-sessions = { version = "0.14.0", features = ["signed"] }

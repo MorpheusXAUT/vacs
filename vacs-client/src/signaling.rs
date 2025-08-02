@@ -139,7 +139,8 @@ impl Connection {
 
     pub fn disconnect(&mut self) {
         log::trace!("Disconnect requested for signaling connection");
-        let _ = self.shutdown_tx.send(());
+        //let _ = self.shutdown_tx.send(());
+        self.client.disconnect();
         self.tasks.abort_all();
     }
     
@@ -168,7 +169,7 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        log::debug!("Signaling connection dropped, sending shutdown signal");
+        log::debug!("Signaling connection dropped, sending disconnect signal");
         self.disconnect();
     }
 }
