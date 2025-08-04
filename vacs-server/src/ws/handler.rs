@@ -1,12 +1,13 @@
 use crate::state::AppState;
 use crate::ws::auth::handle_websocket_login;
 use crate::ws::message::send_message_raw;
-use axum::extract::ws::WebSocket;
+use axum::extract::ws::{CloseCode, CloseFrame, Message, Utf8Bytes, WebSocket};
 use axum::extract::{ConnectInfo, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode as TungsteniteCloseCode;
 use tracing::Instrument;
 use vacs_protocol::ws::{LoginFailureReason, SignalingMessage};
 
@@ -49,6 +50,16 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             {
                 tracing::warn!(?err, "Failed to send login failure message");
             }
+
+            if let Err(err) = websocket_tx
+                .send(Message::Close(Some(CloseFrame {
+                    code: CloseCode::from(TungsteniteCloseCode::Protocol),
+                    reason: Utf8Bytes::from("Login failure"),
+                })))
+                .await
+            {
+                tracing::warn!(?err, "Failed to send close frame");
+            }
             return;
         }
     };
@@ -63,7 +74,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             &mut broadcast_rx,
             &mut rx,
             &mut shutdown_rx,
-            client_id.as_str()
+            client_id.as_str(),
         )
         .await;
 
