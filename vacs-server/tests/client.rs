@@ -165,11 +165,11 @@ async fn control_messages() -> anyhow::Result<()> {
     for n in 0..10 {
         client
             .send_raw_and_expect(
-                tungstenite::Message::Ping(Bytes::from(format!("ping{}", n))),
+                tungstenite::Message::Ping(Bytes::from(format!("ping{n}"))),
                 |message| {
                     assert_eq!(
                         message,
-                        tungstenite::Message::Pong(Bytes::from(format!("ping{}", n)))
+                        tungstenite::Message::Pong(Bytes::from(format!("ping{n}")))
                     );
                 },
             )

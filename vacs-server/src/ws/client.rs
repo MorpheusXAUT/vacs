@@ -44,6 +44,7 @@ impl ClientSession {
         let _ = self.client_shutdown_tx.send(());
     }
 
+    #[instrument(level = "trace", skip(self), err)]
     pub async fn send_message(&self, message: SignalingMessage) -> anyhow::Result<()> {
         self.tx
             .send(message)

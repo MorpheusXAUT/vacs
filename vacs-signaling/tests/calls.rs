@@ -11,6 +11,7 @@ async fn call_offer_answer() {
     let clients = test_rig.clients_mut();
 
     clients[0]
+        .client
         .send(SignalingMessage::CallOffer {
             peer_id: "client1".to_string(),
             sdp: "sdp0".to_string(),
@@ -31,6 +32,7 @@ async fn call_offer_answer() {
     );
 
     clients[1]
+        .client
         .send(SignalingMessage::CallAnswer {
             peer_id: "client0".to_string(),
             sdp: "sdp1".to_string(),

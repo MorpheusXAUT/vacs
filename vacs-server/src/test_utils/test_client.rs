@@ -71,9 +71,12 @@ impl TestClient {
     }
 
     pub async fn recv_raw_with_timeout(&mut self, timeout: Duration) -> Option<Message> {
-        match tokio::time::timeout(timeout, self.ws_stream.next()).await {
-            Ok(Some(Ok(message))) => Some(message),
-            _ => None,
+        loop {
+            match tokio::time::timeout(timeout, self.ws_stream.next()).await {
+                Ok(Some(Ok(Message::Ping(_)))) => continue,
+                Ok(Some(Ok(message))) => return Some(message),
+                _ => return None,
+            }
         }
     }
 
