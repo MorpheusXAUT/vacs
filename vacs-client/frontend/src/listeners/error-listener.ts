@@ -8,11 +8,12 @@ export function setupErrorListener() {
     const unlistenFns: (Promise<UnlistenFn>)[] = [];
 
     const init = () => {
-        const unlisten = listen<Error>("error", (event) => {
-            openErrorOverlay(event.payload.title, event.payload.message, event.payload.timeout_ms);
-        });
 
-        unlistenFns.push(unlisten);
+        unlistenFns.push(
+            listen<Error>("error", (event) => {
+                openErrorOverlay(event.payload.title, event.payload.message, event.payload.timeout_ms);
+            })
+        );
     };
 
     init();

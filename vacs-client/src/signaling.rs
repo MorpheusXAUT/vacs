@@ -168,9 +168,20 @@ impl Connection {
 
     fn handle_signaling_message(msg: SignalingMessage, app: &AppHandle) {
         match msg {
-            SignalingMessage::CallOffer { .. } => {}
-            SignalingMessage::CallEnd { .. } => {}
-            SignalingMessage::CallIceCandidate { .. } => {}
+            ref call_offer @ SignalingMessage::CallOffer { ref peer_id, .. } => {
+                log::trace!("Call offer received from {peer_id}");
+                app.emit("signaling:call-offer", call_offer).ok();
+                // TODO play chime
+            }
+            SignalingMessage::CallEnd { peer_id } => {
+                log::trace!("Call end received from {peer_id}");
+                app.emit("signaling:call-end", peer_id).ok();
+                // TODO end call in webrtc/audio
+            }
+            SignalingMessage::CallIceCandidate { peer_id, .. } => {
+                log::trace!("ICE candidate received from {peer_id}");
+                // TODO pass to webrtc
+            }
             SignalingMessage::ClientConnected { client } => {
                 log::trace!("Client connected: {client:?}");
                 app.emit("signaling:client-connected", client).ok();

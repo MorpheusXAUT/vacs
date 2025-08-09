@@ -7,15 +7,14 @@ export function setupAuthListeners() {
     const unlistenFns: (Promise<UnlistenFn>)[] = [];
 
     const init = () => {
-        const unlisten1 = listen<string>("auth:authenticated", (event) => {
-            setAuthenticated(event.payload);
-        });
-
-        const unlisten2 = listen("auth:unauthenticated", () => {
-            setUnauthenticated();
-        });
-
-        unlistenFns.push(unlisten1, unlisten2);
+        unlistenFns.push(
+            listen<string>("auth:authenticated", (event) => {
+                setAuthenticated(event.payload);
+            }),
+            listen("auth:unauthenticated", () => {
+                setUnauthenticated();
+            })
+        );
     };
 
     init();

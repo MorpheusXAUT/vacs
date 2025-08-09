@@ -20,11 +20,10 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
     setDisplayName: (displayName) => set({displayName}),
     setClients: (clients) => set({clients}),
     addClient: (client) => {
-        const clients = get().clients;
+        const clients = get().clients.filter(c => c.id !== client.id);
         set({clients: [...clients, client]});
     },
     removeClient: (cid) => {
-        const clients = get().clients;
-        set({clients: clients.filter(client => client.id !== cid)});
+        set({clients: get().clients.filter(client => client.id !== cid)});
     }
 }));

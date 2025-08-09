@@ -75,10 +75,10 @@ function SettingsPage() {
                     </div>
                 </div>
                 <div className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:px-1 [&>button]:shrink-0">
-                    <Button color="gray" className="rounded !text-base"><p>Side<br/>tones</p></Button>
+                    <Button color="gray" className="rounded"><p>Side<br/>tones</p></Button>
                     <div className="h-full flex flex-row gap-2">
-                        <Button color="red" className="w-auto px-3 rounded !text-base" disabled={!connected} onClick={handleDisconnectClick}>Disconnect</Button>
-                        <Button color="red" className="rounded !text-base" disabled={!isAuthenticated} onClick={handleLogoutClick}>Logout</Button>
+                        <Button color="red" className="w-auto px-3 rounded" disabled={!connected} onClick={handleDisconnectClick}>Disconnect</Button>
+                        <Button color="red" className="rounded" disabled={!isAuthenticated} onClick={handleLogoutClick}>Logout</Button>
                     </div>
                 </div>
             </div>

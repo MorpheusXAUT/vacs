@@ -10,16 +10,17 @@ export type ButtonProps = {
     children?: ComponentChildren;
     onClick?: (event: MouseEvent) => void;
     disabled?: boolean;
+    softDisabled?: boolean;
     highlight?: ButtonHighlightColor;
 };
 
 const ButtonColors: Record<ButtonColor, string> = {
-    cyan: "bg-[#92e1fe] border-t-cyan-100 border-l-cyan-100 border-r-cyan-950 border-b-cyan-950 rounded-md",
-    green: "bg-[#4b8747] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950 rounded-md",
-    gray: "bg-gray-300 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700 shadow-[0_0_0_1px_#364153] text-lg",
-    blue: "bg-blue-700 border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900 text-white rounded-md",
-    emerald: "bg-[#4b8747] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950 rounded-md", // same background color as green, kept for separation of button types
-    red: "bg-red-400 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900 rounded-md",
+    cyan: "bg-[#92e1fe] border-t-cyan-100 border-l-cyan-100 border-r-cyan-950 border-b-cyan-950",
+    green: "bg-[#4b8747] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950",
+    gray: "bg-gray-300 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700 shadow-[0_0_0_1px_#364153]",
+    blue: "bg-blue-700 border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900 text-white",
+    emerald: "bg-[#4b8747] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950", // same background color as green, kept for separation of button types
+    red: "bg-red-400 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900",
 };
 
 const ActiveButtonColors: Record<ButtonColor, string> = {
@@ -31,13 +32,13 @@ const ActiveButtonColors: Record<ButtonColor, string> = {
     red: "active:border-r-red-200 active:border-b-red-200 active:border-t-red-900 active:border-l-red-900",
 };
 
-export const DisabledButtonColors: Record<ButtonColor, string> = {
-    cyan: "disabled:!border-cyan-900 disabled:!border",
-    green: "disabled:!border-green-950 disabled:!border",
-    gray: "disabled:!border-gray-700 disabled:!border disabled:!shadow-none",
-    blue: "disabled:!border-blue-950 disabled:!border",
-    emerald: "disabled:!border-emerald-950 disabled:!border",
-    red: "disabled:!border-red-950 disabled:!border"
+export const ForceDisabledButtonColors: Record<ButtonColor, string> = {
+    cyan: "!border-cyan-900 !border",
+    green: "!border-green-950 !border",
+    gray: "!border-gray-700 !border !shadow-none",
+    blue: "!border-blue-950 !border",
+    emerald: "!border-emerald-950 !border",
+    red: "!border-red-950 !border"
 };
 
 const ButtonHighlightColors: Record<ButtonHighlightColor, string> = {
@@ -57,13 +58,13 @@ function Button(props: ButtonProps) {
     return (
         <button
             className={clsx(
-                "leading-5 w-20 cursor-pointer border-2 font-semibold disabled:cursor-not-allowed",
+                "leading-5 w-20 border-2 rounded-md font-semibold cursor-pointer disabled:cursor-not-allowed",
                 ButtonColors[props.color],
                 ActiveButtonColors[props.color],
-                DisabledButtonColors[props.color],
+                (props.disabled || props.softDisabled) && ForceDisabledButtonColors[props.color],
                 props.className,
                 props.highlight !== undefined && "p-1.5",
-                !props.disabled && "active:[&>*]:translate-y-[1px] active:[&>*]:translate-x-[1px]"
+                !props.disabled && !props.softDisabled && "active:[&>*]:translate-y-[1px] active:[&>*]:translate-x-[1px]"
             )}
             onClick={props.onClick}
             disabled={props.disabled}

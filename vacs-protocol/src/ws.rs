@@ -47,6 +47,7 @@ pub struct ClientInfo {
 
 /// Represents a message exchanged between the signaling server and clients.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(tag = "type")]
 pub enum SignalingMessage {
     /// A login message sent by the client upon initial connection, providing an VATSIM access token.
     ///
@@ -78,6 +79,7 @@ pub enum SignalingMessage {
     /// which is returned to the source client by the signaling server.
     ///
     /// Upon rejection, the target client will reply with [`SignalingMessage::CallReject`].
+    #[serde(rename_all = "camelCase")]
     CallOffer {
         /// SDP containing the WebRTC offer.
         sdp: String,
@@ -93,6 +95,7 @@ pub enum SignalingMessage {
     ///
     /// After the [`SignalingMessage::CallAnswer`] message has been processed, both clients can start ICE candidate gathering
     /// and trickle them to their peer using [`SignalingMessage::CallIceCandidate`].
+    #[serde(rename_all = "camelCase")]
     CallAnswer {
         /// SDP containing the WebRTC answer based on the previously received offer.
         sdp: String,
@@ -103,6 +106,7 @@ pub enum SignalingMessage {
     /// A call reject message sent by the target client to reject an incoming call.
     ///
     /// The signaling server will forward the offer to the source client, exchanging the [`SignalingMessage::CallReject::peer_id`] with the callee's ID.
+    #[serde(rename_all = "camelCase")]
     CallReject {
         /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
         /// When received from the signaling server (by the caller), this is the ID of the target client rejecting the call.
@@ -111,10 +115,12 @@ pub enum SignalingMessage {
     /// A call end message sent by either client to indicate the (gracious) end of a call.
     ///
     /// The signaling server will forward the message to the given peer, exchanging the [`SignalingMessage::CallEnd::peer_id`] with the other peer's ID.
+    #[serde(rename_all = "camelCase")]
     CallEnd { peer_id: String },
     /// A call ICE candidate message sent by either client to trickle ICE candidates to the other peer during call setup.
     ///
     /// The signaling server will forward the candidate to the given peer, exchanging the [`SignalingMessage::CallIceCandidate::peer_id`] with the other peer's ID.
+    #[serde(rename_all = "camelCase")]
     CallIceCandidate {
         /// ICE candidate to be trickled to the other peer.
         candidate: String,
@@ -122,6 +128,7 @@ pub enum SignalingMessage {
         peer_id: String,
     },
     /// A message sent by the signaling server if no peer with the given ID was found.
+    #[serde(rename_all = "camelCase")]
     PeerNotFound {
         /// ID of the peer that was not found.
         peer_id: String,
@@ -148,6 +155,7 @@ pub enum SignalingMessage {
     },
     /// Generic error message sent by either a client or the signaling server.
     /// This could indicate an error processing the last received message or signals a failure with the last request.
+    #[serde(rename_all = "camelCase")]
     Error {
         /// Reason for the error.
         reason: ErrorReason,

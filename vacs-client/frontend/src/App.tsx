@@ -21,6 +21,7 @@ import TelephonePage from "./pages/TelephonePage.tsx";
 import LinkButton from "./components/ui/LinkButton.tsx";
 import {setupSignalingListeners} from "./listeners/signaling-listener.ts";
 import {useSignalingStore} from "./stores/signaling-store.ts";
+import PhoneButton from "./components/ui/PhoneButton.tsx";
 
 function App() {
     const connected = useSignalingStore(state => state.connected);
@@ -77,13 +78,12 @@ function App() {
                 {/* Bottom Button Row */}
                 <div className="h-20 w-full p-2 pl-4 flex flex-row justify-between gap-20">
                     <div className="h-full flex flex-row gap-3">
-                        <Button color="gray" className="text-xl w-46 font-semibold rounded-md text-gray-500" disabled={true}>Radio</Button>
+                        <Button color="gray" className="text-xl w-46 text-gray-500" disabled={true}>Radio</Button>
                         <Button color="cyan" className="text-xl text-slate-400" disabled={true}>CPL</Button>
                         <Button color="cyan" className="text-xl w-46 text-slate-400" disabled={true}>
                             <p>RADIO<br/>PRIO</p>
                         </Button>
-                        <Button color="gray" highlight="green"
-                                className="w-46 min-h-16 !font-semibold !text-xl !rounded-md">Phone</Button>
+                        <PhoneButton/>
                     </div>
                     <Button color="cyan" className="text-xl w-44 px-10">END</Button>
                 </div>

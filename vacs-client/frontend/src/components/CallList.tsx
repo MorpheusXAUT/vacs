@@ -33,7 +33,7 @@ function CallList() {
                 <Button color="gray">
                     <p>Delete<br/>List</p>
                 </Button>
-                <Button color="gray" className="w-54">Call</Button>
+                <Button color="gray" className="w-54 text-xl">Call</Button>
             </div>
         </div>
     );

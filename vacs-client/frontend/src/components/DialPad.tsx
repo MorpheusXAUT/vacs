@@ -56,7 +56,7 @@ function DialPad() {
                 />
                 <div className="grid grid-cols-3 gap-3 [&>button]:w-27 mb-3">
                     {DIAL_BUTTONS.map(({digit, chars}) =>
-                        <Button color="gray" onClick={() => handleDialClick(digit, chars)}>
+                        <Button color="gray" className="text-lg" onClick={() => handleDialClick(digit, chars)}>
                             {chars !== "" ? (<p>{digit}<br/>{chars}</p>) : (<p>{digit}</p>)}
                         </Button>
                     )}
