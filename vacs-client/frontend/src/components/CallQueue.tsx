@@ -1,19 +1,27 @@
 import Button from "./ui/Button.tsx";
 import {useCallStore} from "../stores/call-store.ts";
+import {invokeStrict} from "../error.ts";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
+    const acceptCall = useCallStore(state => state.acceptCall)
+    const endCall = useCallStore(state => state.endCall);
 
-    const handleCallDisplayClick = (peerId: string) => {
-        // TODO end call
-        console.log("ending call with " + peerId);
+    const handleCallDisplayClick = async (peerId: string) => {
+        try {
+            await invokeStrict("signaling_end_call", {peerId: peerId});
+            endCall();
+        } catch {}
     };
 
-    const handleAnswerKeyClick = (peerId: string) => {
-        // TODO accept call
-        console.log("accept call from " + peerId);
+    const handleAnswerKeyClick = async (peerId: string, sdp: string) => {
+        if (callDisplay !== undefined) return;
+        try {
+            await invokeStrict("signaling_accept_call", {peerId: peerId, sdp: sdp});
+            acceptCall(peerId);
+        } catch {}
     }
 
     return (
@@ -32,7 +40,7 @@ function CallQueue() {
             {/*Answer Keys*/}
             {incomingCalls.map(call => (
                 <Button color={blink ? "green" : "gray"} className={"min-h-16 text-sm"}
-                        onClick={() => handleAnswerKeyClick(call.peerId)}>{call.peerId}</Button>
+                        onClick={() => handleAnswerKeyClick(call.peerId, call.sdp)}>{call.peerId}</Button>
             ))}
             {Array.from(Array(Math.max(5 - incomingCalls.length, 0))).map(() => <div
                 className="w-full border rounded-md min-h-16"></div>)}

@@ -47,19 +47,59 @@ pub async fn signaling_terminate(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn signaling_da_key_click(
+pub async fn signaling_start_call(
     app_state: State<'_, AppState>,
-    client_id: &str,
+    peer_id: String,
 ) -> Result<(), Error> {
-    log::debug!("Handling DA key click");
+    log::debug!("Starting call with {peer_id}");
 
     app_state
         .lock()
         .await
         .send_signaling_message(
             SignalingMessage::CallOffer {
-                peer_id: client_id.to_string(),
-                sdp: "".to_string(),
+                peer_id,
+                sdp: "".to_string(), // TODO webrtc
+            },
+        )
+        .await
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn signaling_accept_call(
+    app_state: State<'_, AppState>,
+    peer_id: String,
+    _sdp: String,
+) -> Result<(), Error> {
+    log::debug!("Accepting call from {peer_id}");
+
+    app_state
+        .lock()
+        .await
+        .send_signaling_message(
+            SignalingMessage::CallAnswer {
+                peer_id,
+                sdp: "".to_string(), // TODO webrtc
+            },
+        )
+        .await
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn signaling_end_call(
+    app_state: State<'_, AppState>,
+    peer_id: String,
+) -> Result<(), Error> {
+    log::debug!("Ending call with {peer_id}");
+
+    app_state
+        .lock()
+        .await
+        .send_signaling_message(
+            SignalingMessage::CallEnd {
+                peer_id,
             },
         )
         .await

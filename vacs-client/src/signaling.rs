@@ -2,9 +2,7 @@ pub(crate) mod commands;
 
 use crate::config::{WS_LOGIN_TIMEOUT, WS_READY_TIMEOUT};
 use tauri::{AppHandle, Emitter};
-use tokio::pin;
 use tokio::sync::{oneshot, watch};
-use tokio::task::JoinSet;
 use vacs_protocol::ws::SignalingMessage;
 use vacs_signaling::client::{InterruptionReason, SignalingClient};
 use vacs_signaling::error::SignalingError;

@@ -10,7 +10,10 @@ type CallState = {
     },
     incomingCalls: CallOffer[],
     setOutgoingCall: (peerId: string) => void,
+    acceptCall: (peerId: string) => void,
+    endCall: () => void,
     addIncomingCall: (offer: CallOffer) => void,
+    getSdpFromIncomingCall: (peerId: string) => string | undefined,
     removePeer: (peerId: string) => void,
 };
 
@@ -21,6 +24,19 @@ export const useCallStore = create<CallState>()((set, get) => ({
     incomingCalls: [],
     setOutgoingCall: (peerId) => {
         set({callDisplay: {type: "outgoing", peerId: peerId}});
+    },
+    acceptCall: (peerId) => {
+        const incomingCalls = get().incomingCalls.filter(offer => offer.peerId !== peerId);
+
+        if (incomingCalls.length === 0) {
+            clearTimeout(get().blinkTimeoutId);
+            set({blink: false, blinkTimeoutId: undefined, incomingCalls: []});
+        }
+
+        set({callDisplay: {type: "accepted", peerId: peerId}, incomingCalls});
+    },
+    endCall: () => {
+        set({callDisplay: undefined});
     },
     addIncomingCall: (offer) => {
         const incomingCalls = get().incomingCalls.filter(o => o.peerId !== offer.peerId);
@@ -43,6 +59,13 @@ export const useCallStore = create<CallState>()((set, get) => ({
 
         set({incomingCalls: [...incomingCalls, offer]});
     },
+    getSdpFromIncomingCall: (peerId: string) => {
+        const call = get().incomingCalls.find(c => c.peerId === peerId);
+        if (call === undefined) {
+            return undefined;
+        }
+        return call.sdp;
+    },
     removePeer: (peerId) => {
         const incomingCalls = get().incomingCalls.filter(offer => offer.peerId !== peerId);
 
@@ -56,5 +79,5 @@ export const useCallStore = create<CallState>()((set, get) => ({
         if (get().callDisplay?.peerId === peerId) {
             set({callDisplay: undefined});
         }
-    }
+    },
 }));

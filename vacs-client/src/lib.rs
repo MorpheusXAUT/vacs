@@ -48,9 +48,11 @@ pub fn run() {
             auth::commands::auth_check_session,
             auth::commands::auth_logout,
             auth::commands::auth_open_oauth_url,
+            signaling::commands::signaling_accept_call,
             signaling::commands::signaling_connect,
-            signaling::commands::signaling_da_key_click,
             signaling::commands::signaling_disconnect,
+            signaling::commands::signaling_end_call,
+            signaling::commands::signaling_start_call,
             signaling::commands::signaling_terminate,
         ])
         .build(tauri::generate_context!())
