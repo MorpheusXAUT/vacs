@@ -3,10 +3,12 @@ import {useSignalingStore} from "../stores/signaling-store.ts";
 import {ClientInfo} from "../types/client-info.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {CallOffer} from "../types/call.ts";
+import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 
 export function setupSignalingListeners() {
     const { setConnected, setDisplayName, setClients, addClient, removeClient } = useSignalingStore.getState();
     const { addIncomingCall, removePeer, rejectPeer, acceptCall } = useCallStore.getState().actions;
+    const { open: openErrorOverlay } = useErrorOverlayStore.getState();
 
     const unlistenFns: (Promise<UnlistenFn>)[] = [];
 
@@ -41,6 +43,11 @@ export function setupSignalingListeners() {
             }),
             listen<string>("signaling:call-reject", (event) => {
                 rejectPeer(event.payload);
+            }),
+            listen<string>("signaling:peer-not-found", (event) => {
+                removePeer(event.payload);
+                removeClient(event.payload);
+                openErrorOverlay("Peer not found", `Can not find peer with CID ${event.payload}`, 5000);
             }),
         );
     };

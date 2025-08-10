@@ -3,7 +3,7 @@ import {CallOffer} from "../types/call.ts";
 import {invokeSafe} from "../error.ts";
 
 type CallDisplay = {
-    type: "outgoing" | "accepted" | "rejected",
+    type: "outgoing" | "accepted" | "rejected" | "error",
     peerId: string,
 };
 

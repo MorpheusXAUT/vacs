@@ -28,5 +28,12 @@ export const useErrorOverlayStore = create<ErrorOverlayState>()((set, get) => ({
 
         set({visible: true, title, message, timeout_id});
     },
-    close: () => set(CLOSED_OVERLAY)
+    close: () => {
+        const timeout_id = get().timeout_id;
+        if (timeout_id !== undefined) {
+            clearTimeout(timeout_id);
+        }
+
+        set(CLOSED_OVERLAY);
+    }
 }));

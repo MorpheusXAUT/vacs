@@ -1,9 +1,10 @@
 pub(crate) mod commands;
 
 use crate::config::{WS_LOGIN_TIMEOUT, WS_READY_TIMEOUT};
+use crate::error::FrontendError;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{oneshot, watch};
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::{ErrorReason, SignalingMessage};
 use vacs_signaling::client::{InterruptionReason, SignalingClient};
 use vacs_signaling::error::SignalingError;
 use vacs_signaling::transport;
@@ -180,14 +181,19 @@ impl Connection {
                 log::trace!("Call reject received from {peer_id}");
                 app.emit("signaling:call-reject", peer_id).ok();
             }
-            SignalingMessage::CallIceCandidate { peer_id, .. } => {
-                log::trace!("ICE candidate received from {peer_id}");
-                // TODO pass to webrtc
-            }
             SignalingMessage::CallEnd { peer_id } => {
                 log::trace!("Call end received from {peer_id}");
                 // TODO end call in webrtc/audio
                 app.emit("signaling:call-end", peer_id).ok();
+            }
+            SignalingMessage::CallIceCandidate { peer_id, .. } => {
+                log::trace!("ICE candidate received from {peer_id}");
+                // TODO pass to webrtc
+            }
+            SignalingMessage::PeerNotFound { peer_id } => {
+                log::trace!("Received peer not found: {peer_id}");
+                // TODO end call in webrtc/audio if in call with peer
+                app.emit("signaling:peer-not-found", peer_id).ok();
             }
             SignalingMessage::ClientConnected { client } => {
                 log::trace!("Client connected: {client:?}");
@@ -197,7 +203,52 @@ impl Connection {
                 log::trace!("Client disconnected: {id:?}");
                 app.emit("signaling:client-disconnected", id).ok();
             }
-            SignalingMessage::Error { .. } => {}
+            SignalingMessage::ClientList { clients } => {
+                log::trace!("Received client list: {} clients connected", clients.len());
+                app.emit("signaling:client-list", clients).ok();
+            }
+            SignalingMessage::Error { reason, peer_id } => match reason {
+                ErrorReason::MalformedMessage => {
+                    log::warn!("Received malformed error message from signaling server");
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::new_with_timeout(
+                            "Signaling error",
+                            "Malformed message",
+                            5000,
+                        ),
+                    )
+                    .ok();
+                }
+                ErrorReason::Internal(msg) => {
+                    log::warn!("Received internal error message from signaling server");
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::new("Signaling error", format!("Internal: {msg}")),
+                    )
+                    .ok();
+                }
+                ErrorReason::PeerConnection => {
+                    log::warn!(
+                        "Received peer connection error from signaling server with peer {}",
+                        peer_id.unwrap_or("NONE".to_string())
+                    );
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::new("Signaling error", "Peer connection error".to_string()),
+                    )
+                    .ok();
+                    // TODO: cleanup or set error state in frontend
+                }
+                ErrorReason::UnexpectedMessage(msg) => {
+                    log::warn!("Received unexpected message error from signaling server");
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::new("Signaling error", format!("Unexpected message: {msg}")),
+                    )
+                    .ok();
+                }
+            },
             _ => {}
         }
     }

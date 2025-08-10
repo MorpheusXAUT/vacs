@@ -17,7 +17,8 @@ function DAKey({client}: DAKeyProps) {
         getSdpFromIncomingCall,
         acceptCall,
         endCall,
-        dismissRejectedPeer
+        dismissRejectedPeer,
+        removePeer
     } = useCallStore(state => state.actions);
 
     const isCalling = incomingCalls.some(call => call.peerId === client.id);
@@ -51,9 +52,10 @@ function DAKey({client}: DAKeyProps) {
             dismissRejectedPeer();
         } else if (callDisplay === undefined) {
             try {
-                await invokeStrict("signaling_start_call", {peerId: client.id});
                 setOutgoingCall(client.id);
+                await invokeStrict("signaling_start_call", {peerId: client.id});
             } catch {
+                removePeer(client.id);
             }
         }
     });
