@@ -26,15 +26,6 @@ pub enum ErrorReason {
     UnexpectedMessage(String),
 }
 
-/// Represents the current or updated status of a client as observed by the signaling server.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub enum ClientStatus {
-    /// The client is connected or just established connection to the signaling server.
-    Connected,
-    /// The client just disconnected from the signaling server.
-    Disconnected,
-}
-
 /// Represents a client as observed by the signaling server.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
