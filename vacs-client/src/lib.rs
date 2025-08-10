@@ -1,4 +1,5 @@
 mod app;
+mod audio;
 mod auth;
 mod config;
 mod error;
@@ -45,6 +46,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app::commands::app_frontend_ready,
+            audio::commands::audio_get_devices,
             auth::commands::auth_check_session,
             auth::commands::auth_logout,
             auth::commands::auth_open_oauth_url,

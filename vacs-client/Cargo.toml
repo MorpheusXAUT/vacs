@@ -34,6 +34,7 @@ tauri-plugin-single-instance = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
+vacs-audio = { workspace = true }
 vacs-macros = { workspace = true }
 vacs-protocol = { workspace = true }
 vacs-signaling = { workspace = true }

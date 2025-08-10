@@ -4,8 +4,10 @@ use anyhow::Context;
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{SupportedStreamConfig, SupportedStreamConfigRange};
 use std::fmt::{Display, Formatter};
+use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DeviceType {
     Input,
     Output,
@@ -24,6 +26,7 @@ pub struct Device {
     pub device_type: DeviceType,
     pub device: cpal::Device,
     pub stream_config: SupportedStreamConfig,
+    pub is_default: bool,
 }
 
 impl Display for Device {
@@ -41,25 +44,108 @@ impl Display for Device {
 }
 
 impl Device {
+    #[instrument(level = "trace", err)]
     pub fn new(config: &AudioDeviceConfig, device_type: DeviceType) -> anyhow::Result<Self> {
         tracing::trace!("Initialising device");
 
-        let host = find_host(&config.host_name)?;
+        let host = find_host(config.host_name.as_deref())?;
         let device = find_device(&host, &config.device_name, &device_type)?;
         let stream_config = find_supported_stream_config(&device, config, &device_type)?;
         let device = Device {
             device_type,
-            device,
             stream_config,
+            is_default: Self::is_default(&host, &device_type, device.name().unwrap_or("<unknown>".to_string()).as_str())?,
+            device,
         };
 
         tracing::debug!(%device, "Device initialised");
         Ok(device)
     }
+
+    pub fn device_name(&self) -> String {
+        self.device.name().unwrap_or("<unknown>".to_string())
+    }
+
+    fn is_default(host: &cpal::Host, device_type: &DeviceType, device_name: &str) -> anyhow::Result<bool> {
+        let default_device = match device_type {
+            DeviceType::Input => host
+                .default_input_device()
+                .context("Failed to get default input device")?,
+            DeviceType::Output => host
+                .default_output_device()
+                .context("Failed to get default output device")?,
+        };
+
+        Ok(default_device.name()?.eq_ignore_ascii_case(device_name))
+    }
+
+    #[instrument(level = "debug", err)]
+    pub fn find_default(device_type: DeviceType) -> anyhow::Result<Self> {
+        tracing::trace!("Finding default device");
+
+        let host = find_host(None)?;
+        let device = match device_type {
+            DeviceType::Input => host
+                .default_input_device()
+                .context("Failed to get default input device")?,
+            DeviceType::Output => host
+                .default_output_device()
+                .context("Failed to get default output device")?,
+        };
+        let stream_config =
+            find_supported_stream_config(&device, &AudioDeviceConfig::from(device_type), &device_type)?;
+        let device = Device {
+            device_type,
+            stream_config,
+            is_default: Self::is_default(&host, &device_type, device.name().unwrap_or("<unknown>".to_string()).as_str())?,
+            device,
+        };
+
+        tracing::debug!(%device, "Device initialised");
+        Ok(device)
+    }
+
+    #[instrument(level = "debug", err)]
+    pub fn find_all(device_type: DeviceType) -> anyhow::Result<Vec<Self>> {
+        tracing::trace!("Finding all devices for type {device_type}");
+
+        let host = find_host(None)?;
+
+        let devices = match device_type {
+            DeviceType::Input => host.input_devices(),
+            DeviceType::Output => host.output_devices(),
+        }?;
+
+        let devices: Vec<Self> = devices
+            .filter_map(|device| {
+                if let Ok(stream_config) = find_supported_stream_config(
+                    &device,
+                    &AudioDeviceConfig::from(device_type),
+                    &device_type,
+                ) {
+                    Some(Device {
+                        device_type,
+                        stream_config,
+                        is_default: Self::is_default(&host, &device_type, device.name().unwrap_or("<unknown>".to_string()).as_str()).unwrap_or(false),
+                        device,
+                    })
+                } else {
+                    tracing::warn!(
+                        device_name = device.name().unwrap_or("<unknown>".to_string()),
+                        "Failed to find supported stream config for device"
+                    );
+                    None
+                }
+            })
+            .collect();
+
+        Ok(devices)
+    }
 }
 
-fn find_host(host_name: &Option<String>) -> anyhow::Result<cpal::Host> {
-    tracing::trace!(?host_name, "Trying to find audio host");
+#[instrument(level = "trace", err)]
+fn find_host(host_name: Option<&str>) -> anyhow::Result<cpal::Host> {
+    tracing::trace!("Trying to find audio host");
 
     let host_id = match host_name {
         Some(host_name) => {
@@ -87,12 +173,13 @@ fn find_host(host_name: &Option<String>) -> anyhow::Result<cpal::Host> {
     cpal::host_from_id(host_id).context("Failed to get audio host")
 }
 
+#[instrument(level = "trace", skip(host), err)]
 fn find_device(
     host: &cpal::Host,
     device_name: &Option<String>,
     device_type: &DeviceType,
 ) -> anyhow::Result<cpal::Device> {
-    tracing::trace!(?device_type, ?device_name, "Trying to find device");
+    tracing::trace!("Trying to find device");
 
     match device_name {
         Some(device_name) => {
@@ -155,16 +242,13 @@ fn find_device(
     }
 }
 
+#[instrument(level = "trace", skip(device), err)]
 fn find_supported_stream_config(
     device: &cpal::Device,
     config: &AudioDeviceConfig,
     device_type: &DeviceType,
 ) -> anyhow::Result<SupportedStreamConfig> {
-    tracing::trace!(
-        ?device_type,
-        ?config,
-        "Trying to find supported stream config"
-    );
+    tracing::trace!("Trying to find supported stream config");
 
     let mut configs: Box<dyn Iterator<Item = SupportedStreamConfigRange>> = match device_type {
         DeviceType::Input => Box::new(

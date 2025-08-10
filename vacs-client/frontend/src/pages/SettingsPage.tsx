@@ -4,12 +4,12 @@ import mic from "../assets/mic.svg";
 import headphones from "../assets/headphones.svg";
 import mousePointerClick from "../assets/mouse-pointer-click.svg";
 import bellRing from "../assets/bell-ring.svg";
-import Select from "../components/ui/Select.tsx";
 import {navigate} from "wouter/use-browser-location";
 import {useAuthStore} from "../stores/auth-store.ts";
 import {invokeStrict} from "../error.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {useSignalingStore} from "../stores/signaling-store.ts";
+import DeviceSelector from "../components/DeviceSelector.tsx";
 
 function SettingsPage() {
     const connected = useSignalingStore(state => state.connected);
@@ -67,10 +67,8 @@ function SettingsPage() {
                     <div className="h-full grow flex flex-col">
                         <p className="w-full text-center border-b-2 border-zinc-200 uppercase font-semibold">Devices</p>
                         <div className="w-full grow px-3 py-1.5 flex flex-col">
-                            <p className="w-full text-center font-semibold">Headset</p>
-                            <Select></Select>
-                            <p className="w-full text-center font-semibold">Microphone</p>
-                            <Select></Select>
+                            <DeviceSelector deviceType="Input" />
+                            <DeviceSelector deviceType="Output" />
                         </div>
                     </div>
                 </div>
