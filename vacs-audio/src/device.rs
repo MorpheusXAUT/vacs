@@ -3,8 +3,8 @@ use crate::config::AudioDeviceConfig;
 use anyhow::Context;
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{SupportedStreamConfig, SupportedStreamConfigRange};
-use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use tracing::instrument;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -26,7 +26,6 @@ pub struct Device {
     pub device_type: DeviceType,
     pub device: cpal::Device,
     pub stream_config: SupportedStreamConfig,
-    pub is_default: bool,
 }
 
 impl Display for Device {
@@ -54,7 +53,6 @@ impl Device {
         let device = Device {
             device_type,
             stream_config,
-            is_default: Self::is_default(&host, &device_type, device.name().unwrap_or("<unknown>".to_string()).as_str())?,
             device,
         };
 
@@ -64,19 +62,6 @@ impl Device {
 
     pub fn device_name(&self) -> String {
         self.device.name().unwrap_or("<unknown>".to_string())
-    }
-
-    fn is_default(host: &cpal::Host, device_type: &DeviceType, device_name: &str) -> anyhow::Result<bool> {
-        let default_device = match device_type {
-            DeviceType::Input => host
-                .default_input_device()
-                .context("Failed to get default input device")?,
-            DeviceType::Output => host
-                .default_output_device()
-                .context("Failed to get default output device")?,
-        };
-
-        Ok(default_device.name()?.eq_ignore_ascii_case(device_name))
     }
 
     #[instrument(level = "debug", err)]
@@ -92,13 +77,15 @@ impl Device {
                 .default_output_device()
                 .context("Failed to get default output device")?,
         };
-        let stream_config =
-            find_supported_stream_config(&device, &AudioDeviceConfig::from(device_type), &device_type)?;
+        let stream_config = find_supported_stream_config(
+            &device,
+            &AudioDeviceConfig::from(device_type),
+            &device_type,
+        )?;
         let device = Device {
             device_type,
-            stream_config,
-            is_default: Self::is_default(&host, &device_type, device.name().unwrap_or("<unknown>".to_string()).as_str())?,
             device,
+            stream_config,
         };
 
         tracing::debug!(%device, "Device initialised");
@@ -125,9 +112,8 @@ impl Device {
                 ) {
                     Some(Device {
                         device_type,
-                        stream_config,
-                        is_default: Self::is_default(&host, &device_type, device.name().unwrap_or("<unknown>".to_string()).as_str()).unwrap_or(false),
                         device,
+                        stream_config,
                     })
                 } else {
                     tracing::warn!(

@@ -1,4 +1,5 @@
-export type Device = {
-    name: string;
-    isDefault: boolean;
+export type AudioDevices = {
+    selected: string;
+    default: string;
+    all: string[];
 };
