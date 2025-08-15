@@ -1,7 +1,8 @@
 import Select, {SelectOption} from "./ui/Select.tsx";
 import {useEffect, useState} from "preact/hooks";
 import {invokeStrict} from "../error.ts";
-import {AudioDevices} from "../types/device.ts";
+import {AudioDevices} from "../types/audio.ts";
+import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 
 type DeviceSelectorProps = {
     deviceType: "Input" | "Output";
@@ -11,13 +12,17 @@ function DeviceSelector(props: DeviceSelectorProps) {
     const [device, setDevice] = useState<string>("");
     const [devices, setDevices] = useState<SelectOption[]>([{value: "", text: "Loading..."}]);
 
-    const handleOnChange = async (device: string) => {
+    const handleOnChange = useAsyncDebounce(async (new_device: string) => {
+        const previousDeviceName = device;
+
+        setDevice(new_device);
+
         try {
-            await invokeStrict("audio_set_device", {deviceType: props.deviceType, deviceName: device});
-            setDevice(device);
+            await invokeStrict("audio_set_device", {deviceType: props.deviceType, deviceName: new_device});
         } catch {
+            setDevice(previousDeviceName);
         }
-    };
+    });
 
     useEffect(() => {
         const fetchDevices = async () => {

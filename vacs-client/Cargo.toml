@@ -33,6 +33,7 @@ tauri-plugin-opener = { workspace = true }
 tauri-plugin-single-instance = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+toml = { workspace = true }
 url = { workspace = true }
 vacs-audio = { workspace = true }
 vacs-macros = { workspace = true }
