@@ -10,7 +10,7 @@ pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
 pub const WS_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const AUDIO_SETTINGS_FILE_NAME: &str = "audio.toml";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     pub backend: BackendConfig,
     pub audio: AudioConfig,
@@ -19,18 +19,7 @@ pub struct AppConfig {
 impl AppConfig {
     pub fn parse() -> anyhow::Result<AppConfig> {
         Config::builder()
-            .set_default("backend.base_url", "http://127.0.0.1:3000")?
-            .set_default("backend.ws_url", "ws://127.0.0.1:3000/ws")?
-            .set_default("backend.endpoints.init_auth", "/auth/vatsim")?
-            .set_default("backend.endpoints.exchange_code", "/auth/vatsim/callback")?
-            .set_default("backend.endpoints.user_info", "/auth/user")?
-            .set_default("backend.endpoints.logout", "/auth/logout")?
-            .set_default("backend.endpoints.ws_token", "/ws/token")?
-            .set_default("backend.endpoints.terminate_ws_session", "/ws")?
-            .set_default("backend.timeout_ms", 2000)?
-            // .set_default("audio.input_device", "")?
-            // .set_default("audio.output_device", "")?
-            .add_source(Config::try_from(&PersistedAudioConfig::default())?)
+            .add_source(Config::try_from(&AppConfig::default())?)
             .add_source(
                 File::with_name(
                     project_dirs()
@@ -54,7 +43,7 @@ impl AppConfig {
                 )
                 .required(false),
             )
-            .add_source(File::with_name("audio.toml").required(false)) // TODO: How about this?
+            .add_source(File::with_name("audio.toml").required(false))
             .add_source(Environment::with_prefix("vacs_client"))
             .build()
             .context("Failed to build config")?
@@ -63,12 +52,23 @@ impl AppConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackendConfig {
     pub base_url: String,
     pub ws_url: String,
     pub endpoints: BackendEndpointsConfigs,
     pub timeout_ms: u64,
+}
+
+impl Default for BackendConfig {
+    fn default() -> Self {
+        Self {
+            base_url: "http://127.0.0.1:3000".to_string(),
+            ws_url: "ws://127.0.0.1:3000/ws".to_string(),
+            endpoints: BackendEndpointsConfigs::default(),
+            timeout_ms: 2000,
+        }
+    }
 }
 
 impl BackendConfig {
@@ -94,7 +94,7 @@ pub enum BackendEndpoint {
     TerminateWsSession,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackendEndpointsConfigs {
     pub init_auth: String,
     pub exchange_code: String,
@@ -104,14 +104,40 @@ pub struct BackendEndpointsConfigs {
     pub terminate_ws_session: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+impl Default for BackendEndpointsConfigs {
+    fn default() -> Self {
+        Self {
+            init_auth: "/auth/vatsim".to_string(),
+            exchange_code: "/auth/vatsim/callback".to_string(),
+            user_info: "/auth/user".to_string(),
+            logout: "/auth/logout".to_string(),
+            ws_token: "/ws/token".to_string(),
+            terminate_ws_session: "/ws".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioConfig {
-    pub input_device: String,
-    pub output_device: String,
+    pub input_device_name: String, // Empty string means default device
+    pub output_device_name: String, // Empty string means default device
     pub input_device_volume: f32,
     pub output_device_volume: f32,
     pub click_volume: f32,
     pub chime_volume: f32,
+}
+
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self {
+            input_device_name: String::new(),
+            output_device_name: String::new(),
+            input_device_volume: 0.5,
+            output_device_volume: 0.5,
+            click_volume: 0.5,
+            chime_volume: 0.5,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

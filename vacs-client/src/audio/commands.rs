@@ -12,10 +12,10 @@ pub async fn audio_get_devices(app_state: State<'_, AppState>, device_type: Devi
 
     let selected = match device_type {
         DeviceType::Input => {
-            app_state.lock().await.config.audio.input_device.to_string()
+            app_state.lock().await.config.audio.input_device_name.to_string()
         },
         DeviceType::Output => {
-            app_state.lock().await.config.audio.output_device.to_string()
+            app_state.lock().await.config.audio.output_device_name.to_string()
         },
     };
 
@@ -38,8 +38,8 @@ pub async fn audio_set_device(app_state: State<'_, AppState>, device_type: Devic
         let mut state = app_state.lock().await;
 
         match device_type {
-            DeviceType::Input => state.config.audio.input_device = device_name,
-            DeviceType::Output => state.config.audio.output_device = device_name,
+            DeviceType::Input => state.config.audio.input_device_name = device_name,
+            DeviceType::Output => state.config.audio.output_device_name = device_name,
         }
 
         state.config.audio.clone().into()
