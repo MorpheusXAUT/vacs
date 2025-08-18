@@ -1,5 +1,7 @@
 pub mod waveform;
 
+pub type AudioSourceId = usize;
+
 /// Represents an audio source that can be mixed into an output stream.
 ///
 /// Types implementing this trait can be fed into the [`crate::mixer::Mixer`] and contribute samples
