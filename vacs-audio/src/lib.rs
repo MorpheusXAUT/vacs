@@ -2,6 +2,7 @@ pub mod config;
 mod device;
 pub mod input;
 pub mod output;
+pub mod sources;
 
 pub use device::Device;
 pub use device::DeviceType;
