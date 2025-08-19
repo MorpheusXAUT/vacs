@@ -155,6 +155,11 @@ pub async fn audio_set_volume(
                 .lock()
                 .await
                 .set_volume(SourceType::Ringback, volume);
+            state
+                .audio_manager
+                .lock()
+                .await
+                .set_volume(SourceType::RingbackOneshot, volume);
             state.config.audio.output_device_volume = volume;
         }
         VolumeType::Click => {

@@ -5,9 +5,9 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use vacs_audio::input::AudioInput;
 use vacs_audio::output::AudioOutput;
-use vacs_audio::sources::AudioSourceId;
 use vacs_audio::sources::opus::OpusSource;
 use vacs_audio::sources::waveform::{Waveform, WaveformSource, WaveformTone};
+use vacs_audio::sources::AudioSourceId;
 use vacs_audio::{Device, DeviceType, EncodedAudioFrame};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -15,6 +15,7 @@ pub enum SourceType {
     Opus,
     Ring,
     Ringback,
+    RingbackOneshot,
     Click,
 }
 
@@ -40,14 +41,22 @@ impl SourceType {
                 output_channels,
                 volume,
             ),
+            SourceType::RingbackOneshot => WaveformSource::new(
+                WaveformTone::new(425.0, Waveform::Sine, 0.2), // TODO: tune amp
+                Duration::from_secs(1),
+                None,
+                Duration::from_millis(10),
+                2,
+                volume,
+            ),
             SourceType::Click => WaveformSource::new(
-                WaveformTone::new(4000.0, Waveform::Sine, 0.1), // TODO: tune amp
+                WaveformTone::new(4000.0, Waveform::Sine, 0.2), // TODO: tune amp
                 Duration::from_millis(20),
                 None,
                 Duration::from_millis(1),
                 output_channels,
                 volume,
-            ),
+            )
         }
     }
 }
@@ -80,6 +89,14 @@ impl AudioManager {
             SourceType::Ringback,
             output.add_audio_source(Box::new(SourceType::into_waveform_source(
                 SourceType::Ringback,
+                output_device.stream_config.channels() as usize,
+                audio_config.output_device_volume,
+            ))),
+        );
+        source_ids.insert(
+            SourceType::RingbackOneshot,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::RingbackOneshot,
                 output_device.stream_config.channels() as usize,
                 audio_config.output_device_volume,
             ))),
@@ -118,14 +135,24 @@ impl AudioManager {
     }
 
     pub fn set_volume(&mut self, source_type: SourceType, volume: f32) {
-        if !self.source_ids.contains_key(&SourceType::Opus) {
-            log::trace!("Tried to set volume {volume} for missing audio source {source_type:?}, skipping");
+        if !self.source_ids.contains_key(&source_type) {
+            log::trace!(
+                "Tried to set volume {volume} for missing audio source {source_type:?}, skipping"
+            );
             return;
         }
 
         log::trace!("Setting volume {volume} for audio source {source_type:?}");
         self.output
-            .set_volume(self.source_ids[&source_type], volume)
+            .set_volume(self.source_ids[&source_type], volume);
+
+        match source_type {
+            SourceType::Ring | SourceType::Click | SourceType::RingbackOneshot => {
+                self.output
+                    .restart_audio_source(self.source_ids[&source_type]);
+            }
+            _ => {}
+        }
     }
 
     pub fn attach_call(&mut self, webrtc_rx: mpsc::Receiver<EncodedAudioFrame>) {
@@ -143,7 +170,8 @@ impl AudioManager {
     }
 
     pub fn detach_call(&mut self) {
-        self.output.remove_audio_source(self.source_ids[&SourceType::Opus]);
+        self.output
+            .remove_audio_source(self.source_ids[&SourceType::Opus]);
         if self.source_ids.remove(&SourceType::Opus).is_some() {
             log::info!("Detached call");
         } else {
