@@ -127,6 +127,21 @@ impl Device {
 
         Ok(devices)
     }
+
+    #[instrument(level = "trace")]
+    pub fn find_all_hosts() -> Vec<String> {
+        tracing::trace!("Finding all hosts");
+        cpal::available_hosts()
+            .iter()
+            .map(|id| id.name().to_string())
+            .collect()
+    }
+
+    #[instrument(level = "trace")]
+    pub fn find_default_host() -> String {
+        tracing::trace!("Finding default host");
+        cpal::default_host().id().name().to_string()
+    }
 }
 
 #[instrument(level = "trace", err)]

@@ -18,6 +18,12 @@ pub struct WaveformTone {
     pub amp: f32, // 0.0 - 1.0
 }
 
+impl WaveformTone {
+    pub fn new(freq: f32, form: Waveform, amp: f32) -> Self {
+        Self { freq, form, amp }
+    }
+}
+
 pub struct WaveformSource {
     tone: WaveformTone,
 
@@ -95,15 +101,15 @@ impl WaveformSource {
                 let t = 2.0 * std::f32::consts::PI * self.tone.freq * time;
                 t.sin()
             }
-            Waveform::Triangle => {
-                1.0 - 4.0 * (phase - 0.5).abs()
-            }
+            Waveform::Triangle => 1.0 - 4.0 * (phase - 0.5).abs(),
             Waveform::Square => {
-                if phase < 0.5 { 1.0 } else { -1.0 }
+                if phase < 0.5 {
+                    1.0
+                } else {
+                    -1.0
+                }
             }
-            Waveform::Sawtooth => {
-                2.0 * phase - 1.0
-            }
+            Waveform::Sawtooth => 2.0 * phase - 1.0,
         }
     }
 
