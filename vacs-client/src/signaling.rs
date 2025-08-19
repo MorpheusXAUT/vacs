@@ -184,15 +184,36 @@ impl Connection {
                 log::trace!("Call answer received from {peer_id}");
                 // TODO start call in webrtc/audio
                 app.emit("signaling:call-answer", peer_id).ok();
+                app.state::<AppState>()
+                    .lock()
+                    .await
+                    .audio_manager
+                    .lock()
+                    .await
+                    .stop(SourceType::Ringback);
             }
             SignalingMessage::CallReject { peer_id } => {
                 log::trace!("Call reject received from {peer_id}");
                 app.emit("signaling:call-reject", peer_id).ok();
+                app.state::<AppState>()
+                    .lock()
+                    .await
+                    .audio_manager
+                    .lock()
+                    .await
+                    .stop(SourceType::Ringback);
             }
             SignalingMessage::CallEnd { peer_id } => {
                 log::trace!("Call end received from {peer_id}");
                 // TODO end call in webrtc/audio
                 app.emit("signaling:call-end", peer_id).ok();
+                app.state::<AppState>()
+                    .lock()
+                    .await
+                    .audio_manager
+                    .lock()
+                    .await
+                    .stop(SourceType::Ring);
             }
             SignalingMessage::CallIceCandidate { peer_id, .. } => {
                 log::trace!("ICE candidate received from {peer_id}");
