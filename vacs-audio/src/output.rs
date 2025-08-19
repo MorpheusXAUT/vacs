@@ -15,7 +15,7 @@ const MIXER_OPS_CAPACITY: usize = 256;
 const MIXER_OPS_PER_DATA_CALLBACK: usize = 32;
 
 pub struct AudioOutput {
-    stream: cpal::Stream,
+    _stream: cpal::Stream,
     mixer_ops: ringbuf::HeapProd<MixerOp>,
     next_audio_source_id: atomic::AtomicUsize,
 }
@@ -54,7 +54,7 @@ impl AudioOutput {
 
         tracing::info!("Successfully started audio output on device");
         Ok(Self {
-            stream,
+            _stream: stream,
             mixer_ops: ops_prod,
             next_audio_source_id: atomic::AtomicUsize::new(0),
         })

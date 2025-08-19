@@ -63,6 +63,8 @@ impl SourceType {
 
 pub struct AudioManager {
     output: AudioOutput,
+    // TODO remove linter disable
+    #[allow(dead_code)]
     input: Option<AudioInput>,
     source_ids: HashMap<SourceType, AudioSourceId>,
 }
@@ -155,6 +157,8 @@ impl AudioManager {
         }
     }
 
+    // TODO remove linter disable
+    #[allow(unused)]
     pub fn attach_call(&mut self, webrtc_rx: mpsc::Receiver<EncodedAudioFrame>) {
         if self.source_ids.contains_key(&SourceType::Opus) {
             log::warn!("Tried to attach call but a call was already attached");
@@ -169,6 +173,8 @@ impl AudioManager {
         log::info!("Attached call");
     }
 
+    // TODO remove linter disable
+    #[allow(unused)]
     pub fn detach_call(&mut self) {
         self.output
             .remove_audio_source(self.source_ids[&SourceType::Opus]);

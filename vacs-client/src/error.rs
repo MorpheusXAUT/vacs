@@ -7,6 +7,8 @@ use thiserror::Error;
 pub enum Error {
     #[error("Unauthorized")]
     Unauthorized,
+    // TODO remove linter disable
+    #[allow(unused)]
     #[error("Audio device error: {0}")]
     AudioDevice(String),
     #[error("Network error: {0}")]

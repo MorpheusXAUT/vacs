@@ -1,4 +1,3 @@
-use std::ops::DerefMut;
 use crate::config::{APP_USER_AGENT, AppConfig, BackendEndpoint};
 use crate::error::{Error, FrontendError};
 use crate::secrets::cookies::SecureCookieStore;

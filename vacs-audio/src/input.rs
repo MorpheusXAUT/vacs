@@ -8,7 +8,7 @@ use tracing::instrument;
 const MAX_OPUS_FRAME_SIZE: usize = 1275;
 
 pub struct AudioInput {
-    stream: cpal::Stream,
+    _stream: cpal::Stream,
 }
 
 impl AudioInput {
@@ -57,7 +57,7 @@ impl AudioInput {
         stream.play().context("Failed to play input stream")?;
 
         tracing::info!("Successfully started audio capture on device");
-        Ok(Self { stream })
+        Ok(Self { _stream: stream })
     }
 
     #[instrument(level = "debug", err)]
