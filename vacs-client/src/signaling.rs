@@ -176,8 +176,6 @@ impl Connection {
                     .lock()
                     .await
                     .audio_manager
-                    .lock()
-                    .await
                     .restart(SourceType::Ring);
             }
             SignalingMessage::CallAnswer { peer_id, .. } => {
@@ -188,8 +186,6 @@ impl Connection {
                     .lock()
                     .await
                     .audio_manager
-                    .lock()
-                    .await
                     .stop(SourceType::Ringback);
             }
             SignalingMessage::CallReject { peer_id } => {
@@ -199,8 +195,6 @@ impl Connection {
                     .lock()
                     .await
                     .audio_manager
-                    .lock()
-                    .await
                     .stop(SourceType::Ringback);
             }
             SignalingMessage::CallEnd { peer_id } => {
@@ -211,8 +205,6 @@ impl Connection {
                     .lock()
                     .await
                     .audio_manager
-                    .lock()
-                    .await
                     .stop(SourceType::Ring);
             }
             SignalingMessage::CallIceCandidate { peer_id, .. } => {

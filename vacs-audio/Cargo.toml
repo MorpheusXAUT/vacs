@@ -9,6 +9,7 @@ anyhow = { workspace = true }
 bytes = { workspace = true }
 cpal = { workspace = true }
 opus = { workspace = true }
+parking_lot = { workspace = true }
 ringbuf = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }

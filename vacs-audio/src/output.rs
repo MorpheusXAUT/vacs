@@ -3,6 +3,7 @@ use crate::sources::{AudioSource, AudioSourceId};
 use crate::{Device, DeviceType};
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, StreamTrait};
+use parking_lot::Mutex;
 use ringbuf::consumer::Consumer;
 use ringbuf::producer::Producer;
 use ringbuf::traits::Split;
@@ -16,7 +17,7 @@ const MIXER_OPS_PER_DATA_CALLBACK: usize = 32;
 
 pub struct AudioOutput {
     _stream: cpal::Stream,
-    mixer_ops: ringbuf::HeapProd<MixerOp>,
+    mixer_ops: Mutex<ringbuf::HeapProd<MixerOp>>,
     next_audio_source_id: atomic::AtomicUsize,
 }
 
@@ -55,7 +56,7 @@ impl AudioOutput {
         tracing::info!("Successfully started audio output on device");
         Ok(Self {
             _stream: stream,
-            mixer_ops: ops_prod,
+            mixer_ops: Mutex::new(ops_prod),
             next_audio_source_id: atomic::AtomicUsize::new(0),
         })
     }
@@ -80,6 +81,7 @@ impl AudioOutput {
         tracing::trace!(?id, "Adding audio source to mixer");
         if self
             .mixer_ops
+            .lock()
             .try_push(Box::new(move |mixer: &mut Mixer| {
                 mixer.add_source(id, source)
             }))
@@ -96,6 +98,7 @@ impl AudioOutput {
         tracing::trace!("Removing audio source from mixer");
         if self
             .mixer_ops
+            .lock()
             .try_push(Box::new(move |mixer: &mut Mixer| mixer.remove_source(id)))
             .is_err()
         {
@@ -108,6 +111,7 @@ impl AudioOutput {
         tracing::trace!("Starting audio source");
         if self
             .mixer_ops
+            .lock()
             .try_push(Box::new(move |mixer: &mut Mixer| {
                 mixer.start_source(id);
             }))
@@ -122,6 +126,7 @@ impl AudioOutput {
         tracing::trace!("Stopping audio source");
         if self
             .mixer_ops
+            .lock()
             .try_push(Box::new(move |mixer: &mut Mixer| {
                 mixer.stop_source(id);
             }))
@@ -136,6 +141,7 @@ impl AudioOutput {
         tracing::trace!("Restarting audio source");
         if self
             .mixer_ops
+            .lock()
             .try_push(Box::new(move |mixer: &mut Mixer| {
                 mixer.restart_source(id);
             }))
@@ -150,6 +156,7 @@ impl AudioOutput {
         tracing::trace!("Setting volume for audio source");
         if self
             .mixer_ops
+            .lock()
             .try_push(Box::new(move |mixer: &mut Mixer| {
                 mixer.set_source_volume(id, volume);
             }))

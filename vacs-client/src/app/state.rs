@@ -19,7 +19,7 @@ use crate::audio::manager::AudioManager;
 pub struct AppStateInner {
     pub config: AppConfig,
     connection: Connection,
-    pub audio_manager: Arc<Mutex<AudioManager>>,
+    pub audio_manager: AudioManager,
     pub http_client: reqwest::Client,
     cookie_store: Arc<SecureCookieStore>,
 }
@@ -34,7 +34,7 @@ impl AppStateInner {
         Ok(Self {
             config: config.clone(),
             connection: Connection::new(),
-            audio_manager: Arc::new(Mutex::new(AudioManager::new(&config.audio)?)),
+            audio_manager: AudioManager::new(&config.audio)?,
             http_client: reqwest::ClientBuilder::new()
                 .user_agent(APP_USER_AGENT)
                 .cookie_provider(cookie_store.clone())

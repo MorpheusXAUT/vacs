@@ -63,11 +63,7 @@ pub async fn signaling_start_call(
         })
         .await?;
 
-    state
-        .audio_manager
-        .lock()
-        .await
-        .restart(SourceType::Ringback);
+    state.audio_manager.restart(SourceType::Ringback);
     Ok(())
 }
 
@@ -89,7 +85,7 @@ pub async fn signaling_accept_call(
         })
         .await?;
 
-    state.audio_manager.lock().await.stop(SourceType::Ring);
+    state.audio_manager.stop(SourceType::Ring);
     Ok(())
 }
 
@@ -107,7 +103,7 @@ pub async fn signaling_end_call(
         .send_signaling_message(SignalingMessage::CallEnd { peer_id })
         .await?;
 
-    state.audio_manager.lock().await.stop(SourceType::Ringback);
+    state.audio_manager.stop(SourceType::Ringback);
     Ok(())
 }
 

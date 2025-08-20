@@ -101,11 +101,10 @@ pub async fn audio_set_device(
             DeviceType::Input => state.config.audio.input_device_name = device_name,
             DeviceType::Output => {
                 state.config.audio.output_device_name = device_name;
+                let audio_config = state.config.audio.clone();
                 state
                     .audio_manager
-                    .lock()
-                    .await
-                    .switch_output_device(&state.config.audio)?;
+                    .switch_output_device(&audio_config)?;
             }
         }
 
@@ -152,34 +151,24 @@ pub async fn audio_set_volume(
         VolumeType::Output => {
             state
                 .audio_manager
-                .lock()
-                .await
                 .set_volume(SourceType::Opus, volume);
             state
                 .audio_manager
-                .lock()
-                .await
                 .set_volume(SourceType::Ringback, volume);
             state
                 .audio_manager
-                .lock()
-                .await
                 .set_volume(SourceType::RingbackOneshot, volume);
             state.config.audio.output_device_volume = volume;
         }
         VolumeType::Click => {
             state
                 .audio_manager
-                .lock()
-                .await
                 .set_volume(SourceType::Click, volume);
             state.config.audio.click_volume = volume;
         }
         VolumeType::Chime => {
             state
                 .audio_manager
-                .lock()
-                .await
                 .set_volume(SourceType::Ring, volume);
             state.config.audio.chime_volume = volume;
         }
@@ -200,8 +189,6 @@ pub async fn audio_play_ui_click(app_state: State<'_, AppState>) -> Result<(), E
         .lock()
         .await
         .audio_manager
-        .lock()
-        .await
         .start(SourceType::Click);
 
     Ok(())
