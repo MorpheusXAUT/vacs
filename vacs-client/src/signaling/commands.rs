@@ -81,10 +81,10 @@ pub async fn signaling_accept_call(
     state
         .send_signaling_message(SignalingMessage::CallAnswer {
             peer_id,
-            sdp: "".to_string(), // TODO webrtc
+            sdp: "".to_string(), // TODO webrtc/audio/active_call_peer_id
         })
         .await?;
-
+    
     state.audio_manager.stop(SourceType::Ring);
     Ok(())
 }

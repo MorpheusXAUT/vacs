@@ -180,13 +180,45 @@ impl Connection {
             }
             SignalingMessage::CallAnswer { peer_id, .. } => {
                 log::trace!("Call answer received from {peer_id}");
-                // TODO start call in webrtc/audio
+
+                let state = app.state::<AppState>();
+                let mut state = state.lock().await;
+
+                // TODO webrtc & audio
+
+                // let (webrtc_tx, webrtc_rx) = mpsc::channel(256);
+                //
+                // let audio_config = state.config.audio.clone();
+                //
+                // if let Err(err) = state
+                //     .audio_manager
+                //     .attach_input_device(&audio_config, webrtc_tx)
+                // {
+                //     log::warn!("Failed to attach input device: {err:?}");
+                //
+                //     if let Err(e) = state
+                //         .send_signaling_message(SignalingMessage::CallEnd { peer_id })
+                //         .await
+                //     {
+                //         log::warn!(
+                //             "Failed to send call end message after failing to attach input device: {e:?}"
+                //         );
+                //     }
+                //
+                //     app.emit::<FrontendError>(
+                //         "error",
+                //         Error::AudioDevice("Failed to start input capture".to_string()).into(),
+                //     )
+                //     .ok();
+                //
+                //     return;
+                // }
+                // log::info!("Attached input device");
+
+                state.set_active_call_peer_id(Some(peer_id.clone()));
+
                 app.emit("signaling:call-answer", peer_id).ok();
-                app.state::<AppState>()
-                    .lock()
-                    .await
-                    .audio_manager
-                    .stop(SourceType::Ringback);
+                state.audio_manager.stop(SourceType::Ringback);
             }
             SignalingMessage::CallReject { peer_id } => {
                 log::trace!("Call reject received from {peer_id}");
@@ -199,7 +231,19 @@ impl Connection {
             }
             SignalingMessage::CallEnd { peer_id } => {
                 log::trace!("Call end received from {peer_id}");
-                // TODO end call in webrtc/audio
+
+                let state = app.state::<AppState>();
+                let mut state = state.lock().await;
+
+                if state.active_call_peer_id() != Some(&peer_id) {
+                    log::warn!("Received call end message for peer that is not active");
+                    return;
+                }
+
+                state.audio_manager.detach_input_device();
+                log::info!("Detached input device");
+
+                // TODO end call in webrtc
                 app.emit("signaling:call-end", peer_id).ok();
                 app.state::<AppState>()
                     .lock()
@@ -213,7 +257,19 @@ impl Connection {
             }
             SignalingMessage::PeerNotFound { peer_id } => {
                 log::trace!("Received peer not found: {peer_id}");
-                // TODO end call in webrtc/audio if in call with peer
+
+                let state = app.state::<AppState>();
+                let mut state = state.lock().await;
+
+                if state.active_call_peer_id() != Some(&peer_id) {
+                    log::warn!("Received call end message for peer that is not active");
+                    return;
+                }
+
+                // TODO end call in webrtc/audio
+                state.set_active_call_peer_id(None);
+                drop(state);
+
                 app.emit("signaling:peer-not-found", peer_id).ok();
             }
             SignalingMessage::ClientConnected { client } => {

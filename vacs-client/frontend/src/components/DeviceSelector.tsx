@@ -3,12 +3,15 @@ import {useEffect, useState} from "preact/hooks";
 import {invokeStrict} from "../error.ts";
 import {AudioDevices} from "../types/audio.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
+import {useCallStore} from "../stores/call-store.ts";
 
 type DeviceSelectorProps = {
     deviceType: "Input" | "Output";
 }
 
 function DeviceSelector(props: DeviceSelectorProps) {
+    const callDisplayType = useCallStore(state => state.callDisplay?.type);
+
     const [device, setDevice] = useState<string>("");
     const [devices, setDevices] = useState<SelectOption[]>([{value: "", text: "Loading..."}]);
 
@@ -53,7 +56,7 @@ function DeviceSelector(props: DeviceSelectorProps) {
                 options={devices}
                 selected={device}
                 onChange={handleOnChange}
-                disabled={devices === undefined || devices.length === 0}
+                disabled={devices === undefined || devices.length === 0 || callDisplayType === "accepted" || callDisplayType === "outgoing"}
             />
         </>
     );

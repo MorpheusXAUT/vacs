@@ -56,15 +56,13 @@ impl SourceType {
                 Duration::from_millis(1),
                 output_channels,
                 volume,
-            )
+            ),
         }
     }
 }
 
 pub struct AudioManager {
     output: AudioOutput,
-    // TODO remove linter disable
-    #[allow(dead_code)]
     input: Option<AudioInput>,
     source_ids: HashMap<SourceType, AudioSourceId>,
 }
@@ -87,49 +85,26 @@ impl AudioManager {
         Ok(())
     }
 
-    fn create_audio_output(audio_config: &AudioConfig) -> Result<(AudioOutput, HashMap<SourceType, AudioSourceId>)> {
-        let output_device = Device::new(
-            &audio_config.device_config(DeviceType::Output),
-            DeviceType::Output,
+    // TODO remove linter disable
+    #[allow(unused)]
+    pub fn attach_input_device(
+        &mut self,
+        audio_config: &AudioConfig,
+        tx: mpsc::Sender<EncodedAudioFrame>,
+    ) -> Result<()> {
+        let input_device = Device::new(
+            &audio_config.device_config(DeviceType::Input),
+            DeviceType::Input,
         )?;
-        let mut output =
-            AudioOutput::start(&output_device).context("Failed to start audio output")?;
+        self.input =
+            Some(AudioInput::start(&input_device, tx).context("Failed to start audio input")?);
+        Ok(())
+    }
 
-        let mut source_ids = HashMap::new();
-        source_ids.insert(
-            SourceType::Ring,
-            output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                SourceType::Ring,
-                output_device.stream_config.channels() as usize,
-                audio_config.chime_volume,
-            ))),
-        );
-        source_ids.insert(
-            SourceType::Ringback,
-            output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                SourceType::Ringback,
-                output_device.stream_config.channels() as usize,
-                audio_config.output_device_volume,
-            ))),
-        );
-        source_ids.insert(
-            SourceType::RingbackOneshot,
-            output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                SourceType::RingbackOneshot,
-                output_device.stream_config.channels() as usize,
-                audio_config.output_device_volume,
-            ))),
-        );
-        source_ids.insert(
-            SourceType::Click,
-            output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                SourceType::Click,
-                output_device.stream_config.channels() as usize,
-                audio_config.click_volume,
-            ))),
-        );
-
-        Ok((output, source_ids))
+    // TODO remove linter disable
+    #[allow(unused)]
+    pub fn detach_input_device(&mut self) {
+        self.input = None;
     }
 
     pub fn start(&mut self, source_type: SourceType) {
@@ -196,5 +171,52 @@ impl AudioManager {
         } else {
             log::warn!("Tried to detach call but no call was attached");
         }
+    }
+
+    fn create_audio_output(
+        audio_config: &AudioConfig,
+    ) -> Result<(AudioOutput, HashMap<SourceType, AudioSourceId>)> {
+        let output_device = Device::new(
+            &audio_config.device_config(DeviceType::Output),
+            DeviceType::Output,
+        )?;
+        let mut output =
+            AudioOutput::start(&output_device).context("Failed to start audio output")?;
+
+        let mut source_ids = HashMap::new();
+        source_ids.insert(
+            SourceType::Ring,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::Ring,
+                output_device.stream_config.channels() as usize,
+                audio_config.chime_volume,
+            ))),
+        );
+        source_ids.insert(
+            SourceType::Ringback,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::Ringback,
+                output_device.stream_config.channels() as usize,
+                audio_config.output_device_volume,
+            ))),
+        );
+        source_ids.insert(
+            SourceType::RingbackOneshot,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::RingbackOneshot,
+                output_device.stream_config.channels() as usize,
+                audio_config.output_device_volume,
+            ))),
+        );
+        source_ids.insert(
+            SourceType::Click,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::Click,
+                output_device.stream_config.channels() as usize,
+                audio_config.click_volume,
+            ))),
+        );
+
+        Ok((output, source_ids))
     }
 }

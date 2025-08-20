@@ -4,8 +4,11 @@ import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {invokeStrict} from "../error.ts";
 import {useEffect} from "preact/hooks";
 import {AudioHosts} from "../types/audio.ts";
+import {useCallStore} from "../stores/call-store.ts";
 
 function AudioHostSelector() {
+    const callDisplayType = useCallStore(state => state.callDisplay?.type);
+
     const [host, setHost] = useState<string>("");
     const [hosts, setHosts] = useState<SelectOption[]>([{value: "", text: "Loading..."}]);
 
@@ -42,7 +45,7 @@ function AudioHostSelector() {
                 options={hosts}
                 selected={host}
                 onChange={handleOnChange}
-                disabled={hosts === undefined || hosts.length === 0}
+                disabled={hosts === undefined || hosts.length === 0 || callDisplayType === "accepted" || callDisplayType === "outgoing" }
             />
         </>
     );

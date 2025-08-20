@@ -30,10 +30,16 @@ pub async fn audio_set_host(
     app_state: State<'_, AppState>,
     host_name: String,
 ) -> Result<(), Error> {
+    let mut state = app_state.lock().await;
+
+    // TODO: Replace with webrtc peer
+    if state.active_call_peer_id().is_some() {
+        return Err(Error::AudioDevice("Cannot set audio device while call is active".to_string()));
+    }
+
     log::info!("Setting audio host (name: {host_name})");
 
     let persisted_audio_config: PersistedAudioConfig = {
-        let mut state = app_state.lock().await;
         state.config.audio.host_name = host_name;
         state.config.audio.clone().into()
     };
@@ -88,6 +94,13 @@ pub async fn audio_set_device(
     device_type: DeviceType,
     device_name: String,
 ) -> Result<(), Error> {
+    let mut state = app_state.lock().await;
+
+    // TODO: Replace with webrtc peer
+    if state.active_call_peer_id().is_some() {
+        return Err(Error::AudioDevice("Cannot set audio device while call is active".to_string()));
+    }
+
     log::info!(
         "Setting audio device (name: {:?}, type: {:?})",
         device_name,
@@ -95,16 +108,13 @@ pub async fn audio_set_device(
     );
 
     let persisted_audio_config: PersistedAudioConfig = {
-        let mut state = app_state.lock().await;
 
         match device_type {
             DeviceType::Input => state.config.audio.input_device_name = device_name,
             DeviceType::Output => {
                 state.config.audio.output_device_name = device_name;
                 let audio_config = state.config.audio.clone();
-                state
-                    .audio_manager
-                    .switch_output_device(&audio_config)?;
+                state.audio_manager.switch_output_device(&audio_config)?;
             }
         }
 
@@ -149,27 +159,19 @@ pub async fn audio_set_volume(
     match volume_type {
         VolumeType::Input => state.config.audio.input_device_volume = volume,
         VolumeType::Output => {
-            state
-                .audio_manager
-                .set_volume(SourceType::Opus, volume);
-            state
-                .audio_manager
-                .set_volume(SourceType::Ringback, volume);
+            state.audio_manager.set_volume(SourceType::Opus, volume);
+            state.audio_manager.set_volume(SourceType::Ringback, volume);
             state
                 .audio_manager
                 .set_volume(SourceType::RingbackOneshot, volume);
             state.config.audio.output_device_volume = volume;
         }
         VolumeType::Click => {
-            state
-                .audio_manager
-                .set_volume(SourceType::Click, volume);
+            state.audio_manager.set_volume(SourceType::Click, volume);
             state.config.audio.click_volume = volume;
         }
         VolumeType::Chime => {
-            state
-                .audio_manager
-                .set_volume(SourceType::Ring, volume);
+            state.audio_manager.set_volume(SourceType::Ring, volume);
             state.config.audio.chime_volume = volume;
         }
     }

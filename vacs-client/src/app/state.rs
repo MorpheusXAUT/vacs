@@ -1,20 +1,20 @@
-use crate::config::{APP_USER_AGENT, AppConfig, BackendEndpoint};
+use crate::audio::manager::AudioManager;
+use crate::config::{AppConfig, BackendEndpoint, APP_USER_AGENT};
 use crate::error::{Error, FrontendError};
 use crate::secrets::cookies::SecureCookieStore;
 use crate::signaling::Connection;
 use anyhow::Context;
 use reqwest::StatusCode;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use url::Url;
 use vacs_protocol::http::ws::WebSocketToken;
 use vacs_protocol::ws::SignalingMessage;
-use crate::audio::manager::AudioManager;
 
 pub struct AppStateInner {
     pub config: AppConfig,
@@ -22,6 +22,7 @@ pub struct AppStateInner {
     pub audio_manager: AudioManager,
     pub http_client: reqwest::Client,
     cookie_store: Arc<SecureCookieStore>,
+    active_call_peer_id: Option<String>,
 }
 
 pub type AppState = Mutex<AppStateInner>;
@@ -42,6 +43,7 @@ impl AppStateInner {
                 .build()
                 .context("Failed to build HTTP client")?,
             cookie_store,
+            active_call_peer_id: None,
         })
     }
 
@@ -141,9 +143,17 @@ impl AppStateInner {
                 "error",
                 Error::Network("Disconnected from websocket connection".to_string()).into(),
             )
-                .ok();
+            .ok();
         }
         log::debug!("Successfully handled closed signaling server connection");
+    }
+
+    pub fn set_active_call_peer_id(&mut self, peer_id: Option<String>) {
+        self.active_call_peer_id = peer_id;
+    }
+
+    pub fn active_call_peer_id(&self) -> Option<&String> {
+        self.active_call_peer_id.as_ref()
     }
 
     fn parse_http_request_url(
