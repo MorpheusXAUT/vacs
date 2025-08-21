@@ -7,6 +7,7 @@ import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {invokeSafe, invokeStrict} from "../error.ts";
 import {useEffect, useState} from "preact/hooks";
 import {AudioVolumes} from "../types/audio.ts";
+import InputLevelMeter from "./ui/InputLevelMeter.tsx";
 
 function VolumeSettings() {
     const [volumes, setVolumes] = useState<AudioVolumes>({input: 0.5, output: 0.5, click: 0.5, chime: 0.5});
@@ -29,9 +30,9 @@ function VolumeSettings() {
 
     return (
         <>
-            <div className="h-full w-60 border-r-2 border-zinc-200 flex flex-col">
+            <div className="h-full w-64 border-r-2 border-zinc-200 flex flex-col">
                 <p className="w-full text-center border-b-2 border-zinc-200 uppercase font-semibold">Call</p>
-                <div className="w-full grow px-3 py-1.5 flex flex-row gap-3.5">
+                <div className="w-full grow px-3 py-1.5 flex flex-row">
                     <div className="w-full flex flex-col items-center">
                         <img src={headphones} className="pt-1 h-12 w-12" alt=""/>
                         <p className="font-bold text-center pt-3 pb-1">Output</p>
@@ -46,6 +47,7 @@ function VolumeSettings() {
                                       setPosition={(position) => setVolumes((prev) => ({...prev, input: position}))}
                                       savePosition={(position) => handleVolumeSave("input", position)}/>
                     </div>
+                    <InputLevelMeter/>
                 </div>
             </div>
             <div className="h-full w-60 border-r-2 border-zinc-200 flex flex-col">

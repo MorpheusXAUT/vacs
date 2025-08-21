@@ -53,6 +53,8 @@ pub fn run() {
             audio::commands::audio_set_device,
             audio::commands::audio_set_host,
             audio::commands::audio_set_volume,
+            audio::commands::audio_start_input_level_meter,
+            audio::commands::audio_stop_input_level_meter,
             auth::commands::auth_check_session,
             auth::commands::auth_logout,
             auth::commands::auth_open_oauth_url,

@@ -1,9 +1,10 @@
 use crate::app::state::AppState;
 use crate::audio::manager::SourceType;
 use crate::audio::{AudioDevices, AudioHosts, AudioVolumes, VolumeType};
-use crate::config::{Persistable, PersistedAudioConfig, AUDIO_SETTINGS_FILE_NAME};
+use crate::config::{AUDIO_SETTINGS_FILE_NAME, Persistable, PersistedAudioConfig};
 use crate::error::Error;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
+use tokio::sync::mpsc;
 use vacs_audio::{Device, DeviceType};
 
 #[tauri::command]
@@ -34,7 +35,9 @@ pub async fn audio_set_host(
 
     // TODO: Replace with webrtc peer
     if state.active_call_peer_id().is_some() {
-        return Err(Error::AudioDevice("Cannot set audio device while call is active".to_string()));
+        return Err(Error::AudioDevice(
+            "Cannot set audio device while call is active".to_string(),
+        ));
     }
 
     log::info!("Setting audio host (name: {host_name})");
@@ -98,7 +101,9 @@ pub async fn audio_set_device(
 
     // TODO: Replace with webrtc peer
     if state.active_call_peer_id().is_some() {
-        return Err(Error::AudioDevice("Cannot set audio device while call is active".to_string()));
+        return Err(Error::AudioDevice(
+            "Cannot set audio device while call is active".to_string(),
+        ));
     }
 
     log::info!(
@@ -108,7 +113,6 @@ pub async fn audio_set_device(
     );
 
     let persisted_audio_config: PersistedAudioConfig = {
-
         match device_type {
             DeviceType::Input => state.config.audio.input_device_name = device_name,
             DeviceType::Output => {
@@ -192,6 +196,44 @@ pub async fn audio_play_ui_click(app_state: State<'_, AppState>) -> Result<(), E
         .await
         .audio_manager
         .start(SourceType::Click);
+
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn audio_start_input_level_meter(
+    app_state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), Error> {
+    log::trace!("Starting input level meter");
+
+    let mut state = app_state.lock().await;
+    let audio_config = &state.config.audio.clone();
+
+    state
+        .audio_manager
+        .attach_input_device(audio_config, mpsc::channel(1).0)?;
+
+    let mut input_rx = state.audio_manager.input_level_rx().resubscribe();
+
+    tauri::async_runtime::spawn(async move {
+        log::trace!("Input level meter task started");
+        while let Ok(frame) = input_rx.recv().await {
+            app.emit("audio:input-level", frame).ok();
+        }
+        log::trace!("Input level meter task stopped");
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn audio_stop_input_level_meter(app_state: State<'_, AppState>) -> Result<(), Error> {
+    log::trace!("Stopping input level meter");
+
+    app_state.lock().await.audio_manager.detach_input_device();
 
     Ok(())
 }

@@ -4,7 +4,7 @@ use bytes::Bytes;
 use cpal::traits::{DeviceTrait, StreamTrait};
 use serde::Serialize;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tracing::instrument;
 
 const MAX_OPUS_FRAME_SIZE: usize = 1275; // max size of an Opus frame according to RFC 6716 3.2.1.
@@ -12,7 +12,7 @@ const INPUT_LEVEL_CHANNEL_CAPACITY: usize = 64;
 
 pub struct AudioInput {
     _stream: cpal::Stream,
-    pub level_rx: mpsc::Receiver<InputLevel>,
+    pub level_rx: broadcast::Receiver<InputLevel>,
 }
 
 impl AudioInput {
@@ -20,7 +20,7 @@ impl AudioInput {
     pub fn start(device: &Device, tx: mpsc::Sender<EncodedAudioFrame>) -> Result<Self> {
         tracing::debug!("Starting input capture on device");
 
-        let (level_tx, level_rx) = mpsc::channel(INPUT_LEVEL_CHANNEL_CAPACITY);
+        let (level_tx, level_rx) = broadcast::channel(INPUT_LEVEL_CHANNEL_CAPACITY);
         let mut level_meter = InputLevelMeter::default();
 
         let mut frame_buf = [0.0f32; FRAME_SIZE];
@@ -41,7 +41,7 @@ impl AudioInput {
                 move |data: &[f32], _| {
                     for &s in data {
                         if let Some(level) = level_meter.push_sample(s)
-                            && let Err(err) = level_tx.try_send(level)
+                            && let Err(err) = level_tx.send(level)
                         {
                             tracing::warn!(?err, "Failed to send input level");
                         }

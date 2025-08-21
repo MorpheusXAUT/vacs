@@ -2,8 +2,8 @@ use crate::config::AudioConfig;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::sync::mpsc;
-use vacs_audio::input::AudioInput;
+use tokio::sync::{broadcast, mpsc};
+use vacs_audio::input::{AudioInput, InputLevel};
 use vacs_audio::output::AudioOutput;
 use vacs_audio::sources::opus::OpusSource;
 use vacs_audio::sources::waveform::{Waveform, WaveformSource, WaveformTone};
@@ -171,6 +171,10 @@ impl AudioManager {
         } else {
             log::warn!("Tried to detach call but no call was attached");
         }
+    }
+
+    pub fn input_level_rx(&mut self) -> &mut broadcast::Receiver<InputLevel> {
+        &mut self.input.as_mut().unwrap().level_rx
     }
 
     fn create_audio_output(
