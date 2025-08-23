@@ -1,30 +1,44 @@
-use crate::config::{WEBRTC_TRACK_ID, WEBRTC_TRACK_STREAM_ID, WebrtcConfig};
+use crate::config::{
+    WebrtcConfig, PEER_EVENTS_CAPACITY, WEBRTC_CHANNELS, WEBRTC_TRACK_ID, WEBRTC_TRACK_STREAM_ID,
+};
 use anyhow::{Context, Result};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
+use tracing::instrument;
 use vacs_audio::{EncodedAudioFrame, SAMPLE_RATE};
-use webrtc::api::APIBuilder;
 use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MIME_TYPE_OPUS, MediaEngine};
+use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS};
+use webrtc::api::APIBuilder;
+use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
-use webrtc::track::track_local::TrackLocal;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use webrtc::track::track_local::TrackLocal;
+
+pub type PeerConnectionState = RTCPeerConnectionState;
+
+#[derive(Debug, Clone)]
+pub enum PeerEvent {
+    ConnectionState(PeerConnectionState),
+    IceCandidate(String),
+    Error(String),
+}
 
 pub struct Peer {
     peer_connection: RTCPeerConnection,
     track: Arc<TrackLocalStaticSample>,
     sender: Option<crate::Sender>,
     receiver: Option<crate::Receiver>,
+    events_tx: broadcast::Sender<PeerEvent>,
 }
-pub type PeerConnectionState = RTCPeerConnectionState;
 
 impl Peer {
+    #[instrument(level = "debug", err)]
     pub async fn new(config: WebrtcConfig) -> Result<Self> {
         let mut media_engine = MediaEngine::default();
         media_engine
@@ -57,7 +71,7 @@ impl Peer {
             RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_owned(),
                 clock_rate: SAMPLE_RATE,
-                channels: 1,
+                channels: WEBRTC_CHANNELS,
                 ..Default::default()
             },
             WEBRTC_TRACK_ID.to_owned(),
@@ -69,35 +83,119 @@ impl Peer {
             .await
             .context("Failed to add track to peer connection")?;
 
-        // todo: rework to work with channel to communicate with control
-        peer_connection.on_peer_connection_state_change(Box::new(
-            move |state: RTCPeerConnectionState| {
-                tracing::trace!(?state, "Peer connection state changed");
+        let (events_tx, _) = broadcast::channel(PEER_EVENTS_CAPACITY);
 
+        {
+            let events_tx = events_tx.clone();
+            peer_connection.on_peer_connection_state_change(Box::new(
+                move |state: RTCPeerConnectionState| {
+                    tracing::trace!(?state, "Peer connection state changed");
+                    if let Err(err) = events_tx.send(PeerEvent::ConnectionState(state)) {
+                        tracing::warn!(?err, "Failed to send peer connection state event");
+                    }
+                    Box::pin(async {})
+                },
+            ));
+        }
+
+        {
+            let events_tx = events_tx.clone();
+            peer_connection.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
+                tracing::trace!(?candidate, "ICE candidate received");
+                if let Some(candidate) = candidate {
+                    match candidate.to_json() {
+                        Ok(init) => match serde_json::to_string(&init) {
+                            Ok(init) => {
+                                if let Err(err) = events_tx.send(PeerEvent::IceCandidate(init)) {
+                                    tracing::warn!(?err, "Failed to send ICE candidate event");
+                                }
+                            }
+                            Err(err) => {
+                                tracing::warn!(?err, "Failed to serialize ICE candidate");
+                            }
+                        },
+                        Err(err) => {
+                            tracing::warn!(?err, "Failed to serialize ICE candidate");
+                        }
+                    }
+                }
                 Box::pin(async {})
-            },
-        ));
+            }))
+        }
 
         Ok(Self {
             peer_connection,
             track,
             sender: None,
             receiver: None,
+            events_tx,
         })
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     pub async fn start(
         &mut self,
         input_rx: mpsc::Receiver<EncodedAudioFrame>,
         output_tx: mpsc::Sender<EncodedAudioFrame>,
     ) -> Result<()> {
-        self.sender = Some(crate::Sender::new(Arc::clone(&self.track), input_rx).await?);
-        self.receiver = Some(crate::Receiver::new(&self.peer_connection, output_tx).await?);
+        tracing::debug!("Starting peer");
+        if self.sender.is_some() || self.receiver.is_some() {
+            tracing::warn!("Peer already started");
+            anyhow::bail!("Peer already started");
+        }
 
+        self.sender = Some(
+            crate::Sender::new(Arc::clone(&self.track), input_rx)
+                .await
+                .context("Failed to create sender")?,
+        );
+        self.receiver = Some(
+            crate::Receiver::new(&self.peer_connection, output_tx)
+                .await
+                .context("Failed to create receiver")?,
+        );
+
+        tracing::trace!("Successfully started peer");
         Ok(())
     }
 
-    pub async fn create_offer(&self) -> Result<RTCSessionDescription> {
+    #[instrument(level = "debug", skip(self), err)]
+    pub async fn stop(&mut self) -> Result<()> {
+        tracing::debug!("Stopping peer");
+        if let Some(sender) = self.sender.take() {
+            tracing::trace!("Shutting down sender");
+            sender.stop().await?;
+        }
+        if let Some(receiver) = self.receiver.take() {
+            tracing::trace!("Shutting down receiver");
+            receiver.shutdown()
+        }
+
+        tracing::trace!("Successfully stopped peer");
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    pub async fn close(&mut self) -> Result<()> {
+        tracing::debug!("Closing peer");
+        self.stop().await.context("Failed to stop peer")?;
+
+        tracing::trace!("Closing peer connection");
+        self.peer_connection
+            .close()
+            .await
+            .context("Failed to close peer connection")?;
+
+        tracing::trace!("Successfully closed peer connection");
+        Ok(())
+    }
+
+    pub fn subscribe(&self) -> broadcast::Receiver<PeerEvent> {
+        self.events_tx.subscribe()
+    }
+
+    #[instrument(level = "trace", skip(self), err)]
+    pub async fn create_offer(&self) -> Result<String> {
         tracing::trace!("Creating SDP offer");
 
         let offer = self
@@ -111,25 +209,25 @@ impl Peer {
             .await
             .context("Failed to set offer as local description")?;
 
-        self.await_all_ice_candidates().await;
-
-        // update offer with all gathered ICE candidates
-        let updated_offer = self
+        let local_description = self
             .peer_connection
             .local_description()
             .await
-            .context("Failed to get local description for offer")?;
+            .context("Failed to get local description")?;
+
+        let sdp = serde_json::to_string(&local_description)
+            .context("Failed to serialize local description")?;
 
         tracing::trace!("Created SDP offer");
-        Ok(updated_offer)
+        Ok(sdp)
     }
 
-    pub async fn accept_offer(
-        &self,
-        offer: RTCSessionDescription,
-    ) -> Result<RTCSessionDescription> {
+    #[instrument(level = "trace", skip(self, sdp), err)]
+    pub async fn accept_offer(&self, sdp: String) -> Result<String> {
         tracing::trace!("Creating SDP answer");
 
+        let offer = serde_json::from_str::<RTCSessionDescription>(&sdp)
+            .context("Failed to deserialize SDP")?;
         self.peer_connection
             .set_remote_description(offer)
             .await
@@ -141,21 +239,25 @@ impl Peer {
             .await
             .context("Failed to set answer as local description")?;
 
-        self.await_all_ice_candidates().await;
-
         let answer = self
             .peer_connection
             .local_description()
             .await
             .context("Failed to get local description for answer")?;
 
+        let sdp =
+            serde_json::to_string(&answer).context("Failed to serialize local description")?;
+
         tracing::trace!("Created SDP answer");
-        Ok(answer)
+        Ok(sdp)
     }
 
-    pub async fn accept_answer(&self, answer: RTCSessionDescription) -> Result<()> {
+    #[instrument(level = "trace", skip(self, sdp), err)]
+    pub async fn accept_answer(&self, sdp: String) -> Result<()> {
         tracing::trace!("Accepting SDP answer");
 
+        let answer = serde_json::from_str::<RTCSessionDescription>(&sdp)
+            .context("Failed to deserialize SDP")?;
         self.peer_connection
             .set_remote_description(answer)
             .await
@@ -165,25 +267,19 @@ impl Peer {
         Ok(())
     }
 
-    async fn await_all_ice_candidates(&self) {
-        let (gather_complete_tx, mut gather_complete_rx) = mpsc::channel::<()>(1);
+    #[instrument(level = "trace", skip(self, candidate), err)]
+    pub async fn add_remote_ice_candidate(&self, candidate: String) -> Result<()> {
+        tracing::trace!("Adding remote ICE candidate");
 
         self.peer_connection
-            .on_ice_gathering_state_change(Box::new(move |state| {
-                tracing::trace!(?state, "ICE gathering state changed");
-                if state == webrtc::ice_transport::ice_gatherer_state::RTCIceGathererState::Complete
-                {
-                    match gather_complete_tx.try_send(()) {
-                        Ok(()) => {}
-                        Err(err) => {
-                            tracing::warn!(?err, "Failed to send gather complete event")
-                        }
-                    }
-                }
+            .add_ice_candidate(
+                serde_json::from_str::<RTCIceCandidateInit>(&candidate)
+                    .context("Failed to deserialize candidate")?,
+            )
+            .await
+            .context("Failed to add remote ICE candidate")?;
 
-                Box::pin(async {})
-            }));
-
-        gather_complete_rx.recv().await;
+        tracing::trace!("Added remote ICE candidate");
+        Ok(())
     }
 }

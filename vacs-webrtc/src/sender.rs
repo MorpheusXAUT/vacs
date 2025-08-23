@@ -1,23 +1,27 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
+use tokio::task::JoinHandle;
+use tracing::{instrument, Instrument};
 use vacs_audio::{EncodedAudioFrame, FRAME_DURATION_MS};
 use webrtc::media::Sample;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 
 pub struct Sender {
     shutdown_tx: watch::Sender<()>,
+    task: JoinHandle<()>,
 }
 
 impl Sender {
+    #[instrument(level = "trace", skip_all, err)]
     pub async fn new(
         track: Arc<TrackLocalStaticSample>,
         mut input_rx: mpsc::Receiver<EncodedAudioFrame>,
     ) -> Result<Self> {
         let (shutdown_tx, mut shutdown_rx) = watch::channel(());
 
-        tokio::spawn(async move {
+        let task = tokio::runtime::Handle::current().spawn(async move {
             loop {
                 tokio::select! {
                     biased;
@@ -45,18 +49,19 @@ impl Sender {
                     }
                 }
             }
-        });
+        }.instrument(tracing::Span::current()));
 
-        Ok(Self { shutdown_tx })
+        Ok(Self { shutdown_tx, task })
     }
 
     pub fn shutdown(&self) {
         let _ = self.shutdown_tx.send(());
     }
-}
 
-impl Drop for Sender {
-    fn drop(&mut self) {
+    #[instrument(level = "trace", skip(self), err)]
+    pub async fn stop(self) -> Result<()> {
         self.shutdown();
+        tracing::trace!("Waiting for sender task to finish");
+        self.task.await.context("Failed to join sender task")
     }
 }

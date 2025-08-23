@@ -1,6 +1,7 @@
 use anyhow::Result;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
+use tracing::instrument;
 use vacs_audio::EncodedAudioFrame;
 use webrtc::peer_connection::RTCPeerConnection;
 
@@ -9,6 +10,7 @@ pub struct Receiver {
 }
 
 impl Receiver {
+    #[instrument(level = "trace", skip_all, err)]
     pub async fn new(
         peer_connection: &RTCPeerConnection,
         output_tx: mpsc::Sender<EncodedAudioFrame>,
@@ -20,9 +22,8 @@ impl Receiver {
             let mut shutdown_rx = shutdown_rx.clone();
 
             Box::pin(async move {
-                tokio::spawn(async move {
-                    loop {
-                        tokio::select! {
+                loop {
+                    tokio::select! {
                             biased;
                             _ = shutdown_rx.changed() => {
                                 tracing::trace!("Shutdown signalled, stopping receiver");
@@ -43,8 +44,7 @@ impl Receiver {
                                 }
                             }
                         }
-                    }
-                });
+                }
             })
         }));
 
