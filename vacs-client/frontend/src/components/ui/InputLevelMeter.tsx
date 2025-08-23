@@ -3,12 +3,16 @@ import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {InputLevel} from "../../types/audio.ts";
 import {clsx} from "clsx";
 import {invokeSafe} from "../../error.ts";
+import {useCallStore} from "../../stores/call-store.ts";
 
 function InputLevelMeter() {
+    const isCallActive = useCallStore(state => state.callDisplay?.type === "accepted");
     const [unlistenFn, setUnlistenFn] = useState<Promise<UnlistenFn> | undefined>();
     const [level, setLevel] = useState<InputLevel | undefined>();
 
     const handleOnClick = async () => {
+        if (isCallActive) return; // Cannot start input level meter while call is active
+
         if (unlistenFn !== undefined) {
             await invokeSafe("audio_stop_input_level_meter");
 
@@ -29,8 +33,9 @@ function InputLevelMeter() {
         <div className="w-4 h-full shrink-0 pb-2 pt-24">
             <div
                 className={clsx(
-                    "relative w-full h-full border-2 rounded cursor-pointer",
-                    unlistenFn === undefined ? "border-gray-500" : level?.clipping ? "border-red-700" : "border-blue-700"
+                    "relative w-full h-full border-2 rounded",
+                    unlistenFn === undefined ? "border-gray-500" : level?.clipping ? "border-red-700" : "border-blue-700",
+                    isCallActive ? "cursor-not-allowed" : "cursor-pointer",
                 )}
                 onClick={handleOnClick}
             >

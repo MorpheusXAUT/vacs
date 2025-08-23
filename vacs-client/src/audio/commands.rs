@@ -221,19 +221,15 @@ pub async fn audio_start_input_level_meter(
     let mut state = app_state.lock().await;
     let audio_config = &state.config.audio.clone();
 
+    if state.audio_manager.is_input_device_attached() {
+        return Err(Error::AudioDevice("Cannot start input level meter while call is active".to_string()))
+    }
+
     state
         .audio_manager
-        .attach_input_device(audio_config, None)?;
-
-    let mut input_rx = state.audio_manager.input_level_rx().resubscribe();
-
-    tauri::async_runtime::spawn(async move {
-        log::trace!("Input level meter task started");
-        while let Ok(frame) = input_rx.recv().await {
-            app.emit("audio:input-level", frame).ok();
-        }
-        log::trace!("Input level meter task stopped");
-    });
+        .attach_input_level_meter(audio_config, Box::new(move |level| {
+            app.emit("audio:input-level", level).ok();
+        }))?;
 
     Ok(())
 }

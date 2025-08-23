@@ -2,7 +2,7 @@ use crate::config::AudioConfig;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::mpsc;
 use vacs_audio::input::{AudioInput, InputLevel};
 use vacs_audio::output::AudioOutput;
 use vacs_audio::sources::opus::OpusSource;
@@ -85,10 +85,12 @@ impl AudioManager {
         Ok(())
     }
 
+    // TODO remove linter disable
+    #[allow(unused)]
     pub fn attach_input_device(
         &mut self,
         audio_config: &AudioConfig,
-        tx: Option<mpsc::Sender<EncodedAudioFrame>>,
+        tx: mpsc::Sender<EncodedAudioFrame>,
     ) -> Result<()> {
         let input_device = Device::new(
             &audio_config.device_config(DeviceType::Input),
@@ -104,6 +106,31 @@ impl AudioManager {
             .context("Failed to start audio input")?,
         );
         Ok(())
+    }
+
+    pub fn attach_input_level_meter(
+        &mut self,
+        audio_config: &AudioConfig,
+        emit: Box::<dyn Fn(InputLevel) + Send>,
+    ) -> Result<()> {
+        let input_device = Device::new(
+            &audio_config.device_config(DeviceType::Input),
+            DeviceType::Input,
+        )?;
+        self.input = Some(
+            AudioInput::start_level_meter(
+                &input_device,
+                emit,
+                audio_config.input_device_volume,
+                audio_config.input_device_volume_amp,
+            )
+                .context("Failed to start audio input level meter")?,
+        );
+        Ok(())
+    }
+
+    pub fn is_input_device_attached(&self) -> bool {
+        self.input.is_some()
     }
 
     pub fn detach_input_device(&mut self) {
@@ -187,10 +214,6 @@ impl AudioManager {
         } else {
             log::warn!("Tried to detach call but no call was attached");
         }
-    }
-
-    pub fn input_level_rx(&mut self) -> &mut broadcast::Receiver<InputLevel> {
-        &mut self.input.as_mut().unwrap().level_rx
     }
 
     fn create_audio_output(

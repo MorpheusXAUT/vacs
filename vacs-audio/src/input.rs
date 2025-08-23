@@ -10,11 +10,10 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::mpsc;
 use tracing::instrument;
 
 const MAX_OPUS_FRAME_SIZE: usize = 1275; // max size of an Opus frame according to RFC 6716 3.2.1.
-const INPUT_LEVEL_CHANNEL_CAPACITY: usize = 64;
 
 type InputVolumeOp = Box<dyn Fn(&mut f32) + Send>;
 
@@ -23,7 +22,6 @@ const INPUT_VOLUME_OPS_PER_DATA_CALLBACK: usize = 16;
 
 pub struct AudioInput {
     _stream: cpal::Stream,
-    pub level_rx: broadcast::Receiver<InputLevel>,
     volume_ops: Mutex<ringbuf::HeapProd<InputVolumeOp>>,
     muted: Arc<AtomicBool>,
 }
@@ -32,14 +30,11 @@ impl AudioInput {
     #[instrument(level = "debug", skip(device, tx), err, fields(device = %device))]
     pub fn start(
         device: &Device,
-        tx: Option<mpsc::Sender<EncodedAudioFrame>>,
+        tx: mpsc::Sender<EncodedAudioFrame>,
         mut volume: f32,
         amp: f32,
     ) -> Result<Self> {
         tracing::debug!("Starting input capture on device");
-
-        let (level_tx, level_rx) = broadcast::channel(INPUT_LEVEL_CHANNEL_CAPACITY);
-        let mut level_meter = InputLevelMeter::default();
 
         let mut frame_buf = [0.0f32; FRAME_SIZE];
         let mut frame_pos = 0usize;
@@ -78,16 +73,6 @@ impl AudioInput {
                             in_s * amp * volume
                         };
 
-                        if let Some(level) = level_meter.push_sample(s)
-                            && let Err(err) = level_tx.send(level)
-                        {
-                            tracing::warn!(?err, "Failed to send input level");
-                        }
-
-                        let Some(tx) = &tx else {
-                            continue; // no actual audio output attached, only using level meter
-                        };
-
                         frame_buf[frame_pos] = s;
                         frame_pos += 1;
 
@@ -120,7 +105,6 @@ impl AudioInput {
         tracing::info!("Successfully started audio capture on device");
         Ok(Self {
             _stream: stream,
-            level_rx,
             volume_ops: Mutex::new(ops_prod),
             muted: muted_clone,
         })
@@ -134,7 +118,59 @@ impl AudioInput {
     ) -> Result<Self> {
         tracing::debug!("Starting audio input on default device");
         let default_device = Device::find_default(DeviceType::Input)?;
-        Self::start(&default_device, Some(tx), volume, amp)
+        Self::start(&default_device, tx, volume, amp)
+    }
+
+    pub fn start_level_meter(
+        device: &Device,
+        emit: Box<dyn Fn(InputLevel) + Send>,
+        mut volume: f32,
+        amp: f32,
+    ) -> Result<Self> {
+        tracing::debug!("Starting audio input level meter");
+
+        let mut level_meter = InputLevelMeter::default();
+
+        let (ops_prod, mut ops_cons) =
+            ringbuf::HeapRb::<InputVolumeOp>::new(INPUT_VOLUME_OPS_CAPACITY).split();
+
+        let stream = device
+            .device
+            .build_input_stream(
+                &device.stream_config.config(),
+                move |data: &[f32], _| {
+                    for _ in 0..INPUT_VOLUME_OPS_PER_DATA_CALLBACK {
+                        if let Some(op) = ops_cons.try_pop() {
+                            op(&mut volume);
+                        } else {
+                            break;
+                        }
+                    }
+
+                    for &in_s in data {
+                        let s = in_s * amp * volume;
+
+                        if let Some(level) = level_meter.push_sample(s) {
+                            emit(level);
+                        }
+                    }
+                },
+                |err| {
+                    tracing::warn!(?err, "CPAL input stream error");
+                },
+                None,
+            )
+            .context("Failed to build input stream")?;
+
+        tracing::trace!("Starting capture on input stream");
+        stream.play().context("Failed to play input stream")?;
+
+        tracing::info!("Successfully started audio input level meter on device");
+        Ok(Self {
+            _stream: stream,
+            volume_ops: Mutex::new(ops_prod),
+            muted: Arc::new(AtomicBool::new(false)),
+        })
     }
 
     #[instrument(level = "trace", skip(self))]
