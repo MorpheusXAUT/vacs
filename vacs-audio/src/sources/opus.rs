@@ -5,11 +5,11 @@ use ringbuf::traits::{Consumer, Producer, Split};
 use ringbuf::{HeapCons, HeapProd, HeapRb};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tracing::{Instrument, instrument};
+use tracing::{instrument, Instrument};
 
 pub struct OpusSource {
     cons: HeapCons<f32>,
-    decoder_handle: JoinHandle<()>,
+    decoder_task: JoinHandle<()>,
     output_channels: u16, // >= 1
     volume: f32,          // 0.0 - 1.0
     amp: f32,             // >= 0.1
@@ -35,7 +35,7 @@ impl OpusSource {
         let mut decoder = opus::Decoder::new(SAMPLE_RATE, opus::Channels::Mono)
             .context("Failed to create Opus decoder")?;
 
-        let decoder_handle = tokio::spawn(
+        let decoder_task = tokio::runtime::Handle::current().spawn(
             async move {
                 tracing::debug!("Starting Opus decoder task");
 
@@ -70,7 +70,7 @@ impl OpusSource {
 
         Ok(Self {
             cons,
-            decoder_handle,
+            decoder_task,
             output_channels: output_channels.max(1),
             volume: volume.clamp(0.0, 1.0),
             amp: amp.max(0.1),
@@ -80,7 +80,7 @@ impl OpusSource {
     #[instrument(level = "debug", skip(self))]
     pub fn stop(self) {
         tracing::trace!("Aborting Opus decoder task");
-        self.decoder_handle.abort();
+        self.decoder_task.abort();
     }
 }
 
