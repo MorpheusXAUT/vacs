@@ -40,7 +40,9 @@ pub fn run() {
             use tauri_plugin_deep_link::DeepLinkExt;
             app.deep_link().register_all()?;
 
-            app.manage(Mutex::new(AppStateInner::new()?));
+            let config_dir = app.path().app_config_dir()?;
+            let data_dir = app.path().app_data_dir()?;
+            app.manage(Mutex::new(AppStateInner::new(config_dir, data_dir)?));
 
             Ok(())
         })

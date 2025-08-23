@@ -1,4 +1,3 @@
-use crate::config::project_dirs;
 use crate::secrets;
 use crate::secrets::SecretKey;
 use anyhow::Context;
@@ -198,18 +197,6 @@ impl SecureCookieStore {
         output.extend(&encrypted);
 
         Ok(output)
-    }
-}
-
-impl Default for SecureCookieStore {
-    fn default() -> Self {
-        Self::new(
-            project_dirs()
-                .expect("Failed to get project dirs")
-                .data_local_dir()
-                .join(".cookies"),
-        )
-        .expect("Failed to create secure cookie store")
     }
 }
 

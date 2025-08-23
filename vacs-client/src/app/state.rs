@@ -1,17 +1,18 @@
 use crate::audio::manager::AudioManager;
-use crate::config::{APP_USER_AGENT, AppConfig, BackendEndpoint};
+use crate::config::{AppConfig, BackendEndpoint, APP_USER_AGENT};
 use crate::error::{Error, FrontendError};
 use crate::secrets::cookies::SecureCookieStore;
 use crate::signaling::Connection;
 use anyhow::Context;
 use reqwest::StatusCode;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::Value;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use url::Url;
 use vacs_protocol::http::ws::WebSocketToken;
 use vacs_protocol::ws::SignalingMessage;
@@ -28,9 +29,12 @@ pub struct AppStateInner {
 pub type AppState = Mutex<AppStateInner>;
 
 impl AppStateInner {
-    pub fn new() -> anyhow::Result<Self> {
-        let cookie_store = Arc::new(SecureCookieStore::default());
-        let config = AppConfig::parse()?;
+    pub fn new(config_dir: PathBuf, data_dir: PathBuf) -> anyhow::Result<Self> {
+        let cookie_store = Arc::new(
+            SecureCookieStore::new(data_dir.join(".cookies"))
+                .context("Failed to create secure cookie store")?,
+        );
+        let config = AppConfig::parse(config_dir)?;
 
         Ok(Self {
             config: config.clone(),

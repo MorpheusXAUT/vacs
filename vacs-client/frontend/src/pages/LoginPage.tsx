@@ -1,6 +1,8 @@
 import {invokeSafe} from "../error.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 
+// TODO: Display state when logging in
+
 function LoginPage() {
     const handleLoginClick = useAsyncDebounce(async () => {
         await invokeSafe("auth_open_oauth_url");

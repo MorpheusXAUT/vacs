@@ -20,7 +20,6 @@ base64 = { workspace = true }
 chacha20poly1305 = { workspace = true }
 config = { workspace = true }
 cookie_store = { workspace = true }
-directories = { workspace = true }
 keyring = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true }

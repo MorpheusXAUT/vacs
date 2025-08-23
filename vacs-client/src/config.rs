@@ -2,6 +2,7 @@ use anyhow::Context;
 use config::{Config, Environment, File};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::PathBuf;
 use std::time::Duration;
 use vacs_audio::DeviceType;
 use vacs_audio::config::AudioDeviceConfig;
@@ -19,14 +20,12 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn parse() -> anyhow::Result<AppConfig> {
+    pub fn parse(config_dir: PathBuf) -> anyhow::Result<AppConfig> {
         Config::builder()
             .add_source(Config::try_from(&AppConfig::default())?)
             .add_source(
                 File::with_name(
-                    project_dirs()
-                        .expect("Failed to get project dirs")
-                        .config_local_dir()
+                    config_dir
                         .join("config.toml")
                         .to_str()
                         .expect("Failed to get local config path"),
@@ -36,9 +35,7 @@ impl AppConfig {
             .add_source(File::with_name("config.toml").required(false))
             .add_source(
                 File::with_name(
-                    project_dirs()
-                        .expect("Failed to get project dirs")
-                        .config_local_dir()
+                    config_dir
                         .join("audio.toml")
                         .to_str()
                         .expect("Failed to get local config path"),
@@ -192,23 +189,17 @@ impl From<AudioConfig> for PersistedAudioConfig {
 }
 
 pub trait Persistable {
-    fn persist(&self, file_name: &str) -> anyhow::Result<()>;
+    fn persist(&self, config_dir: PathBuf, file_name: &str) -> anyhow::Result<()>;
 }
 
 impl<T: Serialize> Persistable for T {
-    fn persist(&self, file_name: &str) -> anyhow::Result<()> {
+    fn persist(&self, config_dir: PathBuf, file_name: &str) -> anyhow::Result<()> {
         let serialized = toml::to_string_pretty(self).context("Failed to serialize config")?;
-        let config_dir = project_dirs().context("Failed to get project dirs")?;
-        let config_dir = config_dir.config_local_dir();
 
-        fs::create_dir_all(config_dir).context("Failed to create config directory")?;
+        fs::create_dir_all(&config_dir).context("Failed to create config directory")?;
         fs::write(config_dir.join(file_name), serialized)
             .context("Failed to write config to file")?;
 
         Ok(())
     }
-}
-
-pub fn project_dirs() -> Option<directories::ProjectDirs> {
-    directories::ProjectDirs::from("app", "vacs", "vacs-client")
 }

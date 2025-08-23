@@ -1,9 +1,9 @@
 use crate::app::state::AppState;
 use crate::audio::manager::SourceType;
 use crate::audio::{AudioDevices, AudioHosts, AudioVolumes, VolumeType};
-use crate::config::{AUDIO_SETTINGS_FILE_NAME, Persistable, PersistedAudioConfig};
+use crate::config::{Persistable, PersistedAudioConfig, AUDIO_SETTINGS_FILE_NAME};
 use crate::error::Error;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use vacs_audio::{Device, DeviceType};
 
 #[tauri::command]
@@ -27,6 +27,7 @@ pub async fn audio_get_hosts(app_state: State<'_, AppState>) -> Result<AudioHost
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn audio_set_host(
+    app: AppHandle,
     app_state: State<'_, AppState>,
     host_name: String,
 ) -> Result<(), Error> {
@@ -46,7 +47,11 @@ pub async fn audio_set_host(
         state.config.audio.clone().into()
     };
 
-    persisted_audio_config.persist(AUDIO_SETTINGS_FILE_NAME)?;
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_audio_config.persist(config_dir, AUDIO_SETTINGS_FILE_NAME)?;
 
     Ok(())
 }
@@ -92,6 +97,7 @@ pub async fn audio_get_devices(
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn audio_set_device(
+    app: AppHandle,
     app_state: State<'_, AppState>,
     device_type: DeviceType,
     device_name: String,
@@ -124,7 +130,11 @@ pub async fn audio_set_device(
         state.config.audio.clone().into()
     };
 
-    persisted_audio_config.persist(AUDIO_SETTINGS_FILE_NAME)?;
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_audio_config.persist(config_dir, AUDIO_SETTINGS_FILE_NAME)?;
 
     Ok(())
 }
@@ -148,6 +158,7 @@ pub async fn audio_get_volumes(app_state: State<'_, AppState>) -> Result<AudioVo
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn audio_set_volume(
+    app: AppHandle,
     app_state: State<'_, AppState>,
     volume_type: VolumeType,
     volume: f32,
@@ -191,7 +202,12 @@ pub async fn audio_set_volume(
     }
 
     let persisted_audio_config: PersistedAudioConfig = state.config.audio.clone().into();
-    persisted_audio_config.persist(AUDIO_SETTINGS_FILE_NAME)?;
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_audio_config.persist(config_dir, AUDIO_SETTINGS_FILE_NAME)?;
 
     Ok(())
 }
