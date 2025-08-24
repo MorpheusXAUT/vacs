@@ -30,16 +30,24 @@ pub async fn handle_application_message(
             tracing::trace!("Logging out client");
             ControlFlow::Break(())
         }
+        SignalingMessage::CallInvite { peer_id } => {
+            handle_call_invite(state, client, &peer_id).await;
+            ControlFlow::Continue(())
+        }
+        SignalingMessage::CallAccept { peer_id } => {
+            handle_call_accept(state, client, &peer_id).await;
+            ControlFlow::Continue(())
+        }
+        SignalingMessage::CallReject { peer_id } => {
+            handle_call_reject(state, client, &peer_id).await;
+            ControlFlow::Continue(())
+        }
         SignalingMessage::CallOffer { peer_id, sdp } => {
             handle_call_offer(state, client, &peer_id, &sdp).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallAnswer { peer_id, sdp } => {
             handle_call_answer(state, client, &peer_id, &sdp).await;
-            ControlFlow::Continue(())
-        }
-        SignalingMessage::CallReject { peer_id } => {
-            handle_call_reject(state, client, &peer_id).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallIceCandidate { peer_id, candidate } => {
@@ -52,6 +60,45 @@ pub async fn handle_application_message(
         }
         _ => ControlFlow::Continue(()),
     }
+}
+
+async fn handle_call_invite(state: &AppState, client: &ClientSession, peer_id: &str) {
+    tracing::trace!(?peer_id, "Handling call invite");
+    state
+        .send_message_to_peer(
+            client,
+            peer_id,
+            SignalingMessage::CallInvite {
+                peer_id: client.get_id().to_string(),
+            },
+        )
+        .await;
+}
+
+async fn handle_call_accept(state: &AppState, client: &ClientSession, peer_id: &str) {
+    tracing::trace!(?peer_id, "Handling call acceptance");
+    state
+        .send_message_to_peer(
+            client,
+            peer_id,
+            SignalingMessage::CallAccept {
+                peer_id: client.get_id().to_string(),
+            },
+        )
+        .await;
+}
+
+async fn handle_call_reject(state: &AppState, client: &ClientSession, peer_id: &str) {
+    tracing::trace!(?peer_id, "Handling call rejection");
+    state
+        .send_message_to_peer(
+            client,
+            peer_id,
+            SignalingMessage::CallReject {
+                peer_id: client.get_id().to_string(),
+            },
+        )
+        .await;
 }
 
 async fn handle_call_offer(state: &AppState, client: &ClientSession, peer_id: &str, sdp: &str) {
@@ -77,19 +124,6 @@ async fn handle_call_answer(state: &AppState, client: &ClientSession, peer_id: &
             SignalingMessage::CallAnswer {
                 peer_id: client.get_id().to_string(),
                 sdp: sdp.to_string(),
-            },
-        )
-        .await;
-}
-
-async fn handle_call_reject(state: &AppState, client: &ClientSession, peer_id: &str) {
-    tracing::trace!(?peer_id, "Handling call rejection");
-    state
-        .send_message_to_peer(
-            client,
-            peer_id,
-            SignalingMessage::CallReject {
-                peer_id: client.get_id().to_string(),
             },
         )
         .await;
