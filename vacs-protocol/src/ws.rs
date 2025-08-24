@@ -59,6 +59,40 @@ pub enum SignalingMessage {
     /// This performs a graceful logout, cleanly indicating a disconnect to the signaling server.
     /// However, the server will also perform a periodic `Ping` to ensure the connected clients are still alive, disconnecting them forcefully if necessary.
     Logout,
+    /// A call invite message sent by the client to initiate a call with another client.
+    ///
+    /// The signaling server will forward the offer to the target client, exchanging the [`SignalingMessage::CallOffer::peer_id`] with the caller's ID.
+    /// The target client will in turn prompt the user to accept or reject the call.
+    ///
+    /// Upon acceptance, the target client will reply with a [`SignalingMessage::CallAccept`] message,
+    /// which is returned to the source client by the signaling server. After receiving the [`SignalingMessage::CallAccept`] message,
+    /// the source client will create a WebRTC offer and transmit it via a [`SignalingMessage::CallOffer`] message containing the corresponding SDP.
+    ///
+    /// Upon rejection, the target client will reply with [`SignalingMessage::CallReject`].
+    #[serde(rename_all = "camelCase")]
+    CallInvite {
+        /// When sent to the signaling server by the caller, this is the ID of the target client to call.
+        /// When received from the signaling server (by the callee), this is the ID of the source client initiating the call.
+        peer_id: String,
+    },
+    /// A call accept message sent by the target client to accept an incoming call.
+    ///
+    /// The signaling server will forward the offer to the source client, exchanging the [`SignalingMessage::CallAccept::peer_id`] with the callee's ID.
+    #[serde(rename_all = "camelCase")]
+    CallAccept {
+        /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
+        /// When received from the signaling server (by the caller), this is the ID of the target client rejecting the call.
+        peer_id: String,
+    },
+    /// A call reject message sent by the target client to reject an incoming call.
+    ///
+    /// The signaling server will forward the offer to the source client, exchanging the [`SignalingMessage::CallReject::peer_id`] with the callee's ID.
+    #[serde(rename_all = "camelCase")]
+    CallReject {
+        /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
+        /// When received from the signaling server (by the caller), this is the ID of the target client rejecting the call.
+        peer_id: String,
+    },
     /// A call offer message sent by the client to initiate a call with another client.
     ///
     /// The SDP provided should contain the WebRTC offer created by the caller.
@@ -66,10 +100,8 @@ pub enum SignalingMessage {
     /// The signaling server will forward the offer to the target client, exchanging the [`SignalingMessage::CallOffer::peer_id`] with the caller's ID.
     /// The target client will in turn prompt the user to accept or reject the call.
     ///
-    /// Upon acceptance, the target client will create a WebRTC answer and reply with a [`SignalingMessage::CallAnswer`] message containing the corresponding SDP,
+    /// The target client will create a WebRTC answer and reply with a [`SignalingMessage::CallAnswer`] message containing the corresponding SDP,
     /// which is returned to the source client by the signaling server.
-    ///
-    /// Upon rejection, the target client will reply with [`SignalingMessage::CallReject`].
     #[serde(rename_all = "camelCase")]
     CallOffer {
         /// SDP containing the WebRTC offer.
@@ -92,15 +124,6 @@ pub enum SignalingMessage {
         sdp: String,
         /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
         /// When received from the signaling server (by the caller), this is the ID of the target client accepting the call.
-        peer_id: String,
-    },
-    /// A call reject message sent by the target client to reject an incoming call.
-    ///
-    /// The signaling server will forward the offer to the source client, exchanging the [`SignalingMessage::CallReject::peer_id`] with the callee's ID.
-    #[serde(rename_all = "camelCase")]
-    CallReject {
-        /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
-        /// When received from the signaling server (by the caller), this is the ID of the target client rejecting the call.
         peer_id: String,
     },
     /// A call end message sent by either client to indicate the (gracious) end of a call.
