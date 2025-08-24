@@ -46,9 +46,10 @@ impl OpusSource {
                     match decoder.decode_float(&frame, &mut decoded, false) {
                         Ok(n) => {
                             let written = prod.push_slice(&decoded[..n]);
-                            if written <= n {
+                            if written < n {
                                 overflows += 1;
                                 if overflows % 100 == 1 {
+                                    overflows = 0;
                                     tracing::debug!(
                                         ?written,
                                         needed = ?n,
