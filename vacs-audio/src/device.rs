@@ -1,5 +1,5 @@
-use crate::SAMPLE_RATE;
 use crate::config::AudioDeviceConfig;
+use crate::SAMPLE_RATE;
 use anyhow::Context;
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{SupportedStreamConfig, SupportedStreamConfigRange};
@@ -141,6 +141,53 @@ impl Device {
     pub fn find_default_host() -> String {
         tracing::trace!("Finding default host");
         cpal::default_host().id().name().to_string()
+    }
+
+    #[instrument(level = "trace", err)]
+    pub fn list_devices_with_supported_configs(
+        host_name: &str,
+        device_type: &DeviceType,
+    ) -> anyhow::Result<()> {
+        let host = find_host(if host_name == "" {
+            None
+        } else {
+            Some(host_name)
+        })?;
+
+        match device_type {
+            DeviceType::Input => {
+                let devices = host.input_devices()?;
+                for device in devices {
+                    let supported_configs = device.supported_input_configs()?;
+                    for config in supported_configs {
+                        tracing::trace!(
+                            device_name = ?device.name()?,
+                            channels = ?config.channels(),
+                            sample_format = ?config.sample_format(),
+                            min_sample_rate = ?config.min_sample_rate().0,
+                            max_sample_rate = ?config.max_sample_rate().0,
+                            "Supported input config");
+                    }
+                }
+            }
+            DeviceType::Output => {
+                let devices = host.output_devices()?;
+                for device in devices {
+                    let supported_configs = device.supported_output_configs()?;
+                    for config in supported_configs {
+                        tracing::trace!(
+                            device_name = ?device.name()?,
+                            channels = ?config.channels(),
+                            sample_format = ?config.sample_format(),
+                            min_sample_rate = ?config.min_sample_rate().0,
+                            max_sample_rate = ?config.max_sample_rate().0,
+                            "Supported output config");
+                    }
+                }
+            }
+        };
+
+        Ok(())
     }
 }
 

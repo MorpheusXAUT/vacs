@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
+use vacs_audio::{Device, DeviceType};
 
 pub struct AppStateInner {
     pub config: AppConfig,
@@ -37,6 +38,14 @@ impl AppStateInner {
                 .context("Failed to create secure cookie store")?,
         );
         let config = AppConfig::parse(&config_dir)?;
+
+        // TODO remove/only log in case of init errors
+        if let Err(err) = Device::list_devices_with_supported_configs(&config.audio.host_name, &DeviceType::Output) {
+            log::warn!("Failed to list all output devices with supported configs: {err:?}");
+        }
+        if let Err(err) = Device::list_devices_with_supported_configs(&config.audio.host_name, &DeviceType::Input) {
+            log::warn!("Failed to list all input devices with supported configs: {err:?}");
+        }
 
         let audio_manager = match AudioManager::new(&config.audio) {
             Ok(audio_manager) => audio_manager,
