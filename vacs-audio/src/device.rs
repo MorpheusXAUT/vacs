@@ -152,7 +152,10 @@ impl DeviceSelector {
                 .iter()
                 .find(|id| id.name().to_lowercase().contains(&name.to_lowercase()))
             {
-                tracing::trace!(?id, "Selected preferred audio host (based on substring match)");
+                tracing::trace!(
+                    ?id,
+                    "Selected preferred audio host (based on substring match)"
+                );
                 return cpal::host_from_id(*id).unwrap_or(cpal::default_host());
             }
         }
@@ -167,33 +170,40 @@ impl DeviceSelector {
         preferred_device_name: Option<&str>,
         device_type: DeviceType,
     ) -> Result<(cpal::Device, SupportedStreamConfig, bool)> {
-        let (mut device, mut is_fallback) = Self::select_device(host, preferred_device_name, device_type)?;
+        let (mut device, mut is_fallback) =
+            Self::select_device(host, preferred_device_name, device_type)?;
 
-        let stream_config = match Self::pick_best_stream_config(&device, device_type) {
+        let (stream_config, _) = match Self::pick_best_stream_config(&device, device_type) {
             Ok(stream_config) => stream_config,
             Err(err) => {
-                tracing::warn!(?err, device = ?DeviceDebug(&device), "Failed to pick stream config for preferred device, trying to find fallback device");
+                tracing::warn!(?err, device = ?DeviceDebug(&device), "Failed to pick stream config for preferred device, picking best fallback device");
 
                 let devices = Self::host_devices(host, device_type)?;
+                let mut best_fallback: Option<(
+                    cpal::Device,
+                    SupportedStreamConfig,
+                    StreamConfigScore,
+                )> = None;
 
-                if let Some((dev, config)) = devices.into_iter().find_map(|dev| {
-                    if dev
-                        .name()
-                        .map(|n| n.eq_ignore_ascii_case(&device.name().unwrap_or_default()))
-                        .unwrap_or(false)
-                    {
-                        return None;
+                for dev in devices {
+                    if let Ok((config, score)) = Self::pick_best_stream_config(&dev, device_type) {
+                        match &mut best_fallback {
+                            None => best_fallback = Some((dev, config, score)),
+                            Some((_, _, best_score)) => {
+                                if score < *best_score {
+                                    *best_score = score;
+                                    best_fallback = Some((dev, config, score))
+                                }
+                            }
+                        }
                     }
+                }
 
-                    match Self::pick_best_stream_config(&dev, device_type) {
-                        Ok(config) => Some((dev, config)),
-                        Err(_) => None,
-                    }
-                }) {
+                if let Some((dev, config, score)) = best_fallback {
                     tracing::info!(device = ?DeviceDebug(&dev), ?config, "Selected fallback device");
                     device = dev;
                     is_fallback = true;
-                    config
+                    (config, score)
                 } else {
                     anyhow::bail!("No supported stream config found for any device");
                 }
@@ -263,7 +273,7 @@ impl DeviceSelector {
     fn pick_best_stream_config(
         device: &cpal::Device,
         device_type: DeviceType,
-    ) -> Result<SupportedStreamConfig> {
+    ) -> Result<(SupportedStreamConfig, StreamConfigScore)> {
         tracing::trace!("Picking best stream config");
 
         let (configs, preferred_channels): (Vec<SupportedStreamConfigRange>, u16) =
@@ -305,7 +315,7 @@ impl DeviceSelector {
             Self::closest_sample_rate(range.min_sample_rate().0, range.max_sample_rate().0);
 
         tracing::trace!(?range, ?score, ?sample_rate, "Picked best stream config");
-        Ok(range.with_sample_rate(cpal::SampleRate(sample_rate)))
+        Ok((range.with_sample_rate(cpal::SampleRate(sample_rate)), score))
     }
 
     fn score_stream_config_range(
