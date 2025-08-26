@@ -3,9 +3,12 @@ use crate::{EncodedAudioFrame, FRAME_SIZE, TARGET_SAMPLE_RATE};
 use anyhow::{Context, Result};
 use ringbuf::traits::{Consumer, Producer, Split};
 use ringbuf::{HeapCons, HeapProd, HeapRb};
+use rubato::{Resampler, SincFixedIn};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::{instrument, Instrument};
+
+const RESAMPLER_BUFFER_SIZE: usize = 8192;
 
 pub struct OpusSource {
     cons: HeapCons<f32>,
@@ -16,9 +19,10 @@ pub struct OpusSource {
 }
 
 impl OpusSource {
-    #[instrument(level = "debug", skip(rx))]
+    #[instrument(level = "debug", skip(rx, resampler), err)]
     pub fn new(
         mut rx: mpsc::Receiver<EncodedAudioFrame>,
+        mut resampler: Option<SincFixedIn<f32>>,
         output_channels: u16,
         volume: f32,
         amp: f32,
@@ -26,8 +30,7 @@ impl OpusSource {
         tracing::trace!("Creating Opus source");
 
         // We buffer 10 frames, which equals a total buffer of 200 ms at 48_000 Hz and 20 ms intervals
-        let rb: HeapRb<f32> = HeapRb::new(FRAME_SIZE * 10);
-        let (mut prod, cons): (HeapProd<f32>, HeapCons<f32>) = rb.split();
+        let (mut prod, cons): (HeapProd<f32>, HeapCons<f32>) = HeapRb::new(FRAME_SIZE * 10).split();
 
         // Our captured input audio will always be in mono and is transmitted via a webrtc mono stream,
         // so we can safely default to a mono Opus decoder here. Interleaving to stereo output devices
@@ -40,18 +43,52 @@ impl OpusSource {
                 tracing::debug!("Starting Opus decoder task");
 
                 let mut decoded = vec![0.0f32; FRAME_SIZE];
+                let mut buf = Vec::<f32>::with_capacity(RESAMPLER_BUFFER_SIZE);
+                let mut resampler_in = vec![Vec::<f32>::with_capacity(FRAME_SIZE * 2)];
+                let mut resampler_out = Vec::<f32>::with_capacity(FRAME_SIZE * 2);
+
                 let mut overflows = 0usize;
 
                 while let Some(frame) = rx.recv().await {
                     match decoder.decode_float(&frame, &mut decoded, false) {
                         Ok(n) => {
-                            let written = prod.push_slice(&decoded[..n]);
-                            if written < n {
+                            let samples = if let Some(resampler) = &mut resampler {
+                                let need = resampler.input_frames_next();
+
+                                buf.extend_from_slice(&decoded[..n]);
+
+                                if buf.len() < need {
+                                    continue;
+                                }
+
+                                resampler_in[0].clear();
+                                resampler_in[0].extend_from_slice(&buf[..need]);
+                                buf.drain(..need);
+
+                                // resample opus data
+                                let resampled = match resampler.process(&resampler_in, None) {
+                                    Ok(frames) => frames,
+                                    Err(err) => {
+                                        tracing::warn!(?err, "Failed to resample opus data");
+                                        continue;
+                                    }
+                                };
+
+                                resampler_out.clear();
+                                resampler_out.extend_from_slice(&resampled[0]);
+
+                                &resampler_out
+                            } else {
+                                &decoded[..n]
+                            };
+
+                            let written = prod.push_slice(samples);
+                            if written < samples.len() {
                                 overflows += 1;
                                 if overflows % 100 == 1 {
                                     tracing::debug!(
                                         ?written,
-                                        needed = ?n,
+                                        needed = ?samples.len(),
                                         ?overflows,
                                         "Opus ring overflow (tail samples dropped)"
                                     );

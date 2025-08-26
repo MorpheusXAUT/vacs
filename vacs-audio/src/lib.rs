@@ -1,14 +1,13 @@
 pub mod config;
 mod device;
-pub mod output;
-pub mod sources;
-pub(crate) mod mixer;
-pub mod stream;
 mod dsp;
+pub(crate) mod mixer;
+pub mod sources;
+pub mod stream;
 
 pub use device::Device;
-pub use device::DeviceType;
 pub use device::DeviceSelector;
+pub use device::DeviceType;
 
 use bytes::Bytes;
 

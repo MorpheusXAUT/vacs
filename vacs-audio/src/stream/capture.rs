@@ -1,6 +1,6 @@
 use crate::device::StreamDevice;
 use crate::dsp::downmix_interleaved_to_mono;
-use crate::{EncodedAudioFrame, FRAME_SIZE, TARGET_SAMPLE_RATE};
+use crate::{DeviceType, EncodedAudioFrame, FRAME_SIZE, TARGET_SAMPLE_RATE};
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use cpal::traits::StreamTrait;
@@ -21,7 +21,6 @@ use tracing::instrument;
 
 const MAX_OPUS_FRAME_SIZE: usize = 1275; // max size of an Opus frame according to RFC 6716 3.2.1.
 const MIN_INPUT_BUFFER_SIZE: usize = 4096;
-const RESAMPLER_BUFFER_SIZE: usize = 8192;
 const RESAMPLER_BUFFER_WAIT: Duration = Duration::from_micros(500);
 
 const INPUT_VOLUME_OPS_CAPACITY: usize = 16;
@@ -46,6 +45,7 @@ impl CaptureStream {
         amp: f32,
     ) -> Result<Self> {
         tracing::debug!("Starting input capture stream");
+        debug_assert!(matches!(device.device_type, DeviceType::Input));
 
         let muted = Arc::new(AtomicBool::new(false));
         let muted_clone = muted.clone();
@@ -115,8 +115,7 @@ impl CaptureStream {
         let task = tokio::runtime::Handle::current().spawn_blocking(move || {
             tracing::trace!("Input capture stream task started");
 
-            let mut buf: Vec<f32> = Vec::with_capacity(RESAMPLER_BUFFER_SIZE);
-            let mut resampler_in = vec![Vec::<f32>::with_capacity(FRAME_SIZE * 2)];
+            let mut resampler_buf = vec![Vec::<f32>::with_capacity(FRAME_SIZE * 2)];
 
             while !cancel_clone.is_cancelled() {
                 // apply any queued volume ops
@@ -133,13 +132,13 @@ impl CaptureStream {
                 if let Some(resampler) = &mut resampler {
                     // buffer input data until we've reached enough to resample into the next frame
                     let need = resampler.input_frames_next();
-                    while buf.len() < need {
+                    while resampler_buf[0].len() < need {
                         if cancel_clone.is_cancelled() {
                             tracing::trace!("Input capture stream task cancelled");
                             break;
                         }
                         if let Some(sample) = input_cons.try_pop() {
-                            buf.push(sample);
+                            resampler_buf[0].push(sample);
                         } else {
                             std::thread::sleep(RESAMPLER_BUFFER_WAIT);
                         }
@@ -149,18 +148,14 @@ impl CaptureStream {
                         tracing::trace!("Input capture stream task cancelled");
                         break;
                     }
-                    if buf.len() < need {
+                    if resampler_buf[0].len() < need {
                         // canceled while waiting; exit
                         tracing::trace!("Did not receive enough input data to resample");
                         break;
                     }
 
-                    resampler_in[0].clear();
-                    resampler_in[0].extend_from_slice(&buf[..need]);
-                    buf.drain(..need);
-
                     // resample the input data
-                    let resampled = match resampler.process(&resampler_in, None) {
+                    let resampled = match resampler.process(&resampler_buf, None) {
                         Ok(frames) => frames,
                         Err(err) => {
                             tracing::warn!(?err, "Failed to resample input");
@@ -168,6 +163,8 @@ impl CaptureStream {
                         }
                     };
                     let resampled = &resampled[0];
+
+                    resampler_buf[0].clear();
 
                     opus_framer.push_slice(resampled, gain);
                 } else {
@@ -215,7 +212,7 @@ impl CaptureStream {
         let mut level_meter = InputLevelMeter::new(device.sample_rate() as f32);
 
         let (ops_prod, mut ops_cons) =
-            ringbuf::HeapRb::<InputVolumeOp>::new(INPUT_VOLUME_OPS_CAPACITY).split();
+            HeapRb::<InputVolumeOp>::new(INPUT_VOLUME_OPS_CAPACITY).split();
 
         let stream = device
             .build_input_stream(
@@ -257,8 +254,8 @@ impl CaptureStream {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub async fn shutdown(mut self) {
-        tracing::info!("Shutting down input capture stream");
+    pub async fn stop(mut self) {
+        tracing::info!("Stopping input capture stream");
         if let Some(cancel) = self.cancel.take() {
             cancel.cancel();
         }

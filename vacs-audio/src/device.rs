@@ -193,9 +193,14 @@ impl StreamDevice {
                 window: WindowFunction::BlackmanHarris2,
             };
 
+            let resample_ratio = match self.device_type {
+                DeviceType::Input => TARGET_SAMPLE_RATE as f64 / self.sample_rate() as f64,
+                DeviceType::Output => self.sample_rate() as f64 / TARGET_SAMPLE_RATE as f64,
+            };
+
             Ok(Some(
                 SincFixedIn::<f32>::new(
-                    TARGET_SAMPLE_RATE as f64 / self.sample_rate() as f64,
+                    resample_ratio,
                     2.0,
                     resampler_params,
                     if let cpal::BufferSize::Fixed(n) = self.config.buffer_size {

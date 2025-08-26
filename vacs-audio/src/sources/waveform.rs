@@ -53,11 +53,10 @@ impl WaveformSource {
         tone_dur: Duration,
         pause_dur: Option<Duration>,
         fade_dur: Duration,
+        sample_rate: f32,
         output_channels: usize,
         volume: f32,
     ) -> Self {
-        let sample_rate = TARGET_SAMPLE_RATE as f32;
-
         assert!(tone.freq > 0.0, "Tone frequency must be greater than 0");
         assert!(tone.amp > 0.0, "Tone amplitude must be greater than 0");
         assert!(
