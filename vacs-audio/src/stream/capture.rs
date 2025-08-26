@@ -10,9 +10,10 @@ use ringbuf::producer::Producer;
 use ringbuf::traits::Split;
 use ringbuf::HeapRb;
 use rubato::Resampler;
+use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -32,8 +33,8 @@ pub struct CaptureStream {
     _stream: cpal::Stream,
     volume_ops: parking_lot::Mutex<ringbuf::HeapProd<InputVolumeOp>>,
     muted: Arc<AtomicBool>,
-    cancel: CancellationToken,
-    task: JoinHandle<()>,
+    cancel: Option<CancellationToken>,
+    task: Option<JoinHandle<()>>,
 }
 
 impl CaptureStream {
@@ -197,16 +198,74 @@ impl CaptureStream {
             _stream: stream,
             volume_ops: Mutex::new(ops_prod),
             muted,
-            cancel,
-            task,
+            cancel: Some(cancel),
+            task: Some(task),
+        })
+    }
+
+    #[instrument(level = "debug", skip(emit), err)]
+    pub fn start_level_meter(
+        device: StreamDevice,
+        emit: Box<dyn Fn(InputLevel) + Send>,
+        mut volume: f32,
+        amp: f32,
+    ) -> Result<Self> {
+        tracing::debug!("Starting input capture stream level meter");
+
+        let mut level_meter = InputLevelMeter::new(device.sample_rate() as f32);
+
+        let (ops_prod, mut ops_cons) =
+            ringbuf::HeapRb::<InputVolumeOp>::new(INPUT_VOLUME_OPS_CAPACITY).split();
+
+        let stream = device
+            .build_input_stream(
+                move |input: &[f32], _| {
+                    for _ in 0..INPUT_VOLUME_OPS_PER_DATA_CALLBACK {
+                        if let Some(op) = ops_cons.try_pop() {
+                            op(&mut volume);
+                        } else {
+                            break;
+                        }
+                    }
+
+                    let gain = amp * volume;
+                    for &sample in input {
+                        if let Some(level) = level_meter.push_sample(sample * gain) {
+                            emit(level);
+                        }
+                    }
+                },
+                |err| {
+                    tracing::warn!(?err, "CPAL input stream error");
+                },
+            )
+            .context("Failed to build input stream")?;
+
+        tracing::trace!("Starting level meter capture on input stream");
+        stream
+            .play()
+            .context("Failed to play level meter input stream")?;
+
+        tracing::info!("Input level meter capture stream started");
+        Ok(Self {
+            _stream: stream,
+            volume_ops: Mutex::new(ops_prod),
+            muted: Arc::new(AtomicBool::new(false)),
+            cancel: None,
+            task: None,
         })
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub async fn shutdown(self) {
-        self.cancel.cancel();
+    pub async fn shutdown(mut self) {
+        tracing::info!("Shutting down input capture stream");
+        if let Some(cancel) = self.cancel.take() {
+            cancel.cancel();
+        }
         drop(self._stream);
-        if let Err(err) = self.task.await {
+        if let Some(task) = self.task.take()
+            && let Err(err) = task.await
+        {
             tracing::warn!(?err, "Input capture stream task failed");
         }
     }
@@ -267,7 +326,7 @@ impl OpusFramer {
     #[inline]
     fn push_slice(&mut self, samples: &[f32], gain: f32) {
         for &sample in samples {
-            self.frame[self.pos] = (sample * gain).min(1.0);
+            self.frame[self.pos] = sample * gain;
             self.pos += 1;
             if self.pos == FRAME_SIZE {
                 if let Ok(len) = self.encoder.encode_float(&self.frame, &mut self.encoded) {
@@ -281,5 +340,95 @@ impl OpusFramer {
                 self.pos = 0;
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InputLevel {
+    pub dbfs_rms: f32,  // e.g. -23.4
+    pub dbfs_peak: f32, // e.g. -1.2
+    pub norm: f32,      // 0..1, for display purposes
+    pub clipping: bool,
+}
+
+pub struct InputLevelMeter {
+    window_samples: usize, // ~10-20ms worth of samples
+    sum_sq: f64,
+    peak: f32,
+    count: usize,
+    last_emit: Instant,
+    emit_interval: Duration, // e.g. 16ms => ~60fps
+    // smoothing (EMA in dB)
+    ema_db: f32,
+    attack: f32,  // 0..1, (higher = faster rise)
+    release: f32, // 0..1, (lower = faster fall)
+}
+
+const INPUT_LEVEL_METER_WINDOW_MS: f32 = 15.0;
+
+const INPUT_LEVEL_MIN_DB: f32 = -60.0;
+const INPUT_LEVEL_MAX_DB: f32 = 0.0;
+
+impl InputLevelMeter {
+    pub fn new(sample_rate: f32) -> Self {
+        let window_samples = (sample_rate * (INPUT_LEVEL_METER_WINDOW_MS / 1000.0)) as usize;
+
+        Self {
+            window_samples: window_samples.max(1),
+            sum_sq: 0.0,
+            peak: 0.0,
+            count: 0,
+            last_emit: Instant::now(),
+            emit_interval: Duration::from_millis(16),
+            ema_db: -90.0,
+            attack: 0.5,
+            release: 0.1,
+        }
+    }
+
+    pub fn push_sample(&mut self, s: f32) -> Option<InputLevel> {
+        let a = s.abs();
+        self.peak = self.peak.max(a);
+        self.sum_sq += (s as f64) * (s as f64);
+        self.count += 1;
+
+        if self.count >= self.window_samples && self.last_emit.elapsed() >= self.emit_interval {
+            let rms = (self.sum_sq / (self.count as f64)).sqrt() as f32;
+            let dbfs_rms = if rms > 0.0 { 20.0 * rms.log10() } else { -90.0 };
+            let dbfs_peak = if self.peak > 0.0 {
+                20.0 * self.peak.log10()
+            } else {
+                -90.0
+            };
+
+            let alpha = if dbfs_rms > self.ema_db {
+                self.attack
+            } else {
+                self.release
+            };
+            self.ema_db = self.ema_db + alpha * (dbfs_rms - self.ema_db);
+
+            let mut norm =
+                (self.ema_db - INPUT_LEVEL_MIN_DB) / (INPUT_LEVEL_MAX_DB - INPUT_LEVEL_MIN_DB);
+            norm = norm.clamp(0.0, 1.0);
+
+            let clipping = self.peak >= 0.999;
+
+            let out = InputLevel {
+                dbfs_rms,
+                dbfs_peak,
+                norm,
+                clipping,
+            };
+
+            self.sum_sq = 0.0;
+            self.peak = 0.0;
+            self.count = 0;
+            self.last_emit = Instant::now();
+
+            return Some(out);
+        }
+        None
     }
 }
