@@ -3,13 +3,14 @@ use crate::error::Error;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use vacs_audio::device::{DeviceSelector, DeviceType};
 use vacs_audio::error::AudioError;
 use vacs_audio::sources::opus::OpusSource;
 use vacs_audio::sources::waveform::{Waveform, WaveformSource, WaveformTone};
 use vacs_audio::sources::AudioSourceId;
 use vacs_audio::stream::capture::{CaptureStream, InputLevel};
 use vacs_audio::stream::playback::PlaybackStream;
-use vacs_audio::{DeviceSelector, DeviceType, EncodedAudioFrame};
+use vacs_audio::EncodedAudioFrame;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum SourceType {
@@ -86,6 +87,10 @@ impl AudioManager {
             input: None,
             source_ids,
         })
+    }
+
+    pub fn output_device_name(&self) -> String {
+        self.output.device_name()
     }
 
     pub fn switch_output_device(&mut self, audio_config: &AudioConfig) -> Result<(), Error> {

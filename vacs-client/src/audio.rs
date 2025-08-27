@@ -13,7 +13,8 @@ pub struct AudioHosts {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioDevices {
-    selected: String,
+    preferred: String,
+    picked: String,
     default: String,
     all: Vec<String>,
 }

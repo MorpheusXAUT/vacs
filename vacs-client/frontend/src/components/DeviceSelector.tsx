@@ -38,10 +38,15 @@ function DeviceSelector(props: DeviceSelectorProps) {
                     value: "", text: `Default (${audioDevices.default})`
                 };
 
-                const deviceList = audioDevices.all.map((deviceName) => ({value: deviceName, text: deviceName}));
+                let deviceList = audioDevices.all.map((deviceName) => ({value: deviceName, text: deviceName}));
+                deviceList = [defaultDevice, ...deviceList];
+                if (audioDevices.preferred.length !== 0 && audioDevices.preferred !== audioDevices.picked) {
+                    // TODO add colors to preferred (red) and picked (green) devices
+                    deviceList.push({value: audioDevices.preferred, text: audioDevices.preferred});
+                }
 
-                setDevice(audioDevices.selected);
-                setDevices(() => [defaultDevice, ...deviceList]);
+                setDevice(audioDevices.preferred);
+                setDevices(deviceList);
             } catch {
             }
         };

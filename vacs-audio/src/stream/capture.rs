@@ -1,7 +1,7 @@
-use crate::device::StreamDevice;
+use crate::device::{DeviceType, StreamDevice};
 use crate::dsp::downmix_interleaved_to_mono;
 use crate::error::AudioError;
-use crate::{DeviceType, EncodedAudioFrame, FRAME_SIZE, TARGET_SAMPLE_RATE};
+use crate::{EncodedAudioFrame, FRAME_SIZE, TARGET_SAMPLE_RATE};
 use bytes::Bytes;
 use cpal::traits::StreamTrait;
 use parking_lot::lock_api::Mutex;

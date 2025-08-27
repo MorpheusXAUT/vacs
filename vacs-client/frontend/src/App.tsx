@@ -25,6 +25,8 @@ import PhoneButton from "./components/ui/PhoneButton.tsx";
 import RadioPrioButton from "./components/ui/RadioPrioButton.tsx";
 import EndButton from "./components/ui/EndButton.tsx";
 
+// TODO: Fix draggable ui on touch devices
+
 function App() {
     const connected = useSignalingStore(state => state.connected);
     const authStatus = useAuthStore(state => state.status);

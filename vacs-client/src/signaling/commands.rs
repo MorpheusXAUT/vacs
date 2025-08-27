@@ -63,6 +63,8 @@ pub async fn signaling_start_call(
 
     let mut state = app_state.lock().await;
 
+    // TODO: Check input device, if not -> display error msg
+
     state
         .send_signaling_message(SignalingMessage::CallInvite {
             peer_id: peer_id.clone(),
@@ -84,6 +86,8 @@ pub async fn signaling_accept_call(
     log::debug!("Accepting call from {peer_id}");
 
     let mut state = app_state.lock().await;
+
+    // TODO: Check input device -> if not, end call & display error msg
 
     state
         .send_signaling_message(SignalingMessage::CallAccept {

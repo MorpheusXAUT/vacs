@@ -6,8 +6,8 @@ use crate::audio::{AudioDevices, AudioHosts, AudioVolumes, VolumeType};
 use crate::config::{Persistable, PersistedAudioConfig, AUDIO_SETTINGS_FILE_NAME};
 use crate::error::Error;
 use tauri::{AppHandle, Emitter, Manager, State};
+use vacs_audio::device::{DeviceSelector, DeviceType};
 use vacs_audio::error::AudioError;
-use vacs_audio::{DeviceSelector, DeviceType};
 
 #[tauri::command]
 #[vacs_macros::log_err]
@@ -75,32 +75,41 @@ pub async fn audio_get_devices(
 ) -> Result<AudioDevices, Error> {
     log::info!("Getting audio devices (type: {:?})", device_type);
 
-    let state = app_state.lock().await;
+    let mut state = app_state.lock().await;
 
-    let selected = match device_type {
-        DeviceType::Input => state
-            .config
-            .audio
-            .input_device_name
-            .clone()
-            .unwrap_or_default(),
-        DeviceType::Output => state
-            .config
-            .audio
-            .output_device_name
-            .clone()
-            .unwrap_or_default(),
+    let host = state.config.audio.host_name.clone();
+    let host = host.as_deref();
+    let (preferred, picked) = match device_type {
+        DeviceType::Input => {
+            let preferred = state
+                .config
+                .audio
+                .input_device_name
+                .clone()
+                .unwrap_or_default();
+            let picked = DeviceSelector::picked_device_name(DeviceType::Input, host, Some(&preferred))?;
+                (preferred, picked)
+        },
+        DeviceType::Output => {
+            let preferred = state
+                .config
+                .audio
+                .output_device_name
+                .clone()
+                .unwrap_or_default();
+            let picked = state.audio_manager().output_device_name();
+            (preferred, picked)
+        },
     };
+    drop(state);
 
-    // TODO check if selected default device is actually still default
-
-    let host = state.config.audio.host_name.as_deref();
-    let default_device = DeviceSelector::default_device_name(host, device_type)?;
-    let devices: Vec<String> = DeviceSelector::all_device_names(host, device_type)?;
+    let default = DeviceSelector::default_device_name(device_type, host)?;
+    let devices: Vec<String> = DeviceSelector::all_device_names(device_type, host)?;
 
     Ok(AudioDevices {
-        selected,
-        default: default_device,
+        preferred,
+        picked,
+        default,
         all: devices,
     })
 }

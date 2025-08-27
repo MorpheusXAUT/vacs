@@ -17,7 +17,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use vacs_audio::{Device, DeviceSelector, DeviceType};
 
 pub struct AppStateInner {
     pub config: AppConfig,
@@ -42,46 +41,6 @@ impl AppStateInner {
         let config = AppConfig::parse(&config_dir)?;
 
         // TODO handle is_fallback and update config accordingly
-
-        match DeviceSelector::open(
-            DeviceType::Output,
-            config.audio.host_name.as_deref(),
-            config.audio.output_device_name.as_deref(),
-        ) {
-            Ok(device) => {
-                log::info!("Using output device: {device:?}");
-            }
-            Err(err) => {
-                log::warn!("Open would crash the app, lol! Error: {err:?}");
-            }
-        }
-
-        match DeviceSelector::open(
-            DeviceType::Input,
-            config.audio.host_name.as_deref(),
-            config.audio.input_device_name.as_deref(),
-        ) {
-            Ok(device) => {
-                log::info!("Using input device: {device:?}");
-            }
-            Err(err) => {
-                log::warn!("Open would crash the app, lol! Error: {err:?}");
-            }
-        }
-
-        // TODO remove/only log in case of init errors
-        if let Err(err) = Device::list_devices_with_supported_configs(
-            config.audio.host_name.as_deref().unwrap_or_default(),
-            &DeviceType::Output,
-        ) {
-            log::warn!("Failed to list all output devices with supported configs: {err:?}");
-        }
-        if let Err(err) = Device::list_devices_with_supported_configs(
-            config.audio.host_name.as_deref().unwrap_or_default(),
-            &DeviceType::Input,
-        ) {
-            log::warn!("Failed to list all input devices with supported configs: {err:?}");
-        }
 
         let audio_manager = match AudioManager::new(&config.audio) {
             Ok(audio_manager) => audio_manager,

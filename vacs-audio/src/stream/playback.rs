@@ -1,8 +1,7 @@
-use crate::device::StreamDevice;
+use crate::device::{DeviceType, StreamDevice};
 use crate::error::AudioError;
 use crate::mixer::Mixer;
 use crate::sources::{AudioSource, AudioSourceId};
-use crate::DeviceType;
 use cpal::traits::StreamTrait;
 use parking_lot::Mutex;
 use ringbuf::consumer::Consumer;
@@ -181,5 +180,9 @@ impl PlaybackStream {
 
     pub fn channels(&self) -> u16 {
         self.device.channels()
+    }
+    
+    pub fn device_name(&self) -> String {
+        self.device.name()
     }
 }
