@@ -1,6 +1,7 @@
 import {JSX} from "preact";
+import {clsx} from "clsx";
 
-export type SelectOption = { value: string, text: string };
+export type SelectOption = { value: string, text: string, className?: string, hidden?: boolean, disabled?: boolean };
 
 type SelectProps = {
     selected: string;
@@ -22,16 +23,19 @@ function Select(props: SelectProps) {
 
     return (
         <select
-            className="w-full truncate bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700 rounded
-            mb-3 text-sm p-1 open:border-r-gray-100 open:border-b-gray-100 open:border-t-gray-700 open:border-l-gray-700
-            disabled:text-gray-500"
+            className={clsx("w-full truncate mb-3 text-sm p-1 rounded",
+                "bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
+                "open:border-r-gray-100 open:border-b-gray-100 open:border-t-gray-700 open:border-l-gray-700",
+                "disabled:text-gray-500",
+                props.className)}
             title={title}
             onChange={handleSelectChange}
             value={props.selected}
             disabled={props.disabled}
         >
             {props.options.map(option =>
-                <option key={option.value} value={option.value}>{option.text}</option>
+                <option key={option.value} value={option.value} className={option.className} hidden={option.hidden}
+                        disabled={option.disabled}>{option.text}</option>
             )}
         </select>
     );

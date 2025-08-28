@@ -1,9 +1,9 @@
+use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::app::state::AppState;
 use crate::audio::manager::SourceType;
 use crate::audio::{AudioDevices, AudioHosts, AudioVolumes, VolumeType};
-use crate::config::{Persistable, PersistedAudioConfig, AUDIO_SETTINGS_FILE_NAME};
+use crate::config::{AUDIO_SETTINGS_FILE_NAME, Persistable, PersistedAudioConfig};
 use crate::error::Error;
 use tauri::{AppHandle, Emitter, Manager, State};
 use vacs_audio::device::{DeviceSelector, DeviceType};
@@ -87,9 +87,10 @@ pub async fn audio_get_devices(
                 .input_device_name
                 .clone()
                 .unwrap_or_default();
-            let picked = DeviceSelector::picked_device_name(DeviceType::Input, host, Some(&preferred))?;
-                (preferred, picked)
-        },
+            let picked =
+                DeviceSelector::picked_device_name(DeviceType::Input, host, Some(&preferred))?;
+            (preferred, picked)
+        }
         DeviceType::Output => {
             let preferred = state
                 .config
@@ -99,7 +100,7 @@ pub async fn audio_get_devices(
                 .unwrap_or_default();
             let picked = state.audio_manager().output_device_name();
             (preferred, picked)
-        },
+        }
     };
     drop(state);
 
