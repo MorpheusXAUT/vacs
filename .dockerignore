@@ -1,0 +1,22 @@
+# Tools
+.idea/
+.vscode/
+*.iml
+
+# Rust
+target/
+**/target/
+
+# Node/frontend
+**/node_modules/
+**/dist/
+**/build/
+
+# OS shenanigans
+.DS_Store
+Thumbs.db
+
+# logs & misc
+*.log
+*.tmp
+*.swp
