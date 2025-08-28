@@ -1,11 +1,15 @@
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::app::state::AppState;
+use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::SourceType;
 use crate::audio::{AudioDevices, AudioHosts, AudioVolumes, VolumeType};
-use crate::config::{Persistable, PersistedAudioConfig, AUDIO_SETTINGS_FILE_NAME};
+use crate::config::{AUDIO_SETTINGS_FILE_NAME, Persistable, PersistedAudioConfig};
 use crate::error::Error;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tokio::sync::MutexGuard;
+use tokio::time::Timeout;
+use tokio::time::error::Elapsed;
 use vacs_audio::device::{DeviceSelector, DeviceType};
 use vacs_audio::error::AudioError;
 
@@ -248,11 +252,14 @@ pub async fn audio_set_volume(
 pub async fn audio_play_ui_click(app_state: State<'_, AppState>) -> Result<(), Error> {
     log::trace!("Playing UI click");
 
-    app_state
-        .lock()
-        .await
-        .audio_manager()
-        .start(SourceType::Click);
+    match tokio::time::timeout(Duration::from_millis(500), app_state.lock()).await {
+        Ok(mut state) => {
+            state.audio_manager().start(SourceType::Click);
+        }
+        Err(_) => {
+            log::warn!("Play UI click state lock acquire timed out");
+        }
+    }
 
     Ok(())
 }

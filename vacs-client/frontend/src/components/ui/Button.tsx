@@ -69,7 +69,6 @@ function Button(props: ButtonProps) {
                 !props.disabled && !props.softDisabled && "active:[&>*]:translate-y-[1px] active:[&>*]:translate-x-[1px]"
             )}
             onClick={(event) => {
-                // TODO: fix audio click if debouncing
                 if (props.muted !== true && props.softDisabled !== true) {
                     void invokeSafe("audio_play_ui_click");
                 }
