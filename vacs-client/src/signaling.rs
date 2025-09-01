@@ -203,16 +203,18 @@ impl Connection {
                         }
                         Err(err) => {
                             log::warn!("Failed to start call: {err:?}");
-                            app.emit("webrtc:call-error", &peer_id).ok();
+
+                            let reason: CallErrorReason = err.into();
+                            state.emit_call_error(app, peer_id.clone(), true, reason.clone());
                             state
-                                .send_signaling_message(SignalingMessage::CallError { peer_id, reason: err.into() })
+                                .send_signaling_message(SignalingMessage::CallError { peer_id, reason })
                                 .await
                         }
                     }
                 } else {
                     log::warn!("Received call accept message for peer that is not set as outgoing");
                     state
-                        .send_signaling_message(SignalingMessage::CallError { peer_id, reason: CallErrorReason::NotInvited })
+                        .send_signaling_message(SignalingMessage::CallError { peer_id, reason: CallErrorReason::CallFailure })
                         .await
                 };
 
@@ -237,9 +239,10 @@ impl Connection {
                     }
                     Err(err) => {
                         log::warn!("Failed to accept call offer: {err:?}");
-                        app.emit("webrtc:call-error", &peer_id).ok();
+                        let reason: CallErrorReason = err.into();
+                        state.emit_call_error(app, peer_id.clone(), true, reason.clone());
                         state
-                            .send_signaling_message(SignalingMessage::CallError { peer_id, reason: err.into() })
+                            .send_signaling_message(SignalingMessage::CallError { peer_id, reason })
                             .await
                     }
                 };
@@ -291,8 +294,7 @@ impl Connection {
                 state.remove_outgoing_call_peer_id(&peer_id);
                 state.remove_incoming_call_peer_id(&peer_id);
 
-                // TODO: display reason in info grid
-                app.emit("webrtc:call-error", &peer_id).ok();
+                state.emit_call_error(app, peer_id, false, reason);
             }
             SignalingMessage::CallReject { peer_id } => {
                 log::trace!("Call reject received from {peer_id}");
@@ -378,17 +380,23 @@ impl Connection {
                     .ok();
                 }
                 ErrorReason::PeerConnection => {
+                    let peer_id = peer_id.unwrap_or_default();
                     log::warn!(
                         "Received peer connection error from signaling server with peer {}",
-                        peer_id.unwrap_or("NONE".to_string())
+                        peer_id
                     );
 
-                    app.emit::<FrontendError>(
-                        "error",
-                        FrontendError::new("Signaling error", "Peer connection error".to_string()),
-                    )
-                    .ok();
-                    // TODO: cleanup or set error state in frontend
+                    let state = app.state::<AppState>();
+                    let mut state = state.lock().await;
+
+                    if !state.end_call(&peer_id).await {
+                        log::debug!("Received peer connection error message for peer that is not active");
+                    }
+
+                    state.remove_outgoing_call_peer_id(&peer_id);
+                    state.remove_incoming_call_peer_id(&peer_id);
+
+                    state.emit_call_error(app, peer_id, false, CallErrorReason::SignalingFailure);
                 }
                 ErrorReason::UnexpectedMessage(msg) => {
                     log::warn!("Received unexpected message error from signaling server");

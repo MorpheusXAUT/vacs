@@ -33,12 +33,12 @@ pub enum CallErrorReason {
     WebrtcFailure,
     /// The client failed to transmit or receive the call audio.
     AudioFailure,
-    /// The client has another active call.
-    CallActive,
-    /// The client received a [`SignalingMessage::CallAccept`] from a peer without previously sending a [`SignalingMessage::CallInvite`] message.
-    NotInvited,
+    /// The client is in an invalid call state. E.g. it received a [`SignalingMessage::CallAccept`] from a peer without previously sending a [`SignalingMessage::CallInvite`] message, or it already has an active call
+    CallFailure,
+    /// An error with the signaling connection to the peer occurred.
+    SignalingFailure,
     /// An unspecified error occurred.
-    Other
+    Other,
 }
 
 /// Represents a client as observed by the signaling server.
@@ -155,7 +155,7 @@ pub enum SignalingMessage {
         /// When received from the signaling server (by the callee), this is the ID of the source client sending the error.
         peer_id: String,
         /// Reason for the error.
-        reason: CallErrorReason
+        reason: CallErrorReason,
     },
     /// A call ICE candidate message sent by either client to trickle ICE candidates to the other peer during call setup.
     ///
@@ -326,7 +326,10 @@ mod tests {
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
-        assert_eq!(serialized, "{\"type\":\"CallReject\",\"peerId\":\"client1\"}");
+        assert_eq!(
+            serialized,
+            "{\"type\":\"CallReject\",\"peerId\":\"client1\"}"
+        );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         match deserialized {
@@ -410,7 +413,10 @@ mod tests {
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
-        assert_eq!(serialized, "{\"type\":\"ClientDisconnected\",\"id\":\"client1\"}");
+        assert_eq!(
+            serialized,
+            "{\"type\":\"ClientDisconnected\",\"id\":\"client1\"}"
+        );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         match deserialized {

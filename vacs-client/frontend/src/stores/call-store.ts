@@ -4,6 +4,7 @@ import {invokeSafe} from "../error.ts";
 type CallDisplay = {
     type: "outgoing" | "accepted" | "rejected" | "error",
     peerId: string,
+    errorReason?: string;
 };
 
 type CallState = {
@@ -19,7 +20,7 @@ type CallState = {
         removePeer: (peerId: string) => void,
         rejectPeer: (peerId: string) => void,
         dismissRejectedPeer: () => void,
-        errorPeer: (peerId: string) => void,
+        errorPeer: (peerId: string, reason: string) => void,
         dismissErrorPeer: () => void,
         reset: () => void,
     },
@@ -98,7 +99,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
                 set({blink: false, blinkTimeoutId: undefined});
             }
         },
-        errorPeer: (peerId) => {
+        errorPeer: (peerId, reason) => {
             const callDisplay = get().callDisplay;
 
             if (callDisplay === undefined || callDisplay.peerId !== peerId || callDisplay.type === "rejected") {
@@ -106,7 +107,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
                 return;
             }
 
-            set({callDisplay: {type: "error", peerId: peerId}});
+            set({callDisplay: {type: "error", peerId: peerId, errorReason: reason}});
 
             if (get().blinkTimeoutId === undefined) {
                 startBlink(set);

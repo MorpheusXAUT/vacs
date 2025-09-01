@@ -8,6 +8,11 @@ export type Error = {
     timeout_ms?: number;
 };
 
+export type CallError = {
+    peerId: string;
+    reason: string;
+}
+
 export async function invokeSafe<T>(cmd: string, args?: InvokeArgs): Promise<T | undefined> {
     try {
         return await invoke<T>(cmd, args);

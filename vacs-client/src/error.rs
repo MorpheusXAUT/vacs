@@ -1,6 +1,6 @@
-use std::fmt::{Display, Formatter};
 use serde::Serialize;
 use serde_json::Value;
+use std::fmt::Debug;
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 use vacs_protocol::ws::CallErrorReason;
@@ -157,11 +157,37 @@ impl From<Error> for CallErrorReason {
         match err {
             Error::AudioDevice(_) => CallErrorReason::AudioFailure,
             Error::Webrtc(err) => match err.as_ref() {
-                vacs_webrtc::error::WebrtcError::CallActive => CallErrorReason::CallActive,
-                vacs_webrtc::error::WebrtcError::NoCallActive => CallErrorReason::NotInvited,
-                _ => CallErrorReason::WebrtcFailure
+                vacs_webrtc::error::WebrtcError::CallActive => CallErrorReason::CallFailure,
+                vacs_webrtc::error::WebrtcError::NoCallActive => CallErrorReason::CallFailure,
+                _ => CallErrorReason::WebrtcFailure,
             },
-            _ => CallErrorReason::Other
+            _ => CallErrorReason::Other,
+        }
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallError {
+    peer_id: String,
+    reason: String,
+}
+
+impl CallError {
+    pub fn new(peer_id: String, is_local: bool, reason: CallErrorReason) -> Self {
+        Self {
+            peer_id,
+            reason: format!(
+                "{} {}",
+                if is_local { "Local" } else { "Remote" },
+                match reason {
+                    CallErrorReason::WebrtcFailure => "Connection failure",
+                    CallErrorReason::AudioFailure => "Audio failure",
+                    CallErrorReason::CallFailure => "Call failure",
+                    CallErrorReason::SignalingFailure => "Target not reachable",
+                    CallErrorReason::Other => "Unknown failure",
+                }
+            ),
         }
     }
 }

@@ -2,13 +2,13 @@ use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::{AppState, AppStateInner, sealed};
 use crate::config::ENCODED_AUDIO_FRAME_BUFFER_SIZE;
-use crate::error::Error;
+use crate::error::{CallError, Error};
 use anyhow::Context;
 use std::fmt::{Debug, Formatter};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::{CallErrorReason, SignalingMessage};
 use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
 use vacs_webrtc::error::WebrtcError;
 
@@ -39,6 +39,7 @@ pub trait AppStateWebrtcExt: sealed::Sealed {
     ) -> Result<(), Error>;
     async fn set_remote_ice_candidate(&self, peer_id: &str, candidate: String);
     async fn end_call(&mut self, peer_id: &str) -> bool;
+    fn emit_call_error(&self, app: &AppHandle, peer_id: String, is_local: bool, reason: CallErrorReason);
     fn active_call_peer_id(&self) -> Option<&String>;
 }
 
@@ -82,18 +83,18 @@ impl AppStateWebrtcExt for AppStateInner {
                                 if let Err(err) =
                                     state.on_peer_connected(&app, &peer_id_clone).await
                                 {
+                                    let reason: CallErrorReason = err.into();
                                     state.end_call(&peer_id_clone).await;
                                     if let Err(err) = state
                                         .send_signaling_message(SignalingMessage::CallError {
                                             peer_id: peer_id_clone.clone(),
-                                            reason: err.into(),
+                                            reason: reason.clone(),
                                         })
                                         .await
                                     {
                                         log::warn!("Failed to send call message: {err:?}");
                                     }
-                                    // TODO display short error message in info grid
-                                    app.emit("webrtc:call-error", &peer_id_clone).ok();
+                                    state.emit_call_error(&app, peer_id_clone.clone(), true, reason);
                                 }
                             }
                             PeerConnectionState::Disconnected => {
@@ -120,8 +121,7 @@ impl AppStateWebrtcExt for AppStateInner {
                                 let mut state = app_state.lock().await;
                                 state.end_call(&peer_id_clone).await;
 
-                                // TODO display short error message in info grid
-                                app.emit("webrtc:call-error", &peer_id_clone).ok();
+                                state.emit_call_error(&app, peer_id_clone.clone(), true, CallErrorReason::WebrtcFailure);
                             }
                             PeerConnectionState::Closed => {
                                 // Graceful close
@@ -228,6 +228,10 @@ impl AppStateWebrtcExt for AppStateInner {
         }
 
         true
+    }
+
+    fn emit_call_error(&self, app: &AppHandle, peer_id: String, is_local: bool, reason: CallErrorReason) {
+        app.emit("webrtc:call-error", CallError::new(peer_id, is_local, reason)).ok();
     }
 
     fn active_call_peer_id(&self) -> Option<&String> {
