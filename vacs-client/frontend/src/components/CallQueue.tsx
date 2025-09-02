@@ -1,6 +1,7 @@
 import Button from "./ui/Button.tsx";
 import {useCallStore} from "../stores/call-store.ts";
 import {invokeStrict} from "../error.ts";
+import unplug from "../assets/unplug.svg";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -22,7 +23,7 @@ function CallQueue() {
     };
 
     const handleAnswerKeyClick = async (peerId: string) => {
-        // Can't call someone if you are currently in an active or outgoing/rejected call
+        // Can't accept someone's call if something is in your call display
         if (callDisplay !== undefined) return;
 
         try {
@@ -39,11 +40,14 @@ function CallQueue() {
         <div className="flex flex-col-reverse gap-2.5 pt-3 pr-[1px] overflow-y-auto" style={{scrollbarWidth: "none"}}>
             {/*Call Display*/}
             {callDisplay !== undefined ? (
-                <Button color={cdColor}
-                        highlight={callDisplay.type === "outgoing" || callDisplay.type === "rejected" ? "green" : undefined}
-                        softDisabled={true}
-                        onClick={() => handleCallDisplayClick(callDisplay.peerId)}
-                        className={"min-h-16 text-sm"}>{callDisplay.peerId}</Button>
+                <div className="relative">
+                    {callDisplay.connectionState === "disconnected" && <img className="absolute top-1 left-1 h-5 w-5" src={unplug} alt="Disconnected"/>}
+                    <Button color={cdColor}
+                            highlight={callDisplay.type === "outgoing" || callDisplay.type === "rejected" ? "green" : undefined}
+                            softDisabled={true}
+                            onClick={() => handleCallDisplayClick(callDisplay.peerId)}
+                            className="h-full min-h-16 text-sm">{callDisplay.peerId}</Button>
+                </div>
             ) : (
                 <div className="w-full border rounded-md min-h-16"></div>
             )}

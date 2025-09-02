@@ -111,7 +111,6 @@ impl AppStateWebrtcExt for AppStateInner {
                                     state.audio_manager().detach_input_device();
                                 }
 
-                                // TODO update status indicator
                                 app.emit("webrtc:call-disconnected", &peer_id_clone).ok();
                             }
                             PeerConnectionState::Failed => {
@@ -275,11 +274,11 @@ impl AppStateInner {
 
             log::info!("Successfully established call to peer");
             app.emit("webrtc:call-connected", peer_id).ok();
-            // TODO: display connected info in status indicator
         } else {
             log::debug!("Peer connected is not the active call, checking held calls");
             if self.held_calls.contains_key(peer_id) {
                 log::info!("Held peer connection with peer {peer_id} reconnected");
+                app.emit("webrtc:call-connected", peer_id).ok();
             } else {
                 log::debug!("Peer {peer_id} is not held, ignoring");
             }
