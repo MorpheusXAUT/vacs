@@ -14,6 +14,8 @@ use vacs_signaling::client::{InterruptionReason, SignalingClient};
 use vacs_signaling::error::SignalingError;
 use vacs_signaling::transport;
 
+const INCOMING_CALLS_LIMIT: usize = 5;
+
 pub struct Connection {
     client: SignalingClient,
     shutdown_tx: watch::Sender<()>,
@@ -177,6 +179,15 @@ impl Connection {
 
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
+
+                if state.incoming_call_peer_ids_len() >= INCOMING_CALLS_LIMIT {
+                    if let Err(err) = state
+                        .send_signaling_message(SignalingMessage::CallReject { peer_id: peer_id.clone() })
+                        .await {
+                        log::warn!("Failed to reject call invite: {err:?}");
+                    }
+                    return;
+                }
 
                 state.add_incoming_call_peer_id(&peer_id);
                 app.emit("signaling:call-invite", &peer_id).ok();

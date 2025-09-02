@@ -1,8 +1,8 @@
+use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::http::AppStateHttpExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::app::state::AppState;
 use crate::audio::manager::SourceType;
 use crate::config::BackendEndpoint;
 use crate::error::{Error, HandleUnauthorizedExt};
@@ -115,24 +115,6 @@ pub async fn signaling_end_call(
 
     state.set_outgoing_call_peer_id(None);
     state.audio_manager().stop(SourceType::Ringback);
-
-    Ok(())
-}
-
-#[tauri::command]
-#[vacs_macros::log_err]
-pub async fn signaling_reject_call(
-    app_state: State<'_, AppState>,
-    peer_id: String,
-) -> Result<(), Error> {
-    log::debug!("Rejecting call from {peer_id}");
-
-    let mut state = app_state.lock().await;
-
-    state
-        .send_signaling_message(SignalingMessage::CallReject { peer_id: peer_id.clone() })
-        .await?;
-    state.remove_incoming_call_peer_id(&peer_id);
 
     Ok(())
 }

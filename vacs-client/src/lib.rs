@@ -69,7 +69,6 @@ pub fn run() {
             signaling::commands::signaling_connect,
             signaling::commands::signaling_disconnect,
             signaling::commands::signaling_end_call,
-            signaling::commands::signaling_reject_call,
             signaling::commands::signaling_start_call,
             signaling::commands::signaling_terminate,
         ])

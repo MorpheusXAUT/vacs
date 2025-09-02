@@ -17,6 +17,7 @@ pub trait AppStateSignalingExt: sealed::Sealed {
     async fn send_signaling_message(&mut self, msg: SignalingMessage) -> Result<(), Error>;
     fn set_outgoing_call_peer_id(&mut self, peer_id: Option<String>);
     fn remove_outgoing_call_peer_id(&mut self, peer_id: &str) -> bool;
+    fn incoming_call_peer_ids_len(&self) -> usize;
     fn add_incoming_call_peer_id(&mut self, peer_id: &str);
     fn remove_incoming_call_peer_id(&mut self, peer_id: &str) -> bool;
 }
@@ -129,6 +130,10 @@ impl AppStateSignalingExt for AppStateInner {
         } else {
             false
         }
+    }
+
+    fn incoming_call_peer_ids_len(&self) -> usize {
+        self.incoming_call_peer_ids.len()
     }
 
     fn add_incoming_call_peer_id(&mut self, peer_id: &str) {

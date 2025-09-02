@@ -1,5 +1,4 @@
 import {create} from "zustand/react";
-import {invokeSafe} from "../error.ts";
 
 type CallDisplay = {
     type: "outgoing" | "accepted" | "rejected" | "error",
@@ -49,12 +48,6 @@ export const useCallStore = create<CallState>()((set, get) => ({
         },
         addIncomingCall: (peerId) => {
             const incomingCalls = get().incomingCalls.filter(id => id !== peerId);
-
-            // TODO: Maybe move into tauri backend?
-            if (incomingCalls.length >= 5) {
-                void invokeSafe("signaling_reject_call", {peerId: peerId});
-                return;
-            }
 
             if (get().blinkTimeoutId === undefined) {
                 startBlink(set);
