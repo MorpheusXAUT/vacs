@@ -7,7 +7,7 @@ pub enum WebrtcError {
     #[error("No call active")]
     NoCallActive,
     #[error(transparent)]
-    Other(#[from] Box<anyhow::Error>)
+    Other(#[from] Box<anyhow::Error>),
 }
 
 impl From<anyhow::Error> for WebrtcError {

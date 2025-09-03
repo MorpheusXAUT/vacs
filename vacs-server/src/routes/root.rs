@@ -1,6 +1,6 @@
 use crate::state::AppState;
-use axum::routing::get;
 use axum::Router;
+use axum::routing::get;
 use std::sync::Arc;
 
 pub fn routes() -> Router<Arc<AppState>> {
@@ -13,10 +13,10 @@ mod get {
     use crate::build::VersionInfo;
     use crate::http::ApiResult;
     use crate::state::AppState;
+    use axum::Json;
     use axum::extract::State;
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
-    use axum::Json;
     use std::sync::Arc;
     use std::time::Duration;
 

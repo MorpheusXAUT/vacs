@@ -1,12 +1,12 @@
 use crate::app::state::AppState;
+use crate::app::state::http::AppStateHttpExt;
+use crate::app::state::signaling::AppStateSignalingExt;
 use crate::config::BackendEndpoint;
 use crate::error::{Error, HandleUnauthorizedExt};
 use anyhow::Context;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, State};
 use vacs_protocol::http::auth::{InitVatsimLogin, UserInfo};
-use crate::app::state::http::AppStateHttpExt;
-use crate::app::state::signaling::AppStateSignalingExt;
 
 #[tauri::command]
 #[vacs_macros::log_err]

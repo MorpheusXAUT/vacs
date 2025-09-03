@@ -68,10 +68,19 @@ impl ClientSession {
 
         let (pong_update_tx, pong_update_rx) = watch::channel(Instant::now());
 
-        let (writer_handle, ws_outbound_tx) =
-            ClientSession::spawn_writer(websocket_tx, app_shutdown_rx.clone(), self.client_shutdown_tx.subscribe()).await;
-        let (reader_handle, mut ws_inbound_rx) =
-            ClientSession::spawn_reader(websocket_rx, app_shutdown_rx.clone(), self.client_shutdown_tx.subscribe(), pong_update_tx).await;
+        let (writer_handle, ws_outbound_tx) = ClientSession::spawn_writer(
+            websocket_tx,
+            app_shutdown_rx.clone(),
+            self.client_shutdown_tx.subscribe(),
+        )
+        .await;
+        let (reader_handle, mut ws_inbound_rx) = ClientSession::spawn_reader(
+            websocket_rx,
+            app_shutdown_rx.clone(),
+            self.client_shutdown_tx.subscribe(),
+            pong_update_tx,
+        )
+        .await;
         let (ping_handle, mut ping_shutdown_rx) =
             ClientSession::spawn_ping_task(&ws_outbound_tx, pong_update_rx);
 
@@ -303,7 +312,9 @@ impl ClientSession {
                     }
                 }
                 tracing::trace!("WebSocket ping task finished");
-            }.instrument(tracing::Span::current()));
+            }
+            .instrument(tracing::Span::current()),
+        );
 
         (join_handle, ping_shutdown_rx)
     }

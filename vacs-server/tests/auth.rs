@@ -201,9 +201,11 @@ async fn login_client_list() {
 
     let _clients = setup_test_clients(
         test_app.addr(),
-        &[("client1", "token1"),
+        &[
+            ("client1", "token1"),
             ("client2", "token2"),
-            ("client3", "token3")],
+            ("client3", "token3"),
+        ],
     )
     .await;
 

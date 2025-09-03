@@ -192,23 +192,24 @@ impl SignalingClient {
 
         let handle = tokio::runtime::Handle::current();
 
-        tasks.spawn_on(Self::reader_task(
+        tasks.spawn_on(
+            Self::reader_task(
                 receiver,
                 send_tx_clone,
                 matcher,
                 broadcast_tx,
                 shutdown_rx,
                 disconnect_rx,
-        ), &handle);
+            ),
+            &handle,
+        );
 
         let shutdown_rx = self.shutdown_rx.clone();
         let disconnect_rx = self.disconnect_tx.subscribe();
-        tasks.spawn_on(Self::writer_task(
-            sender,
-            send_rx,
-            shutdown_rx,
-            disconnect_rx,
-        ), &handle);
+        tasks.spawn_on(
+            Self::writer_task(sender, send_rx, shutdown_rx, disconnect_rx),
+            &handle,
+        );
 
         tracing::trace!("Transport tasks started, handling interaction");
         *self.send_tx.lock().await = Some(send_tx);
@@ -848,7 +849,7 @@ mod tests {
             SignalingMessage::serialize(&SignalingMessage::Login {
                 token: "token1".to_string(),
             })
-                .unwrap(),
+            .unwrap(),
         );
 
         let sent_message = handle.outgoing_rx.recv().await;
@@ -893,7 +894,7 @@ mod tests {
             SignalingMessage::serialize(&SignalingMessage::Login {
                 token: "token1".to_string(),
             })
-                .unwrap(),
+            .unwrap(),
         );
 
         let sent_message = handle.outgoing_rx.recv().await;
@@ -936,7 +937,7 @@ mod tests {
             SignalingMessage::serialize(&SignalingMessage::Login {
                 token: "token1".to_string(),
             })
-                .unwrap(),
+            .unwrap(),
         );
 
         let sent_message = handle.outgoing_rx.recv().await;
@@ -977,7 +978,7 @@ mod tests {
             SignalingMessage::serialize(&SignalingMessage::Login {
                 token: "token1".to_string(),
             })
-                .unwrap(),
+            .unwrap(),
         );
 
         let sent_message = handle.outgoing_rx.recv().await;
@@ -1018,7 +1019,7 @@ mod tests {
             SignalingMessage::serialize(&SignalingMessage::Login {
                 token: "token1".to_string(),
             })
-                .unwrap(),
+            .unwrap(),
         );
 
         let sent_message = handle.outgoing_rx.recv().await;

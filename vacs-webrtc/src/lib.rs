@@ -1,8 +1,8 @@
 pub mod config;
+pub mod error;
 mod peer;
 mod receiver;
 mod sender;
-pub mod error;
 
 pub use peer::Peer;
 pub use peer::PeerConnectionState;

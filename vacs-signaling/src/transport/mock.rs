@@ -1,5 +1,5 @@
 use crate::error::SignalingError;
-use crate::transport::{SignalingSender, SignalingReceiver};
+use crate::transport::{SignalingReceiver, SignalingSender};
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite;
@@ -28,7 +28,15 @@ pub fn create() -> ((MockSender, MockReceiver), MockHandle) {
         incoming_tx,
     };
 
-    ((MockSender {tx: Some(outgoing_tx)}, MockReceiver {rx: incoming_rx}), handle)
+    (
+        (
+            MockSender {
+                tx: Some(outgoing_tx),
+            },
+            MockReceiver { rx: incoming_rx },
+        ),
+        handle,
+    )
 }
 
 #[async_trait]
@@ -42,7 +50,9 @@ impl SignalingSender for MockSender {
                 SignalingError::Transport(anyhow::anyhow!(err).into())
             })
         } else {
-            Err(SignalingError::Transport(anyhow::anyhow!("Sender closed").into()))
+            Err(SignalingError::Transport(
+                anyhow::anyhow!("Sender closed").into(),
+            ))
         }
     }
 
@@ -57,7 +67,10 @@ impl SignalingSender for MockSender {
 #[async_trait]
 impl SignalingReceiver for MockReceiver {
     #[tracing::instrument(level = "debug", skip_all, send_tx)]
-    async fn recv(&mut self, send_tx: &mpsc::Sender<tungstenite::Message>) -> Result<SignalingMessage, SignalingError> {
+    async fn recv(
+        &mut self,
+        send_tx: &mpsc::Sender<tungstenite::Message>,
+    ) -> Result<SignalingMessage, SignalingError> {
         while let Some(msg) = self.rx.recv().await {
             tracing::debug!(?msg, "Received tungstenite::Message");
             match msg {
@@ -73,10 +86,7 @@ impl SignalingReceiver for MockReceiver {
                     return Err(SignalingError::Disconnected);
                 }
                 tungstenite::Message::Ping(data) => {
-                    if let Err(err) = send_tx
-                        .send(tungstenite::Message::Pong(data))
-                        .await
-                    {
+                    if let Err(err) = send_tx.send(tungstenite::Message::Pong(data)).await {
                         tracing::warn!(?err, "Failed to send mock Pong");
                         return Err(SignalingError::Disconnected);
                     }

@@ -3,8 +3,8 @@ pub mod redis;
 
 use crate::store::memory::MemoryStore;
 use crate::store::redis::RedisStore;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::time::Duration;
 
 #[async_trait::async_trait]

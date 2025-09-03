@@ -6,7 +6,7 @@ use ringbuf::{HeapCons, HeapProd, HeapRb};
 use rubato::{Resampler, SincFixedIn};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tracing::{instrument, Instrument};
+use tracing::{Instrument, instrument};
 
 const RESAMPLER_BUFFER_SIZE: usize = 8192;
 

@@ -9,8 +9,8 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 use vacs_protocol::ws::{CallErrorReason, SignalingMessage};
-use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
 use vacs_webrtc::error::WebrtcError;
+use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
 
 pub struct Call {
     pub(super) peer_id: String,
@@ -32,14 +32,16 @@ pub trait AppStateWebrtcExt: sealed::Sealed {
         peer_id: String,
         offer_sdp: Option<String>,
     ) -> Result<String, Error>;
-    async fn accept_call_answer(
-        &self,
-        peer_id: &str,
-        answer_sdp: String,
-    ) -> Result<(), Error>;
+    async fn accept_call_answer(&self, peer_id: &str, answer_sdp: String) -> Result<(), Error>;
     async fn set_remote_ice_candidate(&self, peer_id: &str, candidate: String);
     async fn end_call(&mut self, peer_id: &str) -> bool;
-    fn emit_call_error(&self, app: &AppHandle, peer_id: String, is_local: bool, reason: CallErrorReason);
+    fn emit_call_error(
+        &self,
+        app: &AppHandle,
+        peer_id: String,
+        is_local: bool,
+        reason: CallErrorReason,
+    );
     fn active_call_peer_id(&self) -> Option<&String>;
 }
 
@@ -94,7 +96,12 @@ impl AppStateWebrtcExt for AppStateInner {
                                     {
                                         log::warn!("Failed to send call message: {err:?}");
                                     }
-                                    state.emit_call_error(&app, peer_id_clone.clone(), true, reason);
+                                    state.emit_call_error(
+                                        &app,
+                                        peer_id_clone.clone(),
+                                        true,
+                                        reason,
+                                    );
                                 }
                             }
                             PeerConnectionState::Disconnected => {
@@ -120,7 +127,12 @@ impl AppStateWebrtcExt for AppStateInner {
                                 let mut state = app_state.lock().await;
                                 state.end_call(&peer_id_clone).await;
 
-                                state.emit_call_error(&app, peer_id_clone.clone(), true, CallErrorReason::WebrtcFailure);
+                                state.emit_call_error(
+                                    &app,
+                                    peer_id_clone.clone(),
+                                    true,
+                                    CallErrorReason::WebrtcFailure,
+                                );
                             }
                             PeerConnectionState::Closed => {
                                 // Graceful close
@@ -169,17 +181,15 @@ impl AppStateWebrtcExt for AppStateInner {
         Ok(sdp)
     }
 
-    async fn accept_call_answer(
-        &self,
-        peer_id: &str,
-        answer_sdp: String,
-    ) -> Result<(), Error> {
+    async fn accept_call_answer(&self, peer_id: &str, answer_sdp: String) -> Result<(), Error> {
         if let Some(call) = &self.active_call {
             if call.peer_id == peer_id {
                 call.peer.accept_answer(answer_sdp).await?;
                 return Ok(());
             } else {
-                log::warn!("Tried to accept answer, but peer_id does not match. Peer id: {peer_id}");
+                log::warn!(
+                    "Tried to accept answer, but peer_id does not match. Peer id: {peer_id}"
+                );
             }
         }
 
@@ -229,8 +239,18 @@ impl AppStateWebrtcExt for AppStateInner {
         true
     }
 
-    fn emit_call_error(&self, app: &AppHandle, peer_id: String, is_local: bool, reason: CallErrorReason) {
-        app.emit("webrtc:call-error", CallError::new(peer_id, is_local, reason)).ok();
+    fn emit_call_error(
+        &self,
+        app: &AppHandle,
+        peer_id: String,
+        is_local: bool,
+        reason: CallErrorReason,
+    ) {
+        app.emit(
+            "webrtc:call-error",
+            CallError::new(peer_id, is_local, reason),
+        )
+        .ok();
     }
 
     fn active_call_peer_id(&self) -> Option<&String> {

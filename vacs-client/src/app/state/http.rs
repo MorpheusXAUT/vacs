@@ -1,10 +1,10 @@
-use crate::app::state::{sealed, AppStateInner};
+use crate::app::state::{AppStateInner, sealed};
 use crate::config::BackendEndpoint;
 use crate::error::Error;
 use anyhow::Context;
 use reqwest::StatusCode;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use url::Url;
 
 pub trait AppStateHttpExt: sealed::Sealed {

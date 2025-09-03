@@ -1,9 +1,9 @@
 pub mod device;
 mod dsp;
+pub mod error;
 pub(crate) mod mixer;
 pub mod sources;
 pub mod stream;
-pub mod error;
 
 pub type EncodedAudioFrame = bytes::Bytes;
 

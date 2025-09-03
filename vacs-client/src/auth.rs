@@ -1,13 +1,13 @@
 pub(crate) mod commands;
 
 use crate::app::state::AppState;
+use crate::app::state::http::AppStateHttpExt;
 use crate::config::BackendEndpoint;
 use crate::error::Error;
 use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager};
 use url::Url;
 use vacs_protocol::http::auth::{AuthExchangeToken, UserInfo};
-use crate::app::state::http::AppStateHttpExt;
 
 #[vacs_macros::log_err]
 pub async fn handle_auth_callback(app: &AppHandle, url: &str) -> Result<(), Error> {

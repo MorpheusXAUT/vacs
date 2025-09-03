@@ -1,9 +1,9 @@
 use crate::state::AppState;
 use crate::ws::ClientSession;
 use crate::ws::message::send_message;
+use axum::extract::ws;
 use std::ops::ControlFlow;
 use std::sync::Arc;
-use axum::extract::ws;
 use tokio::sync::mpsc;
 use vacs_protocol::ws::{CallErrorReason, SignalingMessage};
 
@@ -146,7 +146,12 @@ async fn handle_call_end(state: &AppState, client: &ClientSession, peer_id: &str
         .await;
 }
 
-async fn handle_call_error(state: &AppState, client: &ClientSession, peer_id: &str, reason: CallErrorReason) {
+async fn handle_call_error(
+    state: &AppState,
+    client: &ClientSession,
+    peer_id: &str,
+    reason: CallErrorReason,
+) {
     tracing::trace!(?peer_id, "Handling call error");
     state
         .send_message_to_peer(
@@ -155,7 +160,7 @@ async fn handle_call_error(state: &AppState, client: &ClientSession, peer_id: &s
             SignalingMessage::CallError {
                 peer_id: client.get_id().to_string(),
                 reason,
-            }
+            },
         )
         .await;
 }
@@ -181,12 +186,12 @@ async fn handle_call_ice_candidate(
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Deref;
     use super::*;
     use crate::ws::test_util::TestSetup;
     use axum::extract::ws;
     use axum::extract::ws::Utf8Bytes;
     use pretty_assertions::assert_eq;
+    use std::ops::Deref;
     use test_log::test;
     use vacs_protocol::ws::LoginFailureReason;
 
@@ -228,7 +233,7 @@ mod tests {
             setup.websocket_tx.lock().await.deref(),
             SignalingMessage::ListClients,
         )
-            .await;
+        .await;
         assert_eq!(control_flow, ControlFlow::Continue(()));
 
         let message = setup

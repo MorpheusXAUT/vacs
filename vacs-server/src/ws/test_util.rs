@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use tokio::sync::{broadcast, mpsc, watch, Mutex};
+use tokio::sync::{Mutex, broadcast, mpsc, watch};
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 
 pub struct MockSink {
@@ -140,11 +140,7 @@ impl TestSetup {
     }
 
     pub async fn take_last_websocket_message(&mut self) -> Option<ws::Message> {
-        self.websocket_rx
-            .lock()
-            .await
-            .recv()
-            .await
+        self.websocket_rx.lock().await.recv().await
     }
 
     pub fn spawn_session_handle_interaction(

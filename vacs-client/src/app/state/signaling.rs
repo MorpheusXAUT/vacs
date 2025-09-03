@@ -1,6 +1,6 @@
 use crate::app::state::http::AppStateHttpExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::app::state::{sealed, AppState, AppStateInner};
+use crate::app::state::{AppState, AppStateInner, sealed};
 use crate::audio::manager::SourceType;
 use crate::config::BackendEndpoint;
 use crate::error::{Error, FrontendError};

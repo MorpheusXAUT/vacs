@@ -1,4 +1,4 @@
-use crate::app::state::{sealed, AppStateInner};
+use crate::app::state::{AppStateInner, sealed};
 use crate::audio::manager::AudioManager;
 
 pub trait AppStateAudioExt: sealed::Sealed {

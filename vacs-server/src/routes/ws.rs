@@ -1,3 +1,4 @@
+use crate::auth::users::AuthSession;
 use crate::auth::users::Backend;
 use crate::http::ApiResult;
 use crate::state::AppState;
@@ -7,12 +8,14 @@ use axum::extract::State;
 use axum::routing::{delete, get};
 use axum_login::login_required;
 use std::sync::Arc;
-use crate::auth::users::AuthSession;
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/token", get(get::token).layer(login_required!(Backend)))
-        .route("/", delete(delete::terminate_connection).layer(login_required!(Backend)))
+        .route(
+            "/",
+            delete(delete::terminate_connection).layer(login_required!(Backend)),
+        )
 }
 
 mod get {
@@ -33,9 +36,9 @@ mod get {
 }
 
 mod delete {
-    use axum::http::StatusCode;
-    use crate::http::StatusCodeResult;
     use super::*;
+    use crate::http::StatusCodeResult;
+    use axum::http::StatusCode;
 
     pub async fn terminate_connection(
         auth_session: AuthSession,

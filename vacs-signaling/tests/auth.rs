@@ -110,10 +110,7 @@ async fn login_timeout() {
 
     let res = client.login("token1", Duration::from_millis(100)).await;
     assert!(res.is_err());
-    assert_matches!(
-        res.unwrap_err(),
-        SignalingError::Disconnected
-    );
+    assert_matches!(res.unwrap_err(), SignalingError::Disconnected);
 
     shutdown_tx.send(()).unwrap();
     task.await.unwrap();
@@ -211,7 +208,11 @@ async fn client_disconnects() {
     assert!(!is_connected);
     assert!(!is_logged_in);
 
-    let msg = test_rig.client_mut(1).recv_with_timeout(Duration::from_millis(100)).await.unwrap();
+    let msg = test_rig
+        .client_mut(1)
+        .recv_with_timeout(Duration::from_millis(100))
+        .await
+        .unwrap();
     assert_matches!(
         msg,
         SignalingMessage::ClientDisconnected { id } if id == "client0"
@@ -221,7 +222,7 @@ async fn client_disconnects() {
 #[test(tokio::test)]
 async fn client_list_synchronization() {
     let mut test_rig = TestRig::new(3).await.unwrap();
-    
+
     let res = test_rig.client_mut(0).client.logout();
     assert!(res.is_ok());
 
@@ -231,7 +232,11 @@ async fn client_list_synchronization() {
     assert!(!is_connected);
     assert!(!is_logged_in);
 
-    let msg = test_rig.client_mut(2).recv_with_timeout(Duration::from_millis(100)).await.unwrap();
+    let msg = test_rig
+        .client_mut(2)
+        .recv_with_timeout(Duration::from_millis(100))
+        .await
+        .unwrap();
     assert_matches!(
         msg,
         SignalingMessage::ClientDisconnected { id } if id == "client0"
@@ -268,10 +273,7 @@ async fn client_connected_broadcast() {
     let clients = test_rig.clients_mut();
     for (i, client) in clients.iter_mut().enumerate() {
         let mut received_client_ids = vec![];
-        while let Some(msg) = client
-            .recv_with_timeout(Duration::from_millis(100))
-            .await
-        {
+        while let Some(msg) = client.recv_with_timeout(Duration::from_millis(100)).await {
             match msg {
                 SignalingMessage::ClientConnected { client } => {
                     received_client_ids.push(client.id.clone());

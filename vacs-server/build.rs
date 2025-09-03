@@ -1,4 +1,4 @@
-use vergen_git2::{BuildBuilder, CargoBuilder, Emitter, RustcBuilder, Git2Builder};
+use vergen_git2::{BuildBuilder, CargoBuilder, Emitter, Git2Builder, RustcBuilder};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let git = Git2Builder::all_git()?;

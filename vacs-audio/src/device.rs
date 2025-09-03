@@ -1,5 +1,5 @@
-use crate::error::AudioError;
 use crate::TARGET_SAMPLE_RATE;
+use crate::error::AudioError;
 use anyhow::Context;
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Sample, SampleFormat, SupportedStreamConfig, SupportedStreamConfigRange};

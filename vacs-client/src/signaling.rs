@@ -1,9 +1,9 @@
 pub(crate) mod commands;
 
+use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::app::state::AppState;
 use crate::audio::manager::SourceType;
 use crate::config::{WS_LOGIN_TIMEOUT, WS_READY_TIMEOUT};
 use crate::error::FrontendError;
@@ -182,8 +182,11 @@ impl Connection {
 
                 if state.incoming_call_peer_ids_len() >= INCOMING_CALLS_LIMIT {
                     if let Err(err) = state
-                        .send_signaling_message(SignalingMessage::CallReject { peer_id: peer_id.clone() })
-                        .await {
+                        .send_signaling_message(SignalingMessage::CallReject {
+                            peer_id: peer_id.clone(),
+                        })
+                        .await
+                    {
                         log::warn!("Failed to reject call invite: {err:?}");
                     }
                     return;
@@ -218,14 +221,20 @@ impl Connection {
                             let reason: CallErrorReason = err.into();
                             state.emit_call_error(app, peer_id.clone(), true, reason.clone());
                             state
-                                .send_signaling_message(SignalingMessage::CallError { peer_id, reason })
+                                .send_signaling_message(SignalingMessage::CallError {
+                                    peer_id,
+                                    reason,
+                                })
                                 .await
                         }
                     }
                 } else {
                     log::warn!("Received call accept message for peer that is not set as outgoing");
                     state
-                        .send_signaling_message(SignalingMessage::CallError { peer_id, reason: CallErrorReason::CallFailure })
+                        .send_signaling_message(SignalingMessage::CallError {
+                            peer_id,
+                            reason: CallErrorReason::CallFailure,
+                        })
                         .await
                 };
 
@@ -271,7 +280,10 @@ impl Connection {
                 if let Err(err) = state.accept_call_answer(&peer_id, sdp).await {
                     log::warn!("Failed to accept answer: {err:?}");
                     if let Err(err) = state
-                        .send_signaling_message(SignalingMessage::CallError { peer_id, reason: err.into() })
+                        .send_signaling_message(SignalingMessage::CallError {
+                            peer_id,
+                            reason: err.into(),
+                        })
                         .await
                     {
                         log::warn!("Failed to send call end message: {err:?}");
@@ -401,7 +413,9 @@ impl Connection {
                     let mut state = state.lock().await;
 
                     if !state.end_call(&peer_id).await {
-                        log::debug!("Received peer connection error message for peer that is not active");
+                        log::debug!(
+                            "Received peer connection error message for peer that is not active"
+                        );
                     }
 
                     state.remove_outgoing_call_peer_id(&peer_id);

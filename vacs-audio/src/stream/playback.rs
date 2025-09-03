@@ -4,13 +4,13 @@ use crate::mixer::Mixer;
 use crate::sources::{AudioSource, AudioSourceId};
 use cpal::traits::StreamTrait;
 use parking_lot::Mutex;
+use ringbuf::HeapRb;
 use ringbuf::consumer::Consumer;
 use ringbuf::producer::Producer;
 use ringbuf::traits::Split;
-use ringbuf::HeapRb;
 use rubato::SincFixedIn;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{atomic, Arc};
+use std::sync::{Arc, atomic};
 use tokio::sync::mpsc;
 use tracing::instrument;
 

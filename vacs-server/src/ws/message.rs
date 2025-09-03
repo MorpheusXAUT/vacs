@@ -111,7 +111,11 @@ mod tests {
             },
         };
 
-        assert!(send_message_raw(&mut mock_sink, message.clone()).await.is_ok());
+        assert!(
+            send_message_raw(&mut mock_sink, message.clone())
+                .await
+                .is_ok()
+        );
 
         if let Some(sent_message) = rx.recv().await {
             if let ws::Message::Text(serialized_message) = sent_message {
@@ -139,7 +143,11 @@ mod tests {
             SignalingMessage::Logout,
         ];
         for message in &messages {
-            assert!(send_message_raw(&mut mock_sink, message.clone()).await.is_ok());
+            assert!(
+                send_message_raw(&mut mock_sink, message.clone())
+                    .await
+                    .is_ok()
+            );
         }
 
         for expected in messages {
@@ -293,10 +301,7 @@ mod tests {
         let results = futures_util::future::join_all(tasks).await;
         for result in results {
             assert!(result.is_ok(), "Receiving message failed");
-            assert_matches!(
-                result.unwrap(),
-                MessageResult::ApplicationMessage(_)
-            );
+            assert_matches!(result.unwrap(), MessageResult::ApplicationMessage(_));
         }
     }
 
