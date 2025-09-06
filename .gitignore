@@ -141,3 +141,7 @@ Cargo.lock
 
 # RustRover HTTP client files
 *.http
+
+# Tauri updater signing key
+*.key
+*.key.pub

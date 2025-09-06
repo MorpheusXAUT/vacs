@@ -9,9 +9,11 @@ mod signaling;
 
 use crate::app::state::{AppState, AppStateInner};
 use crate::build::VersionInfo;
+use crate::config::BackendEndpoint;
 use crate::error::FrontendError;
 use tauri::{Emitter, Manager, RunEvent};
 use tokio::sync::Mutex;
+use crate::app::update;
 
 pub fn run() {
     tauri::Builder::default()
@@ -40,6 +42,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             use tauri_plugin_deep_link::DeepLinkExt;
             app.deep_link().register_all()?;
@@ -47,6 +50,10 @@ pub fn run() {
             log::info!("{:?}", VersionInfo::gather());
 
             let state = AppStateInner::new(app.handle())?;
+            let updater_url = state
+                .config
+                .backend
+                .endpoint_url(BackendEndpoint::VersionUpdateCheck);
 
             if state.config.client.always_on_top {
                 if let Err(err) = app
@@ -61,6 +68,15 @@ pub fn run() {
             }
 
             app.manage(Mutex::new(state));
+
+            if cfg!(debug_assertions) {
+                log::info!("Debug build, skipping update check");
+            } else {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    update(&app_handle, updater_url.as_str()).await.unwrap()
+                });
+            }
 
             Ok(())
         })

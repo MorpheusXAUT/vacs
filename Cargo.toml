@@ -52,6 +52,7 @@ tauri-plugin-deep-link = "2.4.2"
 tauri-plugin-log = "2.6.0"
 tauri-plugin-opener = "2.5.0"
 tauri-plugin-single-instance = "2.3.3"
+tauri-plugin-updater = "2.9.0"
 test-log = { version = "0.2.18", features = ["trace"] }
 thiserror = "2.0.16"
 tokio = { version = "1.47.1", features = ["rt", "rt-multi-thread", "macros", "signal", "sync", "time"] }

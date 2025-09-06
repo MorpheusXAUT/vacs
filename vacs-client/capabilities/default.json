@@ -11,6 +11,7 @@
     "log:default",
     "opener:default",
     "log:default",
-    "core:window:allow-set-always-on-top"
+    "core:window:allow-set-always-on-top",
+    "updater:default"
   ]
 }

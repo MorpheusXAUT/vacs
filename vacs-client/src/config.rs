@@ -101,6 +101,7 @@ impl BackendConfig {
             BackendEndpoint::Logout => &self.endpoints.logout,
             BackendEndpoint::WsToken => &self.endpoints.ws_token,
             BackendEndpoint::TerminateWsSession => &self.endpoints.terminate_ws_session,
+            BackendEndpoint::VersionUpdateCheck => &self.endpoints.version_update_check,
         };
         format!("{}{}", self.base_url, path)
     }
@@ -113,6 +114,7 @@ pub enum BackendEndpoint {
     Logout,
     WsToken,
     TerminateWsSession,
+    VersionUpdateCheck,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,6 +125,7 @@ pub struct BackendEndpointsConfigs {
     pub logout: String,
     pub ws_token: String,
     pub terminate_ws_session: String,
+    pub version_update_check: String,
 }
 
 impl Default for BackendEndpointsConfigs {
@@ -134,6 +137,7 @@ impl Default for BackendEndpointsConfigs {
             logout: "/auth/logout".to_string(),
             ws_token: "/ws/token".to_string(),
             terminate_ws_session: "/ws".to_string(),
+            version_update_check: "/version/update?version={{current_version}}&target={{target}}&arch={{arch}}".to_string(),       
         }
     }
 }
