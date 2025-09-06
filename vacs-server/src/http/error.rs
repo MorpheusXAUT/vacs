@@ -1,7 +1,7 @@
 use crate::auth::users::Backend;
-use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use axum_login::Error as LoginError;
 use serde::Serialize;
 use thiserror::Error;
@@ -30,6 +30,11 @@ impl ProblemDetails {
         }
     }
 
+    pub fn with_title(mut self, title: &str) -> Self {
+        self.title = title.to_string();
+        self
+    }
+
     pub fn with_type_url(mut self, type_url: &str) -> Self {
         self.type_url = type_url.to_string();
         self
@@ -43,6 +48,15 @@ impl ProblemDetails {
     pub fn with_instance(mut self, instance: &str) -> Self {
         self.instance = Some(instance.to_string());
         self
+    }
+}
+
+impl From<StatusCode> for ProblemDetails {
+    fn from(status: StatusCode) -> Self {
+        Self::new(
+            status.as_u16(),
+            status.canonical_reason().unwrap_or(status.as_str()),
+        )
     }
 }
 
@@ -101,5 +115,11 @@ impl From<LoginError<Backend>> for AppError {
             LoginError::Backend(err) => err,
             LoginError::Session(err) => AppError::InternalServerError(err.into()),
         }
+    }
+}
+
+impl From<String> for AppError {
+    fn from(err: String) -> Self {
+        AppError::InternalServerError(anyhow::anyhow!(err))
     }
 }
