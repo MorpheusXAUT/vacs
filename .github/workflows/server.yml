@@ -27,6 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ghcr.io/morpheusxaut/vacs-server
+      CACHE_IMAGE_NAME: ghcr.io/morpheusxaut/vacs-server-buildcache
 
     steps:
       - name: Checkout
@@ -58,13 +59,13 @@ jobs:
             type=semver,pattern={{version}},value=${{ github.ref_name }},match=(\d+\.\d+\.\d+),enable=${{ startsWith(github.ref, 'refs/tags/') }}
             type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }},match=(\d+\.\d+\.\d+),enable=${{ startsWith(github.ref, 'refs/tags/') }}
             # major tag only when major >= 1
-            type=semver,pattern={{major}},value=${{ github.ref_name }},match=([1-9]\d*\.\d+\.\d+),enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{major}},value=${{ github.ref_name }},match=(\d+\.\d+\.\d+),enable=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name,'-v0.') }}
             
             # --- Manual dispatch path (accepts 1.2.3 / v1.2.3 / vacs-server-v1.2.3) ---
             type=semver,pattern={{version}},value=${{ inputs.version }},match=(\d+\.\d+\.\d+),enable=${{ github.event_name == 'workflow_dispatch' }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }},match=(\d+\.\d+\.\d+),enable=${{ github.event_name == 'workflow_dispatch' }}
             # major tag only when major >= 1
-            type=semver,pattern={{major}},value=${{ inputs.version }},match=([1-9]\d*\.\d+\.\d+),enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=semver,pattern={{major}},value=${{ inputs.version }},match=(\d+\.\d+\.\d+),enable=${{ github.event_name == 'workflow_dispatch' && !contains(inputs.version,'v0.') }}
 
       - name: Build and push
         id: build
@@ -73,11 +74,12 @@ jobs:
           context: .
           file: vacs-server/Dockerfile
           sbom: true
+          provenance: mode=max
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE_NAME }}:latest
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE_NAME }}:latest,mode=max
 
       - name: Trivy scan
         uses: aquasecurity/trivy-action@0.33.1
@@ -102,10 +104,3 @@ jobs:
             images+="${tag}@${DIGEST} "
           done
           cosign sign --yes ${images}
-
-      - name: Attest build provenance (SLSA)
-        uses: actions/attest-build-provenance@v3
-        with:
-          subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
