@@ -1,0 +1,19 @@
+[[stable]]
+version = "0.1.5"
+required = false
+pubDate = "2025-09-06T14:35:00Z"
+[[stable.assets]]
+target = "linux"
+arch = "x86_64"
+url = "http://localhost:8000/vacs-client-0.2.0-1.x86_64.rpm"
+signature = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeEFZK3p3OTJSZ255TWxMMkR0M3h1ZEJiQkc0T1BEZ0lFNmRtekhmMHQyMUdJMEJxamhLS0VjaWVZQzk3TEJDTlN6Rm11T05Qa2lPeHdlcXhMYjVkaXVmamVNa2hhUGdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzU3MTY5Mjg3CWZpbGU6dmFjcy1jbGllbnQtMC4yLjAtMS54ODZfNjQucnBtCnFpUEk4WVJLTVlpdVFobThZemkxeWdldEZ6OVRueTZFbWQzNnBuaFhRZHVvZXFvZ2NZdUtGV1JEZS9MQmVpdEZGQ1BhY2YxVzdaWk9jME5Qanl1L0JBPT0K"
+
+[[stable]]
+version = "0.2.0"
+required = false
+pubDate = "2025-09-06T14:35:00Z"
+    [[stable.assets]]
+    target = "linux"
+    arch = "x86_64"
+    url = "http://localhost:8000/vacs-client-0.2.0-1.x86_64.rpm"
+    signature = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeEFZK3p3OTJSZ255TWxMMkR0M3h1ZEJiQkc0T1BEZ0lFNmRtekhmMHQyMUdJMEJxamhLS0VjaWVZQzk3TEJDTlN6Rm11T05Qa2lPeHdlcXhMYjVkaXVmamVNa2hhUGdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzU3MTY5Mjg3CWZpbGU6dmFjcy1jbGllbnQtMC4yLjAtMS54ODZfNjQucnBtCnFpUEk4WVJLTVlpdVFobThZemkxeWdldEZ6OVRueTZFbWQzNnBuaFhRZHVvZXFvZ2NZdUtGV1JEZS9MQmVpdEZGQ1BhY2YxVzdaWk9jME5Qanl1L0JBPT0K"

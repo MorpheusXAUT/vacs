@@ -1,0 +1,4 @@
+[required_ranges]
+stable = ["=0.1.5"]
+beta = []
+dev = []
