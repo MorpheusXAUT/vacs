@@ -19,11 +19,14 @@ on:
 jobs:
   prep:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.vars.outputs.version }}
       tag: ${{ steps.vars.outputs.tag }}
       draft: ${{ steps.vars.outputs.draft }}
       prerelease: ${{ steps.vars.outputs.prerelease }}
+      release_name: ${{ steps.vars.outputs.release_name }}
 
     steps:
       - name: Checkout
@@ -51,6 +54,7 @@ jobs:
           fi
 
           TAG="vacs-client-v${VER}"
+          REL_NAME="vacs-client v${VER}"
 
           # Draft release when manual; published on tag-push
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
@@ -70,8 +74,9 @@ jobs:
           echo "tag=$TAG"           >> "$GITHUB_OUTPUT"
           echo "draft=$DRAFT"       >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "release_name=$REL_NAME" >> "$GITHUB_OUTPUT"
 
-  release:
+  build:
     needs: prep
     strategy:
       fail-fast: false
@@ -85,7 +90,6 @@ jobs:
     runs-on: ${{ matrix.platform }}
     permissions:
       attestations: write
-      contents: write
       id-token: write
 
     steps:
@@ -143,6 +147,10 @@ jobs:
           git describe --tags --always
           # override version info built into client
           echo "VACS_VERSION_OVERRIDE=${{ steps.vars.outputs.version }}" >> "$GITHUB_ENV"
+          # build tauri user config with version info
+          TAURI_USER_CFG="$(mktemp)"
+          echo '{"version":"${{ needs.prep.outputs.version }}"}' > "$TAURI_USER_CFG"
+          echo "EXTRA_TAURI_ARGS=--config $TAURI_USER_CFG" >> "$GITHUB_ENV"
 
       - name: Install build dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -171,19 +179,31 @@ jobs:
         working-directory: vacs-client
         run: npm ci
 
-      - name: Build and publish
+      - name: Build
         uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: vacs-client
           appVersion: ${{ steps.vars.outputs.version }}
-          args: ${{ matrix.args }}
-          tagName: ${{ steps.vars.outputs.tag }}
-          releaseName: "vacs-client v${{ steps.vars.outputs.version }}"
-          releaseDraft: ${{ steps.vars.outputs.draft }}
-          prerelease: ${{ steps.vars.outputs.prerelease }}
-          includeUpdaterJson: true
+          args: ${{ matrix.args }} ${{ env.EXTRA_TAURI_ARGS }}
+          includeUpdaterJson: false
+
+      - name: Upload bundles as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.platform }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            target/release/bundle/**/*.msi
+            target/release/bundle/**/*.msi.sig
+            target/release/bundle/**/*.exe
+            target/release/bundle/**/*.exe.sig
+            target/release/bundle/**/*.deb
+            target/release/bundle/**/*.deb.sig
+            target/release/bundle/**/*.rpm
+            target/release/bundle/**/*.rpm.sig
+            target/release/bundle/**/*.AppImage
+            target/release/bundle/**/*.AppImage.sig
 
       - name: Attest build provenance
         if: ${{ !github.event.repository.private || github.event.repository.owner.type == 'Organization' }}
@@ -201,20 +221,20 @@ jobs:
             target/release/bundle/**/*.AppImage
             target/release/bundle/**/*.AppImage.sig
 
-  finalize:
-    needs: [prep, release]
+  release:
+    needs: [prep, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
 
     steps:
-      - name: Download release artifacts
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir dist
-          gh release download "${{ steps.vars.outputs.tag }}" -R "${{ github.repository }}" --dir dist
+      - name: Download bundles from artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          pattern: bundles-*
+          merge-multiple: true
 
       - name: Generate checksums
         working-directory: dist
@@ -234,11 +254,12 @@ jobs:
             --output-certificate "SHA256SUMS-${{ needs.prep.outputs.version }}.txt.pem" \
             "SHA256SUMS-${{ needs.prep.outputs.version }}.txt"
 
-      - name: Upload release artifacts
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ steps.vars.outputs.tag }}" -R "${{ github.repository }}" --clobber \
-            SHA256SUMS-${{ needs.prep.outputs.version }}.txt \
-            SHA256SUMS-${{ needs.prep.outputs.version }}.txt.sig \
-            SHA256SUMS-${{ needs.prep.outputs.version }}.txt.pem
+      - name: Create/update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prep.outputs.tag }}
+          name: ${{ needs.prep.outputs.release_name }}
+          draft: ${{ needs.prep.outputs.draft }}
+          prerelease: ${{ needs.prep.outputs.prerelease }}
+          files: |
+            dist/**
