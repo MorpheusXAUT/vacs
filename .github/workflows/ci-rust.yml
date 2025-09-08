@@ -45,3 +45,8 @@ jobs:
 
       - name: Tests
         run: cargo test --workspace --all-targets --all-features
+
+      - name: Release build (binaries)
+        run: |
+          cargo build -p vacs-server --bins --release
+          cargo build -p vacs-client --bins --release
