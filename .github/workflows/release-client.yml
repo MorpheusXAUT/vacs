@@ -89,6 +89,7 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     permissions:
+      contents: read
       attestations: write
       id-token: write
 
