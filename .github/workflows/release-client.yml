@@ -105,17 +105,17 @@ jobs:
         shell: bash
         run: |
           # create/update a lightweight tag locally so vergen sees it
-          git tag -f "${{ steps.vars.outputs.tag }}" HEAD
+          git tag -f "${{ needs.prep.outputs.tag }}" HEAD
           git describe --tags --always
           # override version info built into client
-          echo "VACS_VERSION_OVERRIDE=${{ steps.vars.outputs.version }}" >> "$GITHUB_ENV"
+          echo "VACS_VERSION_OVERRIDE=${{ needs.prep.outputs.version }}" >> "$GITHUB_ENV"
           # build tauri user config with version info
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             # Escape double quotes for Windows arg parsing
-            echo "EXTRA_TAURI_ARGS=--config {\\\"version\\\":\\\"${{ steps.vars.outputs.version }}\\\"}" >> "$GITHUB_ENV"
+            echo "EXTRA_TAURI_ARGS=--config {\\\"version\\\":\\\"${{ needs.prep.outputs.version }}\\\"}" >> "$GITHUB_ENV"
           else
             # POSIX shells: wrap JSON in single quotes so quotes survive
-            echo "EXTRA_TAURI_ARGS=--config '{\"version\":\"${{ steps.vars.outputs.version }}\"}'" >> "$GITHUB_ENV"
+            echo "EXTRA_TAURI_ARGS=--config '{\"version\":\"${{ needs.prep.outputs.version }}\"}'" >> "$GITHUB_ENV"
           fi
 
       - name: Install build dependencies
@@ -149,7 +149,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         with:
           projectPath: vacs-client
-          appVersion: ${{ steps.vars.outputs.version }}
+          appVersion: ${{ needs.prep.outputs.version }}
           args: ${{ matrix.args }} ${{ env.EXTRA_TAURI_ARGS }}
           includeUpdaterJson: false
 
