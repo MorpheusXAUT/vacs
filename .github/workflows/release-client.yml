@@ -199,9 +199,14 @@ jobs:
       - name: Generate checksums
         working-directory: dist
         run: |
-          find . -type f \
+          out="SHA256SUMS-${{ needs.prep.outputs.version }}.txt"
+          : > "$out"
+          while IFS= read -r -d '' f; do
+            sum=$(shasum -a 256 "$f" | cut -d' ' -f1)
+            echo "$sum  $(basename "$f")" >> "$out"
+          done < <(find . -type f \
             ! -name 'SHA256SUMS*' \
-            -print0 | sort -z | xargs -0 shasum -a 256 > "SHA256SUMS-${{ needs.prep.outputs.version }}.txt"
+            -print0 | sort -z)
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
