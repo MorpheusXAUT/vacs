@@ -1,8 +1,8 @@
+use crate::app::state::AppState;
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
+use crate::error::Error;
 use anyhow::Context;
 use tauri::{AppHandle, Manager, State, Window};
-use crate::app::state::AppState;
-use crate::config::{Persistable, PersistedClientConfig, CLIENT_SETTINGS_FILE_NAME};
-use crate::error::Error;
 
 #[tauri::command]
 pub fn app_frontend_ready() {
@@ -10,9 +10,16 @@ pub fn app_frontend_ready() {
 }
 
 #[tauri::command]
-pub async fn app_set_always_on_top(window: Window, app: AppHandle, app_state: State<'_, AppState>, always_on_top: bool) -> Result<bool, Error> {
+pub async fn app_set_always_on_top(
+    window: Window,
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    always_on_top: bool,
+) -> Result<bool, Error> {
     let persisted_client_config: PersistedClientConfig = {
-        window.set_always_on_top(always_on_top).context("Failed to change window always on top behaviour")?;
+        window
+            .set_always_on_top(always_on_top)
+            .context("Failed to change window always on top behaviour")?;
 
         let mut state = app_state.lock().await;
         state.config.client.always_on_top = always_on_top;

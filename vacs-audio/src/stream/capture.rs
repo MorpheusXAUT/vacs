@@ -1,19 +1,19 @@
 use crate::device::{DeviceType, StreamDevice};
-use crate::dsp::{downmix_interleaved_to_mono, MicProcessor};
+use crate::dsp::{MicProcessor, downmix_interleaved_to_mono};
 use crate::error::AudioError;
 use crate::{EncodedAudioFrame, FRAME_SIZE, TARGET_SAMPLE_RATE};
 use anyhow::Context;
 use bytes::Bytes;
 use cpal::traits::StreamTrait;
 use parking_lot::lock_api::Mutex;
+use ringbuf::HeapRb;
 use ringbuf::consumer::Consumer;
 use ringbuf::producer::Producer;
 use ringbuf::traits::Split;
-use ringbuf::HeapRb;
 use rubato::Resampler;
 use serde::Serialize;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -340,10 +340,7 @@ impl OpusFramer {
             if self.pos == FRAME_SIZE {
                 self.processor.process_frame(&mut self.frame);
 
-                match self
-                    .encoder
-                    .encode_float(&self.frame, &mut self.encoded)
-                {
+                match self.encoder.encode_float(&self.frame, &mut self.encoded) {
                     Ok(len) => {
                         let bytes = Bytes::copy_from_slice(&self.encoded[..len]);
                         if let Err(err) = self.tx.try_send(bytes) {
@@ -354,7 +351,7 @@ impl OpusFramer {
                         tracing::warn!(?err, "Failed to encode input audio frame");
                     }
                 }
-                
+
                 self.pos = 0;
             }
         }

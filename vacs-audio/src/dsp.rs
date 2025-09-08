@@ -1,5 +1,5 @@
 use crate::TARGET_SAMPLE_RATE;
-use biquad::{Biquad, Coefficients, DirectForm2Transposed, ToHertz, Type, Q_BUTTERWORTH_F32};
+use biquad::{Biquad, Coefficients, DirectForm2Transposed, Q_BUTTERWORTH_F32, ToHertz, Type};
 
 pub fn downmix_interleaved_to_mono(interleaved: &[f32], channels: usize, mono: &mut Vec<f32>) {
     debug_assert!(channels > 0);

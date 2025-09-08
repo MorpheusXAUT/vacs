@@ -52,7 +52,7 @@ impl AppConfig {
                         .to_str()
                         .expect("Failed to get local config path"),
                 )
-                    .required(false),
+                .required(false),
             )
             .add_source(File::with_name("audio.toml").required(false))
             .add_source(Environment::with_prefix("vacs_client"))

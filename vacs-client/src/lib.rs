@@ -49,9 +49,11 @@ pub fn run() {
             let state = AppStateInner::new(app.handle())?;
 
             if state.config.client.always_on_top {
-                if let Err(err) = app.get_webview_window("main")
+                if let Err(err) = app
+                    .get_webview_window("main")
                     .unwrap()
-                    .set_always_on_top(true) {
+                    .set_always_on_top(true)
+                {
                     log::warn!("Failed to set main window always on top: {err}");
                 } else {
                     log::debug!("Set main window to be always on top");

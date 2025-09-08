@@ -3,14 +3,14 @@ mod root;
 mod ws;
 
 use crate::state::AppState;
-use axum::http::Request;
 use axum::Router;
+use axum::http::Request;
 use axum_login::{AuthManagerLayer, AuthnBackend};
 use std::sync::Arc;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::{DefaultMakeSpan, MakeSpan, TraceLayer};
-use tower_sessions::service::SignedCookie;
 use tower_sessions::SessionStore;
+use tower_sessions::service::SignedCookie;
 use tracing::Span;
 
 pub fn create_app<B, S>(auth_layer: AuthManagerLayer<B, S, SignedCookie>) -> Router<Arc<AppState>>
