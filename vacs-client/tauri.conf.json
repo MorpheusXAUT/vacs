@@ -46,7 +46,7 @@
       }
     },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgyOTFEREMzQjM4RjAxRjEKUldUeEFZK3p3OTJSZ2pDWGE2Z1Y0OWpkVlpRWGFmZmxwQ3ZQL1VtTWxDdUcwN1I4aGRueXNYZHMK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJEMTJGNjQxRDY0M0VFRjkKUldUNTdrUFdRZllTdlV5djI5SnlqZUQwZnRDMFNFOWkxSWtpNWcrUTJ2SXlRY2Y4VzF0dWpYdk0K",
       "dangerousInsecureTransportProtocol": true
     }
   }
