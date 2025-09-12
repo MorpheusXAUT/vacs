@@ -7,12 +7,11 @@
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-close",
     "deep-link:default",
     "log:default",
     "opener:default",
-    "log:default",
-    "core:window:allow-set-always-on-top",
-    "updater:default",
-    "core:window:allow-close"
+    "updater:default"
   ]
 }

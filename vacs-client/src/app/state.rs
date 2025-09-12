@@ -7,6 +7,7 @@ pub(crate) mod webrtc;
 use crate::app::state::webrtc::Call;
 use crate::audio::manager::AudioManager;
 use crate::config::{APP_USER_AGENT, AppConfig};
+use crate::error::{StartupError, StartupErrorExt};
 use crate::secrets::cookies::SecureCookieStore;
 use crate::signaling::Connection;
 use anyhow::Context;
@@ -31,26 +32,35 @@ pub struct AppStateInner {
 pub type AppState = Mutex<AppStateInner>;
 
 impl AppStateInner {
-    pub fn new(app: &AppHandle) -> anyhow::Result<Self> {
-        let config_dir = app.path().app_config_dir()?;
-        let data_dir = app.path().app_data_dir()?;
+    pub fn new(app: &AppHandle) -> Result<Self, StartupError> {
+        let config_dir = app
+            .path()
+            .app_config_dir()
+            .map_startup_err(StartupError::Config)?;
+        let data_dir = app
+            .path()
+            .app_data_dir()
+            .map_startup_err(StartupError::Config)?;
 
         let cookie_store = Arc::new(
             SecureCookieStore::new(data_dir.join(".cookies"))
-                .context("Failed to create secure cookie store")?,
+                .context("Failed to create secure cookie store")
+                .map_startup_err(StartupError::Config)?,
         );
-        let config = AppConfig::parse(&config_dir)?;
+        let config = AppConfig::parse(&config_dir).map_startup_err(StartupError::Config)?;
 
         Ok(Self {
             config: config.clone(),
             connection: Connection::new(),
-            audio_manager: AudioManager::new(app.clone(), &config.audio)?,
+            audio_manager: AudioManager::new(app.clone(), &config.audio)
+                .map_startup_err(StartupError::Audio)?,
             http_client: reqwest::ClientBuilder::new()
                 .user_agent(APP_USER_AGENT)
                 .cookie_provider(cookie_store.clone())
                 .timeout(Duration::from_millis(config.backend.timeout_ms))
                 .build()
-                .context("Failed to build HTTP client")?,
+                .context("Failed to build HTTP client")
+                .map_startup_err(StartupError::Other)?,
             cookie_store,
             active_call: None,
             held_calls: HashMap::new(),

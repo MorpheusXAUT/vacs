@@ -14,6 +14,7 @@
         "title": "vacs",
         "width": 1000,
         "height": 753,
+        "visible": false,
         "backgroundColor":"#B5BBC6"
       }
     ],

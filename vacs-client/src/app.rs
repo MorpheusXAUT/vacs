@@ -4,6 +4,10 @@ use crate::error::Error;
 use anyhow::Context;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_dialog::{
+    DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult,
+};
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 use url::Url;
 
@@ -43,4 +47,42 @@ pub async fn get_update(app: &AppHandle) -> Result<Option<Update>, Error> {
         .check()
         .await
         .context("Failed to check for updates")?)
+}
+
+pub fn open_fatal_error_dialog(app: &AppHandle, msg: &str) {
+    let open_logs = "Open logs";
+    let result = app
+        .dialog()
+        .message(msg)
+        .kind(MessageDialogKind::Error)
+        .title("Fatal Error")
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            open_logs.to_string(),
+            "Close".to_string(),
+        ))
+        .blocking_show_with_result();
+
+    match result {
+        MessageDialogResult::Custom(text) if text == open_logs => open_log_dir(app),
+        _ => {}
+    };
+}
+
+pub fn open_log_dir(app: &AppHandle) {
+    if let Err(err) = (|app: &AppHandle| {
+        let log_dir = app.path().app_log_dir().context("Failed to get log dir")?;
+        let log_dir = log_dir.to_str().context("Log dir is empty")?;
+
+        app.opener()
+            .open_path(log_dir, None::<&str>)
+            .context("Failed to open log dir")
+    })(app)
+    {
+        log::error!("Failed to open log directory: {err}");
+        app.dialog()
+            .message("Failed to open the logs directory.")
+            .kind(MessageDialogKind::Error)
+            .title("Fatal Error")
+            .blocking_show();
+    };
 }

@@ -1,6 +1,6 @@
 use serde::Serialize;
 use serde_json::Value;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 use vacs_protocol::ws::CallErrorReason;
@@ -196,6 +196,39 @@ impl CallError {
                     CallErrorReason::Other => "Unknown failure",
                 }
             ),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum StartupError {
+    Audio,
+    Config,
+    Other,
+}
+
+impl Display for StartupError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            StartupError::Audio => "No suitable output audio device found. Check your logs for further details.",
+            StartupError::Config => "Failed to load configuration. Check your config files for errors or logs for further details.",
+            StartupError::Other => "A fatal error occurred during startup. Check your logs for further details.",
+        })
+    }
+}
+
+pub trait StartupErrorExt<T> {
+    fn map_startup_err(self, error: StartupError) -> Result<T, StartupError>;
+}
+
+impl<T, E: Debug> StartupErrorExt<T> for Result<T, E> {
+    fn map_startup_err(self, error: StartupError) -> Result<T, StartupError> {
+        match self {
+            Ok(val) => Ok(val),
+            Err(err) => {
+                log::error!("{err:?}");
+                Err(error)
+            }
         }
     }
 }

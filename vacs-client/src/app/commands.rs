@@ -1,5 +1,5 @@
 use crate::app::state::AppState;
-use crate::app::{UpdateInfo, get_update};
+use crate::app::{UpdateInfo, get_update, open_fatal_error_dialog};
 use crate::build::VersionInfo;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
 use crate::error::Error;
@@ -7,9 +7,18 @@ use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 
 #[tauri::command]
-pub fn app_frontend_ready() {
+pub fn app_frontend_ready(app: AppHandle, window: Window) {
     log::info!("Frontend ready");
-    // TODO: Show window?
+    if let Err(err) = window.show() {
+        log::error!("Failed to show window: {err}");
+
+        open_fatal_error_dialog(
+            &app,
+            "Failed to show main window. Check your logs for further details.",
+        );
+
+        app.exit(1);
+    };
 }
 
 #[tauri::command]

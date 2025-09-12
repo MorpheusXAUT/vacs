@@ -7,10 +7,12 @@ mod error;
 mod secrets;
 mod signaling;
 
+use crate::app::open_fatal_error_dialog;
 use crate::app::state::{AppState, AppStateInner};
 use crate::build::VersionInfo;
-use crate::error::FrontendError;
-use tauri::{Emitter, Manager, RunEvent};
+use crate::error::{FrontendError, StartupError, StartupErrorExt};
+use anyhow::Context;
+use tauri::{App, Emitter, Manager, RunEvent};
 use tokio::sync::Mutex;
 
 pub fn run() {
@@ -39,29 +41,46 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
-            use tauri_plugin_deep_link::DeepLinkExt;
-            app.deep_link().register_all()?;
-
             log::info!("{:?}", VersionInfo::gather());
 
-            let state = AppStateInner::new(app.handle())?;
+            fn setup(app: &mut App) -> Result<(), StartupError> {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                app.deep_link()
+                    .register_all()
+                    .context("Failed to register deep link")
+                    .map_startup_err(StartupError::Other)?;
 
-            if state.config.client.always_on_top {
-                if let Err(err) = app
+                let state = AppStateInner::new(app.handle())?;
+
+                let main_window = app
                     .get_webview_window("main")
-                    .unwrap()
-                    .set_always_on_top(true)
-                {
-                    log::warn!("Failed to set main window to be always on top: {err}");
-                } else {
-                    log::debug!("Set main window to be always on top");
+                    .context("Failed to get main window")
+                    .map_startup_err(StartupError::Other)?;
+
+                if state.config.client.always_on_top {
+                    if let Err(err) = main_window.set_always_on_top(true) {
+                        log::warn!("Failed to set main window to be always on top: {err}");
+                    } else {
+                        log::debug!("Set main window to be always on top");
+                    }
                 }
+
+                app.manage(Mutex::new(state));
+
+                Ok(())
             }
 
-            app.manage(Mutex::new(state));
+            if let Err(err) = setup(app) {
+                log::error!("Startup failed. Err: {err:?}");
+
+                open_fatal_error_dialog(app.handle(), &err.to_string());
+
+                return Err(anyhow::anyhow!("{err}").into());
+            }
 
             Ok(())
         })
