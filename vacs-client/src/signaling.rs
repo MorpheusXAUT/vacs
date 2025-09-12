@@ -9,9 +9,9 @@ use crate::config::{WS_LOGIN_TIMEOUT, WS_READY_TIMEOUT};
 use crate::error::{Error, FrontendError};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{oneshot, watch};
-use vacs_protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
 use vacs_signaling::client::{InterruptionReason, SignalingClient};
 use vacs_signaling::error::SignalingError;
+use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
 use vacs_signaling::transport;
 
 const INCOMING_CALLS_LIMIT: usize = 5;

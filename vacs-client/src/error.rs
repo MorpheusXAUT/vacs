@@ -3,8 +3,8 @@ use serde_json::Value;
 use std::fmt::{Debug, Display, Formatter};
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
-use vacs_protocol::ws::{CallErrorReason, ErrorReason, LoginFailureReason};
 use vacs_signaling::error::SignalingError;
+use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, LoginFailureReason};
 
 #[derive(Debug, Error)]
 pub enum Error {

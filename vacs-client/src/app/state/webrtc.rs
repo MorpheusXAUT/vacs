@@ -8,7 +8,7 @@ use std::fmt::{Debug, Formatter};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
-use vacs_protocol::ws::{CallErrorReason, SignalingMessage};
+use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
 use vacs_webrtc::error::WebrtcError;
 use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
 

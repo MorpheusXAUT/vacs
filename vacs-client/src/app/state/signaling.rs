@@ -8,9 +8,9 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
-use vacs_protocol::http::ws::WebSocketToken;
-use vacs_protocol::ws::{LoginFailureReason, SignalingMessage};
 use vacs_signaling::error::SignalingError;
+use vacs_signaling::protocol::http::ws::WebSocketToken;
+use vacs_signaling::protocol::ws::{LoginFailureReason, SignalingMessage};
 
 pub trait AppStateSignalingExt: sealed::Sealed {
     async fn connect_signaling(&mut self, app: &AppHandle) -> Result<(), Error>;

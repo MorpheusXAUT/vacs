@@ -17,7 +17,7 @@ use vacs_audio::sources::opus::OpusSource;
 use vacs_audio::sources::waveform::{Waveform, WaveformSource, WaveformTone};
 use vacs_audio::stream::capture::{CaptureStream, InputLevel};
 use vacs_audio::stream::playback::PlaybackStream;
-use vacs_protocol::ws::{CallErrorReason, SignalingMessage};
+use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
 
 const AUDIO_STREAM_ERROR_CHANNEL_SIZE: usize = 32;
 

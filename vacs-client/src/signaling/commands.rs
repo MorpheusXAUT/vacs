@@ -7,7 +7,7 @@ use crate::audio::manager::SourceType;
 use crate::config::BackendEndpoint;
 use crate::error::{Error, HandleUnauthorizedExt};
 use tauri::{AppHandle, Manager, State};
-use vacs_protocol::ws::SignalingMessage;
+use vacs_signaling::protocol::ws::SignalingMessage;
 
 #[tauri::command]
 #[vacs_macros::log_err]

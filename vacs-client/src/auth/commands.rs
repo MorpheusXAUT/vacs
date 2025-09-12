@@ -6,7 +6,7 @@ use crate::error::{Error, HandleUnauthorizedExt};
 use anyhow::Context;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, State};
-use vacs_protocol::http::auth::{InitVatsimLogin, UserInfo};
+use vacs_signaling::protocol::http::auth::{InitVatsimLogin, UserInfo};
 
 #[tauri::command]
 #[vacs_macros::log_err]

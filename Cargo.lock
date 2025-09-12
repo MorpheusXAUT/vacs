@@ -7479,7 +7479,6 @@ dependencies = [
  "url",
  "vacs-audio",
  "vacs-macros",
- "vacs-protocol",
  "vacs-signaling",
  "vacs-webrtc",
  "vergen-git2",

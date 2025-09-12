@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
-use vacs_protocol::http::version::ReleaseChannel;
+use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_webrtc::config::WebrtcConfig;
 
 /// User-Agent string used for all HTTP requests.
