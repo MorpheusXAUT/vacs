@@ -16,7 +16,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-log": "^2.6.0",
     "clsx": "^2.1.1",
-    "preact": "^10.25.1",
+    "preact": "^10.27.1",
     "react": "npm:@preact/compat@^18.3.1",
     "react-dom": "npm:@preact/compat@^18.3.1",
     "tailwindcss": "^4.1.11",
@@ -24,8 +24,8 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
-    "@preact/preset-vite": "^2.9.3",
-    "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "@preact/preset-vite": "^2.10.2",
+    "typescript": "~5.9.2",
+    "vite": "^7.1.5"
   }
 }
