@@ -5,14 +5,19 @@ use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::SourceType;
-use crate::config::{WS_LOGIN_TIMEOUT, WS_READY_TIMEOUT};
+use crate::config::{BackendEndpoint, WS_LOGIN_TIMEOUT, WS_READY_TIMEOUT};
 use crate::error::{Error, FrontendError};
+use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{oneshot, watch};
+use tokio::task::JoinHandle;
 use vacs_signaling::client::{InterruptionReason, SignalingClient};
 use vacs_signaling::error::SignalingError;
+use vacs_signaling::protocol::http::ws::WebSocketToken;
 use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
-use vacs_signaling::transport;
+use vacs_signaling::transport::SignalingTransport;
+use vacs_signaling::transport::tokio::TokioTransport;
+use crate::app::state::http::AppStateHttpExt;
 
 const INCOMING_CALLS_LIMIT: usize = 5;
 
@@ -22,9 +27,9 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new() -> Self {
+    pub fn new(reconnect_max_tries: u8) -> Self {
         let (shutdown_tx, shutdown_rx) = watch::channel(());
-        let client = SignalingClient::new(shutdown_rx);
+        let client = SignalingClient::new(shutdown_rx, reconnect_max_tries);
 
         Self {
             client,
@@ -42,13 +47,36 @@ impl Connection {
         log::info!("Connecting to signaling server");
 
         log::debug!("Creating signaling connection");
-        let (sender, receiver) = transport::tokio::create(ws_url).await?;
+        let transport = TokioTransport::new(ws_url);
+        let (sender, receiver) = transport.connect().await?;
 
         let (ready_tx, ready_rx) = oneshot::channel();
         let mut client = self.client.clone();
 
         let (cancel_tx, _) = watch::channel(());
         let cancel_tx_clone = cancel_tx.clone();
+
+        let reconnect_cb = {
+            let app = app.clone();
+            Box::new(move |ready_rx: Option<oneshot::Receiver<()>>| {
+                match ready_rx {
+                    Some(ready_rx) => {
+                        tauri::async_runtime::spawn(async {
+                            if let Ok(()) = ready_rx.await {
+                                // Login
+                                let state = app.state::<AppState>();
+                                let state = state.lock().await;
+
+                                // TODO: Move signaling login to state, because we don't have self here and we need another token
+                            }
+                        });
+                    }
+                    None => {
+                        app.emit("signaling:reconnecting", Value::Null).ok();
+                    }
+                };
+            })
+        };
 
         let client_task = tauri::async_runtime::spawn(async move {
             log::trace!("Signaling client interaction task started");
@@ -62,7 +90,7 @@ impl Connection {
                     log::info!("Cancel signal received, stopping signaling connection client");
                 }
 
-                reason = client.start(sender, receiver, ready_tx) => {
+                reason = client.start(transport, sender, receiver, ready_tx, reconnect_cb) => {
                     match reason {
                         InterruptionReason::Disconnected(requested) => {
                             log::debug!(
@@ -142,16 +170,19 @@ impl Connection {
             ));
         }
 
-        log::debug!("Signaling connection is ready, logging in");
-        let clients = match self.client.login(token, WS_LOGIN_TIMEOUT).await {
-            Ok(clients) => clients,
-            Err(err) => {
-                log::warn!("Login failed, aborting connection: {err:?}");
-                client_task.abort();
-                interaction_task.abort();
-                return Err(err);
-            }
+        if let Err(err) = self.login(&app, token).await {
+            log::warn!("Login failed, aborting connection: {err:?}");
+            client_task.abort();
+            interaction_task.abort();
+            return Err(err);
         };
+
+        Ok(())
+    }
+
+    async fn login(&mut self, app: &AppHandle, token: &str) -> Result<(), SignalingError> {
+        log::debug!("Signaling connection is ready, logging in");
+        let clients = self.client.login(token, WS_LOGIN_TIMEOUT).await?;
         log::debug!(
             "Successfully connected to signaling server, {} clients connected",
             clients.len()

@@ -7557,6 +7557,7 @@ dependencies = [
  "async-trait",
  "futures-util",
  "pretty_assertions",
+ "rand 0.9.2",
  "serde_json",
  "test-log",
  "thiserror 2.0.16",

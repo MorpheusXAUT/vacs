@@ -183,10 +183,27 @@ impl From<AudioConfig> for PersistedAudioConfig {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
     pub always_on_top: bool,
     pub release_channel: ReleaseChannel,
+    pub signaling_auto_reconnect: bool,
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            always_on_top: false,
+            release_channel: ReleaseChannel::default(),
+            signaling_auto_reconnect: true,
+        }
+    }
+}
+
+impl ClientConfig {
+    pub fn max_signaling_reconnect_attempts(&self) -> u8 {
+        if self.signaling_auto_reconnect { 8 } else { 0 }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
