@@ -51,7 +51,7 @@ impl AppStateInner {
 
         Ok(Self {
             config: config.clone(),
-            connection: Connection::new(),
+            connection: Connection::new(config.client.max_signaling_reconnect_attempts()),
             audio_manager: AudioManager::new(app.clone(), &config.audio)
                 .map_startup_err(StartupError::Audio)?,
             http_client: reqwest::ClientBuilder::new()

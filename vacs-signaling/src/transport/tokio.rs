@@ -1,5 +1,5 @@
 use crate::error::SignalingError;
-use crate::transport::{SignalingReceiver, SignalingSender};
+use crate::transport::{SignalingReceiver, SignalingSender, SignalingTransport};
 use async_trait::async_trait;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
@@ -10,28 +10,48 @@ use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 use vacs_protocol::ws::SignalingMessage;
 
+#[derive(Debug, Clone)]
+pub struct TokioTransport {
+    url: String,
+}
+
+impl TokioTransport {
+    pub fn new(url: &str) -> Self {
+        Self {
+            url: url.to_string(),
+        }
+    }
+}
+
+#[async_trait]
+impl SignalingTransport for TokioTransport {
+    type Sender = TokioSender;
+    type Receiver = TokioReceiver;
+
+    #[tracing::instrument(level = "info", err)]
+    async fn connect(&self) -> Result<(Self::Sender, Self::Receiver), SignalingError> {
+        tracing::info!("Connecting to signaling server");
+        let (websocket_stream, response) = tokio_tungstenite::connect_async(&self.url)
+            .await
+            .map_err(|err| {
+                tracing::error!(?err, "Failed to connect to signaling server");
+                SignalingError::ConnectionError(err.into())
+            })?;
+        tracing::debug!(?response, "WebSocket handshake response");
+
+        let (websocket_tx, websocket_rx) = websocket_stream.split();
+
+        tracing::info!("Successfully established connection to signaling server");
+        Ok((TokioSender { websocket_tx }, TokioReceiver { websocket_rx }))
+    }
+}
+
 pub struct TokioSender {
     websocket_tx: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, tungstenite::Message>,
 }
 
 pub struct TokioReceiver {
     websocket_rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-}
-
-#[tracing::instrument(level = "info", err)]
-pub async fn create(url: &str) -> Result<(TokioSender, TokioReceiver), SignalingError> {
-    tracing::info!("Connecting to signaling server");
-    let (websocket_stream, response) =
-        tokio_tungstenite::connect_async(url).await.map_err(|err| {
-            tracing::error!(?err, "Failed to connect to signaling server");
-            SignalingError::ConnectionError(err.into())
-        })?;
-    tracing::debug!(?response, "WebSocket handshake response");
-
-    let (websocket_tx, websocket_rx) = websocket_stream.split();
-
-    tracing::info!("Successfully established connection to signaling server");
-    Ok((TokioSender { websocket_tx }, TokioReceiver { websocket_rx }))
 }
 
 #[async_trait]

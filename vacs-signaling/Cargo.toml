@@ -12,6 +12,7 @@ test-utils = ["dep:vacs-server"]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures-util = { workspace = true }
+rand = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

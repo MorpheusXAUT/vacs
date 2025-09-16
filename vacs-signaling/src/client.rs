@@ -1,6 +1,7 @@
 use crate::error::SignalingError;
 use crate::matcher::ResponseMatcher;
-use crate::transport::{SignalingReceiver, SignalingSender};
+use crate::transport::{SignalingReceiver, SignalingSender, SignalingTransport};
+use rand::{Rng, SeedableRng};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -14,6 +15,8 @@ use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 const BROADCAST_CHANNEL_SIZE: usize = 100;
 const SEND_CHANNEL_SIZE: usize = 100;
 
+type ReconnectCb = Box<dyn Fn(Option<oneshot::Receiver<()>>) + Send>;
+
 #[derive(Clone)]
 pub struct SignalingClient {
     matcher: ResponseMatcher,
@@ -23,11 +26,12 @@ pub struct SignalingClient {
     disconnect_tx: watch::Sender<()>,
     is_connected: Arc<AtomicBool>,
     is_logged_in: Arc<AtomicBool>,
+    reconnect_max_tries: u8,
 }
 
 impl SignalingClient {
     #[instrument(level = "debug", skip_all)]
-    pub fn new(shutdown_rx: watch::Receiver<()>) -> Self {
+    pub fn new(shutdown_rx: watch::Receiver<()>, reconnect_max_tries: u8) -> Self {
         Self {
             matcher: ResponseMatcher::new(),
             broadcast_tx: broadcast::channel(BROADCAST_CHANNEL_SIZE).0,
@@ -36,6 +40,7 @@ impl SignalingClient {
             disconnect_tx: watch::channel(()).0,
             is_connected: Arc::new(AtomicBool::new(false)),
             is_logged_in: Arc::new(AtomicBool::new(false)),
+            reconnect_max_tries,
         }
     }
 
@@ -176,11 +181,17 @@ impl SignalingClient {
     }
 
     #[instrument(level = "debug", skip_all)]
-    pub async fn start<S: SignalingSender + 'static, R: SignalingReceiver + 'static>(
+    pub async fn start<
+        T: SignalingTransport + 'static,
+        S: SignalingSender + 'static,
+        R: SignalingReceiver + 'static,
+    >(
         &mut self,
+        transport: T,
         sender: S,
         receiver: R,
         ready_tx: oneshot::Sender<()>,
+        reconnect_cb: ReconnectCb,
     ) -> InterruptionReason {
         let (send_tx, send_rx) = mpsc::channel::<tungstenite::Message>(SEND_CHANNEL_SIZE);
         let send_tx_clone = send_tx.clone();
@@ -240,6 +251,54 @@ impl SignalingClient {
         *self.send_tx.lock().await = None;
         self.is_connected.store(false, Ordering::SeqCst);
         self.is_logged_in.store(false, Ordering::SeqCst);
+
+        match reason {
+            // TODO: Do we want to reconnect on every Error?
+            // TODO: Keep track of connect -> reconnect -> connected -> reconnect -> ... and stop eventually with auto reconnects
+            InterruptionReason::Disconnected(false) | InterruptionReason::Error(_) => {
+                tracing::warn!(
+                    ?reason,
+                    "Client disconnected or received error, attempting to reconnect"
+                );
+
+                self.reconnect(reason, transport, reconnect_cb).await
+            }
+            other => other,
+        }
+    }
+
+    async fn reconnect<T: SignalingTransport + 'static>(
+        &mut self,
+        reason: InterruptionReason,
+        transport: T,
+        reconnect_cb: ReconnectCb,
+    ) -> InterruptionReason {
+        let mut retry_strategy = RetryStrategy::default();
+
+        reconnect_cb(None);
+
+        for attempt in 1..=self.reconnect_max_tries {
+            tracing::trace!(?attempt, "Reconnecting transport");
+            match transport.connect().await {
+                Ok((sender, receiver)) => {
+                    let (ready_tx, ready_rx) = oneshot::channel();
+
+                    reconnect_cb(Some(ready_rx));
+                    return Box::pin(self.start(
+                        transport,
+                        sender,
+                        receiver,
+                        ready_tx,
+                        reconnect_cb,
+                    ))
+                    .await;
+                }
+                Err(err) => {
+                    tracing::warn!(?err, ?attempt, "Failed to reconnect transport");
+                    tokio::time::sleep(retry_strategy.timeout(attempt as u32)).await;
+                }
+            }
+        }
 
         reason
     }
@@ -384,6 +443,46 @@ pub enum InterruptionReason {
     ShutdownSignal,
     Disconnected(bool),
     Error(SignalingError),
+}
+
+pub struct RetryStrategy {
+    base: Duration,
+    cap: Duration,
+    rng: rand::rngs::StdRng,
+}
+
+impl Default for RetryStrategy {
+    fn default() -> Self {
+        Self {
+            base: Duration::from_millis(100),
+            cap: Duration::from_secs(5),
+            rng: rand::rngs::StdRng::from_os_rng(),
+        }
+    }
+}
+
+impl RetryStrategy {
+    fn timeout(&mut self, attempt: u32) -> Duration {
+        if attempt == 0 {
+            return Duration::from_millis(0);
+        }
+
+        // exp = base * 2^(attempt - 1), capped
+        let exp_nanos = self
+            .base
+            .as_nanos()
+            .saturating_mul(1u128 << attempt.saturating_sub(1).min(63));
+        let max_delay_nanos = exp_nanos.min(self.cap.as_nanos());
+
+        let jitter_nanos = if max_delay_nanos == 0 {
+            0
+        } else {
+            // full jitter
+            self.rng.random_range(0..=max_delay_nanos)
+        };
+
+        Duration::from_nanos(jitter_nanos.min(u128::from(u64::MAX)) as u64)
+    }
 }
 
 #[cfg(test)]
