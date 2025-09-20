@@ -1,19 +1,18 @@
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::app::state::{AppState, AppStateInner, sealed};
+use crate::app::state::{AppStateInner, sealed};
 use crate::audio::manager::SourceType;
-use crate::config::BackendEndpoint;
-use crate::error::{Error, FrontendError};
+use crate::error::Error;
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::oneshot;
+use tauri::{AppHandle, Emitter};
+use vacs_signaling::client::State;
 use vacs_signaling::error::SignalingError;
-use vacs_signaling::protocol::http::ws::WebSocketToken;
-use vacs_signaling::protocol::ws::{LoginFailureReason, SignalingMessage};
+use vacs_signaling::protocol::ws::SignalingMessage;
 
 pub trait AppStateSignalingExt: sealed::Sealed {
-    async fn connect_signaling(&mut self, app: &AppHandle) -> Result<(), Error>;
+    async fn connect_signaling(&self) -> Result<(), Error>;
     async fn disconnect_signaling(&mut self, app: &AppHandle);
+    async fn handle_signaling_connection_closed(&mut self, app: &AppHandle);
     async fn send_signaling_message(&mut self, msg: SignalingMessage) -> Result<(), Error>;
     fn set_outgoing_call_peer_id(&mut self, peer_id: Option<String>);
     fn remove_outgoing_call_peer_id(&mut self, peer_id: &str) -> bool;
@@ -24,46 +23,18 @@ pub trait AppStateSignalingExt: sealed::Sealed {
 }
 
 impl AppStateSignalingExt for AppStateInner {
-    async fn connect_signaling(&mut self, app: &AppHandle) -> Result<(), Error> {
+    async fn connect_signaling(&self) -> Result<(), Error> {
         log::info!("Connecting to signaling server");
 
-        if self.connection.is_logged_in() {
+        if self.connection.state() != State::Disconnected {
             log::info!("Already connected and logged in with signaling server");
-            return Err(Error::Signaling(Box::from(SignalingError::LoginError(
-                LoginFailureReason::DuplicateId,
+            return Err(Error::Signaling(Box::from(SignalingError::Other(
+                "Already connected".to_string(),
             ))));
         }
 
-        log::debug!("Retrieving WebSocket auth token");
-        let token = self
-            .http_get::<WebSocketToken>(BackendEndpoint::WsToken, None)
-            .await?
-            .token;
-
         log::debug!("Connecting to signaling server");
-        let (disconnect_tx, disconnect_rx) = oneshot::channel();
-        self.connection
-            .connect(
-                app.clone(),
-                self.config.backend.ws_url.as_str(),
-                token.as_str(),
-                disconnect_tx,
-            )
-            .await?;
-
-        let app_clone = app.clone();
-        tauri::async_runtime::spawn(async move {
-            let requested = disconnect_rx.await.unwrap_or(false);
-
-            log::debug!("Signaling connection task ended, cleaning up state");
-            app_clone
-                .state::<AppState>()
-                .lock()
-                .await
-                .handle_signaling_connection_closed(&app_clone, requested)
-                .await;
-            log::debug!("Finished cleaning up state after signaling connection task ended");
-        });
+        self.connection.connect().await?;
 
         log::info!("Successfully connected to signaling server");
         Ok(())
@@ -72,41 +43,29 @@ impl AppStateSignalingExt for AppStateInner {
     async fn disconnect_signaling(&mut self, app: &AppHandle) {
         log::info!("Disconnecting from signaling server");
 
-        if !self.connection.is_connected() {
-            log::info!("Tried to disconnection from signaling server, but not connected");
+        if self.connection.state() == State::Disconnected {
+            log::info!("Tried to disconnect from signaling server, but not connected");
             return;
         }
 
-        self.incoming_call_peer_ids.clear();
-        self.outgoing_call_peer_id = None;
+        self.cleanup_signaling(app).await;
 
-        self.audio_manager.stop(SourceType::Ring);
-        self.audio_manager.stop(SourceType::Ringback);
-
-        self.audio_manager.detach_call_output();
-        self.audio_manager.detach_input_device();
-
-        if let Some(peer_id) = self.active_call_peer_id().cloned() {
-            self.end_call(&peer_id).await;
-        };
-        let peer_ids = self.held_calls.keys().cloned().collect::<Vec<_>>();
-        for peer_id in peer_ids {
-            self.end_call(&peer_id).await;
-            app.emit("signaling:call-end", &peer_id).ok();
-        }
-
-        self.connection.disconnect();
+        self.connection.disconnect().await;
         app.emit("signaling:disconnected", Value::Null).ok();
         log::debug!("Successfully disconnected from signaling server");
     }
 
+    async fn handle_signaling_connection_closed(&mut self, app: &AppHandle) {
+        log::info!("Handling signaling server connection closed");
+
+        self.cleanup_signaling(app).await;
+
+        app.emit("signaling:disconnected", Value::Null).ok();
+        log::debug!("Successfully handled closed signaling server connection");
+    }
+
     async fn send_signaling_message(&mut self, msg: SignalingMessage) -> Result<(), Error> {
         log::trace!("Sending signaling message: {msg:?}");
-
-        if !self.connection.is_logged_in() {
-            log::warn!("Not logged in with signaling server, cannot send message");
-            return Err(Error::Network("Not connected".to_string()));
-        };
 
         if let Err(err) = self.connection.send(msg).await {
             log::warn!("Failed to send signaling message: {err:?}");
@@ -166,17 +125,23 @@ impl AppStateSignalingExt for AppStateInner {
 }
 
 impl AppStateInner {
-    async fn handle_signaling_connection_closed(&mut self, app: &AppHandle, requested: bool) {
-        log::info!("Handling closed signaling server connection, requested: {requested}");
+    async fn cleanup_signaling(&mut self, app: &AppHandle) {
+        self.incoming_call_peer_ids.clear();
+        self.outgoing_call_peer_id = None;
 
-        app.emit("signaling:disconnected", Value::Null).ok();
-        if !requested {
-            app.emit::<FrontendError>(
-                "error",
-                Error::Network("Disconnected from websocket connection".to_string()).into(),
-            )
-            .ok();
+        self.audio_manager.stop(SourceType::Ring);
+        self.audio_manager.stop(SourceType::Ringback);
+
+        self.audio_manager.detach_call_output();
+        self.audio_manager.detach_input_device();
+
+        if let Some(peer_id) = self.active_call_peer_id().cloned() {
+            self.end_call(&peer_id).await;
+        };
+        let peer_ids = self.held_calls.keys().cloned().collect::<Vec<_>>();
+        for peer_id in peer_ids {
+            self.end_call(&peer_id).await;
+            app.emit("signaling:call-end", &peer_id).ok();
         }
-        log::debug!("Successfully handled closed signaling server connection");
     }
 }

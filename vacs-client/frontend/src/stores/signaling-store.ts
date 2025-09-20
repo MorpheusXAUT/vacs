@@ -1,11 +1,13 @@
 import {ClientInfo} from "../types/client-info.ts";
 import {create} from "zustand/react";
 
+type ConnectionState = "connecting" | "connected" | "disconnected";
+
 type SignalingState = {
-    connected: boolean;
+    connectionState: ConnectionState;
     displayName: string;
     clients: ClientInfo[];
-    setConnected: (connected: boolean) => void;
+    setConnectionState: (state: ConnectionState) => void;
     setDisplayName: (displayName: string) => void;
     setClients: (clients: ClientInfo[]) => void;
     addClient: (client: ClientInfo) => void;
@@ -13,10 +15,10 @@ type SignalingState = {
 }
 
 export const useSignalingStore = create<SignalingState>()((set, get) => ({
-    connected: false,
+    connectionState: "disconnected",
     displayName: "",
     clients: [],
-    setConnected: (connected) => set({connected}),
+    setConnectionState: (connectionState) => set({connectionState}),
     setDisplayName: (displayName) => set({displayName}),
     setClients: (clients) => set({clients}),
     addClient: (client) => {

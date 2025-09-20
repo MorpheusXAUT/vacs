@@ -1,5 +1,5 @@
 use crate::app::state::AppState;
-use crate::app::state::http::AppStateHttpExt;
+use crate::app::state::http::HttpState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::config::BackendEndpoint;
 use crate::error::{Error, HandleUnauthorizedExt};
@@ -10,10 +10,8 @@ use vacs_signaling::protocol::http::auth::{InitVatsimLogin, UserInfo};
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn auth_open_oauth_url(app_state: State<'_, AppState>) -> Result<(), Error> {
-    let auth_url = app_state
-        .lock()
-        .await
+pub async fn auth_open_oauth_url(http_state: State<'_, HttpState>) -> Result<(), Error> {
+    let auth_url = http_state
         .http_get::<InitVatsimLogin>(BackendEndpoint::InitAuth, None)
         .await?
         .url;
@@ -30,12 +28,10 @@ pub async fn auth_open_oauth_url(app_state: State<'_, AppState>) -> Result<(), E
 #[vacs_macros::log_err]
 pub async fn auth_check_session(
     app: AppHandle,
-    app_state: State<'_, AppState>,
+    http_state: State<'_, HttpState>,
 ) -> Result<(), Error> {
     log::debug!("Fetching user info");
-    let response = app_state
-        .lock()
-        .await
+    let response = http_state
         .http_get::<UserInfo>(BackendEndpoint::UserInfo, None)
         .await;
 
@@ -60,19 +56,24 @@ pub async fn auth_check_session(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn auth_logout(app: AppHandle, app_state: State<'_, AppState>) -> Result<(), Error> {
+pub async fn auth_logout(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    http_state: State<'_, HttpState>,
+) -> Result<(), Error> {
     log::debug!("Logging out");
 
-    let mut state = app_state.lock().await;
+    {
+        let mut state = app_state.lock().await;
+        state.disconnect_signaling(&app).await;
+    }
 
-    state.disconnect_signaling(&app).await;
-
-    state
+    http_state
         .http_post::<(), ()>(BackendEndpoint::Logout, None, None)
         .await
         .handle_unauthorized(&app)?;
 
-    state
+    http_state
         .clear_cookie_store()
         .context("Failed to clear cookie store")?;
 

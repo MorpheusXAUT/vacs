@@ -10,7 +10,6 @@ use vacs_webrtc::config::WebrtcConfig;
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
-pub const WS_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const AUDIO_SETTINGS_FILE_NAME: &str = "audio.toml";
 pub const CLIENT_SETTINGS_FILE_NAME: &str = "client.toml";
 pub const ENCODED_AUDIO_FRAME_BUFFER_SIZE: usize = 512;

@@ -1,18 +1,23 @@
 import Button from "../components/ui/Button.tsx";
-import {useAsyncDebounceState} from "../hooks/debounce-hook.ts";
+import {useAsyncDebounce, useAsyncDebounceState} from "../hooks/debounce-hook.ts";
 import {invoke} from "@tauri-apps/api/core";
 import {invokeSafe, isError, openErrorOverlayFromUnknown} from "../error.ts";
 import {useState} from "preact/hooks";
 import {clsx} from "clsx";
+import {useSignalingStore} from "../stores/signaling-store.ts";
 
 function ConnectPage() {
+    const connecting = useSignalingStore(state => state.connectionState === "connecting");
+    const setConnectionState = useSignalingStore(state => state.setConnectionState);
     const [terminateDialogOpen, setTerminateDialogOpen] = useState<boolean>(false);
 
-    const [handleConnectClick, loading] = useAsyncDebounceState(async () => {
+    const handleConnectClick = useAsyncDebounce(async () => {
+        setConnectionState("connecting");
         try {
             await invoke("signaling_connect");
         } catch (e) {
-            if (isError(e) && e.message === "login failed: DuplicateId") {
+            setConnectionState("disconnected");
+            if (isError(e) && (e.message === "Login failed: Another client with your CID is already connected." || e.message === "Already connected")) {
                 setTerminateDialogOpen(true);
                 return;
             }
@@ -30,10 +35,10 @@ function ConnectPage() {
         <div className="h-full w-full flex justify-center items-center p-4">
             <Button
                 color="green"
-                className={clsx("w-44 px-5 py-3 text-xl", loading && "brightness-90 cursor-not-allowed")}
+                className={clsx("w-44 px-5 py-3 text-xl", connecting && "brightness-90 cursor-not-allowed")}
                 onClick={handleConnectClick}
             >
-                {!loading ? "Connect" : "Connecting..."}
+                {!connecting ? "Connect" : "Connecting..."}
             </Button>
 
             <div

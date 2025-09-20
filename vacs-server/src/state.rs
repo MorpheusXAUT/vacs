@@ -91,6 +91,7 @@ impl AppState {
     pub async fn unregister_client(&self, client_id: &str) {
         tracing::trace!("Unregistering client");
 
+        // TODO notify client about termination to avoid reconnect loop
         let Some(client) = self.clients.write().await.remove(client_id) else {
             tracing::debug!("Client not found in client list, skipping unregister");
             return;

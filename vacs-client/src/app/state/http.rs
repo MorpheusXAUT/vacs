@@ -1,14 +1,14 @@
-use std::sync::Arc;
-use std::time::Duration;
-use crate::config::{AppConfig, BackendEndpoint, APP_USER_AGENT};
+use crate::config::{APP_USER_AGENT, AppConfig, BackendEndpoint};
 use crate::error::{Error, StartupError, StartupErrorExt};
+use crate::secrets::cookies::SecureCookieStore;
 use anyhow::Context;
 use reqwest::StatusCode;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use url::Url;
-use crate::secrets::cookies::SecureCookieStore;
 
 pub struct HttpState {
     config: AppConfig,
@@ -33,9 +33,9 @@ impl HttpState {
                 .map_startup_err(StartupError::Config)?,
         );
         let config = AppConfig::parse(&config_dir).map_startup_err(StartupError::Config)?;
-        
-        Ok(Self{
-            config: config.clone(),           
+
+        Ok(Self {
+            config: config.clone(),
             http_client: reqwest::ClientBuilder::new()
                 .user_agent(APP_USER_AGENT)
                 .cookie_provider(cookie_store.clone())

@@ -2,205 +2,98 @@ pub(crate) mod commands;
 
 use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
+use crate::app::state::http::HttpState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::SourceType;
-use crate::config::{BackendEndpoint, WS_LOGIN_TIMEOUT, WS_READY_TIMEOUT};
+use crate::config::{BackendEndpoint, WS_LOGIN_TIMEOUT};
 use crate::error::{Error, FrontendError};
+use async_trait::async_trait;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::{oneshot, watch};
-use tokio::task::JoinHandle;
-use vacs_signaling::client::{InterruptionReason, SignalingClient};
-use vacs_signaling::error::SignalingError;
+use tokio_util::sync::CancellationToken;
+use vacs_signaling::auth::TokenProvider;
+use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
+use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
 use vacs_signaling::protocol::http::ws::WebSocketToken;
 use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
-use vacs_signaling::transport::SignalingTransport;
 use vacs_signaling::transport::tokio::TokioTransport;
-use crate::app::state::http::AppStateHttpExt;
 
 const INCOMING_CALLS_LIMIT: usize = 5;
 
 pub struct Connection {
-    client: SignalingClient,
-    shutdown_tx: watch::Sender<()>,
+    client: SignalingClient<TokioTransport, TauriTokenProvider>,
+    shutdown_token: CancellationToken,
 }
 
 impl Connection {
-    pub fn new(reconnect_max_tries: u8) -> Self {
-        let (shutdown_tx, shutdown_rx) = watch::channel(());
-        let client = SignalingClient::new(shutdown_rx, reconnect_max_tries);
+    pub fn new(handle: AppHandle, ws_url: &str, reconnect_max_tries: u8) -> Self {
+        let shutdown_token = CancellationToken::new(); // TODO use child of global shutdown token
+        let client = SignalingClient::new(
+            TokioTransport::new(ws_url),
+            TauriTokenProvider::new(handle.clone()),
+            move |e| {
+                let handle = handle.clone();
+                async move {
+                    Self::handle_signaling_event(&handle, e).await;
+                }
+            },
+            shutdown_token.clone(),
+            WS_LOGIN_TIMEOUT,
+            reconnect_max_tries,
+            tauri::async_runtime::handle().inner(),
+        );
 
         Self {
             client,
-            shutdown_tx,
+            shutdown_token,
         }
     }
 
-    pub async fn connect(
-        &mut self,
-        app: AppHandle,
-        ws_url: &str,
-        token: &str,
-        on_disconnect: oneshot::Sender<bool>,
-    ) -> Result<(), SignalingError> {
+    pub async fn connect(&self) -> Result<(), SignalingError> {
         log::info!("Connecting to signaling server");
-
-        log::debug!("Creating signaling connection");
-        let transport = TokioTransport::new(ws_url);
-        let (sender, receiver) = transport.connect().await?;
-
-        let (ready_tx, ready_rx) = oneshot::channel();
-        let mut client = self.client.clone();
-
-        let (cancel_tx, _) = watch::channel(());
-        let cancel_tx_clone = cancel_tx.clone();
-
-        let reconnect_cb = {
-            let app = app.clone();
-            Box::new(move |ready_rx: Option<oneshot::Receiver<()>>| {
-                match ready_rx {
-                    Some(ready_rx) => {
-                        tauri::async_runtime::spawn(async {
-                            if let Ok(()) = ready_rx.await {
-                                // Login
-                                let state = app.state::<AppState>();
-                                let state = state.lock().await;
-
-                                // TODO: Move signaling login to state, because we don't have self here and we need another token
-                            }
-                        });
-                    }
-                    None => {
-                        app.emit("signaling:reconnecting", Value::Null).ok();
-                    }
-                };
-            })
-        };
-
-        let client_task = tauri::async_runtime::spawn(async move {
-            log::trace!("Signaling client interaction task started");
-
-            let mut cancel_rx = cancel_tx.subscribe();
-
-            tokio::select! {
-                biased;
-
-                _ = cancel_rx.changed() => {
-                    log::info!("Cancel signal received, stopping signaling connection client");
-                }
-
-                reason = client.start(transport, sender, receiver, ready_tx, reconnect_cb) => {
-                    match reason {
-                        InterruptionReason::Disconnected(requested) => {
-                            log::debug!(
-                                "Signaling client interaction ended due to disconnect. Requested: {requested}"
-                            );
-                            on_disconnect.send(requested).ok();
-                        }
-                        InterruptionReason::ShutdownSignal => {
-                            log::trace!(
-                                "Signaling client interaction ended due to shutdown signal"
-                            );
-                            on_disconnect.send(false).ok();
-                        }
-                        InterruptionReason::Error(err) => {
-                            log::warn!("Signaling client interaction ended due to error: {err:?}");
-                            on_disconnect.send(false).ok();
-                        }
-                    };
-                    cancel_tx.send(()).ok();
-                }
-            }
-
-            log::trace!("Signaling client task finished");
-        });
-
-        let app_clone = app.clone();
-        let mut broadcast_rx = self.client.subscribe();
-        let mut shutdown_rx = self.shutdown_tx.subscribe();
-        let interaction_task = tauri::async_runtime::spawn(async move {
-            log::trace!("Signaling connection interaction task started");
-
-            let mut cancel_rx = cancel_tx_clone.subscribe();
-
-            loop {
-                tokio::select! {
-                    biased;
-
-                    _ = cancel_rx.changed() => {
-                        log::info!("Cancel signal received, stopping signaling connection interaction handling");
-                        break;
-                    }
-
-                    _ = shutdown_rx.changed() => {
-                        log::info!("Shutdown signal received, stopping signaling connection interaction handling");
-                        break;
-                    }
-
-                    msg = broadcast_rx.recv() => {
-                        match msg {
-                            Ok(msg) => Self::handle_signaling_message(msg, &app_clone).await,
-                            Err(err) => {
-                                log::warn!("Received error from signaling client broadcast receiver: {err:?}");
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            cancel_tx_clone.send(()).ok();
-
-            log::trace!("Signaling connection interaction task finished");
-        });
-
-        log::debug!("Waiting for signaling connection to be ready");
-        if tokio::time::timeout(WS_READY_TIMEOUT, ready_rx)
-            .await
-            .is_err()
-        {
-            log::warn!(
-                "Signaling connection did not become ready in time, aborting remaining tasks"
-            );
-            client_task.abort();
-            interaction_task.abort();
-            return Err(SignalingError::Timeout(
-                "Signaling client did not become ready in time".to_string(),
-            ));
-        }
-
-        if let Err(err) = self.login(&app, token).await {
-            log::warn!("Login failed, aborting connection: {err:?}");
-            client_task.abort();
-            interaction_task.abort();
-            return Err(err);
-        };
-
-        Ok(())
+        self.client.connect().await
     }
 
-    async fn login(&mut self, app: &AppHandle, token: &str) -> Result<(), SignalingError> {
-        log::debug!("Signaling connection is ready, logging in");
-        let clients = self.client.login(token, WS_LOGIN_TIMEOUT).await?;
-        log::debug!(
-            "Successfully connected to signaling server, {} clients connected",
-            clients.len()
-        );
-
-        app.emit("signaling:connected", "LOVV_CTR").ok(); // TODO: Update display name
-        app.emit("signaling:client-list", clients).ok();
-
-        Ok(())
-    }
-
-    pub fn disconnect(&mut self) {
+    pub async fn disconnect(&self) {
         log::trace!("Disconnect requested for signaling connection");
-        self.client.disconnect();
+        self.client.disconnect().await;
     }
 
-    pub async fn send(&mut self, msg: SignalingMessage) -> Result<(), SignalingError> {
+    pub async fn send(&self, msg: SignalingMessage) -> Result<(), SignalingError> {
         self.client.send(msg).await
+    }
+
+    async fn handle_signaling_event(app: &AppHandle, event: SignalingEvent) {
+        match event {
+            SignalingEvent::Connected {
+                display_name,
+                clients,
+            } => {
+                log::debug!(
+                    "Successfully connected to signaling server, {} clients connected",
+                    clients.len()
+                );
+
+                app.emit("signaling:connected", display_name).ok();
+                app.emit("signaling:client-list", clients).ok();
+            }
+            SignalingEvent::Message(msg) => Self::handle_signaling_message(msg, app).await,
+            SignalingEvent::Error(error) => {
+                if error.is_fatal() {
+                    let state = app.state::<AppState>();
+                    let mut state = state.lock().await;
+                    state.handle_signaling_connection_closed(app).await;
+
+                    if error.can_reconnect() {
+                        app.emit("signaling:reconnecting", Value::Null).ok();
+                    } else {
+                        app.emit::<FrontendError>("error", Error::from(error).into())
+                            .ok();
+                    }
+                }
+            }
+        }
     }
 
     async fn handle_signaling_message(msg: SignalingMessage, app: &AppHandle) {
@@ -418,8 +311,10 @@ impl Connection {
 
                     app.emit::<FrontendError>(
                         "error",
-                        FrontendError::from(Error::from(SignalingError::ServerError(reason)))
-                            .timeout(5000),
+                        FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
+                            reason,
+                        )))
+                        .timeout(5000),
                     )
                     .ok();
                 }
@@ -428,7 +323,9 @@ impl Connection {
 
                     app.emit::<FrontendError>(
                         "error",
-                        FrontendError::from(Error::from(SignalingError::ServerError(reason))),
+                        FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
+                            reason,
+                        ))),
                     )
                     .ok();
                 }
@@ -458,7 +355,9 @@ impl Connection {
 
                     app.emit::<FrontendError>(
                         "error",
-                        FrontendError::from(Error::from(SignalingError::ServerError(reason))),
+                        FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
+                            reason,
+                        ))),
                     )
                     .ok();
                 }
@@ -467,18 +366,42 @@ impl Connection {
         }
     }
 
-    pub fn is_connected(&self) -> bool {
-        self.client.status().0
-    }
-
-    pub fn is_logged_in(&self) -> bool {
-        self.client.status().1
+    pub fn state(&self) -> State {
+        self.client.state()
     }
 }
 
 impl Drop for Connection {
     fn drop(&mut self) {
         log::debug!("Signaling connection dropped, sending disconnect signal");
-        self.disconnect();
+        self.shutdown_token.cancel();
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TauriTokenProvider {
+    handle: AppHandle,
+}
+
+impl TauriTokenProvider {
+    pub fn new(handle: AppHandle) -> Self {
+        Self { handle }
+    }
+}
+
+#[async_trait]
+impl TokenProvider for TauriTokenProvider {
+    async fn get_token(&self) -> Result<String, SignalingError> {
+        log::debug!("Retrieving WebSocket auth token");
+        let http_state = self.handle.state::<HttpState>();
+
+        let token = http_state
+            .http_get::<WebSocketToken>(BackendEndpoint::WsToken, None)
+            .await
+            .map_err(|err| SignalingError::ProtocolError(err.to_string()))?
+            .token;
+
+        log::debug!("Successfully retrieved WebSocket auth token");
+        Ok(token)
     }
 }

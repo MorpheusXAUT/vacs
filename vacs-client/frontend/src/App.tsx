@@ -28,7 +28,7 @@ import {setupWebrtcListeners} from "./listeners/webrtc-listener.ts";
 import UpdateOverlay from "./components/UpdateOverlay.tsx";
 
 function App() {
-    const connected = useSignalingStore(state => state.connected);
+    const connected = useSignalingStore(state => state.connectionState === "connected");
     const authStatus = useAuthStore(state => state.status);
 
     useEffect(() => {

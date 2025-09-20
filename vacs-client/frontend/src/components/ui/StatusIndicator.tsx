@@ -12,7 +12,7 @@ const StatusColors: Record<Status, string> = {
 };
 
 function StatusIndicator() {
-    const connected = useSignalingStore(state => state.connected);
+    const connected = useSignalingStore(state => state.connectionState === "connected");
     const callConnectionState = useCallStore(state => state.callDisplay?.connectionState);
     const status = ((): Status => {
         if (connected) {

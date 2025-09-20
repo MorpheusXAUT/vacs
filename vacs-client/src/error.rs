@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::fmt::{Debug, Display, Formatter};
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
-use vacs_signaling::error::SignalingError;
+use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
 use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, LoginFailureReason};
 
 #[derive(Debug, Error)]
@@ -15,7 +15,7 @@ pub enum Error {
     #[error("Network error: {0}")]
     Network(String),
     #[error("Signaling error: {0}")]
-    Signaling(#[from] Box<vacs_signaling::error::SignalingError>),
+    Signaling(#[from] Box<SignalingError>),
     #[error("HTTP error: {0}")]
     Reqwest(#[from] Box<reqwest::Error>),
     #[error("WebRTC error: {0}")]
@@ -30,9 +30,15 @@ impl From<vacs_audio::error::AudioError> for Error {
     }
 }
 
-impl From<vacs_signaling::error::SignalingError> for Error {
-    fn from(err: vacs_signaling::error::SignalingError) -> Self {
+impl From<SignalingError> for Error {
+    fn from(err: SignalingError) -> Self {
         Error::Signaling(Box::new(err))
+    }
+}
+
+impl From<SignalingRuntimeError> for Error {
+    fn from(err: SignalingRuntimeError) -> Self {
+        Error::Signaling(Box::new(err.into()))
     }
 }
 
@@ -184,13 +190,16 @@ fn format_signaling_error(err: &SignalingError) -> String {
             }
         }
         .to_string(),
-        SignalingError::ServerError(reason) => match reason {
-            ErrorReason::MalformedMessage => "Server error: Malformed message".to_string(),
-            ErrorReason::Internal(msg) => format!("Internal server error: {msg}"),
-            ErrorReason::PeerConnection => "Server error: Peer connection error.".to_string(),
-            ErrorReason::UnexpectedMessage(msg) => {
-                format!("Server error: unexpected message: {msg}")
-            }
+        SignalingError::Runtime(runtime_err) => match runtime_err {
+            SignalingRuntimeError::ServerError(reason) => match reason {
+                ErrorReason::MalformedMessage => "Server error: Malformed message".to_string(),
+                ErrorReason::Internal(msg) => format!("Internal server error: {msg}"),
+                ErrorReason::PeerConnection => "Server error: Peer connection error.".to_string(),
+                ErrorReason::UnexpectedMessage(msg) => {
+                    format!("Server error: unexpected message: {msg}")
+                }
+            },
+            _ => runtime_err.to_string(),
         },
         _ => err.to_string(),
     }
@@ -246,10 +255,10 @@ pub enum StartupError {
 impl Display for StartupError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            StartupError::Audio => "No suitable output audio device found. Check your logs for further details.",
-            StartupError::Config => "Failed to load configuration. Check your config files for errors or logs for further details.",
-            StartupError::Other => "A fatal error occurred during startup. Check your logs for further details.",
-        })
+                StartupError::Audio => "No suitable output audio device found. Check your logs for further details.",
+                StartupError::Config => "Failed to load configuration. Check your config files for errors or logs for further details.",
+                StartupError::Other => "A fatal error occurred during startup. Check your logs for further details.",
+            })
     }
 }
 
