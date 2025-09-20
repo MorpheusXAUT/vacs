@@ -1,90 +1,100 @@
-use pretty_assertions::{assert_eq, assert_matches};
+use pretty_assertions::assert_matches;
 use std::time::Duration;
 use test_log::test;
-use tokio::sync::{oneshot, watch};
-use vacs_protocol::ws::{ClientInfo, LoginFailureReason, SignalingMessage};
+use tokio_util::sync::CancellationToken;
+use vacs_protocol::ws::{LoginFailureReason, SignalingMessage};
 use vacs_server::test_utils::{TestApp, TestClient};
-use vacs_signaling::client;
-use vacs_signaling::error::SignalingRuntimeError;
-use vacs_signaling::test_utils::TestRig;
-use vacs_signaling::transport;
+use vacs_signaling::auth::mock::MockTokenProvider;
+use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
+use vacs_signaling::error::SignalingError;
+use vacs_signaling::test_utils::{AwaitSignalingEventExt, TestRig};
+use vacs_signaling::transport::tokio::TokioTransport;
 
 #[test(tokio::test)]
 async fn login_without_self() {
     let test_app = TestApp::new().await;
 
-    let (sender, receiver) = transport::tokio::create(test_app.addr())
-        .await
-        .expect("Failed to create transport");
-    let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClientInner::new(shutdown_rx);
-    let mut client_clone = client.clone();
-    let (ready_tx, ready_rx) = oneshot::channel();
-    let (interrupt_tx, _interrupt_rx) = oneshot::channel();
-    let task = tokio::spawn(async move {
-        let reason = client_clone.connect(sender, receiver, ready_tx).await;
-        interrupt_tx.send(reason).unwrap();
-    });
-    ready_rx.await.expect("Client failed to connect");
+    let transport = TokioTransport::new(test_app.addr());
+    let token_provider = MockTokenProvider::new(1, None);
+    let shutdown_token = CancellationToken::new();
 
-    let res = client.login("token1", Duration::from_millis(100)).await;
+    let client = SignalingClient::new(
+        transport,
+        token_provider,
+        |_| async {},
+        shutdown_token.clone(),
+        Duration::from_millis(100),
+        8,
+        &tokio::runtime::Handle::current(),
+    );
+
+    let mut broadcast_rx = client.subscribe();
+    let res = client.connect().await;
+    let connected_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event|
+        matches!(event, SignalingEvent::Connected{ clients, display_name} if clients.is_empty() && display_name == "LOVV_CTR"),
+    ).await;
+
     assert!(res.is_ok());
-    assert_eq!(res.unwrap(), vec![]);
+    assert!(connected_event.is_ok());
 
-    shutdown_tx.send(()).unwrap();
-    task.await.unwrap();
+    shutdown_token.cancel();
+    client.disconnect().await;
 }
 
 #[test(tokio::test)]
 async fn login() {
     let test_app = TestApp::new().await;
 
-    let (sender1, receiver1) = transport::tokio::create(test_app.addr())
-        .await
-        .expect("Failed to create transport");
-    let (shutdown_tx1, shutdown_rx1) = watch::channel(());
-    let mut client1 = client::SignalingClientInner::new(shutdown_rx1);
-    let mut client1_clone = client1.clone();
-    let (ready_tx1, ready_rx1) = oneshot::channel();
-    let (interrupt_tx1, _interrupt_rx1) = oneshot::channel();
-    let task1 = tokio::spawn(async move {
-        let reason = client1_clone.connect(sender1, receiver1, ready_tx1).await;
-        interrupt_tx1.send(reason).unwrap();
-    });
-    ready_rx1.await.expect("Client failed to connect");
+    let transport1 = TokioTransport::new(test_app.addr());
+    let token_provider1 = MockTokenProvider::new(1, None);
+    let shutdown_token1 = CancellationToken::new();
 
-    let res1 = client1.login("token1", Duration::from_millis(100)).await;
-    assert!(res1.is_ok());
-    assert_eq!(res1.unwrap(), vec![]);
-
-    let (sender2, receiver2) = transport::tokio::create(test_app.addr())
-        .await
-        .expect("Failed to create transport");
-    let (shutdown_tx2, shutdown_rx2) = watch::channel(());
-    let mut client2 = client::SignalingClientInner::new(shutdown_rx2);
-    let mut client2_clone = client2.clone();
-    let (ready_tx2, ready_rx2) = oneshot::channel();
-    let (interrupt_tx2, _interrupt_rx2) = oneshot::channel();
-    let task2 = tokio::spawn(async move {
-        let reason = client2_clone.connect(sender2, receiver2, ready_tx2).await;
-        interrupt_tx2.send(reason).unwrap();
-    });
-    ready_rx2.await.expect("Client failed to connect");
-
-    let res2 = client2.login("token2", Duration::from_millis(100)).await;
-    assert!(res2.is_ok());
-    assert_eq!(
-        res2.unwrap(),
-        vec![ClientInfo {
-            id: "client1".to_string(),
-            display_name: "client1".to_string()
-        }]
+    let client1 = SignalingClient::new(
+        transport1,
+        token_provider1,
+        |_| async {},
+        shutdown_token1.child_token(),
+        Duration::from_millis(100),
+        8,
+        &tokio::runtime::Handle::current(),
     );
 
-    shutdown_tx1.send(()).unwrap();
-    shutdown_tx2.send(()).unwrap();
-    task1.await.unwrap();
-    task2.await.unwrap();
+    let mut broadcast_rx1 = client1.subscribe();
+    let res1 = client1.connect().await;
+    let connected_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event|
+        matches!(event, SignalingEvent::Connected{ clients, display_name} if clients.is_empty() && display_name == "LOVV_CTR"),
+    ).await;
+
+    assert!(res1.is_ok());
+    assert!(connected_event1.is_ok());
+
+    let transport2 = TokioTransport::new(test_app.addr());
+    let token_provider2 = MockTokenProvider::new(2, None);
+    let shutdown_token2 = CancellationToken::new();
+
+    let client2 = SignalingClient::new(
+        transport2,
+        token_provider2,
+        |_| async {},
+        shutdown_token2.child_token(),
+        Duration::from_millis(100),
+        8,
+        &tokio::runtime::Handle::current(),
+    );
+
+    let mut broadcast_rx2 = client2.subscribe();
+    let res2 = client2.connect().await;
+    let connected_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event|
+        matches!(event, SignalingEvent::Connected{ clients, display_name} if clients.len() == 1 && clients[0].id == "client1" && display_name == "LOVV_CTR"),
+    ).await;
+
+    assert!(res2.is_ok());
+    assert!(connected_event2.is_ok());
+
+    shutdown_token1.cancel();
+    client1.disconnect().await;
+    shutdown_token2.cancel();
+    client2.disconnect().await;
 }
 
 #[test(tokio::test)]
@@ -92,86 +102,87 @@ async fn login() {
 async fn login_timeout() {
     let test_app = TestApp::new().await;
 
-    let (sender, receiver) = transport::tokio::create(test_app.addr())
-        .await
-        .expect("Failed to create transport");
-    let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClientInner::new(shutdown_rx);
-    let mut client_clone = client.clone();
-    let (ready_tx, ready_rx) = oneshot::channel();
-    let (interrupt_tx, _interrupt_rx) = oneshot::channel();
-    let task = tokio::spawn(async move {
-        let reason = client_clone.connect(sender, receiver, ready_tx).await;
-        interrupt_tx.send(reason).unwrap();
-    });
-    ready_rx.await.expect("Client failed to connect");
+    let transport = TokioTransport::new(test_app.addr());
+    let token_provider = MockTokenProvider::new(1, Some(Duration::from_millis(150)));
+    let shutdown_token = CancellationToken::new();
 
-    tokio::time::sleep(Duration::from_millis(150)).await;
+    let client = SignalingClient::new(
+        transport,
+        token_provider,
+        |_| async {},
+        shutdown_token.clone(),
+        Duration::from_millis(100),
+        8,
+        &tokio::runtime::Handle::current(),
+    );
 
-    let res = client.login("token1", Duration::from_millis(100)).await;
+    let res = client.connect().await;
+
     assert!(res.is_err());
-    assert_matches!(res.unwrap_err(), SignalingRuntimeError::Disconnected);
+    assert_matches!(res.unwrap_err(), SignalingError::Timeout(reason) if reason == "Timeout waiting for message");
 
-    shutdown_tx.send(()).unwrap();
-    task.await.unwrap();
+    shutdown_token.cancel();
+    client.disconnect().await;
 }
 
 #[test(tokio::test)]
 async fn login_invalid_credentials() {
     let test_app = TestApp::new().await;
 
-    let (sender, receiver) = transport::tokio::create(test_app.addr())
-        .await
-        .expect("Failed to create transport");
-    let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClientInner::new(shutdown_rx);
-    let mut client_clone = client.clone();
-    let (ready_tx, ready_rx) = oneshot::channel();
-    let (interrupt_tx, _interrupt_rx) = oneshot::channel();
-    let task = tokio::spawn(async move {
-        let reason = client_clone.connect(sender, receiver, ready_tx).await;
-        interrupt_tx.send(reason).unwrap();
-    });
-    ready_rx.await.expect("Client failed to connect");
+    let transport = TokioTransport::new(test_app.addr());
+    let token_provider = MockTokenProvider::new(usize::MAX, None);
+    let shutdown_token = CancellationToken::new();
 
-    let res = client.login("", Duration::from_millis(100)).await;
+    let client = SignalingClient::new(
+        transport,
+        token_provider,
+        |_| async {},
+        shutdown_token.clone(),
+        Duration::from_millis(100),
+        8,
+        &tokio::runtime::Handle::current(),
+    );
+
+    let res = client.connect().await;
+
     assert!(res.is_err());
     assert_matches!(
         res.unwrap_err(),
-        SignalingRuntimeError::LoginError(LoginFailureReason::InvalidCredentials)
+        SignalingError::LoginError(LoginFailureReason::InvalidCredentials)
     );
 
-    shutdown_tx.send(()).unwrap();
-    task.await.unwrap();
+    shutdown_token.cancel();
+    client.disconnect().await;
 }
 
 #[test(tokio::test)]
 async fn login_duplicate_id() {
     let test_rig = TestRig::new(1).await.unwrap();
 
-    let (sender, receiver) = transport::tokio::create(test_rig.server().addr())
-        .await
-        .expect("Failed to create transport");
-    let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClientInner::new(shutdown_rx);
-    let mut client_clone = client.clone();
-    let (ready_tx, ready_rx) = oneshot::channel();
-    let (interrupt_tx, _interrupt_rx) = oneshot::channel();
-    let task = tokio::spawn(async move {
-        let reason = client_clone.connect(sender, receiver, ready_tx).await;
-        interrupt_tx.send(reason).unwrap();
-    });
-    ready_rx.await.expect("Client failed to connect");
+    let transport = TokioTransport::new(test_rig.server().addr());
+    let token_provider = MockTokenProvider::new(0, None);
+    let shutdown_token = CancellationToken::new();
 
-    let res = client.login("token0", Duration::from_millis(100)).await;
+    let client = SignalingClient::new(
+        transport,
+        token_provider,
+        |_| async {},
+        shutdown_token.clone(),
+        Duration::from_millis(100),
+        8,
+        &tokio::runtime::Handle::current(),
+    );
+
+    let res = client.connect().await;
+
     assert!(res.is_err());
     assert_matches!(
         res.unwrap_err(),
-        SignalingRuntimeError::LoginError(LoginFailureReason::DuplicateId)
+        SignalingError::LoginError(LoginFailureReason::DuplicateId)
     );
 
-    shutdown_tx.send(()).unwrap();
-    task.await.unwrap();
+    shutdown_token.cancel();
+    client.disconnect().await;
 }
 
 #[test(tokio::test)]
@@ -189,9 +200,8 @@ async fn login_multiple_clients() {
 
     for i in 0..5 {
         let client = test_rig.client(i);
-        let (is_connected, is_logged_in) = client.client.status();
-        assert!(is_connected);
-        assert!(is_logged_in);
+        let state = client.client.state();
+        assert_matches!(state, State::LoggedIn);
     }
 }
 
@@ -199,48 +209,38 @@ async fn login_multiple_clients() {
 async fn client_disconnects() {
     let mut test_rig = TestRig::new(2).await.unwrap();
 
-    let res = test_rig.client_mut(0).client.logout();
-    assert!(res.is_ok());
+    test_rig.client_mut(0).client.disconnect().await;
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    let state = test_rig.client(0).client.state();
+    assert_matches!(state, State::Disconnected);
 
-    let (is_connected, is_logged_in) = test_rig.client(0).client.status();
-    assert!(!is_connected);
-    assert!(!is_logged_in);
-
-    let msg = test_rig
+    let event = test_rig
         .client_mut(1)
-        .recv_with_timeout(Duration::from_millis(100))
-        .await
-        .unwrap();
-    assert_matches!(
-        msg,
-        SignalingMessage::ClientDisconnected { id } if id == "client0"
-    );
+        .recv_with_timeout_and_filter(
+            Duration::from_millis(100),
+            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0")
+        )
+        .await;
+    assert!(event.is_some());
 }
 
 #[test(tokio::test)]
 async fn client_list_synchronization() {
     let mut test_rig = TestRig::new(3).await.unwrap();
 
-    let res = test_rig.client_mut(0).client.logout();
-    assert!(res.is_ok());
+    test_rig.client_mut(0).client.disconnect().await;
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    let state = test_rig.client(0).client.state();
+    assert_matches!(state, State::Disconnected);
 
-    let (is_connected, is_logged_in) = test_rig.client(0).client.status();
-    assert!(!is_connected);
-    assert!(!is_logged_in);
-
-    let msg = test_rig
+    let event = test_rig
         .client_mut(2)
-        .recv_with_timeout(Duration::from_millis(100))
-        .await
-        .unwrap();
-    assert_matches!(
-        msg,
-        SignalingMessage::ClientDisconnected { id } if id == "client0"
-    );
+        .recv_with_timeout_and_filter(
+            Duration::from_millis(100),
+            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0")
+        )
+        .await;
+    assert!(event.is_some());
 
     test_rig
         .client_mut(2)
@@ -249,14 +249,14 @@ async fn client_list_synchronization() {
         .await
         .unwrap();
 
-    let msg = test_rig
+    let event = test_rig
         .client_mut(2)
-        .recv_with_timeout(Duration::from_millis(100))
+        .recv_with_timeout_and_filter(
+            Duration::from_millis(100),
+            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == "client1")
+        )
         .await;
-    assert_matches!(
-        msg.unwrap(),
-        SignalingMessage::ClientList { clients } if clients.len() == 1 && clients[0].id == "client1"
-    );
+    assert!(event.is_some());
 }
 
 #[test(tokio::test)]
@@ -273,10 +273,18 @@ async fn client_connected_broadcast() {
     let clients = test_rig.clients_mut();
     for (i, client) in clients.iter_mut().enumerate() {
         let mut received_client_ids = vec![];
-        while let Some(msg) = client.recv_with_timeout(Duration::from_millis(100)).await {
+        while let Some(msg) = client
+            .recv_with_timeout_and_filter(Duration::from_millis(100), |e| {
+                matches!(
+                    e,
+                    SignalingEvent::Message(SignalingMessage::ClientConnected { .. })
+                )
+            })
+            .await
+        {
             match msg {
-                SignalingMessage::ClientConnected { client } => {
-                    received_client_ids.push(client.id.clone());
+                SignalingEvent::Message(SignalingMessage::ClientConnected { client }) => {
+                    received_client_ids.push(client.id);
                 }
                 _ => panic!("Unexpected message: {msg:?}"),
             }

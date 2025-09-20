@@ -1,58 +1,74 @@
-use crate::client::{InterruptionReason, SignalingClientInner};
-use crate::transport;
+use crate::auth::mock::MockTokenProvider;
+use crate::client::{SignalingClient, SignalingEvent};
+use crate::test_utils::AwaitSignalingEventExt;
+use crate::transport::tokio::TokioTransport;
 use std::time::Duration;
-use tokio::sync::{broadcast, oneshot, watch};
-use tokio::task::JoinHandle;
-use vacs_protocol::ws::SignalingMessage;
+use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use vacs_server::test_utils::TestApp;
 
 pub struct TestRigClient {
-    pub client: SignalingClientInner,
-    pub task: JoinHandle<()>,
-    pub interrupt_rx: oneshot::Receiver<InterruptionReason>,
-    pub broadcast_rx: broadcast::Receiver<SignalingMessage>,
+    pub client: SignalingClient<TokioTransport, MockTokenProvider>,
+    pub broadcast_rx: broadcast::Receiver<SignalingEvent>,
 }
 
 impl TestRigClient {
-    pub async fn recv_with_timeout(&mut self, timeout: Duration) -> Option<SignalingMessage> {
+    pub async fn recv_with_timeout(&mut self, timeout: Duration) -> Option<SignalingEvent> {
         match tokio::time::timeout(timeout, self.broadcast_rx.recv()).await {
             Ok(Ok(msg)) => Some(msg),
             _ => None,
         }
+    }
+
+    pub async fn recv_with_timeout_and_filter<F>(
+        &mut self,
+        timeout: Duration,
+        predicate: F,
+    ) -> Option<SignalingEvent>
+    where
+        F: Fn(&SignalingEvent) -> bool + Send,
+    {
+        self.broadcast_rx
+            .recv_with_timeout(timeout, predicate)
+            .await
+            .ok()
     }
 }
 
 pub struct TestRig {
     server: TestApp,
     clients: Vec<TestRigClient>,
-    shutdown_tx: watch::Sender<()>,
+    shutdown_token: CancellationToken,
 }
 
 impl TestRig {
     pub async fn new(num_clients: usize) -> anyhow::Result<Self> {
         let server = TestApp::new().await;
-        let (shutdown_tx, _) = watch::channel(());
+        let shutdown_token = CancellationToken::new();
 
         let mut clients = Vec::with_capacity(num_clients);
         for i in 0..num_clients {
-            let mut client = SignalingClientInner::new(shutdown_tx.subscribe());
-            let mut client_clone = client.clone();
-            let (sender, receiver) = transport::tokio::create(server.addr()).await?;
-            let (ready_tx, ready_rx) = oneshot::channel();
-            let (interrupt_tx, interrupt_rx) = oneshot::channel();
-            let task = tokio::spawn(async move {
-                let reason = client_clone.connect(sender, receiver, ready_tx).await;
-                interrupt_tx.send(reason).unwrap();
-            });
-            ready_rx.await.expect("Client failed to connect");
-            client
-                .login(format!("token{i}").as_str(), Duration::from_millis(100))
-                .await?;
+            let transport = TokioTransport::new(server.addr());
+            let token_provider = MockTokenProvider::new(i, None);
+
+            let client = SignalingClient::new(
+                transport,
+                token_provider,
+                |_| async {},
+                shutdown_token.child_token(),
+                Duration::from_millis(100),
+                8,
+                &tokio::runtime::Handle::current(),
+            );
+
             let broadcast_rx = client.subscribe();
+            client
+                .connect()
+                .await
+                .expect("Client failed to connect and login");
+
             clients.push(TestRigClient {
                 client,
-                task,
-                interrupt_rx,
                 broadcast_rx,
             });
         }
@@ -60,7 +76,7 @@ impl TestRig {
         Ok(Self {
             server,
             clients,
-            shutdown_tx,
+            shutdown_token,
         })
     }
 
@@ -93,10 +109,7 @@ impl TestRig {
     }
 
     pub fn shutdown(&self) {
-        self.shutdown_tx.send(()).unwrap();
-        for client in &self.clients {
-            client.task.abort();
-        }
+        self.shutdown_token.cancel();
     }
 }
 

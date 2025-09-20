@@ -1,42 +1,71 @@
-use crate::error::{SignalingRuntimeError, TransportFailureReason};
-use crate::transport::{SignalingReceiver, SignalingSender};
+use crate::error::{SignalingError, SignalingRuntimeError, TransportFailureReason};
+use crate::transport::{SignalingReceiver, SignalingSender, SignalingTransport};
 use async_trait::async_trait;
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::tungstenite;
+use tokio_util::sync::CancellationToken;
 use vacs_protocol::ws::SignalingMessage;
 
-pub struct MockHandle {
-    pub outgoing_rx: mpsc::Receiver<tungstenite::Message>,
-    pub incoming_tx: mpsc::Sender<tungstenite::Message>,
+pub struct MockTransport {
+    pub outgoing_rx: broadcast::Receiver<tungstenite::Message>,
+    pub outgoing_tx: broadcast::Sender<tungstenite::Message>,
+    pub incoming_tx: broadcast::Sender<tungstenite::Message>,
+    pub incoming_rx: broadcast::Receiver<tungstenite::Message>,
+    pub ready: Arc<tokio::sync::Notify>,
+    pub disconnect_token: CancellationToken,
+}
+
+impl Default for MockTransport {
+    fn default() -> Self {
+        let (outgoing_tx, outgoing_rx) = broadcast::channel(32);
+        let (incoming_tx, incoming_rx) = broadcast::channel(32);
+        Self {
+            outgoing_tx,
+            outgoing_rx,
+            incoming_tx,
+            incoming_rx,
+            ready: Arc::new(tokio::sync::Notify::new()),
+            disconnect_token: CancellationToken::new(),
+        }
+    }
+}
+
+impl MockTransport {
+    pub fn disconnect_token(&self) -> CancellationToken {
+        self.disconnect_token.clone()
+    }
+}
+
+#[async_trait]
+impl SignalingTransport for MockTransport {
+    type Sender = MockSender;
+    type Receiver = MockReceiver;
+
+    async fn connect(&self) -> Result<(Self::Sender, Self::Receiver), SignalingError> {
+        let sender = MockSender {
+            tx: Some(self.outgoing_tx.clone()),
+            disconnect_token: self.disconnect_token.child_token(),
+        };
+        let receiver = MockReceiver {
+            rx: self.incoming_tx.subscribe(),
+            disconnect_token: self.disconnect_token.child_token(),
+        };
+
+        self.ready.notify_one();
+
+        Ok((sender, receiver))
+    }
 }
 
 pub struct MockSender {
-    tx: Option<mpsc::Sender<tungstenite::Message>>,
+    tx: Option<broadcast::Sender<tungstenite::Message>>,
+    disconnect_token: CancellationToken,
 }
 
 pub struct MockReceiver {
-    rx: mpsc::Receiver<tungstenite::Message>,
-}
-
-#[tracing::instrument(level = "info")]
-pub fn create() -> ((MockSender, MockReceiver), MockHandle) {
-    let (outgoing_tx, outgoing_rx) = mpsc::channel(32);
-    let (incoming_tx, incoming_rx) = mpsc::channel(32);
-
-    let handle = MockHandle {
-        outgoing_rx,
-        incoming_tx,
-    };
-
-    (
-        (
-            MockSender {
-                tx: Some(outgoing_tx),
-            },
-            MockReceiver { rx: incoming_rx },
-        ),
-        handle,
-    )
+    rx: broadcast::Receiver<tungstenite::Message>,
+    disconnect_token: CancellationToken,
 }
 
 #[async_trait]
@@ -44,11 +73,18 @@ impl SignalingSender for MockSender {
     #[tracing::instrument(level = "debug", skip(self))]
     async fn send(&mut self, msg: tungstenite::Message) -> Result<(), SignalingRuntimeError> {
         tracing::debug!("Sending SignalingMessage");
+        if self.disconnect_token.is_cancelled() {
+            return Err(SignalingRuntimeError::Transport(
+                TransportFailureReason::Send("Sender closed".to_string()),
+            ));
+        }
+
         if let Some(ref tx) = self.tx {
-            tx.send(msg).await.map_err(|err| {
+            tx.send(msg).map_err(|err| {
                 tracing::warn!(?err, "Failed to send SignalingMessage");
                 SignalingRuntimeError::Transport(TransportFailureReason::Send(err.to_string()))
-            })
+            })?;
+            Ok(())
         } else {
             Err(SignalingRuntimeError::Transport(
                 TransportFailureReason::Send("Sender closed".to_string()),
@@ -71,32 +107,43 @@ impl SignalingReceiver for MockReceiver {
         &mut self,
         send_tx: &mpsc::Sender<tungstenite::Message>,
     ) -> Result<SignalingMessage, SignalingRuntimeError> {
-        while let Some(msg) = self.rx.recv().await {
-            tracing::debug!(?msg, "Received tungstenite::Message");
-            match msg {
-                tungstenite::Message::Text(text) => {
-                    tracing::debug!("Received message");
-                    return SignalingMessage::deserialize(&text).map_err(|err| {
-                        tracing::warn!(?err, "Failed to deserialize message");
-                        SignalingRuntimeError::SerializationError(err.to_string())
-                    });
-                }
-                tungstenite::Message::Close(reason) => {
-                    tracing::warn!(?reason, "Received Close WebSocket frame");
+        loop {
+            tokio::select! {
+                biased;
+                _ = self.disconnect_token.cancelled() => {
+                    tracing::warn!("Channel closed");
                     return Err(SignalingRuntimeError::Disconnected);
                 }
-                tungstenite::Message::Ping(data) => {
-                    if let Err(err) = send_tx.send(tungstenite::Message::Pong(data)).await {
-                        tracing::warn!(?err, "Failed to send mock Pong");
-                        return Err(SignalingRuntimeError::Disconnected);
+                msg = self.rx.recv() => {
+                    tracing::debug!(?msg, "Received tungstenite::Message");
+                    match msg {
+                        Ok(tungstenite::Message::Text(text)) => {
+                            tracing::debug!("Received message");
+                            return SignalingMessage::deserialize(&text).map_err(|err| {
+                                tracing::warn!(?err, "Failed to deserialize message");
+                                SignalingRuntimeError::SerializationError(err.to_string())
+                            });
+                        }
+                        Ok(tungstenite::Message::Close(reason)) => {
+                            tracing::warn!(?reason, "Received Close WebSocket frame");
+                            return Err(SignalingRuntimeError::Disconnected);
+                        }
+                        Ok(tungstenite::Message::Ping(data)) => {
+                            if let Err(err) = send_tx.send(tungstenite::Message::Pong(data)).await {
+                                tracing::warn!(?err, "Failed to send mock Pong");
+                                return Err(SignalingRuntimeError::Disconnected);
+                            }
+                        }
+                        Ok(other) => {
+                            tracing::debug!(?other, "Skipping non-text WebSocket frame");
+                        }
+                        Err(_) => {
+                            tracing::warn!("Channel closed");
+                            return Err(SignalingRuntimeError::Disconnected);
+                        }
                     }
-                }
-                other => {
-                    tracing::debug!(?other, "Skipping non-text WebSocket frame");
                 }
             }
         }
-        tracing::warn!("Channel closed");
-        Err(SignalingRuntimeError::Disconnected)
     }
 }
