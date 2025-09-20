@@ -1,4 +1,3 @@
-use crate::app::state::http::AppStateHttpExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::app::state::{AppState, AppStateInner, sealed};
 use crate::audio::manager::SourceType;

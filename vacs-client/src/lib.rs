@@ -14,6 +14,7 @@ use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use anyhow::Context;
 use tauri::{App, Emitter, Manager, RunEvent};
 use tokio::sync::Mutex;
+use crate::app::state::http::HttpState;
 
 pub fn run() {
     tauri::Builder::default()
@@ -56,12 +57,11 @@ pub fn run() {
 
                 let state = AppStateInner::new(app.handle())?;
 
-                let main_window = app
-                    .get_webview_window("main")
-                    .context("Failed to get main window")
-                    .map_startup_err(StartupError::Other)?;
-
                 if state.config.client.always_on_top {
+                    let main_window = app
+                        .get_webview_window("main")
+                        .context("Failed to get main window")
+                        .map_startup_err(StartupError::Other)?;
                     if let Err(err) = main_window.set_always_on_top(true) {
                         log::warn!("Failed to set main window to be always on top: {err}");
                     } else {
@@ -70,6 +70,9 @@ pub fn run() {
                 }
 
                 app.manage(Mutex::new(state));
+
+                let http_state = HttpState::new(app.handle())?;
+                app.manage(http_state);
 
                 Ok(())
             }
@@ -116,6 +119,11 @@ pub fn run() {
             if let RunEvent::ExitRequested { .. } = event {
                 let app_handle = app_handle.clone();
                 tauri::async_runtime::block_on(async move {
+                    app_handle
+                        .state::<HttpState>()
+                        .persist()
+                        .expect("Failed to persist http state");
+                    
                     app_handle
                         .state::<AppState>()
                         .lock()

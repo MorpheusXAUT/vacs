@@ -1,47 +1,67 @@
-use crate::app::state::{AppStateInner, sealed};
-use crate::config::BackendEndpoint;
-use crate::error::Error;
+use std::sync::Arc;
+use std::time::Duration;
+use crate::config::{AppConfig, BackendEndpoint, APP_USER_AGENT};
+use crate::error::{Error, StartupError, StartupErrorExt};
 use anyhow::Context;
 use reqwest::StatusCode;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use tauri::{AppHandle, Manager};
 use url::Url;
+use crate::secrets::cookies::SecureCookieStore;
 
-pub trait AppStateHttpExt: sealed::Sealed {
-    fn clear_cookie_store(&self) -> anyhow::Result<()>;
-    async fn http_get<R>(
-        &self,
-        endpoint: BackendEndpoint,
-        query: Option<&[(&str, &str)]>,
-    ) -> Result<R, Error>
-    where
-        R: DeserializeOwned + Default;
-    async fn http_post<R, P>(
-        &self,
-        endpoint: BackendEndpoint,
-        query: Option<&[(&str, &str)]>,
-        payload: Option<P>,
-    ) -> Result<R, Error>
-    where
-        R: DeserializeOwned + Default,
-        P: Serialize;
-    async fn http_delete<R>(
-        &self,
-        endpoint: BackendEndpoint,
-        query: Option<&[(&str, &str)]>,
-    ) -> Result<R, Error>
-    where
-        R: DeserializeOwned + Default;
+pub struct HttpState {
+    config: AppConfig,
+    http_client: reqwest::Client,
+    cookie_store: Arc<SecureCookieStore>,
 }
 
-impl AppStateHttpExt for AppStateInner {
-    fn clear_cookie_store(&self) -> anyhow::Result<()> {
+impl HttpState {
+    pub fn new(app: &AppHandle) -> Result<Self, StartupError> {
+        let config_dir = app
+            .path()
+            .app_config_dir()
+            .map_startup_err(StartupError::Config)?;
+        let data_dir = app
+            .path()
+            .app_data_dir()
+            .map_startup_err(StartupError::Config)?;
+
+        let cookie_store = Arc::new(
+            SecureCookieStore::new(data_dir.join(".cookies"))
+                .context("Failed to create secure cookie store")
+                .map_startup_err(StartupError::Config)?,
+        );
+        let config = AppConfig::parse(&config_dir).map_startup_err(StartupError::Config)?;
+        
+        Ok(Self{
+            config: config.clone(),           
+            http_client: reqwest::ClientBuilder::new()
+                .user_agent(APP_USER_AGENT)
+                .cookie_provider(cookie_store.clone())
+                .timeout(Duration::from_millis(config.backend.timeout_ms))
+                .build()
+                .context("Failed to build HTTP client")
+                .map_startup_err(StartupError::Other)?,
+            cookie_store,
+        })
+    }
+
+    pub fn persist(&self) -> anyhow::Result<()> {
+        self.cookie_store
+            .save()
+            .context("Failed to save cookie store")?;
+
+        Ok(())
+    }
+
+    pub fn clear_cookie_store(&self) -> anyhow::Result<()> {
         self.cookie_store
             .clear()
             .context("Failed to clear cookie store")
     }
 
-    async fn http_get<R>(
+    pub async fn http_get<R>(
         &self,
         endpoint: BackendEndpoint,
         query: Option<&[(&str, &str)]>,
@@ -74,7 +94,7 @@ impl AppStateHttpExt for AppStateInner {
         Ok(result)
     }
 
-    async fn http_post<R, P>(
+    pub async fn http_post<R, P>(
         &self,
         endpoint: BackendEndpoint,
         query: Option<&[(&str, &str)]>,
@@ -113,7 +133,7 @@ impl AppStateHttpExt for AppStateInner {
         Ok(result)
     }
 
-    async fn http_delete<R>(
+    pub async fn http_delete<R>(
         &self,
         endpoint: BackendEndpoint,
         query: Option<&[(&str, &str)]>,
@@ -145,9 +165,7 @@ impl AppStateHttpExt for AppStateInner {
         log::trace!("HTTP DELETE request succeeded: {}", request_url.as_str());
         Ok(result)
     }
-}
 
-impl AppStateInner {
     fn parse_http_request_url(
         &self,
         endpoint: BackendEndpoint,

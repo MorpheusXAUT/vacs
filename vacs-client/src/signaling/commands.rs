@@ -1,6 +1,6 @@
 use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
-use crate::app::state::http::AppStateHttpExt;
+use crate::app::state::http::HttpState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::SourceType;
@@ -37,13 +37,11 @@ pub async fn signaling_disconnect(app: AppHandle) -> Result<(), Error> {
 #[vacs_macros::log_err]
 pub async fn signaling_terminate(
     app: AppHandle,
-    app_state: State<'_, AppState>,
+    http_state: State<'_, HttpState>,
 ) -> Result<(), Error> {
     log::debug!("Terminating signaling server session");
 
-    let state = app_state.lock().await;
-
-    state
+    http_state
         .http_delete::<()>(BackendEndpoint::TerminateWsSession, None)
         .await
         .handle_unauthorized(&app)?;
