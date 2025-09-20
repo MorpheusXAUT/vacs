@@ -1,4 +1,4 @@
-use crate::error::SignalingError;
+use crate::error::{SignalingError, SignalingRuntimeError};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,7 +54,7 @@ impl ResponseMatcher {
 
         match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(msg)) => Ok(msg),
-            Ok(Err(_)) => Err(SignalingError::Disconnected),
+            Ok(Err(_)) => Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected)),
             Err(_) => Err(SignalingError::Timeout("Matcher timed out".to_string())),
         }
     }
@@ -65,6 +65,8 @@ impl ResponseMatcher {
     ///
     /// This internally uses [`wait_for_with_timeout`] and waits for [`std::time::Duration::MAX`],
     /// which results in approximately 584,942,417,355 years of wait time - probably enough for our use cases.
+    ///
+    /// # Returns
     ///
     /// - `Ok(Message)` if a matching message was received within the timeout.
     /// - `Err(SignalingError:Timeout)` if the timeout was reached before a matching message was received.
@@ -89,6 +91,13 @@ impl ResponseMatcher {
         {
             let _ = entry.responder.send(msg.clone());
         }
+    }
+
+    /// Clears all currently stored matchers.
+    /// This should be called when the transport is disconnected/reset to a clean state to avoid
+    /// an inconsistent consumer state.
+    pub async fn clear(&self) {
+        self.inner.lock().await.clear();
     }
 }
 

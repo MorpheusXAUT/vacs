@@ -15,15 +15,13 @@ pub async fn signaling_connect(app: AppHandle) -> Result<(), Error> {
     app.state::<AppState>()
         .lock()
         .await
-        .connect_signaling(&app)
+        .connect_signaling()
         .await
 }
 
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn signaling_disconnect(app: AppHandle) -> Result<(), Error> {
-    log::debug!("Disconnecting signaling server");
-
     app.state::<AppState>()
         .lock()
         .await

@@ -36,7 +36,11 @@ impl AppStateInner {
 
         Ok(Self {
             config: config.clone(),
-            connection: Connection::new(config.client.max_signaling_reconnect_attempts()),
+            connection: Connection::new(
+                app.clone(),
+                &config.backend.ws_url,
+                config.client.max_signaling_reconnect_attempts(),
+            ),
             audio_manager: AudioManager::new(app.clone(), &config.audio)
                 .map_startup_err(StartupError::Audio)?,
             active_call: None,

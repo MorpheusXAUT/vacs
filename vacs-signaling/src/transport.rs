@@ -1,14 +1,14 @@
 pub mod mock;
 pub mod tokio;
 
-use crate::error::SignalingError;
+use crate::error::{SignalingError, SignalingRuntimeError};
 use ::tokio::sync::mpsc;
 use async_trait::async_trait;
 use tokio_tungstenite::tungstenite;
 use vacs_protocol::ws::SignalingMessage;
 
 #[async_trait]
-pub trait SignalingTransport: Send + Sync {
+pub trait SignalingTransport: Send + Sync + 'static {
     type Sender: SignalingSender;
     type Receiver: SignalingReceiver;
 
@@ -16,15 +16,15 @@ pub trait SignalingTransport: Send + Sync {
 }
 
 #[async_trait]
-pub trait SignalingSender: Send + Sync {
-    async fn send(&mut self, msg: tungstenite::Message) -> Result<(), SignalingError>;
-    async fn close(&mut self) -> Result<(), SignalingError>;
+pub trait SignalingSender: Send + Sync + 'static {
+    async fn send(&mut self, msg: tungstenite::Message) -> Result<(), SignalingRuntimeError>;
+    async fn close(&mut self) -> Result<(), SignalingRuntimeError>;
 }
 
 #[async_trait]
-pub trait SignalingReceiver: Send + Sync {
+pub trait SignalingReceiver: Send + Sync + 'static {
     async fn recv(
         &mut self,
         send_tx: &mpsc::Sender<tungstenite::Message>,
-    ) -> Result<SignalingMessage, SignalingError>;
+    ) -> Result<SignalingMessage, SignalingRuntimeError>;
 }

@@ -43,7 +43,7 @@ function SettingsPage() {
 }
 
 function DisconnectLogoutButtons() {
-    const connected = useSignalingStore(state => state.connected);
+    const connected = useSignalingStore(state => state.connectionState === "connected");
     const isAuthenticated = useAuthStore(state => state.status === "authenticated");
 
     const handleLogoutClick = useAsyncDebounce(async () => {

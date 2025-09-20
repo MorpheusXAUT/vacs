@@ -1,4 +1,4 @@
-use crate::client::{InterruptionReason, SignalingClient};
+use crate::client::{InterruptionReason, SignalingClientInner};
 use crate::transport;
 use std::time::Duration;
 use tokio::sync::{broadcast, oneshot, watch};
@@ -7,7 +7,7 @@ use vacs_protocol::ws::SignalingMessage;
 use vacs_server::test_utils::TestApp;
 
 pub struct TestRigClient {
-    pub client: SignalingClient,
+    pub client: SignalingClientInner,
     pub task: JoinHandle<()>,
     pub interrupt_rx: oneshot::Receiver<InterruptionReason>,
     pub broadcast_rx: broadcast::Receiver<SignalingMessage>,
@@ -35,13 +35,13 @@ impl TestRig {
 
         let mut clients = Vec::with_capacity(num_clients);
         for i in 0..num_clients {
-            let mut client = SignalingClient::new(shutdown_tx.subscribe());
+            let mut client = SignalingClientInner::new(shutdown_tx.subscribe());
             let mut client_clone = client.clone();
             let (sender, receiver) = transport::tokio::create(server.addr()).await?;
             let (ready_tx, ready_rx) = oneshot::channel();
             let (interrupt_tx, interrupt_rx) = oneshot::channel();
             let task = tokio::spawn(async move {
-                let reason = client_clone.start(sender, receiver, ready_tx).await;
+                let reason = client_clone.connect(sender, receiver, ready_tx).await;
                 interrupt_tx.send(reason).unwrap();
             });
             ready_rx.await.expect("Client failed to connect");

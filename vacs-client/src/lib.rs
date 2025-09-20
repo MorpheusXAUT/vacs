@@ -8,13 +8,13 @@ mod secrets;
 mod signaling;
 
 use crate::app::open_fatal_error_dialog;
+use crate::app::state::http::HttpState;
 use crate::app::state::{AppState, AppStateInner};
 use crate::build::VersionInfo;
 use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use anyhow::Context;
 use tauri::{App, Emitter, Manager, RunEvent};
 use tokio::sync::Mutex;
-use crate::app::state::http::HttpState;
 
 pub fn run() {
     tauri::Builder::default()
@@ -123,7 +123,7 @@ pub fn run() {
                         .state::<HttpState>()
                         .persist()
                         .expect("Failed to persist http state");
-                    
+
                     app_handle
                         .state::<AppState>()
                         .lock()

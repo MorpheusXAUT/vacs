@@ -5,7 +5,7 @@ use tokio::sync::{oneshot, watch};
 use vacs_protocol::ws::{ClientInfo, LoginFailureReason, SignalingMessage};
 use vacs_server::test_utils::{TestApp, TestClient};
 use vacs_signaling::client;
-use vacs_signaling::error::SignalingError;
+use vacs_signaling::error::SignalingRuntimeError;
 use vacs_signaling::test_utils::TestRig;
 use vacs_signaling::transport;
 
@@ -17,12 +17,12 @@ async fn login_without_self() {
         .await
         .expect("Failed to create transport");
     let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClient::new(shutdown_rx);
+    let mut client = client::SignalingClientInner::new(shutdown_rx);
     let mut client_clone = client.clone();
     let (ready_tx, ready_rx) = oneshot::channel();
     let (interrupt_tx, _interrupt_rx) = oneshot::channel();
     let task = tokio::spawn(async move {
-        let reason = client_clone.start(sender, receiver, ready_tx).await;
+        let reason = client_clone.connect(sender, receiver, ready_tx).await;
         interrupt_tx.send(reason).unwrap();
     });
     ready_rx.await.expect("Client failed to connect");
@@ -43,12 +43,12 @@ async fn login() {
         .await
         .expect("Failed to create transport");
     let (shutdown_tx1, shutdown_rx1) = watch::channel(());
-    let mut client1 = client::SignalingClient::new(shutdown_rx1);
+    let mut client1 = client::SignalingClientInner::new(shutdown_rx1);
     let mut client1_clone = client1.clone();
     let (ready_tx1, ready_rx1) = oneshot::channel();
     let (interrupt_tx1, _interrupt_rx1) = oneshot::channel();
     let task1 = tokio::spawn(async move {
-        let reason = client1_clone.start(sender1, receiver1, ready_tx1).await;
+        let reason = client1_clone.connect(sender1, receiver1, ready_tx1).await;
         interrupt_tx1.send(reason).unwrap();
     });
     ready_rx1.await.expect("Client failed to connect");
@@ -61,12 +61,12 @@ async fn login() {
         .await
         .expect("Failed to create transport");
     let (shutdown_tx2, shutdown_rx2) = watch::channel(());
-    let mut client2 = client::SignalingClient::new(shutdown_rx2);
+    let mut client2 = client::SignalingClientInner::new(shutdown_rx2);
     let mut client2_clone = client2.clone();
     let (ready_tx2, ready_rx2) = oneshot::channel();
     let (interrupt_tx2, _interrupt_rx2) = oneshot::channel();
     let task2 = tokio::spawn(async move {
-        let reason = client2_clone.start(sender2, receiver2, ready_tx2).await;
+        let reason = client2_clone.connect(sender2, receiver2, ready_tx2).await;
         interrupt_tx2.send(reason).unwrap();
     });
     ready_rx2.await.expect("Client failed to connect");
@@ -96,12 +96,12 @@ async fn login_timeout() {
         .await
         .expect("Failed to create transport");
     let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClient::new(shutdown_rx);
+    let mut client = client::SignalingClientInner::new(shutdown_rx);
     let mut client_clone = client.clone();
     let (ready_tx, ready_rx) = oneshot::channel();
     let (interrupt_tx, _interrupt_rx) = oneshot::channel();
     let task = tokio::spawn(async move {
-        let reason = client_clone.start(sender, receiver, ready_tx).await;
+        let reason = client_clone.connect(sender, receiver, ready_tx).await;
         interrupt_tx.send(reason).unwrap();
     });
     ready_rx.await.expect("Client failed to connect");
@@ -110,7 +110,7 @@ async fn login_timeout() {
 
     let res = client.login("token1", Duration::from_millis(100)).await;
     assert!(res.is_err());
-    assert_matches!(res.unwrap_err(), SignalingError::Disconnected);
+    assert_matches!(res.unwrap_err(), SignalingRuntimeError::Disconnected);
 
     shutdown_tx.send(()).unwrap();
     task.await.unwrap();
@@ -124,12 +124,12 @@ async fn login_invalid_credentials() {
         .await
         .expect("Failed to create transport");
     let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClient::new(shutdown_rx);
+    let mut client = client::SignalingClientInner::new(shutdown_rx);
     let mut client_clone = client.clone();
     let (ready_tx, ready_rx) = oneshot::channel();
     let (interrupt_tx, _interrupt_rx) = oneshot::channel();
     let task = tokio::spawn(async move {
-        let reason = client_clone.start(sender, receiver, ready_tx).await;
+        let reason = client_clone.connect(sender, receiver, ready_tx).await;
         interrupt_tx.send(reason).unwrap();
     });
     ready_rx.await.expect("Client failed to connect");
@@ -138,7 +138,7 @@ async fn login_invalid_credentials() {
     assert!(res.is_err());
     assert_matches!(
         res.unwrap_err(),
-        SignalingError::LoginError(LoginFailureReason::InvalidCredentials)
+        SignalingRuntimeError::LoginError(LoginFailureReason::InvalidCredentials)
     );
 
     shutdown_tx.send(()).unwrap();
@@ -153,12 +153,12 @@ async fn login_duplicate_id() {
         .await
         .expect("Failed to create transport");
     let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let mut client = client::SignalingClient::new(shutdown_rx);
+    let mut client = client::SignalingClientInner::new(shutdown_rx);
     let mut client_clone = client.clone();
     let (ready_tx, ready_rx) = oneshot::channel();
     let (interrupt_tx, _interrupt_rx) = oneshot::channel();
     let task = tokio::spawn(async move {
-        let reason = client_clone.start(sender, receiver, ready_tx).await;
+        let reason = client_clone.connect(sender, receiver, ready_tx).await;
         interrupt_tx.send(reason).unwrap();
     });
     ready_rx.await.expect("Client failed to connect");
@@ -167,7 +167,7 @@ async fn login_duplicate_id() {
     assert!(res.is_err());
     assert_matches!(
         res.unwrap_err(),
-        SignalingError::LoginError(LoginFailureReason::DuplicateId)
+        SignalingRuntimeError::LoginError(LoginFailureReason::DuplicateId)
     );
 
     shutdown_tx.send(()).unwrap();
