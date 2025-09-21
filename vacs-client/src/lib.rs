@@ -71,8 +71,7 @@ pub fn run() {
 
                 app.manage(Mutex::new(state));
 
-                let http_state = HttpState::new(app.handle())?;
-                app.manage(http_state);
+                app.manage(HttpState::new(app.handle())?);
 
                 Ok(())
             }

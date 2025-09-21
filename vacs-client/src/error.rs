@@ -255,10 +255,10 @@ pub enum StartupError {
 impl Display for StartupError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-                StartupError::Audio => "No suitable output audio device found. Check your logs for further details.",
-                StartupError::Config => "Failed to load configuration. Check your config files for errors or logs for further details.",
-                StartupError::Other => "A fatal error occurred during startup. Check your logs for further details.",
-            })
+            StartupError::Audio => "No suitable output audio device found. Check your logs for further details.",
+            StartupError::Config => "Failed to load configuration. Check your config files for errors or logs for further details.",
+            StartupError::Other => "A fatal error occurred during startup. Check your logs for further details.",
+        })
     }
 }
 

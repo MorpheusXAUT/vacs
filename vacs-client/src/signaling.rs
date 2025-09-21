@@ -56,7 +56,7 @@ impl Connection {
     }
 
     pub async fn disconnect(&self) {
-        log::trace!("Disconnect requested for signaling connection");
+        log::trace!("Disconnecting from signaling server");
         self.client.disconnect().await;
     }
 

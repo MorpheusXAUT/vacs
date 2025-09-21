@@ -63,10 +63,7 @@ pub async fn auth_logout(
 ) -> Result<(), Error> {
     log::debug!("Logging out");
 
-    {
-        let mut state = app_state.lock().await;
-        state.disconnect_signaling(&app).await;
-    }
+    app_state.lock().await.disconnect_signaling(&app).await;
 
     http_state
         .http_post::<(), ()>(BackendEndpoint::Logout, None, None)
