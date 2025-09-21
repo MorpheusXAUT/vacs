@@ -1,21 +1,19 @@
+mod auth;
 pub(crate) mod commands;
 
 use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
-use crate::app::state::http::HttpState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::SourceType;
-use crate::config::{BackendEndpoint, WS_LOGIN_TIMEOUT};
+use crate::config::WS_LOGIN_TIMEOUT;
 use crate::error::{Error, FrontendError};
-use async_trait::async_trait;
+use crate::signaling::auth::TauriTokenProvider;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
-use vacs_signaling::auth::TokenProvider;
 use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
-use vacs_signaling::protocol::http::ws::WebSocketToken;
 use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
 use vacs_signaling::transport::tokio::TokioTransport;
 
@@ -375,33 +373,5 @@ impl Drop for Connection {
     fn drop(&mut self) {
         log::debug!("Signaling connection dropped, sending disconnect signal");
         self.shutdown_token.cancel();
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct TauriTokenProvider {
-    handle: AppHandle,
-}
-
-impl TauriTokenProvider {
-    pub fn new(handle: AppHandle) -> Self {
-        Self { handle }
-    }
-}
-
-#[async_trait]
-impl TokenProvider for TauriTokenProvider {
-    async fn get_token(&self) -> Result<String, SignalingError> {
-        log::debug!("Retrieving WebSocket auth token");
-        let http_state = self.handle.state::<HttpState>();
-
-        let token = http_state
-            .http_get::<WebSocketToken>(BackendEndpoint::WsToken, None)
-            .await
-            .map_err(|err| SignalingError::ProtocolError(err.to_string()))?
-            .token;
-
-        log::debug!("Successfully retrieved WebSocket auth token");
-        Ok(token)
     }
 }
