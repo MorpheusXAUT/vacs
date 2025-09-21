@@ -7,7 +7,7 @@ use vacs_server::test_utils::{TestApp, TestClient};
 use vacs_signaling::auth::mock::MockTokenProvider;
 use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
 use vacs_signaling::error::SignalingError;
-use vacs_signaling::test_utils::{AwaitSignalingEventExt, TestRig};
+use vacs_signaling::test_utils::{RecvWithTimeoutExt, TestRig};
 use vacs_signaling::transport::tokio::TokioTransport;
 
 #[test(tokio::test)]

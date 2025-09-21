@@ -1,6 +1,6 @@
 use crate::auth::mock::MockTokenProvider;
 use crate::client::{SignalingClient, SignalingEvent};
-use crate::test_utils::AwaitSignalingEventExt;
+use crate::test_utils::RecvWithTimeoutExt;
 use crate::transport::tokio::TokioTransport;
 use std::time::Duration;
 use tokio::sync::broadcast;

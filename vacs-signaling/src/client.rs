@@ -704,7 +704,7 @@ impl RetryStrategy {
 mod tests {
     use super::*;
     use crate::auth::mock::MockTokenProvider;
-    use crate::test_utils::AwaitTungsteniteMessageExt;
+    use crate::test_utils::RecvWithTimeoutExt;
     use crate::transport::mock::MockTransport;
     use pretty_assertions::assert_matches;
     use test_log::test;
