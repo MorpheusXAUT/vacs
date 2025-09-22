@@ -26,6 +26,6 @@
   "devDependencies": {
     "@preact/preset-vite": "^2.10.2",
     "typescript": "~5.9.2",
-    "vite": "^7.1.5"
+    "vite": "^7.1.7"
   }
 }
