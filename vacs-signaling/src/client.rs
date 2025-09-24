@@ -223,9 +223,11 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
     #[instrument(level = "debug", skip_all)]
     async fn disconnect(&self, requested: bool) {
-        tracing::trace!(?requested, "Sending logout message before disconnecting");
-        if let Err(err) = self.send(SignalingMessage::Logout).await {
-            tracing::warn!(?err, "Failed to send Logout message before disconnecting");
+        if self.state() != State::Disconnected {
+            tracing::trace!(?requested, "Sending logout message before disconnecting");
+            if let Err(err) = self.send(SignalingMessage::Logout).await {
+                tracing::warn!(?err, "Failed to send Logout message before disconnecting");
+            }
         }
         self.disconnect_token.lock().cancel();
         self.set_state(State::Disconnected);

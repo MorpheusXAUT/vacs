@@ -1,10 +1,10 @@
 mod auth;
 pub(crate) mod commands;
 
+use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::app::state::AppState;
 use crate::audio::manager::SourceType;
 use crate::config::WS_LOGIN_TIMEOUT;
 use crate::error::{Error, FrontendError};

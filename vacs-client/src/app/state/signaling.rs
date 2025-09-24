@@ -43,15 +43,10 @@ impl AppStateSignalingExt for AppStateInner {
     async fn disconnect_signaling(&mut self, app: &AppHandle) {
         log::info!("Disconnecting from signaling server");
 
-        if self.connection.state() == State::Disconnected {
-            log::info!("Tried to disconnect from signaling server, but not connected");
-            return;
-        }
-
         self.cleanup_signaling(app).await;
-
-        self.connection.disconnect().await;
         app.emit("signaling:disconnected", Value::Null).ok();
+        self.connection.disconnect().await;
+
         log::debug!("Successfully disconnected from signaling server");
     }
 
