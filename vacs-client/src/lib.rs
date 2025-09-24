@@ -123,12 +123,7 @@ pub fn run() {
                         .persist()
                         .expect("Failed to persist http state");
 
-                    app_handle
-                        .state::<AppState>()
-                        .lock()
-                        .await
-                        .persist()
-                        .expect("Failed to persist app state");
+                    app_handle.state::<AppState>().lock().await.shutdown();
                 });
             }
         });

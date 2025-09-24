@@ -1,3 +1,4 @@
+#[cfg(feature = "test-utils")]
 pub mod mock;
 pub mod tokio;
 

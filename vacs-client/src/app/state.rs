@@ -12,9 +12,11 @@ use crate::signaling::Connection;
 use std::collections::{HashMap, HashSet};
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 pub struct AppStateInner {
     pub config: AppConfig,
+    shutdown_token: CancellationToken,
     connection: Connection,
     audio_manager: AudioManager,
     active_call: Option<Call>,
@@ -33,14 +35,17 @@ impl AppStateInner {
             .map_startup_err(StartupError::Config)?;
 
         let config = AppConfig::parse(&config_dir).map_startup_err(StartupError::Config)?;
+        let shutdown_token = CancellationToken::new();
 
         Ok(Self {
             config: config.clone(),
             connection: Connection::new(
                 app.clone(),
+                shutdown_token.child_token(),
                 &config.backend.ws_url,
                 config.client.max_signaling_reconnect_attempts(),
             ),
+            shutdown_token,
             audio_manager: AudioManager::new(app.clone(), &config.audio)
                 .map_startup_err(StartupError::Audio)?,
             active_call: None,
@@ -50,7 +55,7 @@ impl AppStateInner {
         })
     }
 
-    pub fn persist(&self) -> anyhow::Result<()> {
-        Ok(())
+    pub fn shutdown(&self) {
+        self.shutdown_token.cancel();
     }
 }

@@ -1,10 +1,10 @@
 mod auth;
 pub(crate) mod commands;
 
-use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
+use crate::app::state::AppState;
 use crate::audio::manager::SourceType;
 use crate::config::WS_LOGIN_TIMEOUT;
 use crate::error::{Error, FrontendError};
@@ -25,8 +25,12 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new(handle: AppHandle, ws_url: &str, reconnect_max_tries: u8) -> Self {
-        let shutdown_token = CancellationToken::new(); // TODO use child of global shutdown token
+    pub fn new(
+        handle: AppHandle,
+        shutdown_token: CancellationToken,
+        ws_url: &str,
+        reconnect_max_tries: u8,
+    ) -> Self {
         let client = SignalingClient::new(
             TokioTransport::new(ws_url),
             TauriTokenProvider::new(handle.clone()),
@@ -49,12 +53,10 @@ impl Connection {
     }
 
     pub async fn connect(&self) -> Result<(), SignalingError> {
-        log::info!("Connecting to signaling server");
         self.client.connect().await
     }
 
     pub async fn disconnect(&self) {
-        log::trace!("Disconnecting from signaling server");
         self.client.disconnect().await;
     }
 
