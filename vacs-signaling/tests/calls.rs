@@ -6,7 +6,7 @@ use vacs_signaling::test_utils::TestRig;
 
 #[test(tokio::test)]
 async fn call_offer_answer() {
-    let mut test_rig = TestRig::new(2).await.unwrap();
+    let mut test_rig = TestRig::new(2).await;
 
     let clients = test_rig.clients_mut();
 

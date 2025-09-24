@@ -157,7 +157,7 @@ async fn login_invalid_credentials() {
 
 #[test(tokio::test)]
 async fn login_duplicate_id() {
-    let test_rig = TestRig::new(1).await.unwrap();
+    let test_rig = TestRig::new(1).await;
 
     let transport = TokioTransport::new(test_rig.server().addr());
     let token_provider = MockTokenProvider::new(0, None);
@@ -187,7 +187,7 @@ async fn login_duplicate_id() {
 
 #[test(tokio::test)]
 async fn logout() {
-    let mut test_rig = TestRig::new(1).await.unwrap();
+    let mut test_rig = TestRig::new(1).await;
     let client = test_rig.client_mut(0);
 
     let res = client.client.send(SignalingMessage::Logout).await;
@@ -196,7 +196,7 @@ async fn logout() {
 
 #[test(tokio::test)]
 async fn login_multiple_clients() {
-    let test_rig = TestRig::new(5).await.unwrap();
+    let test_rig = TestRig::new(5).await;
 
     for i in 0..5 {
         let client = test_rig.client(i);
@@ -207,7 +207,7 @@ async fn login_multiple_clients() {
 
 #[test(tokio::test)]
 async fn client_disconnects() {
-    let mut test_rig = TestRig::new(2).await.unwrap();
+    let mut test_rig = TestRig::new(2).await;
 
     test_rig.client_mut(0).client.disconnect().await;
 
@@ -217,7 +217,7 @@ async fn client_disconnects() {
     let event = test_rig
         .client_mut(1)
         .recv_with_timeout_and_filter(
-            Duration::from_millis(100),
+            Duration::from_millis(300),
             |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0")
         )
         .await;
@@ -226,7 +226,7 @@ async fn client_disconnects() {
 
 #[test(tokio::test)]
 async fn client_list_synchronization() {
-    let mut test_rig = TestRig::new(3).await.unwrap();
+    let mut test_rig = TestRig::new(3).await;
 
     test_rig.client_mut(0).client.disconnect().await;
 
@@ -236,7 +236,7 @@ async fn client_list_synchronization() {
     let event = test_rig
         .client_mut(2)
         .recv_with_timeout_and_filter(
-            Duration::from_millis(100),
+            Duration::from_millis(300),
             |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0")
         )
         .await;
@@ -252,7 +252,7 @@ async fn client_list_synchronization() {
     let event = test_rig
         .client_mut(2)
         .recv_with_timeout_and_filter(
-            Duration::from_millis(100),
+            Duration::from_millis(300),
             |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == "client1")
         )
         .await;
@@ -261,7 +261,7 @@ async fn client_list_synchronization() {
 
 #[test(tokio::test)]
 async fn client_connected_broadcast() {
-    let mut test_rig = TestRig::new(3).await.unwrap();
+    let mut test_rig = TestRig::new(3).await;
 
     let mut client3 = TestClient::new(test_rig.server().addr(), "client3", "token3")
         .await

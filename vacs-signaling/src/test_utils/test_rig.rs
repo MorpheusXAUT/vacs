@@ -42,7 +42,7 @@ pub struct TestRig {
 }
 
 impl TestRig {
-    pub async fn new(num_clients: usize) -> anyhow::Result<Self> {
+    pub async fn new(num_clients: usize) -> Self {
         let server = TestApp::new().await;
         let shutdown_token = CancellationToken::new();
 
@@ -73,11 +73,11 @@ impl TestRig {
             });
         }
 
-        Ok(Self {
+        Self {
             server,
             clients,
             shutdown_token,
-        })
+        }
     }
 
     pub fn server(&self) -> &TestApp {

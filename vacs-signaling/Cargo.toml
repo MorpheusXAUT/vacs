@@ -9,7 +9,6 @@ default = []
 test-utils = ["dep:vacs-server"]
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures-util = { workspace = true }
 parking_lot = { workspace = true }

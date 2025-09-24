@@ -7555,7 +7555,6 @@ dependencies = [
 name = "vacs-signaling"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "futures-util",
  "parking_lot",
