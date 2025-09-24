@@ -13,6 +13,7 @@ use crate::app::state::{AppState, AppStateInner};
 use crate::build::VersionInfo;
 use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use anyhow::Context;
+use serde_json::Value;
 use tauri::{App, Emitter, Manager, RunEvent};
 use tokio::sync::Mutex;
 
@@ -37,6 +38,7 @@ pub fn run() {
                 let url = url.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(err) = auth::handle_auth_callback(&app, &url).await {
+                        app.emit("auth:error", Value::Null).ok();
                         app.emit::<FrontendError>("error", err.into()).ok();
                     }
                 });

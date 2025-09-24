@@ -1,12 +1,25 @@
 import {invokeSafe} from "../error.ts";
-import {useAsyncDebounceState} from "../hooks/debounce-hook.ts";
+import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {clsx} from "clsx";
+import {useEffect, useState} from "preact/hooks";
+import {listen} from "@tauri-apps/api/event";
 
 function LoginPage() {
-    const [handleLoginClick, loading] = useAsyncDebounceState(async () => {
+    const [loading, setLoading] = useState<boolean>(false);
+
+    const handleLoginClick = useAsyncDebounce(async () => {
+        setLoading(true);
         void invokeSafe("audio_play_ui_click");
         await invokeSafe("auth_open_oauth_url");
     });
+
+    useEffect(() => {
+        const unlisten = listen("auth:error", () => {
+            setLoading(false);
+        });
+
+        return () => unlisten.then(fn => fn());
+    }, []);
 
     return (
         <div className="h-full w-full flex justify-center items-center p-4">
