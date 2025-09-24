@@ -45,6 +45,10 @@ jobs:
         working-directory: vacs-client
         run: npm ci
 
+      - name: Typecheck
+        working-directory: vacs-client
+        run: npm run -w frontend typecheck
+
       - name: Lint
-        working-directory: vacs-client/frontend
-        run: npm run lint
+        working-directory: vacs-client
+        run: npm run -w frontend lint
