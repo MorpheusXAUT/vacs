@@ -4,20 +4,23 @@ mod sealed;
 pub(crate) mod signaling;
 pub(crate) mod webrtc;
 
+use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::Call;
 use crate::audio::manager::AudioManager;
 use crate::config::AppConfig;
 use crate::error::{StartupError, StartupErrorExt};
-use crate::signaling::Connection;
+use crate::signaling::auth::TauriTokenProvider;
 use std::collections::{HashMap, HashSet};
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
+use vacs_signaling::client::SignalingClient;
+use vacs_signaling::transport::tokio::TokioTransport;
 
 pub struct AppStateInner {
     pub config: AppConfig,
     shutdown_token: CancellationToken,
-    connection: Connection,
+    signaling_client: SignalingClient<TokioTransport, TauriTokenProvider>,
     audio_manager: AudioManager,
     active_call: Option<Call>,
     held_calls: HashMap<String, Call>,       // peer_id -> call
@@ -39,10 +42,10 @@ impl AppStateInner {
 
         Ok(Self {
             config: config.clone(),
-            connection: Connection::new(
+            signaling_client: Self::new_signaling_client(
                 app.clone(),
-                shutdown_token.child_token(),
                 &config.backend.ws_url,
+                shutdown_token.child_token(),
                 config.client.max_signaling_reconnect_attempts(),
             ),
             shutdown_token,
