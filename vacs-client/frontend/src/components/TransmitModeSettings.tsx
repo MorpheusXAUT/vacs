@@ -9,15 +9,13 @@ function TransmitModeSettings() {
     const pushToTalkLabel = useRef<string | undefined>(undefined);
     const pushToMuteLabel = useRef<string | undefined>(undefined);
     const [capturing, setCapturing] = useState<boolean>(false);
-    const transmitConfigRef = useRef<TransmitConfig>();
+
+    const isRemoveDisabled = transmitConfig === undefined || transmitConfig.mode === "VoiceActivation" || (transmitConfig.mode === "PushToTalk" && transmitConfig.pushToTalk === undefined) || (transmitConfig.mode === "PushToMute" && transmitConfig.pushToMute === undefined);
 
     const handleKeyDownEvent = useCallback(async (event: KeyboardEvent) => {
         event.preventDefault();
 
-        console.log("loo");
-
         let newConfig: TransmitConfig;
-        const transmitConfig = transmitConfigRef.current;
         if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") {
             return;
         } else if (transmitConfig.mode === "PushToTalk") {
@@ -36,14 +34,7 @@ function TransmitModeSettings() {
             document.removeEventListener("keydown", handleKeyDownEvent);
             document.removeEventListener("keyup", preventKeyUpEvent);
         }
-    }, []);
-
-    const handleClickEvent = useCallback(() => {
-        setCapturing(false);
-        document.removeEventListener("keydown", handleKeyDownEvent);
-        document.removeEventListener("keyup", preventKeyUpEvent);
-        document.removeEventListener("click", handleClickEvent);
-    }, []);
+    }, [transmitConfig]);
 
     const handleKeySelectOnClick = async () => {
         if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") return;
@@ -52,12 +43,10 @@ function TransmitModeSettings() {
             setCapturing(false);
             document.removeEventListener("keydown", handleKeyDownEvent);
             document.removeEventListener("keyup", preventKeyUpEvent);
-            document.addEventListener("click", handleClickEvent);
         } else {
             setCapturing(true);
             document.addEventListener("keydown", handleKeyDownEvent);
             document.addEventListener("keyup", preventKeyUpEvent);
-            document.removeEventListener("click", handleClickEvent);
         }
     };
 
@@ -78,9 +67,12 @@ function TransmitModeSettings() {
         }
     };
 
-    const isRemoveDisabled = transmitConfig === undefined || transmitConfig.mode === "VoiceActivation" || (transmitConfig.mode === "PushToTalk" && transmitConfig.pushToTalk === undefined) || (transmitConfig.mode === "PushToMute" && transmitConfig.pushToMute === undefined);
-
     const handleOnRemoveClick = async () => {
+        if (capturing) {
+            setCapturing(false);
+            return;
+        }
+
         if (isRemoveDisabled) return;
 
         let newConfig: TransmitConfig;
@@ -110,17 +102,14 @@ function TransmitModeSettings() {
             setTransmitConfig(config);
         };
         void fetchConfig();
-
-        return () => {
-            document.removeEventListener("keydown", handleKeyDownEvent);
-            document.removeEventListener("keyup", preventKeyUpEvent);
-            document.removeEventListener("click", handleClickEvent);
-        };
     }, []);
 
     useEffect(() => {
-        transmitConfigRef.current = transmitConfig;
-    }, [transmitConfig]);
+        return () => {
+            document.removeEventListener("keydown", handleKeyDownEvent);
+            document.removeEventListener("keyup", preventKeyUpEvent);
+        };
+    }, [handleKeyDownEvent]);
 
     return (
         <div className="w-full px-3 py-1.5 flex flex-row gap-3 items-center justify-center">
