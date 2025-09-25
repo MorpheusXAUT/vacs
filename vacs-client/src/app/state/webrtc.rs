@@ -114,8 +114,8 @@ impl AppStateWebrtcExt for AppStateInner {
                                     && call.peer_id == peer_id_clone
                                 {
                                     call.peer.pause();
-                                    state.audio_manager().detach_call_output();
-                                    state.audio_manager().detach_input_device();
+                                    state.audio_manager_mut().detach_call_output();
+                                    state.audio_manager_mut().detach_input_device();
                                 }
 
                                 app.emit("webrtc:call-disconnected", &peer_id_clone).ok();
@@ -274,7 +274,7 @@ impl AppStateInner {
 
             let audio_config = self.config.audio.clone();
             log::debug!("Attaching call to audio manager");
-            if let Err(err) = self.audio_manager().attach_call_output(
+            if let Err(err) = self.audio_manager_mut().attach_call_output(
                 output_rx,
                 audio_config.output_device_volume,
                 audio_config.output_device_volume_amp,
@@ -285,7 +285,7 @@ impl AppStateInner {
 
             log::debug!("Attaching input device to audio manager");
             if let Err(err) =
-                self.audio_manager()
+                self.audio_manager_mut()
                     .attach_input_device(app.clone(), &audio_config, input_tx)
             {
                 log::warn!("Failed to attach input device to audio manager: {err:?}");

@@ -6,7 +6,9 @@ mod config;
 mod error;
 mod secrets;
 mod signaling;
+mod keybinds;
 
+use std::thread;
 use crate::app::open_fatal_error_dialog;
 use crate::app::state::http::HttpState;
 use crate::app::state::{AppState, AppStateInner};
@@ -14,7 +16,7 @@ use crate::build::VersionInfo;
 use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use anyhow::Context;
 use serde_json::Value;
-use tauri::{App, Emitter, Manager, RunEvent};
+use tauri::{App, Emitter, Manager, RunEvent, WindowEvent};
 use tokio::sync::Mutex;
 
 pub fn run() {
@@ -47,6 +49,7 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             log::info!("{:?}", VersionInfo::gather());
 
@@ -71,8 +74,47 @@ pub fn run() {
                     }
                 }
 
-                app.manage(Mutex::new(state));
+                use crate::app::state::AppState;
+                use tauri_plugin_global_shortcut::{
+                    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
+                };
 
+                // fn handle_keybind_shortcut(
+                //     app: AppHandle,
+                //     event: ShortcutEvent,
+                //     mode: TransmitMode,
+                // ) {
+                //     tauri::async_runtime::spawn(async move {
+                //         let state = app.state::<AppState>();
+                //         let state = state.lock().await;
+                //
+                //         state.audio_manager().set_input_muted(true);
+                //
+                //         if state.config.client.keybinds.mode == mode {
+                //
+                //         }
+                //     });
+                // }
+
+                // app.global_shortcut()
+                //     .on_shortcut(
+                //         Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyN),
+                //         |app, _shortcut, event| {
+                //             println!("LOL");
+                //         },
+                //     )
+                //     .expect("Failed to set on shortcut");
+
+                //
+                // app.global_shortcut()
+                //     .unregister(Shortcut::new(
+                //         Some(Modifiers::META | Modifiers::SHIFT),
+                //         Code::KeyN,
+                //     ))
+                //     .expect("Failed to unregister");
+                // app.global_shortcut().register(shortcut).expect("Failed to register shortcut");
+
+                app.manage(Mutex::new(state));
                 app.manage(HttpState::new(app.handle())?);
 
                 Ok(())
@@ -107,6 +149,8 @@ pub fn run() {
             auth::commands::auth_check_session,
             auth::commands::auth_logout,
             auth::commands::auth_open_oauth_url,
+            keybinds::commands::keybinds_get_transmit_config,
+            keybinds::commands::keybinds_set_transmit_config,
             signaling::commands::signaling_accept_call,
             signaling::commands::signaling_connect,
             signaling::commands::signaling_disconnect,

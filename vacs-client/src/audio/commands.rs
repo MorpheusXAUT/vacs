@@ -58,7 +58,7 @@ pub async fn audio_set_host(
         audio_config.host_name = Some(host_name).filter(|x| !x.is_empty());
 
         state
-            .audio_manager()
+            .audio_manager_mut()
             .switch_output_device(app.clone(), &audio_config, false)?;
 
         state.config.audio = audio_config;
@@ -82,7 +82,7 @@ pub async fn audio_get_devices(
 ) -> Result<AudioDevices, Error> {
     log::info!("Getting audio devices (type: {:?})", device_type);
 
-    let mut state = app_state.lock().await;
+    let state = app_state.lock().await;
 
     let host = state.config.audio.host_name.clone();
     let host = host.as_deref();
@@ -154,7 +154,7 @@ pub async fn audio_set_device(
                 audio_config.output_device_name = device_name;
 
                 state
-                    .audio_manager()
+                    .audio_manager_mut()
                     .switch_output_device(app.clone(), &audio_config, false)?;
 
                 state.config.audio = audio_config;
@@ -281,7 +281,7 @@ pub async fn audio_start_input_level_meter(
         .into());
     }
 
-    state.audio_manager().attach_input_level_meter(
+    state.audio_manager_mut().attach_input_level_meter(
         app.clone(),
         audio_config,
         Box::new(move |level| {
@@ -297,7 +297,7 @@ pub async fn audio_start_input_level_meter(
 pub async fn audio_stop_input_level_meter(app_state: State<'_, AppState>) -> Result<(), Error> {
     log::trace!("Stopping input level meter");
 
-    app_state.lock().await.audio_manager().detach_input_device();
+    app_state.lock().await.audio_manager_mut().detach_input_device();
 
     Ok(())
 }

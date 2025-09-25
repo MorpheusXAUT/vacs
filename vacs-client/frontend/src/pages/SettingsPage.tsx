@@ -10,6 +10,7 @@ import AudioHostSelector from "../components/AudioHostSelector.tsx";
 import {useEffect, useState} from "preact/hooks";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {useUpdateStore} from "../stores/update-store.ts";
+import TransmitModeSettings from "../components/TransmitModeSettings.tsx";
 
 function SettingsPage() {
     return (
@@ -20,11 +21,13 @@ function SettingsPage() {
                     <VolumeSettings/>
                     <div className="h-full grow flex flex-col">
                         <p className="w-full text-center border-b-2 border-zinc-200 uppercase font-semibold">Devices</p>
-                        <div className="w-full grow px-3 py-1.5 flex flex-col">
+                        <div className="w-full px-3 py-1.5 flex flex-col">
                             <AudioHostSelector/>
                             <DeviceSelector deviceType="Output"/>
                             <DeviceSelector deviceType="Input"/>
                         </div>
+                        <p className="w-full text-center border-t-2 pt-1 border-zinc-200 uppercase font-semibold">Transmit Mode</p>
+                        <TransmitModeSettings/>
                     </div>
                 </div>
                 <div
