@@ -1,7 +1,7 @@
 import Button from "../components/ui/Button.tsx";
 import {useAsyncDebounce, useAsyncDebounceState} from "../hooks/debounce-hook.ts";
 import {invoke} from "@tauri-apps/api/core";
-import {invokeSafe, isError, openErrorOverlayFromUnknown} from "../error.ts";
+import {invokeStrict, isError, openErrorOverlayFromUnknown} from "../error.ts";
 import {useState} from "preact/hooks";
 import {clsx} from "clsx";
 import {useSignalingStore} from "../stores/signaling-store.ts";
@@ -26,9 +26,12 @@ function ConnectPage() {
     });
 
     const [handleTerminateClick, terminateLoading] = useAsyncDebounceState(async () => {
-        await invokeSafe("signaling_terminate");
-        setTerminateDialogOpen(false);
-        void handleConnectClick();
+        try {
+            await invokeStrict("signaling_terminate");
+            setTerminateDialogOpen(false);
+            void handleConnectClick();
+        } catch {
+        }
     });
 
     return (

@@ -88,7 +88,7 @@ impl PlaybackStream {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn add_audio_source(&mut self, source: Box<dyn AudioSource>) -> AudioSourceId {
+    pub fn add_audio_source(&self, source: Box<dyn AudioSource>) -> AudioSourceId {
         let id = self
             .next_audio_source_id
             .fetch_add(1, atomic::Ordering::SeqCst);
@@ -109,7 +109,7 @@ impl PlaybackStream {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn remove_audio_source(&mut self, id: AudioSourceId) {
+    pub fn remove_audio_source(&self, id: AudioSourceId) {
         tracing::trace!("Removing audio source from mixer");
         if self
             .mixer_ops
@@ -122,7 +122,7 @@ impl PlaybackStream {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn start_audio_source(&mut self, id: AudioSourceId) {
+    pub fn start_audio_source(&self, id: AudioSourceId) {
         tracing::trace!("Starting audio source");
         if self
             .mixer_ops
@@ -137,7 +137,7 @@ impl PlaybackStream {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn stop_audio_source(&mut self, id: AudioSourceId) {
+    pub fn stop_audio_source(&self, id: AudioSourceId) {
         tracing::trace!("Stopping audio source");
         if self
             .mixer_ops
@@ -152,7 +152,7 @@ impl PlaybackStream {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn restart_audio_source(&mut self, id: AudioSourceId) {
+    pub fn restart_audio_source(&self, id: AudioSourceId) {
         tracing::trace!("Restarting audio source");
         if self
             .mixer_ops
@@ -167,7 +167,7 @@ impl PlaybackStream {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn set_volume(&mut self, id: AudioSourceId, volume: f32) {
+    pub fn set_volume(&self, id: AudioSourceId, volume: f32) {
         tracing::trace!("Setting volume for audio source");
         if self
             .mixer_ops

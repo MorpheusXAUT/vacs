@@ -1,22 +1,23 @@
-use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
+use crate::app::state::AppState;
 use crate::config::AudioConfig;
 use crate::error::{Error, FrontendError};
+use parking_lot::{Mutex, RwLock};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
-use vacs_audio::EncodedAudioFrame;
 use vacs_audio::device::{DeviceSelector, DeviceType};
 use vacs_audio::error::AudioError;
-use vacs_audio::sources::AudioSourceId;
 use vacs_audio::sources::opus::OpusSource;
 use vacs_audio::sources::waveform::{Waveform, WaveformSource, WaveformTone};
+use vacs_audio::sources::AudioSourceId;
 use vacs_audio::stream::capture::{CaptureStream, InputLevel};
 use vacs_audio::stream::playback::PlaybackStream;
+use vacs_audio::EncodedAudioFrame;
 use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
 
 const AUDIO_STREAM_ERROR_CHANNEL_SIZE: usize = 32;
@@ -194,7 +195,7 @@ impl AudioManager {
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                state.audio_manager().detach_input_device();
+                state.audio_manager_mut().detach_input_device();
 
                 app.emit("audio:stop-input-level-meter", Value::Null).ok();
                 app.emit::<FrontendError>("error", Error::from(err).into())
@@ -222,24 +223,24 @@ impl AudioManager {
         log::info!("Detached input device");
     }
 
-    pub fn start(&mut self, source_type: SourceType) {
+    pub fn start(&self, source_type: SourceType) {
         log::trace!("Starting audio source {source_type:?}");
         self.output
             .start_audio_source(self.source_ids[&source_type])
     }
 
-    pub fn restart(&mut self, source_type: SourceType) {
+    pub fn restart(&self, source_type: SourceType) {
         log::trace!("Restarting audio source {source_type:?}");
         self.output
             .restart_audio_source(self.source_ids[&source_type])
     }
 
-    pub fn stop(&mut self, source_type: SourceType) {
+    pub fn stop(&self, source_type: SourceType) {
         log::trace!("Stopping audio source {source_type:?}");
         self.output.stop_audio_source(self.source_ids[&source_type])
     }
 
-    pub fn set_output_volume(&mut self, source_type: SourceType, volume: f32) {
+    pub fn set_output_volume(&self, source_type: SourceType, volume: f32) {
         if !self.source_ids.contains_key(&source_type) {
             log::trace!(
                 "Tried to set output volume {volume} for missing audio source {source_type:?}, skipping"
@@ -260,14 +261,14 @@ impl AudioManager {
         }
     }
 
-    pub fn set_input_volume(&mut self, volume: f32) {
-        if let Some(input) = &mut self.input {
+    pub fn set_input_volume(&self, volume: f32) {
+        if let Some(input) = &self.input {
             input.set_volume(volume);
         }
     }
 
-    pub fn set_input_muted(&mut self, muted: bool) {
-        if let Some(input) = &mut self.input {
+    pub fn set_input_muted(&self, muted: bool) {
+        if let Some(input) = &self.input {
             input.set_muted(muted);
         }
     }
@@ -330,7 +331,7 @@ impl AudioManager {
         let channels = output_device.channels() as usize;
 
         let (error_tx, mut error_rx) = mpsc::channel(AUDIO_STREAM_ERROR_CHANNEL_SIZE);
-        let mut output = PlaybackStream::start(output_device, error_tx)?;
+        let output = PlaybackStream::start(output_device, error_tx)?;
 
         let audio_config_clone = audio_config.clone();
         tauri::async_runtime::spawn(async move {
@@ -368,7 +369,7 @@ impl AudioManager {
                         app.emit("signaling:call-end", &peer_id).ok();
                     }
 
-                    if let Err(err) = state.audio_manager().switch_output_device(
+                    if let Err(err) = state.audio_manager_mut().switch_output_device(
                         app.clone(),
                         &audio_config_clone,
                         true,

@@ -69,6 +69,7 @@ function DeviceSelector(props: DeviceSelectorProps) {
         <>
             <p className="w-full text-center font-semibold">{props.deviceType === "Output" ? "Headset" : "Microphone"}</p>
             <Select
+                name={props.deviceType}
                 className={isFallback ? "text-red-500 disabled:!text-[#B34F5C]" : ""}
                 options={devices}
                 selected={device}

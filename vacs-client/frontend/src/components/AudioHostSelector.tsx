@@ -41,6 +41,7 @@ function AudioHostSelector() {
         <>
             <p className="w-full text-center font-semibold">Audio Backend</p>
             <Select
+                name="audio-host"
                 options={hosts}
                 selected={host}
                 onChange={handleOnChange}
