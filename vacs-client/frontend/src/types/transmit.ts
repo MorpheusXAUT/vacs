@@ -7,8 +7,40 @@ export function isTransmitMode(value: string): value is TransmitMode {
 
 export type TransmitConfig = {
     mode: TransmitMode;
-    pushToTalk?: string;
-    pushToMute?: string;
+    pushToTalk: string | null;
+    pushToMute: string | null;
+}
+
+export type TransmitConfigWithLabels = TransmitConfig & {
+    pushToTalkLabel: string | null;
+    pushToMuteLabel: string | null;
+}
+
+export async function withLabels(config: TransmitConfig): Promise<TransmitConfigWithLabels> {
+    return {
+        ...config,
+        pushToTalkLabel: config.pushToTalk && await codeToLabel(config.pushToTalk),
+        pushToMuteLabel: config.pushToMute && await codeToLabel(config.pushToMute),
+    };
+}
+
+export async function codeToLabel(code: string): Promise<string> {
+    const keyboard = (navigator as {
+        keyboard?: {
+            getLayoutMap: () => Promise<{ get: (value: string) => string }>
+        }
+    }).keyboard;
+
+    if (keyboard?.getLayoutMap) {
+        try {
+            const map = await keyboard.getLayoutMap();
+            const label = map.get(code);
+            if (label) return label.toUpperCase();
+        } catch {
+        }
+    }
+
+    return prettyFormatKeyCode(code);
 }
 
 export function prettyFormatKeyCode(keyCode: string): string {
@@ -172,23 +204,4 @@ export function prettyFormatKeyCode(keyCode: string): string {
         default:
             return keyCode;
     }
-}
-
-export async function codeToLabel(code: string): Promise<string> {
-    const keyboard = (navigator as {
-        keyboard?: {
-            getLayoutMap: () => Promise<{ get: (value: string) => string }>
-        }
-    }).keyboard;
-
-    if (keyboard?.getLayoutMap) {
-        try {
-            const map = await keyboard.getLayoutMap();
-            const label = map.get(code);
-            if (label) return label.toUpperCase();
-        } catch {
-        }
-    }
-
-    return prettyFormatKeyCode(code);
 }

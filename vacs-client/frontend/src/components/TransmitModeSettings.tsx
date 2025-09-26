@@ -1,16 +1,20 @@
 import Select from "./ui/Select.tsx";
 import {clsx} from "clsx";
 import {useCallback, useEffect, useRef, useState} from "preact/hooks";
-import {codeToLabel, isTransmitMode, TransmitConfig} from "../types/transmit.ts";
+import {
+    withLabels,
+    isTransmitMode,
+    TransmitConfig,
+    TransmitConfigWithLabels
+} from "../types/transmit.ts";
 import {invokeSafe, invokeStrict} from "../error.ts";
 
 function TransmitModeSettings() {
-    const [transmitConfig, setTransmitConfig] = useState<TransmitConfig | undefined>(undefined);
-    const pushToTalkLabel = useRef<string | undefined>(undefined);
-    const pushToMuteLabel = useRef<string | undefined>(undefined);
+    const [transmitConfig, setTransmitConfig] = useState<TransmitConfigWithLabels | undefined>(undefined);
     const [capturing, setCapturing] = useState<boolean>(false);
+    const keySelectRef = useRef<HTMLDivElement | null>(null);
 
-    const isRemoveDisabled = transmitConfig === undefined || transmitConfig.mode === "VoiceActivation" || (transmitConfig.mode === "PushToTalk" && transmitConfig.pushToTalk === undefined) || (transmitConfig.mode === "PushToMute" && transmitConfig.pushToMute === undefined);
+    const isRemoveDisabled = transmitConfig === undefined || transmitConfig.mode === "VoiceActivation" || (transmitConfig.mode === "PushToTalk" && transmitConfig.pushToTalk === null) || (transmitConfig.mode === "PushToMute" && transmitConfig.pushToMute === null);
 
     const handleKeyDownEvent = useCallback(async (event: KeyboardEvent) => {
         event.preventDefault();
@@ -26,67 +30,60 @@ function TransmitModeSettings() {
 
         try {
             await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
-            pushToTalkLabel.current = newConfig.pushToTalk && await codeToLabel(newConfig.pushToTalk);
-            pushToMuteLabel.current = newConfig.pushToMute && await codeToLabel(newConfig.pushToMute);
-            setTransmitConfig(newConfig);
+            setTransmitConfig(await withLabels(newConfig));
         } finally {
             setCapturing(false);
-            document.removeEventListener("keydown", handleKeyDownEvent);
-            document.removeEventListener("keyup", preventKeyUpEvent);
         }
     }, [transmitConfig]);
+
+    const handleClickOutside = useCallback((event: MouseEvent) => {
+        if (keySelectRef.current === null || keySelectRef.current.contains(event.target as Node)) return;
+        setCapturing(false);
+    }, []);
 
     const handleKeySelectOnClick = async () => {
         if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") return;
 
-        if (capturing) {
-            setCapturing(false);
-            document.removeEventListener("keydown", handleKeyDownEvent);
-            document.removeEventListener("keyup", preventKeyUpEvent);
-        } else {
-            setCapturing(true);
-            document.addEventListener("keydown", handleKeyDownEvent);
-            document.addEventListener("keyup", preventKeyUpEvent);
-        }
+        void invokeSafe("audio_play_ui_click");
+
+        setCapturing(!capturing);
     };
 
     const handleOnModeChange = async (value: string) => {
-        if (isTransmitMode(value)) {
-            const previousTransmitConfig = transmitConfig;
+        if (!isTransmitMode(value) || transmitConfig === undefined) return;
 
-            setTransmitConfig(config => {
-                if (config === undefined) return;
-                return {...config, mode: value};
-            });
+        const previousTransmitConfig = transmitConfig;
+        const newTransmitConfig = {...transmitConfig, mode: value};
 
-            try {
-                await invokeStrict("keybinds_set_transmit_config", {transmitConfig: transmitConfig});
-            } catch {
-                setTransmitConfig(previousTransmitConfig);
-            }
+        setTransmitConfig(newTransmitConfig);
+
+        try {
+            await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newTransmitConfig});
+        } catch {
+            setTransmitConfig(previousTransmitConfig);
         }
     };
 
     const handleOnRemoveClick = async () => {
+        if (isRemoveDisabled) return;
+
+        void invokeSafe("audio_play_ui_click");
+
         if (capturing) {
             setCapturing(false);
             return;
         }
 
-        if (isRemoveDisabled) return;
-
         let newConfig: TransmitConfig;
         if (transmitConfig.mode === "PushToTalk") {
-            newConfig = {...transmitConfig, pushToTalk: undefined};
+            newConfig = {...transmitConfig, pushToTalk: null};
         } else {
-            newConfig = {...transmitConfig, pushToMute: undefined};
+            newConfig = {...transmitConfig, pushToMute: null};
         }
 
         try {
             await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
-            pushToTalkLabel.current = newConfig.pushToTalk && await codeToLabel(newConfig.pushToTalk);
-            pushToMuteLabel.current = newConfig.pushToMute && await codeToLabel(newConfig.pushToMute);
-            setTransmitConfig(newConfig);
+            setTransmitConfig(await withLabels(newConfig));
         } catch {
         }
     };
@@ -96,20 +93,26 @@ function TransmitModeSettings() {
             const config = await invokeSafe<TransmitConfig>("keybinds_get_transmit_config");
             if (config === undefined) return;
 
-            pushToTalkLabel.current = config.pushToTalk && await codeToLabel(config.pushToTalk);
-            pushToMuteLabel.current = config.pushToMute && await codeToLabel(config.pushToMute);
-
-            setTransmitConfig(config);
+            setTransmitConfig(await withLabels(config));
         };
         void fetchConfig();
     }, []);
 
     useEffect(() => {
+        if (!capturing) return;
+
+        document.addEventListener("keydown", handleKeyDownEvent);
+        document.addEventListener("keyup", preventKeyUpEvent);
+        document.addEventListener("click", handleClickOutside);
+
         return () => {
-            document.removeEventListener("keydown", handleKeyDownEvent);
-            document.removeEventListener("keyup", preventKeyUpEvent);
+            if (capturing) {
+                document.removeEventListener("keydown", handleKeyDownEvent);
+                document.removeEventListener("keyup", preventKeyUpEvent);
+                document.removeEventListener("click", handleClickOutside);
+            }
         };
-    }, [handleKeyDownEvent]);
+    }, [capturing, handleKeyDownEvent, handleClickOutside]);
 
     return (
         <div className="w-full px-3 py-1.5 flex flex-row gap-3 items-center justify-center">
@@ -128,22 +131,25 @@ function TransmitModeSettings() {
                     />
                     <div className="grow h-full flex flex-row items-center justify-center">
                         <div
-                            onKeyDown={(e) => capturing && handleKeyDownEvent(e)}
-                            onKeyUp={(e) => capturing && preventKeyUpEvent(e)}
+                            ref={keySelectRef}
                             onClick={handleKeySelectOnClick}
                             className={clsx("relative w-full h-full truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
-                                "bg-gray-300 border-2 ",
+                                "bg-gray-300 border-2",
                                 capturing ?
                                     "border-r-gray-100 border-b-gray-100 border-t-gray-700 border-l-gray-700 [&>*]:translate-y-[1px] [&>*]:translate-x-[1px]"
                                     : "border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
-                                transmitConfig.mode === "VoiceActivation" && "brightness-90 cursor-not-allowed")}>
-                            <p>{capturing ? "Press your key" : transmitConfig.mode !== "VoiceActivation" ? transmitConfig.mode === "PushToTalk" ? pushToTalkLabel.current : pushToMuteLabel.current : ""}</p>
+                                transmitConfig.mode === "VoiceActivation" ? "brightness-90 cursor-not-allowed" : "cursor-pointer")}>
+                            <p>{capturing ? "Press your key" : transmitConfig.mode !== "VoiceActivation" ? transmitConfig.mode === "PushToTalk" ? transmitConfig.pushToTalkLabel : transmitConfig.pushToMuteLabel : ""}</p>
                         </div>
                         <svg onClick={handleOnRemoveClick}
                              xmlns="http://www.w3.org/2000/svg" width="27" height="27"
                              viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"
                              strokeLinejoin="round"
-                             className={clsx("p-1 !pr-0", isRemoveDisabled ? "stroke-gray-500 cursor-not-allowed" : "stroke-gray-700 hover:stroke-red-500 transition-colors")}>
+                             className={clsx("p-1 !pr-0",
+                                 isRemoveDisabled ?
+                                     "stroke-gray-500 cursor-not-allowed"
+                                     : "stroke-gray-700 hover:stroke-red-500 transition-colors cursor-pointer"
+                             )}>
                             <path d="M18 6 6 18"/>
                             <path d="m6 6 12 12"/>
                         </svg>
