@@ -2,8 +2,6 @@ use crate::error::Error;
 use anyhow::Context;
 use config::{Config, Environment, File};
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
-use std::borrow::Cow::Borrowed;
 use std::fs;
 use std::path::Path;
 use std::str::FromStr;
@@ -283,7 +281,7 @@ impl TryFrom<FrontendTransmitConfig> for TransmitConfig {
             push_to_mute: value
                 .push_to_mute
                 .as_ref()
-                .map(|s| Code::from_str(&s).map(|code| Shortcut::new(None, code)))
+                .map(|s| Code::from_str(s).map(|code| Shortcut::new(None, code)))
                 .transpose()
                 .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.push_to_mute.unwrap_or_default()))))?,
         })

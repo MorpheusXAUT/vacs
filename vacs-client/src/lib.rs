@@ -4,11 +4,10 @@ mod auth;
 mod build;
 mod config;
 mod error;
+mod keybinds;
 mod secrets;
 mod signaling;
-mod keybinds;
 
-use std::thread;
 use crate::app::open_fatal_error_dialog;
 use crate::app::state::http::HttpState;
 use crate::app::state::{AppState, AppStateInner};
@@ -16,7 +15,7 @@ use crate::build::VersionInfo;
 use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use anyhow::Context;
 use serde_json::Value;
-use tauri::{App, Emitter, Manager, RunEvent, WindowEvent};
+use tauri::{App, Emitter, Manager, RunEvent};
 use tokio::sync::Mutex;
 
 pub fn run() {
@@ -74,10 +73,9 @@ pub fn run() {
                     }
                 }
 
-                use crate::app::state::AppState;
-                use tauri_plugin_global_shortcut::{
-                    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
-                };
+                // use tauri_plugin_global_shortcut::{
+                //     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
+                // };
 
                 // fn handle_keybind_shortcut(
                 //     app: AppHandle,

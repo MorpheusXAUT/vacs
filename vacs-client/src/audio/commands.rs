@@ -153,9 +153,11 @@ pub async fn audio_set_device(
                 let mut audio_config = state.config.audio.clone();
                 audio_config.output_device_name = device_name;
 
-                state
-                    .audio_manager_mut()
-                    .switch_output_device(app.clone(), &audio_config, false)?;
+                state.audio_manager_mut().switch_output_device(
+                    app.clone(),
+                    &audio_config,
+                    false,
+                )?;
 
                 state.config.audio = audio_config;
             }
@@ -252,7 +254,7 @@ pub async fn audio_play_ui_click(app_state: State<'_, AppState>) -> Result<(), E
     log::trace!("Playing UI click");
 
     match tokio::time::timeout(Duration::from_millis(500), app_state.lock()).await {
-        Ok(mut state) => {
+        Ok(state) => {
             state.audio_manager().start(SourceType::Click);
         }
         Err(_) => {
@@ -297,7 +299,11 @@ pub async fn audio_start_input_level_meter(
 pub async fn audio_stop_input_level_meter(app_state: State<'_, AppState>) -> Result<(), Error> {
     log::trace!("Stopping input level meter");
 
-    app_state.lock().await.audio_manager_mut().detach_input_device();
+    app_state
+        .lock()
+        .await
+        .audio_manager_mut()
+        .detach_input_device();
 
     Ok(())
 }
