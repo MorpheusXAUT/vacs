@@ -45,6 +45,15 @@ pub enum CallErrorReason {
     Other,
 }
 
+/// Possible reasons for being forcefully disconnected by the signaling server.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub enum DisconnectReason {
+    /// The connection was terminated by another client.
+    Terminated,
+    /// No active VATSIM connection was found.
+    NoActiveVatsimConnection,
+}
+
 /// Represents a client as observed by the signaling server.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -220,6 +229,11 @@ pub enum SignalingMessage {
         reason: ErrorReason,
         /// Optional ID of the peer that caused the error.
         peer_id: Option<String>,
+    },
+    /// A message sent by the signaling server before (forcefully) disconnecting a client.
+    Disconnected {
+        /// Reason for the forceful disconnect.
+        reason: DisconnectReason,
     },
 }
 
