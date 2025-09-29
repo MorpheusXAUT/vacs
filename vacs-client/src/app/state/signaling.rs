@@ -158,16 +158,15 @@ impl AppStateInner {
     async fn handle_signaling_event(app: &AppHandle, event: SignalingEvent) {
         match event {
             SignalingEvent::Connected {
-                display_name,
-                clients,
+                client_info
             } => {
                 log::debug!(
-                    "Successfully connected to signaling server, {} clients connected",
-                    clients.len()
+                    "Successfully connected to signaling server. Display name: {}, frequency: {}",
+                    &client_info.display_name,
+                    &client_info.frequency,
                 );
 
-                app.emit("signaling:connected", display_name).ok();
-                app.emit("signaling:client-list", clients).ok();
+                app.emit("signaling:connected", client_info).ok();
             }
             SignalingEvent::Message(msg) => Self::handle_signaling_message(msg, app).await,
             SignalingEvent::Error(error) => {
@@ -395,6 +394,10 @@ impl AppStateInner {
                 log::trace!("Received client list: {} clients connected", clients.len());
 
                 app.emit("signaling:client-list", clients).ok();
+            }
+            SignalingMessage::ClientInfo { own, info } => {
+                let event = if own {"signaling:connected"} else {"signaling:client-connected"};
+                app.emit(event, info).ok();
             }
             SignalingMessage::Error { reason, peer_id } => match reason {
                 ErrorReason::MalformedMessage => {

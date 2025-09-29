@@ -21,18 +21,18 @@ function DAKey({client}: DAKeyProps) {
         removePeer
     } = useCallStore(state => state.actions);
 
-    const isCalling = incomingCalls.some(peerId => peerId === client.id);
-    const beingCalled = callDisplay?.type === "outgoing" && callDisplay.peerId === client.id;
-    const inCall = callDisplay?.type === "accepted" && callDisplay.peerId === client.id;
-    const isRejected = callDisplay?.type === "rejected" && callDisplay.peerId === client.id;
-    const isError = callDisplay?.type === "error" && callDisplay.peerId === client.id;
+    const isCalling = incomingCalls.some(peer => peer.id === client.id);
+    const beingCalled = callDisplay?.type === "outgoing" && callDisplay.peer.id === client.id;
+    const inCall = callDisplay?.type === "accepted" && callDisplay.peer.id === client.id;
+    const isRejected = callDisplay?.type === "rejected" && callDisplay.peer.id === client.id;
+    const isError = callDisplay?.type === "error" && callDisplay.peer.id === client.id;
 
     const handleClick = useAsyncDebounce(async () => {
         if (isCalling) {
             if (callDisplay !== undefined) return;
 
             try {
-                acceptCall(client.id);
+                acceptCall(client);
                 await invokeStrict("signaling_accept_call", {peerId: client.id});
             } catch {
                 removePeer(client.id);
@@ -49,7 +49,7 @@ function DAKey({client}: DAKeyProps) {
             dismissErrorPeer();
         } else if (callDisplay === undefined) {
             try {
-                setOutgoingCall(client.id);
+                setOutgoingCall(client);
                 await invokeStrict("signaling_start_call", {peerId: client.id});
             } catch {
                 removePeer(client.id);
@@ -60,11 +60,11 @@ function DAKey({client}: DAKeyProps) {
     return (
         <Button
             color={inCall ? "green" : (isCalling || isRejected) && blink ? "green" : isError && blink ? "red" : "gray"}
-            className="w-25 h-[calc((100%-3.75rem)/6)] rounded !leading-4.5 text-lg"
+            className="w-25 h-[calc((100%-3.75rem)/6)] rounded !leading-4.5 p-1.5"
             highlight={beingCalled || isRejected ? "green" : undefined}
             onClick={handleClick}
         >
-            {client.id}
+            <p className="wrap-break-word w-full">{client.displayName}<br/>{client.frequency}</p>
         </Button>
     );
     // 320-340<br/>E2<br/>EC

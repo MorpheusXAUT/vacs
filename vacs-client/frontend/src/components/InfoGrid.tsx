@@ -8,7 +8,7 @@ import {invokeSafe} from "../error.ts";
 
 function InfoGrid() {
     const cid = useAuthStore(state => state.cid);
-    const displayName = useSignalingStore(state => state.displayName);
+    const clientInfo = useSignalingStore(state => `${state.displayName}${state.frequency !== "" ? `(${state.frequency})` : ""}`);
     const callErrorReason = useCallStore(state => state.callDisplay?.errorReason);
     const currentVersion = useUpdateStore(state => state.currentVersion);
     const newVersion = useUpdateStore(state => state.newVersion);
@@ -26,7 +26,7 @@ function InfoGrid() {
             <div className="info-grid-cell cursor-pointer" title={versionText}
                  onClick={handleVersionClick}>{currentVersion !== "" ? versionText : ""}</div>
             <div className="info-grid-cell"></div>
-            <div className="info-grid-cell" title={displayName}>{displayName}</div>
+            <div className="info-grid-cell" title={clientInfo}>{clientInfo}</div>
             <div className="info-grid-cell"></div>
             <div className="info-grid-cell uppercase" title={callErrorReason}>{callErrorReason}</div>
         </div>

@@ -31,7 +31,7 @@ async fn login_without_self() {
     let mut broadcast_rx = client.subscribe();
     let res = client.connect().await;
     let connected_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ clients, display_name} if clients.is_empty() && display_name == "LOVV_CTR"),
+        matches!(event, SignalingEvent::Connected{ display_name, frequency } if display_name == "LOVV_CTR" && frequency == "100.00"),
     ).await;
 
     assert!(res.is_ok());
@@ -62,7 +62,7 @@ async fn login() {
     let mut broadcast_rx1 = client1.subscribe();
     let res1 = client1.connect().await;
     let connected_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ clients, display_name} if clients.is_empty() && display_name == "LOVV_CTR"),
+        matches!(event, SignalingEvent::Connected{ display_name, frequency } if display_name == "LOVV_CTR" && frequency == "100.00"),
     ).await;
 
     assert!(res1.is_ok());

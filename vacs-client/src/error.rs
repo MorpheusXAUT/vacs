@@ -182,6 +182,9 @@ fn format_signaling_error(err: &SignalingError) -> String {
                 "Login failed: Another client with your CID is already connected."
             }
             LoginFailureReason::InvalidCredentials => "Login failed: Invalid credentials.",
+            LoginFailureReason::NoActiveVatsimConnection => {
+                "Login failed: No active VATSIM connection. Wait a few seconds and try again."
+            }
             LoginFailureReason::Timeout => {
                 "Login failed: Login did not complete in time. Please try again."
             }

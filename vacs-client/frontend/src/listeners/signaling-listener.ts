@@ -6,7 +6,7 @@ import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 import {useCallListStore} from "../stores/call-list-store.ts";
 
 export function setupSignalingListeners() {
-    const {setConnectionState, setDisplayName, setClients, addClient, removeClient} = useSignalingStore.getState();
+    const {setConnectionState, setClientInfo, setClients, addClient, getClientInfo, removeClient} = useSignalingStore.getState();
     const {
         addIncomingCall,
         removePeer,
@@ -21,16 +21,16 @@ export function setupSignalingListeners() {
 
     const init = () => {
         unlistenFns.push(
-            listen<string>("signaling:connected", (event) => {
+            listen<ClientInfo>("signaling:connected", (event) => {
                 setConnectionState("connected");
-                setDisplayName(event.payload);
+                setClientInfo(event.payload);
             }),
             listen("signaling:reconnecting", () => {
                 setConnectionState("connecting");
             }),
             listen("signaling:disconnected", () => {
                 setConnectionState("disconnected");
-                setDisplayName("");
+                setClientInfo({displayName: "", frequency: ""});
                 setClients([]);
                 resetCallStore();
                 clearCallList();
@@ -46,10 +46,10 @@ export function setupSignalingListeners() {
                 removePeer(event.payload);
             }),
             listen<string>("signaling:call-invite", (event) => {
-                addIncomingCall(event.payload);
+                addIncomingCall(getClientInfo(event.payload));
             }),
             listen<string>("signaling:call-accept", (event) => {
-                acceptCall(event.payload);
+                acceptCall(getClientInfo(event.payload));
             }),
             listen<string>("signaling:call-end", (event) => {
                 removePeer(event.payload);
@@ -63,11 +63,11 @@ export function setupSignalingListeners() {
                 openErrorOverlay("Peer not found", `Can not find peer with CID ${event.payload}`, false, 5000);
             }),
             listen<{ incoming: boolean, peerId: string }>("signaling:add-to-call-list", (event) => {
-                console.log("add to call list", event.payload);
+                const clientInfo = getClientInfo(event.payload.peerId);
                 addCallToCallList({
                     type: event.payload.incoming ? "IN" : "OUT",
                     time: new Date().toLocaleString('de-AT', {hour: "2-digit", minute: "2-digit"}),
-                    name: "LOVV_CTR", // TODO: Update display name
+                    name: clientInfo.displayName,
                     number: event.payload.peerId
                 });
             })

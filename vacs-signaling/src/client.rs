@@ -42,8 +42,7 @@ pub enum SignalingEvent {
     /// Emitted after the [`SignalingClient`] successfully connected to the server, including authentication.
     /// The client is ready to send and receive messages.
     Connected {
-        clients: Vec<ClientInfo>,
-        display_name: String,
+        client_info: ClientInfo,
     },
     /// Emitted for every [`SignalingMessage`] received by a connected and authenticated [`SignalingClientInner`].
     Message(SignalingMessage),
@@ -317,7 +316,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    async fn login(&self) -> Result<(String, Vec<ClientInfo>), SignalingError> {
+    async fn login(&self) -> Result<ClientInfo, SignalingError> {
         tracing::trace!("Retrieving auth token from token provider");
         let token = self.token_provider.get_token().await?;
         tracing::debug!("Sending Login message to server");
@@ -329,9 +328,14 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
         tracing::debug!("Awaiting authentication response from server");
         match self.recv_with_timeout(self.login_timeout).await? {
-            SignalingMessage::ClientList { clients } => {
-                tracing::info!(num_clients = ?clients.len(), "Login successful, received client list");
-                Ok(("LOVV_CTR".to_string(), clients)) // TODO retrieve actual display name
+            SignalingMessage::ClientInfo { own, info } => {
+                if !own {
+                    return Err(SignalingError::ProtocolError(
+                        "Expected own client info after Login".to_string(),
+                    ));
+                }
+                tracing::info!(?info, "Login successful, received own client info");
+                Ok(info)
             }
             SignalingMessage::LoginFailure { reason } => {
                 tracing::warn!(?reason, "Login failed");
@@ -395,13 +399,12 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
         tracing::trace!("Successfully started worker tasks, logging in");
         match self.login().await {
-            Ok((display_name, clients)) => {
+            Ok(client_info) => {
                 tracing::trace!("Successfully logged in to server");
 
                 self.set_state(State::LoggedIn);
                 if let Err(err) = self.broadcast_tx.send(SignalingEvent::Connected {
-                    display_name,
-                    clients,
+                    client_info
                 }) {
                     tracing::warn!(?err, "Failed to broadcast connected event");
                 }
@@ -718,14 +721,17 @@ mod tests {
             ClientInfo {
                 id: "client1".to_string(),
                 display_name: "Client 1".to_string(),
+                frequency: "100.000".to_string()
             },
             ClientInfo {
                 id: "client2".to_string(),
                 display_name: "Client 2".to_string(),
+                frequency: "200.000".to_string()
             },
             ClientInfo {
                 id: "client3".to_string(),
                 display_name: "Client 3".to_string(),
+                frequency: "300.000".to_string()
             },
         ]
     }

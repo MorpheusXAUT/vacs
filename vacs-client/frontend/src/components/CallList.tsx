@@ -87,7 +87,7 @@ function CallList() {
                             const peerId: string | undefined = calls[selectedCall]?.number;
                             if (peerId === undefined || callDisplay !== undefined) return;
                             try {
-                                setOutgoingCall(peerId);
+                                setOutgoingCall({id: peerId, displayName: peerId, frequency: ""});
                                 await invokeStrict("signaling_start_call", {peerId: peerId});
                             } catch {
                                 removePeer(peerId);

@@ -2,6 +2,7 @@ import Button from "./ui/Button.tsx";
 import {useCallStore} from "../stores/call-store.ts";
 import {invokeStrict} from "../error.ts";
 import unplug from "../assets/unplug.svg";
+import {ClientInfo} from "../types/client-info.ts";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -29,15 +30,15 @@ function CallQueue() {
         }
     };
 
-    const handleAnswerKeyClick = async (peerId: string) => {
+    const handleAnswerKeyClick = async (peer: ClientInfo) => {
         // Can't accept someone's call if something is in your call display
         if (callDisplay !== undefined) return;
 
         try {
-            acceptCall(peerId);
-            await invokeStrict("signaling_accept_call", {peerId: peerId});
+            acceptCall(peer);
+            await invokeStrict("signaling_accept_call", {peerId: peer.id});
         } catch {
-            removePeer(peerId);
+            removePeer(peer.id);
         }
     }
 
@@ -53,17 +54,17 @@ function CallQueue() {
                     <Button color={cdColor}
                             highlight={callDisplay.type === "outgoing" || callDisplay.type === "rejected" ? "green" : undefined}
                             softDisabled={true}
-                            onClick={() => handleCallDisplayClick(callDisplay.peerId)}
-                            className="h-full min-h-16 text-sm">{callDisplay.peerId}</Button>
+                            onClick={() => handleCallDisplayClick(callDisplay.peer.id)}
+                            className="h-16 text-sm p-1.5"><p className="wrap-break-word max-w-full leading-3.5">{callDisplay.peer.displayName}</p></Button>
                 </div>
             ) : (
                 <div className="w-full border rounded-md min-h-16"></div>
             )}
 
             {/*Answer Keys*/}
-            {incomingCalls.map((peerId, idx) => (
+            {incomingCalls.map((peer, idx) => (
                 <Button key={idx} color={blink ? "green" : "gray"} className={"min-h-16 text-sm"}
-                        onClick={() => handleAnswerKeyClick(peerId)}>{peerId}</Button>
+                        onClick={() => handleAnswerKeyClick(peer)}><p>{peer.displayName}<br/>{peer.frequency}</p></Button>
             ))}
             {Array.from(Array(Math.max(5 - incomingCalls.length, 0)).keys()).map((idx) =>
                 <div key={idx} className="w-full border rounded-md min-h-16"></div>

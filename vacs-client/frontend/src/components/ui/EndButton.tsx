@@ -11,7 +11,7 @@ function EndButton() {
     const endAnyCall = useAsyncDebounce(async () => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {
             try {
-                await invokeStrict("signaling_end_call", {peerId: callDisplay.peerId});
+                await invokeStrict("signaling_end_call", {peerId: callDisplay.peer.id});
                 endCall();
             } catch {}
         } else if (callDisplay?.type === "rejected") {
