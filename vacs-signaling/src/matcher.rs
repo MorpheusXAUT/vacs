@@ -54,7 +54,9 @@ impl ResponseMatcher {
 
         match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(msg)) => Ok(msg),
-            Ok(Err(_)) => Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected)),
+            Ok(Err(_)) => Err(SignalingError::Runtime(
+                SignalingRuntimeError::Disconnected(None),
+            )),
             Err(_) => Err(SignalingError::Timeout("Matcher timed out".to_string())),
         }
     }

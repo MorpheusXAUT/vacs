@@ -236,11 +236,15 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         match self.state() {
             State::Disconnected => {
                 tracing::warn!("Tried to send message before signaling client was started");
-                return Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected));
+                return Err(SignalingError::Runtime(
+                    SignalingRuntimeError::Disconnected(None),
+                ));
             }
             State::Connected if !matches!(msg, SignalingMessage::Login { .. }) => {
                 tracing::warn!("Tried to send message before login");
-                return Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected));
+                return Err(SignalingError::Runtime(
+                    SignalingRuntimeError::Disconnected(None),
+                ));
             }
             _ => {}
         };
@@ -248,7 +252,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         let send_tx = {
             self.send_tx.lock().as_ref().cloned().ok_or_else(|| {
                 tracing::error!("Client is connected, but send_tx is not initialized");
-                SignalingError::Runtime(SignalingRuntimeError::Disconnected)
+                SignalingError::Runtime(SignalingRuntimeError::Disconnected(None))
             })?
         };
 
@@ -261,7 +265,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         send_tx
             .send(tungstenite::Message::from(serialized))
             .await
-            .map_err(|_| SignalingError::Runtime(SignalingRuntimeError::Disconnected))
+            .map_err(|_| SignalingError::Runtime(SignalingRuntimeError::Disconnected(None)))
     }
 
     #[instrument(level = "debug", skip(self), err)]
@@ -280,7 +284,9 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
         if self.state() == State::Disconnected {
             tracing::warn!("Tried to receive message without transport being connected");
-            return Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected));
+            return Err(SignalingError::Runtime(
+                SignalingRuntimeError::Disconnected(None),
+            ));
         }
 
         let disconnect_token = self.disconnect_token.lock().clone();
@@ -637,7 +643,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
                                 }
                             },
                             None => {
-                                Self::emit_task_error(&state_rx, &broadcast_tx, SignalingRuntimeError::Disconnected);
+                                Self::emit_task_error(&state_rx, &broadcast_tx, SignalingRuntimeError::Disconnected(None));
                                 break;
                             }
                         }
@@ -830,7 +836,9 @@ mod tests {
         let result = client.send(msg.clone()).await;
         assert_matches!(
             result,
-            Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected))
+            Err(SignalingError::Runtime(
+                SignalingRuntimeError::Disconnected(None)
+            ))
         );
     }
 
@@ -861,7 +869,9 @@ mod tests {
             let result = client_clone.send(msg.clone()).await;
             assert_matches!(
                 result,
-                Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected))
+                Err(SignalingError::Runtime(
+                    SignalingRuntimeError::Disconnected(None)
+                ))
             );
         });
 
@@ -886,7 +896,9 @@ mod tests {
         let result = client.send(msg.clone()).await;
         assert_matches!(
             result,
-            Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected))
+            Err(SignalingError::Runtime(
+                SignalingRuntimeError::Disconnected(None)
+            ))
         );
     }
 
@@ -908,7 +920,9 @@ mod tests {
         let result = client.send(msg.clone()).await;
         assert_matches!(
             result,
-            Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected))
+            Err(SignalingError::Runtime(
+                SignalingRuntimeError::Disconnected(None)
+            ))
         );
     }
 
@@ -1027,7 +1041,9 @@ mod tests {
         assert!(recv_result.is_err());
         assert_matches!(
             recv_result,
-            Err(SignalingError::Runtime(SignalingRuntimeError::Disconnected))
+            Err(SignalingError::Runtime(
+                SignalingRuntimeError::Disconnected(None)
+            ))
         );
     }
 

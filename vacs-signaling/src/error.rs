@@ -1,6 +1,6 @@
 use thiserror::Error;
 use tokio_tungstenite::tungstenite;
-use vacs_protocol::ws::{ErrorReason, LoginFailureReason};
+use vacs_protocol::ws::{DisconnectReason, ErrorReason, LoginFailureReason};
 
 #[derive(Debug, Error)]
 pub enum SignalingError {
@@ -20,8 +20,8 @@ pub enum SignalingError {
 
 #[derive(Debug, Clone, Error)]
 pub enum SignalingRuntimeError {
-    #[error("disconnected")]
-    Disconnected,
+    #[error("disconnected: {0:?}")]
+    Disconnected(Option<DisconnectReason>),
     #[error("reconnect failed: {0:?}")]
     ReconnectFailed(ReconnectFailureReason),
     #[error("server error: {0:?}")]
@@ -34,23 +34,23 @@ pub enum SignalingRuntimeError {
 
 impl SignalingRuntimeError {
     pub fn can_reconnect(&self) -> bool {
-        matches!(
-            self,
-            SignalingRuntimeError::Disconnected
-                | SignalingRuntimeError::ServerError(_)
-                | SignalingRuntimeError::Transport(_)
-                | SignalingRuntimeError::SerializationError(_)
-        )
+        matches!(self, SignalingRuntimeError::Disconnected(reason) if reason.is_none())
+            || matches!(
+                self,
+                SignalingRuntimeError::ServerError(_)
+                    | SignalingRuntimeError::Transport(_)
+                    | SignalingRuntimeError::SerializationError(_)
+            )
     }
 
     pub fn is_fatal(&self) -> bool {
-        matches!(
-            self,
-            SignalingRuntimeError::Disconnected
-                | SignalingRuntimeError::ReconnectFailed(_)
-                | SignalingRuntimeError::ServerError(_)
-                | SignalingRuntimeError::Transport(_)
-        )
+        matches!(self, SignalingRuntimeError::Disconnected(reason) if reason.is_some())
+            || matches!(
+                self,
+                SignalingRuntimeError::ReconnectFailed(_)
+                    | SignalingRuntimeError::ServerError(_)
+                    | SignalingRuntimeError::Transport(_)
+            )
     }
 }
 
@@ -82,7 +82,7 @@ impl From<SignalingError> for ReconnectFailureReason {
             SignalingError::ProtocolError(reason) => ReconnectFailureReason::Other(reason),
             SignalingError::Timeout(reason) => ReconnectFailureReason::Other(reason),
             SignalingError::Runtime(error) => match error {
-                SignalingRuntimeError::Disconnected
+                SignalingRuntimeError::Disconnected(_)
                 | SignalingRuntimeError::ServerError(_)
                 | SignalingRuntimeError::SerializationError(_) => {
                     ReconnectFailureReason::Connection

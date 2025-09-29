@@ -100,19 +100,29 @@ impl SignalingReceiver for TokioReceiver {
             match msg {
                 Ok(tungstenite::Message::Text(text)) => {
                     tracing::debug!("Received message");
-                    return SignalingMessage::deserialize(&text).map_err(|err| {
-                        tracing::warn!(?err, "Failed to deserialize message");
-                        SignalingRuntimeError::SerializationError(err.to_string())
-                    });
+                    return match SignalingMessage::deserialize(&text) {
+                        Ok(SignalingMessage::Disconnected { reason }) => {
+                            tracing::debug!(
+                                ?reason,
+                                "Received Disconnected message, returning disconnected error"
+                            );
+                            Err(SignalingRuntimeError::Disconnected(Some(reason)))
+                        }
+                        Ok(msg) => Ok(msg),
+                        Err(err) => {
+                            tracing::warn!(?err, "Failed to deserialize message");
+                            Err(SignalingRuntimeError::SerializationError(err.to_string()))
+                        }
+                    };
                 }
                 Ok(tungstenite::Message::Close(reason)) => {
                     tracing::warn!(?reason, "Received Close WebSocket frame");
-                    return Err(SignalingRuntimeError::Disconnected);
+                    return Err(SignalingRuntimeError::Disconnected(None));
                 }
                 Ok(tungstenite::Message::Ping(data)) => {
                     if let Err(err) = send_tx.send(tungstenite::Message::Pong(data)).await {
                         tracing::warn!(?err, "Failed to send tokio Pong");
-                        return Err(SignalingRuntimeError::Disconnected);
+                        return Err(SignalingRuntimeError::Disconnected(None));
                     }
                 }
                 Ok(other) => {
@@ -127,6 +137,6 @@ impl SignalingReceiver for TokioReceiver {
             }
         }
         tracing::warn!("WebSocket stream closed");
-        Err(SignalingRuntimeError::Disconnected)
+        Err(SignalingRuntimeError::Disconnected(None))
     }
 }
