@@ -34,6 +34,7 @@
 //! ```
 
 use anyhow::Context;
+use std::str::FromStr;
 use tracing::instrument;
 
 /// Default timeout for HTTP requests against the slurper API.
@@ -58,6 +59,58 @@ const SLURPER_FACILITY_TYPE_ATC: &str = "atc";
 /// Slurper facility type for pilots.
 const SLURPER_FACILITY_TYPE_PILOT: &str = "pilot";
 
+/// Enum representing the different VATSIM facility types as parsed from their respective callsign suffixes
+/// (in accordance with the [VATSIM GCAP](https://vatsim.net/docs/policy/global-controller-administration-policy).
+#[derive(Debug, PartialEq, Default)]
+pub enum FacilityType {
+    #[default]
+    Unknown,
+    Ramp,
+    Delivery,
+    Ground,
+    Tower,
+    Approach,
+    Departure,
+    Enroute,
+    FlightServiceStation,
+    Radio,
+    TrafficFlow,
+}
+
+impl FromStr for FacilityType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.to_ascii_uppercase();
+        let facility_suffix = s.split('_').last().unwrap_or_default();
+        match facility_suffix {
+            "RMP" => Ok(FacilityType::Ramp),
+            "DEL" => Ok(FacilityType::Delivery),
+            "GND" => Ok(FacilityType::Ground),
+            "TWR" => Ok(FacilityType::Tower),
+            "APP" => Ok(FacilityType::Approach),
+            "DEP" => Ok(FacilityType::Departure),
+            "CTR" => Ok(FacilityType::Enroute),
+            "FSS" => Ok(FacilityType::FlightServiceStation),
+            "RDO" => Ok(FacilityType::Radio),
+            "TMU" => Ok(FacilityType::TrafficFlow),
+            "FMP" => Ok(FacilityType::TrafficFlow),
+            _ => Ok(FacilityType::Unknown),
+        }
+    }
+}
+
+impl From<&str> for FacilityType {
+    fn from(value: &str) -> Self {
+        value.parse().unwrap_or_default()
+    }
+}
+
+impl From<String> for FacilityType {
+    fn from(value: String) -> Self {
+        value.as_str().parse().unwrap_or_default()
+    }
+}
+
 /// User info returned from the VATSIM Slurper API.
 #[derive(Debug, PartialEq)]
 pub struct SlurperUserInfo {
@@ -65,6 +118,8 @@ pub struct SlurperUserInfo {
     pub callsign: String,
     /// (Primary) frequency selected by the controller.
     pub frequency: String,
+    /// Facility type the CID connected as.
+    pub facility_type: FacilityType,
 }
 
 /// Client for accessing the VATSIM Slurper API.
@@ -288,10 +343,18 @@ impl SlurperClient {
             return Ok(None);
         }
 
-        tracing::debug!(?callsign, ?frequency, "Found user info for CID");
+        let facility_type: FacilityType = callsign.into();
+
+        tracing::debug!(
+            ?callsign,
+            ?frequency,
+            ?facility_type,
+            "Found user info for CID"
+        );
         Ok(Some(SlurperUserInfo {
             callsign: callsign.to_string(),
             frequency: frequency.to_string(),
+            facility_type,
         }))
     }
 }
