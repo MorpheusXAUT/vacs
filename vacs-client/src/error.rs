@@ -183,7 +183,7 @@ fn format_signaling_error(err: &SignalingError) -> String {
             }
             LoginFailureReason::InvalidCredentials => "Login failed: Invalid credentials.",
             LoginFailureReason::NoActiveVatsimConnection => {
-                "Login failed: No active VATSIM connection. Wait a few seconds and try again."
+                "Login failed: No active VATSIM connection. Wait a few seconds after connecting to VATSIM and try again."
             }
             LoginFailureReason::Timeout => {
                 "Login failed: Login did not complete in time. Please try again."

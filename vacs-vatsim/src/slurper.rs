@@ -227,7 +227,9 @@ impl SlurperClient {
             }
         }
 
-        tracing::debug!("CID is present in slurper, but no valid controller info found, returning None");
+        tracing::debug!(
+            "CID is present in slurper, but no valid controller info found, returning None"
+        );
         Ok(None)
     }
 
