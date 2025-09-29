@@ -9,6 +9,8 @@ pub enum LoginFailureReason {
     DuplicateId,
     /// The provided credentials are invalid.
     InvalidCredentials,
+    /// No active VATSIM connection was found.
+    NoActiveVatsimConnection,
     /// The login flow was not completed in time, the client should reconnect and authenticate immediately.
     Timeout,
     /// The client is using an unsupported protocol version.
@@ -49,8 +51,10 @@ pub enum CallErrorReason {
 pub struct ClientInfo {
     /// ID of the client.
     pub id: String,
-    /// Display (station) name of the client.
+    /// The VATSIM callsign of the client.
     pub display_name: String,
+    /// The primary VATSIM frequency of the client.
+    pub frequency: String,
 }
 
 /// Represents a message exchanged between the signaling server and clients.
@@ -94,6 +98,16 @@ pub enum SignalingMessage {
         /// When sent to the signaling server by the caller, this is the ID of the target client to call.
         /// When received from the signaling server (by the callee), this is the ID of the source client initiating the call.
         peer_id: String,
+    },
+    /// A message containing the (updated) info for a connected client.
+    ///
+    /// This message is also returned after a successful login attempt, containing the authenticated client's
+    /// own information.
+    ClientInfo {
+        /// Indicates whether the message contains an update for the client's own info.
+        own: bool,
+        /// Updated information about the client.
+        info: ClientInfo,
     },
     /// A call accept message sent by the target client to accept an incoming call.
     ///
@@ -401,13 +415,14 @@ mod tests {
             client: ClientInfo {
                 id: "client1".to_string(),
                 display_name: "station1".to_string(),
+                frequency: "100.000".to_string()
             },
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"ClientConnected\",\"client\":{\"id\":\"client1\",\"displayName\":\"station1\"}}"
+            "{\"type\":\"ClientConnected\",\"client\":{\"id\":\"client1\",\"displayName\":\"station1\",\"frequency\":\"100.000\"}}"
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -459,10 +474,12 @@ mod tests {
                 ClientInfo {
                     id: "client1".to_string(),
                     display_name: "station1".to_string(),
+                    frequency: "100.000".to_string()
                 },
                 ClientInfo {
                     id: "client2".to_string(),
                     display_name: "station2".to_string(),
+                    frequency: "200.000".to_string()
                 },
             ],
         };
@@ -470,7 +487,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"ClientList\",\"clients\":[{\"id\":\"client1\",\"displayName\":\"station1\"},{\"id\":\"client2\",\"displayName\":\"station2\"}]}"
+            "{\"type\":\"ClientList\",\"clients\":[{\"id\":\"client1\",\"displayName\":\"station1\",\"frequency\":\"100.000\"},{\"id\":\"client2\",\"displayName\":\"station2\",\"frequency\":\"200.000\"}]}"
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
