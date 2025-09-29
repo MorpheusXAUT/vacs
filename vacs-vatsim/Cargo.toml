@@ -6,9 +6,12 @@ publish.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 bytes = { workspace = true }
 csv = { workspace = true }
+parking_lot = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

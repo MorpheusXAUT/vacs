@@ -7545,10 +7545,13 @@ name = "vacs-vatsim"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bytes",
  "csv",
+ "parking_lot",
  "pretty_assertions",
  "reqwest",
+ "serde",
  "test-log",
  "tokio",
  "tracing",

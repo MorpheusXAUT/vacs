@@ -1,3 +1,4 @@
+pub mod data_feed;
 pub mod slurper;
 
 use std::str::FromStr;
