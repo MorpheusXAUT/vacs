@@ -187,7 +187,7 @@ async fn handle_call_ice_candidate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ws::test_util::TestSetup;
+    use crate::ws::test_util::{TestSetup, create_client_info};
     use axum::extract::ws;
     use axum::extract::ws::Utf8Bytes;
     use pretty_assertions::assert_eq;
@@ -198,7 +198,7 @@ mod tests {
     #[test(tokio::test)]
     async fn handle_application_message_list_clients_without_self() {
         let mut setup = TestSetup::new();
-        setup.register_client("client1").await;
+        setup.register_client(create_client_info(1)).await;
 
         let control_flow = handle_application_message(
             &setup.app_state,
@@ -224,8 +224,8 @@ mod tests {
     #[test(tokio::test)]
     async fn handle_application_message_list_clients() {
         let mut setup = TestSetup::new();
-        setup.register_client("client1").await;
-        setup.register_client("client2").await;
+        setup.register_client(create_client_info(1)).await;
+        setup.register_client(create_client_info(2)).await;
 
         let control_flow = handle_application_message(
             &setup.app_state,
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(
             message,
             ws::Message::Text(Utf8Bytes::from_static(
-                r#"{"type":"ClientList","clients":[{"id":"client2","displayName":"client2"}]}"#
+                r#"{"type":"ClientList","clients":[{"id":"client2","displayName":"Client 2","frequency":"200.000"}]}"#
             ))
         )
     }
@@ -251,7 +251,7 @@ mod tests {
     #[test(tokio::test)]
     async fn handle_application_message_logout() {
         let setup = TestSetup::new();
-        setup.register_client("client1").await;
+        setup.register_client(create_client_info(1)).await;
 
         let control_flow = handle_application_message(
             &setup.app_state,
@@ -266,7 +266,11 @@ mod tests {
     #[test(tokio::test)]
     async fn handle_application_message_call_offer() {
         let setup = TestSetup::new();
-        let mut clients = setup.register_clients(vec!["client1", "client2"]).await;
+        let client_info_1 = create_client_info(1);
+        let client_info_2 = create_client_info(2);
+        let mut clients = setup
+            .register_clients(vec![client_info_1, client_info_2])
+            .await;
 
         let control_flow = handle_application_message(
             &setup.app_state,

@@ -24,17 +24,21 @@ impl TestClient {
         })
     }
 
-    pub async fn new_with_login<F>(
+    pub async fn new_with_login<FI, FC>(
         ws_addr: &str,
         id: &str,
         token: &str,
-        client_list_predicate: F,
+        client_info_predicate: FI,
+        client_list_predicate: FC,
     ) -> anyhow::Result<Self>
     where
-        F: FnOnce(&[ClientInfo]) -> anyhow::Result<()>,
+        FI: FnOnce(bool, ClientInfo) -> anyhow::Result<()>,
+        FC: FnOnce(&[ClientInfo]) -> anyhow::Result<()> + Copy,
     {
         let mut client = Self::new(ws_addr, id, token).await?;
-        client.login(client_list_predicate).await?;
+        client
+            .login(client_info_predicate, client_list_predicate)
+            .await?;
         Ok(client)
     }
 
@@ -42,22 +46,34 @@ impl TestClient {
         &self.id
     }
 
-    pub async fn login<F>(&mut self, client_list_predicate: F) -> anyhow::Result<()>
+    pub async fn login<FI, FC>(
+        &mut self,
+        client_info_predicate: FI,
+        client_list_predicate: FC,
+    ) -> anyhow::Result<()>
     where
-        F: FnOnce(&[ClientInfo]) -> anyhow::Result<()>,
+        FI: FnOnce(bool, ClientInfo) -> anyhow::Result<()>,
+        FC: FnOnce(&[ClientInfo]) -> anyhow::Result<()> + Copy,
     {
         let login_msg = SignalingMessage::Login {
             token: self.token.to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
         };
         self.send_and_expect_with_timeout(login_msg, Duration::from_millis(100), |msg| match msg {
-            SignalingMessage::ClientList { clients } => client_list_predicate(&clients),
+            SignalingMessage::ClientInfo { own, info } => client_info_predicate(own, info),
             SignalingMessage::LoginFailure { reason } => {
                 Err(anyhow::anyhow!("Login failed: {:?}", reason))
             }
             _ => Err(anyhow::anyhow!("Unexpected response: {:?}", msg)),
         })
-        .await
+        .await?;
+
+        self.recv_with_timeout_and_filter(
+            Duration::from_millis(100),
+            |msg| matches!(msg, SignalingMessage::ClientList { clients } if client_list_predicate(clients).is_ok()))
+        .await.ok_or_else(|| anyhow::anyhow!("Client list not received"))?;
+
+        Ok(())
     }
 
     pub async fn send_raw(&mut self, msg: Message) -> anyhow::Result<()> {
@@ -102,6 +118,22 @@ impl TestClient {
                 _ => return None,
             }
         }
+    }
+
+    pub async fn recv_with_timeout_and_filter<F>(
+        &mut self,
+        timeout: Duration,
+        predicate: F,
+    ) -> Option<SignalingMessage>
+    where
+        F: Fn(&SignalingMessage) -> bool,
+    {
+        while let Some(message) = self.recv_with_timeout(timeout).await {
+            if predicate(&message) {
+                return Some(message);
+            }
+        }
+        None
     }
 
     pub async fn recv_until_timeout(&mut self, timeout: Duration) -> Vec<SignalingMessage> {
@@ -201,7 +233,7 @@ pub async fn setup_test_clients(
 ) -> HashMap<String, TestClient> {
     let mut test_clients = HashMap::new();
     for (id, token) in clients {
-        let client = TestClient::new_with_login(addr, id, token, |clients| Ok(()))
+        let client = TestClient::new_with_login(addr, id, token, |_, _| Ok(()), |_| Ok(()))
             .await
             .expect("Failed to create test client");
         test_clients.insert(client.id.clone(), client);
@@ -217,7 +249,8 @@ pub async fn setup_n_test_clients(addr: &str, num_clients: usize) -> Vec<TestCli
             addr,
             &format!("client{n}"),
             &format!("token{n}"),
-            |clients| Ok(()),
+            |_, _| Ok(()),
+            |_| Ok(()),
         )
         .await
         .expect("Failed to create test client");

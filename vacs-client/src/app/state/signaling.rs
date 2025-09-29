@@ -157,9 +157,7 @@ impl AppStateSignalingExt for AppStateInner {
 impl AppStateInner {
     async fn handle_signaling_event(app: &AppHandle, event: SignalingEvent) {
         match event {
-            SignalingEvent::Connected {
-                client_info
-            } => {
+            SignalingEvent::Connected { client_info } => {
                 log::debug!(
                     "Successfully connected to signaling server. Display name: {}, frequency: {}",
                     &client_info.display_name,
@@ -396,7 +394,11 @@ impl AppStateInner {
                 app.emit("signaling:client-list", clients).ok();
             }
             SignalingMessage::ClientInfo { own, info } => {
-                let event = if own {"signaling:connected"} else {"signaling:client-connected"};
+                let event = if own {
+                    "signaling:connected"
+                } else {
+                    "signaling:client-connected"
+                };
                 app.emit(event, info).ok();
             }
             SignalingMessage::Error { reason, peer_id } => match reason {

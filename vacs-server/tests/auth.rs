@@ -14,19 +14,39 @@ use vacs_server::test_utils::{
 async fn login() {
     let test_app = TestApp::new().await;
 
-    let _client1 = TestClient::new_with_login(test_app.addr(), "client1", "token1", |clients| {
-        assert_eq!(clients.len(), 0);
-        Ok(())
-    })
+    let _client1 = TestClient::new_with_login(
+        test_app.addr(),
+        "client1",
+        "token1",
+        |own, info| {
+            assert_eq!(own, true);
+            assert_eq!(info.display_name, "client1");
+            Ok(())
+        },
+        |clients| {
+            assert_eq!(clients.len(), 0);
+            Ok(())
+        },
+    )
     .await
     .expect("Failed to log in first client");
 
-    let _client2 = TestClient::new_with_login(test_app.addr(), "client2", "token2", |clients| {
-        assert_eq!(clients.len(), 1);
-        assert_eq!(clients[0].id, "client1");
-        assert_eq!(clients[0].display_name, "client1");
-        Ok(())
-    })
+    let _client2 = TestClient::new_with_login(
+        test_app.addr(),
+        "client2",
+        "token2",
+        |own, info| {
+            assert_eq!(own, true);
+            assert_eq!(info.display_name, "client2");
+            Ok(())
+        },
+        |clients| {
+            assert_eq!(clients.len(), 1);
+            assert_eq!(clients[0].id, "client1");
+            assert_eq!(clients[0].display_name, "client1");
+            Ok(())
+        },
+    )
     .await
     .expect("Failed to log in second client");
 }
@@ -35,17 +55,33 @@ async fn login() {
 async fn duplicate_login() {
     let test_app = TestApp::new().await;
 
-    let _client1 = TestClient::new_with_login(test_app.addr(), "client1", "token1", |clients| {
-        assert_eq!(clients.len(), 0);
-        Ok(())
-    })
+    let _client1 = TestClient::new_with_login(
+        test_app.addr(),
+        "client1",
+        "token1",
+        |own, info| {
+            assert_eq!(own, true);
+            assert_eq!(info.display_name, "client1");
+            Ok(())
+        },
+        |clients| {
+            assert_eq!(clients.len(), 0);
+            Ok(())
+        },
+    )
     .await
     .expect("Failed to log in first client");
 
     assert!(
-        TestClient::new_with_login(test_app.addr(), "client1", "token1", |_| Ok(()))
-            .await
-            .is_err_and(|err| { err.to_string() == "Login failed: DuplicateId" })
+        TestClient::new_with_login(
+            test_app.addr(),
+            "client1",
+            "token1",
+            |_, _| Ok(()),
+            |_| Ok(())
+        )
+        .await
+        .is_err_and(|err| { err.to_string() == "Login failed: DuplicateId" })
     );
 }
 
@@ -54,7 +90,7 @@ async fn invalid_login() {
     let test_app = TestApp::new().await;
 
     assert!(
-        TestClient::new_with_login(test_app.addr(), "client1", "", |_| Ok(()))
+        TestClient::new_with_login(test_app.addr(), "client1", "", |_, _| Ok(()), |_| Ok(()))
             .await
             .is_err_and(|err| { err.to_string() == "Login failed: InvalidCredentials" })
     );
@@ -90,8 +126,20 @@ async fn unauthorized_message_before_login() {
 async fn simultaneous_login_attempts() {
     let test_app = TestApp::new().await;
 
-    let attempt1 = TestClient::new_with_login(test_app.addr(), "client1", "token1", |_| Ok(()));
-    let attempt2 = TestClient::new_with_login(test_app.addr(), "client1", "token1", |_| Ok(()));
+    let attempt1 = TestClient::new_with_login(
+        test_app.addr(),
+        "client1",
+        "token1",
+        |_, _| Ok(()),
+        |_| Ok(()),
+    );
+    let attempt2 = TestClient::new_with_login(
+        test_app.addr(),
+        "client1",
+        "token1",
+        |_, _| Ok(()),
+        |_| Ok(()),
+    );
 
     let (attempt1_result, attempt2_result) = tokio::join!(attempt1, attempt2);
 
@@ -211,13 +259,23 @@ async fn login_client_list() {
     )
     .await;
 
-    let _client4 = TestClient::new_with_login(test_app.addr(), "client4", "token4", |clients| {
-        assert_eq!(clients.len(), 3);
-        assert!(clients.iter().any(|client| client.id == "client1"));
-        assert!(clients.iter().any(|client| client.id == "client2"));
-        assert!(clients.iter().any(|client| client.id == "client3"));
-        Ok(())
-    })
+    let _client4 = TestClient::new_with_login(
+        test_app.addr(),
+        "client4",
+        "token4",
+        |own, info| {
+            assert_eq!(own, true);
+            assert_eq!(info.display_name, "client4");
+            Ok(())
+        },
+        |clients| {
+            assert_eq!(clients.len(), 3);
+            assert!(clients.iter().any(|client| client.id == "client1"));
+            assert!(clients.iter().any(|client| client.id == "client2"));
+            assert!(clients.iter().any(|client| client.id == "client3"));
+            Ok(())
+        },
+    )
     .await
     .expect("Failed to log in fourth client");
 }

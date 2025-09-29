@@ -81,7 +81,7 @@ impl FromStr for FacilityType {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_ascii_uppercase();
-        let facility_suffix = s.split('_').last().unwrap_or_default();
+        let facility_suffix = s.split('_').next_back().unwrap_or_default();
         match facility_suffix {
             "RMP" => Ok(FacilityType::Ramp),
             "DEL" => Ok(FacilityType::Delivery),

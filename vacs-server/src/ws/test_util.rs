@@ -1,4 +1,4 @@
-use crate::config::AppConfig;
+use crate::config::{AppConfig, VatsimConfig};
 use crate::release::UpdateChecker;
 use crate::state::AppState;
 use crate::store::Store;
@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::sync::{Mutex, broadcast, mpsc, watch};
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
+use vacs_vatsim::slurper::SlurperClient;
 
 pub struct MockSink {
     tx: mpsc::Sender<ws::Message>,
@@ -84,15 +85,25 @@ impl TestSetup {
             vatsim_users.insert(format!("token{i}"), format!("client{i}"));
         }
         let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let config = AppConfig {
+            vatsim: VatsimConfig {
+                user_service: Default::default(),
+                require_active_connection: false,
+                slurper_base_url: Default::default(),
+            },
+            ..Default::default()
+        };
         let app_state = Arc::new(AppState::new(
-            AppConfig::default(),
+            config,
             UpdateChecker::default(),
             Store::Memory(MemoryStore::default()),
+            SlurperClient::new("http://localhost:12345").unwrap(),
             shutdown_rx,
         ));
         let client_info = ClientInfo {
             id: "client1".to_string(),
             display_name: "Client 1".to_string(),
+            frequency: "100.000".to_string(),
         };
         let (tx, rx) = mpsc::channel(10);
         let session = ClientSession::new(client_info, tx);
@@ -121,20 +132,23 @@ impl TestSetup {
 
     pub async fn register_client(
         &self,
-        client_id: &str,
+        client_info: ClientInfo,
     ) -> (ClientSession, mpsc::Receiver<SignalingMessage>) {
         self.app_state
-            .register_client(client_id)
+            .register_client(client_info)
             .await
             .expect("Failed to register client")
     }
 
     pub async fn register_clients(
         &self,
-        client_ids: Vec<&str>,
+        client_ids: Vec<ClientInfo>,
     ) -> HashMap<String, (ClientSession, mpsc::Receiver<SignalingMessage>)> {
-        futures_util::future::join_all(client_ids.iter().map(|&client_id| async move {
-            (client_id.to_string(), self.register_client(client_id).await)
+        futures_util::future::join_all(client_ids.into_iter().map(|client_id| async move {
+            (
+                client_id.id.to_string(),
+                self.register_client(client_id).await,
+            )
         }))
         .await
         .into_iter()
@@ -147,7 +161,7 @@ impl TestSetup {
 
     pub fn spawn_session_handle_interaction(
         mut self,
-        client_id: String,
+        client_info: ClientInfo,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             self.session
@@ -158,9 +172,17 @@ impl TestSetup {
                     &mut self.broadcast_rx,
                     &mut self.rx,
                     &mut self.shutdown_tx.subscribe(),
-                    client_id.as_str(),
+                    client_info,
                 )
                 .await
         })
+    }
+}
+
+pub fn create_client_info(id: u8) -> ClientInfo {
+    ClientInfo {
+        id: format!("client{}", id),
+        display_name: format!("Client {}", id),
+        frequency: format!("{}00.000", id),
     }
 }

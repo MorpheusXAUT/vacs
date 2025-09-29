@@ -31,11 +31,13 @@ async fn login_without_self() {
     let mut broadcast_rx = client.subscribe();
     let res = client.connect().await;
     let connected_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ display_name, frequency } if display_name == "LOVV_CTR" && frequency == "100.00"),
+        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client1" && client_info.display_name == "client1" && client_info.frequency == ""),
     ).await;
+    let client_list_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
 
     assert!(res.is_ok());
     assert!(connected_event.is_ok());
+    assert!(client_list_event.is_ok());
 
     shutdown_token.cancel();
     client.disconnect().await;
@@ -62,11 +64,13 @@ async fn login() {
     let mut broadcast_rx1 = client1.subscribe();
     let res1 = client1.connect().await;
     let connected_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ display_name, frequency } if display_name == "LOVV_CTR" && frequency == "100.00"),
+        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client1" && client_info.display_name == "client1" && client_info.frequency == ""),
     ).await;
+    let client_list_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
 
     assert!(res1.is_ok());
     assert!(connected_event1.is_ok());
+    assert!(client_list_event1.is_ok());
 
     let transport2 = TokioTransport::new(test_app.addr());
     let token_provider2 = MockTokenProvider::new(2, None);
@@ -85,11 +89,13 @@ async fn login() {
     let mut broadcast_rx2 = client2.subscribe();
     let res2 = client2.connect().await;
     let connected_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ clients, display_name} if clients.len() == 1 && clients[0].id == "client1" && display_name == "LOVV_CTR"),
+        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client2" && client_info.display_name == "client2" && client_info.frequency == ""),
     ).await;
+    let client_list_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == "client1")).await;
 
     assert!(res2.is_ok());
     assert!(connected_event2.is_ok());
+    assert!(client_list_event2.is_ok());
 
     shutdown_token1.cancel();
     client1.disconnect().await;
@@ -218,7 +224,7 @@ async fn client_disconnects() {
         .client_mut(1)
         .recv_with_timeout_and_filter(
             Duration::from_millis(300),
-            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0")
+            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0"),
         )
         .await;
     assert!(event.is_some());
@@ -237,7 +243,7 @@ async fn client_list_synchronization() {
         .client_mut(2)
         .recv_with_timeout_and_filter(
             Duration::from_millis(300),
-            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0")
+            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0"),
         )
         .await;
     assert!(event.is_some());
@@ -253,7 +259,7 @@ async fn client_list_synchronization() {
         .client_mut(2)
         .recv_with_timeout_and_filter(
             Duration::from_millis(300),
-            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == "client1")
+            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == "client1"),
         )
         .await;
     assert!(event.is_some());
@@ -266,7 +272,7 @@ async fn client_connected_broadcast() {
     let mut client3 = TestClient::new(test_rig.server().addr(), "client3", "token3")
         .await
         .unwrap();
-    client3.login(|_| Ok(())).await.unwrap();
+    client3.login(|_, _| Ok(()), |_| Ok(())).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 

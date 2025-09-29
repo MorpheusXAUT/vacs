@@ -6,7 +6,7 @@ use crate::ws::ClientSession;
 use anyhow::Context;
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::sync::{broadcast, mpsc, watch, RwLock};
+use tokio::sync::{RwLock, broadcast, mpsc, watch};
 use tracing::instrument;
 use uuid::Uuid;
 use vacs_protocol::ws::{ClientInfo, ErrorReason, SignalingMessage};

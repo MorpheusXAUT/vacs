@@ -1,5 +1,5 @@
 use crate::auth::layer::setup_mock_auth_layer;
-use crate::config::{AppConfig, AuthConfig};
+use crate::config::{AppConfig, AuthConfig, VatsimConfig};
 use crate::release::UpdateChecker;
 use crate::routes::create_app;
 use crate::state::AppState;
@@ -9,6 +9,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use vacs_vatsim::slurper::SlurperClient;
 
 pub struct TestApp {
     state: Arc<AppState>,
@@ -24,6 +25,11 @@ impl TestApp {
                 login_flow_timeout_millis: 100,
                 ..Default::default()
             },
+            vatsim: VatsimConfig {
+                user_service: Default::default(),
+                require_active_connection: false,
+                slurper_base_url: Default::default(),
+            },
             ..Default::default()
         };
 
@@ -32,6 +38,7 @@ impl TestApp {
             config.clone(),
             UpdateChecker::default(),
             Store::Memory(MemoryStore::default()),
+            SlurperClient::new("http://localhost:12345").unwrap(),
             shutdown_rx,
         ));
 

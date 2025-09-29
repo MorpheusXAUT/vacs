@@ -41,9 +41,7 @@ pub enum State {
 pub enum SignalingEvent {
     /// Emitted after the [`SignalingClient`] successfully connected to the server, including authentication.
     /// The client is ready to send and receive messages.
-    Connected {
-        client_info: ClientInfo,
-    },
+    Connected { client_info: ClientInfo },
     /// Emitted for every [`SignalingMessage`] received by a connected and authenticated [`SignalingClientInner`].
     Message(SignalingMessage),
     /// Emitted for every [`SignalingRuntimeError`] handled by the [`SignalingClientInner`].
@@ -403,9 +401,10 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
                 tracing::trace!("Successfully logged in to server");
 
                 self.set_state(State::LoggedIn);
-                if let Err(err) = self.broadcast_tx.send(SignalingEvent::Connected {
-                    client_info
-                }) {
+                if let Err(err) = self
+                    .broadcast_tx
+                    .send(SignalingEvent::Connected { client_info })
+                {
                     tracing::warn!(?err, "Failed to broadcast connected event");
                 }
 
@@ -716,26 +715,6 @@ mod tests {
     use tokio::sync::Notify;
     use vacs_protocol::ws::{ErrorReason, LoginFailureReason};
 
-    fn test_client_list() -> Vec<ClientInfo> {
-        vec![
-            ClientInfo {
-                id: "client1".to_string(),
-                display_name: "Client 1".to_string(),
-                frequency: "100.000".to_string()
-            },
-            ClientInfo {
-                id: "client2".to_string(),
-                display_name: "Client 2".to_string(),
-                frequency: "200.000".to_string()
-            },
-            ClientInfo {
-                id: "client3".to_string(),
-                display_name: "Client 3".to_string(),
-                frequency: "300.000".to_string()
-            },
-        ]
-    }
-
     async fn setup_test_client(
         transport: MockTransport,
         reconnect_max_tries: u8,
@@ -752,8 +731,13 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::ClientList {
-                    clients: test_client_list(),
+                SignalingMessage::serialize(&SignalingMessage::ClientInfo {
+                    own: true,
+                    info: ClientInfo {
+                        id: "client1".to_string(),
+                        display_name: "client1".to_string(),
+                        frequency: "".to_string(),
+                    },
                 })
                 .unwrap()
                 .into(),

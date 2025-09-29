@@ -133,6 +133,7 @@ mod tests {
             clients: vec![ClientInfo {
                 id: "client1".to_string(),
                 display_name: "Client 1".to_string(),
+                frequency: "100.000".to_string(),
             }],
         };
 
@@ -354,6 +355,7 @@ mod tests {
             clients: vec![ClientInfo {
                 id: "client1".into(),
                 display_name: "Client 1".into(),
+                frequency: "100.000".into(),
             }],
         });
         matcher.try_match(&SignalingMessage::CallAnswer {

@@ -415,7 +415,7 @@ mod tests {
             client: ClientInfo {
                 id: "client1".to_string(),
                 display_name: "station1".to_string(),
-                frequency: "100.000".to_string()
+                frequency: "100.000".to_string(),
             },
         };
 
@@ -474,12 +474,12 @@ mod tests {
                 ClientInfo {
                     id: "client1".to_string(),
                     display_name: "station1".to_string(),
-                    frequency: "100.000".to_string()
+                    frequency: "100.000".to_string(),
                 },
                 ClientInfo {
                     id: "client2".to_string(),
                     display_name: "station2".to_string(),
-                    frequency: "200.000".to_string()
+                    frequency: "200.000".to_string(),
                 },
             ],
         };

@@ -158,9 +158,15 @@ async fn client_dropped() -> anyhow::Result<()> {
 #[test(tokio::test)]
 async fn control_messages() -> anyhow::Result<()> {
     let test_app = TestApp::new().await;
-    let mut client = TestClient::new_with_login(test_app.addr(), "client1", "token1", |_| Ok(()))
-        .await
-        .expect("Failed to create client");
+    let mut client = TestClient::new_with_login(
+        test_app.addr(),
+        "client1",
+        "token1",
+        |_, _| Ok(()),
+        |_| Ok(()),
+    )
+    .await
+    .expect("Failed to create client");
 
     for n in 0..10 {
         client
