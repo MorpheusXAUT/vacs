@@ -1,6 +1,6 @@
 //! Client for the VATSIM Slurper API.
 //!
-//! This module provides a [`SlurperClient`] for retrieving the user info of a currently connected VATSIM client.
+//! This module provides a [`SlurperClient`] for retrieving the controller info of a currently connected VATSIM client.
 //!
 //! # Examples
 //!
@@ -23,18 +23,18 @@
 //!
 //!         let client = SlurperClient::new(&server.uri())?;
 //!
-//!         let user_info = client
-//!             .get_user_info("1234567")
+//!         let controller_info = client
+//!             .get_controller_info("1234567")
 //!             .await?;
 //!
-//!         assert_eq!(user_info, None);
+//!         assert_eq!(controller_info, None);
 //!         Ok(())
 //!     }
 //! }
 //! ```
 
+use crate::{ControllerInfo, FacilityType};
 use anyhow::Context;
-use std::str::FromStr;
 use tracing::instrument;
 
 /// Default timeout for HTTP requests against the slurper API.
@@ -58,69 +58,6 @@ const SLURPER_VISIBILITY_RANGE_FIELD_INDEX: usize = 4;
 const SLURPER_FACILITY_TYPE_ATC: &str = "atc";
 /// Slurper facility type for pilots.
 const SLURPER_FACILITY_TYPE_PILOT: &str = "pilot";
-
-/// Enum representing the different VATSIM facility types as parsed from their respective callsign suffixes
-/// (in accordance with the [VATSIM GCAP](https://vatsim.net/docs/policy/global-controller-administration-policy).
-#[derive(Debug, PartialEq, Default)]
-pub enum FacilityType {
-    #[default]
-    Unknown,
-    Ramp,
-    Delivery,
-    Ground,
-    Tower,
-    Approach,
-    Departure,
-    Enroute,
-    FlightServiceStation,
-    Radio,
-    TrafficFlow,
-}
-
-impl FromStr for FacilityType {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.to_ascii_uppercase();
-        let facility_suffix = s.split('_').next_back().unwrap_or_default();
-        match facility_suffix {
-            "RMP" => Ok(FacilityType::Ramp),
-            "DEL" => Ok(FacilityType::Delivery),
-            "GND" => Ok(FacilityType::Ground),
-            "TWR" => Ok(FacilityType::Tower),
-            "APP" => Ok(FacilityType::Approach),
-            "DEP" => Ok(FacilityType::Departure),
-            "CTR" => Ok(FacilityType::Enroute),
-            "FSS" => Ok(FacilityType::FlightServiceStation),
-            "RDO" => Ok(FacilityType::Radio),
-            "TMU" => Ok(FacilityType::TrafficFlow),
-            "FMP" => Ok(FacilityType::TrafficFlow),
-            _ => Ok(FacilityType::Unknown),
-        }
-    }
-}
-
-impl From<&str> for FacilityType {
-    fn from(value: &str) -> Self {
-        value.parse().unwrap_or_default()
-    }
-}
-
-impl From<String> for FacilityType {
-    fn from(value: String) -> Self {
-        value.as_str().parse().unwrap_or_default()
-    }
-}
-
-/// User info returned from the VATSIM Slurper API.
-#[derive(Debug, PartialEq)]
-pub struct SlurperUserInfo {
-    /// Callsign the CID connected as.
-    pub callsign: String,
-    /// (Primary) frequency selected by the controller.
-    pub frequency: String,
-    /// Facility type the CID connected as.
-    pub facility_type: FacilityType,
-}
 
 /// Client for accessing the VATSIM Slurper API.
 pub struct SlurperClient {
@@ -177,16 +114,16 @@ impl SlurperClient {
         Ok(self)
     }
 
-    /// Fetches the user info for a given CID.
+    /// Fetches the controller info for a given CID.
     ///
     /// This method queries the Slurper user info API for the given CID and returns the corresponding
     /// callsign and frequency, if available.
-    /// If multiple entries are found (e.g. the user has connected one or multiple ATIS stations),
+    /// If multiple entries are found (e.g., the user has connected one or multiple ATIS stations),
     /// the first entry with a visibility range greater than zero is returned.
     ///
     /// # Returns
     ///
-    /// - `Ok(Some(SlurperUserInfo))` if an active VATSIM ATC connection was found.
+    /// - `Ok(Some(ControllerInfo))` if an active VATSIM ATC connection was found.
     /// - `Ok(None)` if no active VATSIM connection was found, the CID is connected as a pilot, or no entry with a visibility range greater than zero was found.
     /// - `Err(anyhow::Error)` if retrieving or parsing the data failed.
     ///
@@ -197,7 +134,7 @@ impl SlurperClient {
     /// use wiremock::{Mock, MockServer, ResponseTemplate};
     ///
     /// #[tokio::test]
-    /// async fn get_user_info() -> anyhow::Result<()> {
+    /// async fn get_controller_info() -> anyhow::Result<()> {
     ///     let server = MockServer::start().await;
     ///     Mock::given(method("GET"))
     ///         .and(path("/users/info"))
@@ -212,18 +149,18 @@ impl SlurperClient {
     ///
     ///     let client = SlurperClient::new(&server.uri())?;
     ///
-    ///     let user_info = client
-    ///         .get_user_info("1234567")
+    ///     let controller_info = client
+    ///         .get_controller_info("1234567")
     ///         .await?.unwrap();
     ///
-    ///     assert_eq!(user_info.callsign, "LOVV_CTR");
-    ///     assert_eq!(user_info.frequency, "123.450");
+    ///     assert_eq!(controller_info.callsign, "LOVV_CTR");
+    ///     assert_eq!(controller_info.frequency, "123.450");
     ///     Ok(())
     ///  }
     /// ```
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn get_user_info(&self, cid: &str) -> anyhow::Result<Option<SlurperUserInfo>> {
-        tracing::debug!("Retrieving user info for CID");
+    pub async fn get_controller_info(&self, cid: &str) -> anyhow::Result<Option<ControllerInfo>> {
+        tracing::debug!("Retrieving controller info for CID");
 
         if cid.is_empty() {
             tracing::debug!("CID is empty, returning None");
@@ -236,7 +173,7 @@ impl SlurperClient {
             return Ok(None);
         }
 
-        self.parse_slurper_data(body)
+        self.parse_slurper_data(cid, body)
     }
 
     /// Performs an HTTP request to fetch the user info data from the Slurper API.
@@ -263,9 +200,13 @@ impl SlurperClient {
     }
 
     /// Parses the CSV data retrieved from the Slurper user info endpoint and returns the
-    /// extracted [`SlurperUserInfo`].
+    /// extracted [`ControllerInfo`].
     #[instrument(level = "trace", skip(self, body), err)]
-    fn parse_slurper_data(&self, body: bytes::Bytes) -> anyhow::Result<Option<SlurperUserInfo>> {
+    fn parse_slurper_data(
+        &self,
+        cid: &str,
+        body: bytes::Bytes,
+    ) -> anyhow::Result<Option<ControllerInfo>> {
         tracing::trace!("Parsing CSV");
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(false)
@@ -280,23 +221,24 @@ impl SlurperClient {
                 }
             };
 
-            match self.extract_user_info(record)? {
+            match self.extract_controller_info(cid, record)? {
                 Some(info) => return Ok(Some(info)),
                 None => continue,
             }
         }
 
-        tracing::debug!("CID is present in slurper, but no valid user info found, returning None");
+        tracing::debug!("CID is present in slurper, but no valid controller info found, returning None");
         Ok(None)
     }
 
-    /// Extracts the [`SlurperUserInfo`] from the parsed [`csv::StringRecord`], validating the client is
+    /// Extracts the [`ControllerInfo`] from the parsed [`csv::StringRecord`], validating the client is
     /// currently logged in using an ATC connection.
     #[instrument(level = "trace", skip(self), err)]
-    fn extract_user_info(
+    fn extract_controller_info(
         &self,
+        cid: &str,
         record: csv::StringRecord,
-    ) -> anyhow::Result<Option<SlurperUserInfo>> {
+    ) -> anyhow::Result<Option<ControllerInfo>> {
         let facility_type = record
             .get(SLURPER_FACILITY_TYPE_FIELD_INDEX)
             .unwrap_or(SLURPER_FACILITY_TYPE_PILOT);
@@ -349,9 +291,10 @@ impl SlurperClient {
             ?callsign,
             ?frequency,
             ?facility_type,
-            "Found user info for CID"
+            "Found controller info for CID"
         );
-        Ok(Some(SlurperUserInfo {
+        Ok(Some(ControllerInfo {
+            cid: cid.to_string(),
             callsign: callsign.to_string(),
             frequency: frequency.to_string(),
             facility_type,
@@ -379,7 +322,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn get_user_info() -> anyhow::Result<()> {
+    async fn get_controller_info() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -392,19 +335,19 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?
-            .expect("No user info found");
+            .context("Failed to get controller info")?
+            .expect("No controller info found");
 
-        assert_eq!(user_info.callsign, "LOVV_CTR".to_string());
-        assert_eq!(user_info.frequency, "123.450".to_string());
+        assert_eq!(controller_info.callsign, "LOVV_CTR".to_string());
+        assert_eq!(controller_info.frequency, "123.450".to_string());
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_multiple_entries() -> anyhow::Result<()> {
+    async fn get_controller_info_multiple_entries() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -419,19 +362,19 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?
-            .expect("No user info found");
+            .context("Failed to get controller info")?
+            .expect("No controller info found");
 
-        assert_eq!(user_info.callsign, "LOVV_CTR".to_string());
-        assert_eq!(user_info.frequency, "123.450".to_string());
+        assert_eq!(controller_info.callsign, "LOVV_CTR".to_string());
+        assert_eq!(controller_info.frequency, "123.450".to_string());
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_pilot() -> anyhow::Result<()> {
+    async fn get_controller_info_pilot() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -445,17 +388,17 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_visibility_range_zero() -> anyhow::Result<()> {
+    async fn get_controller_info_visibility_range_zero() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -469,17 +412,17 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_empty() -> anyhow::Result<()> {
+    async fn get_controller_info_empty() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -490,30 +433,30 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_empty_cid() -> anyhow::Result<()> {
+    async fn get_controller_info_empty_cid() -> anyhow::Result<()> {
         let client = SlurperClient::new("http://localhost").context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("")
+        let controller_info = client
+            .get_controller_info("")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_non_200_status_code() -> anyhow::Result<()> {
+    async fn get_controller_info_non_200_status_code() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -524,7 +467,7 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
 
-        let result = client.get_user_info("1234567").await;
+        let result = client.get_controller_info("1234567").await;
 
         assert!(result.is_err());
         assert!(result.unwrap_err().chain().any(|e| {
@@ -535,7 +478,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_timeout() -> anyhow::Result<()> {
+    async fn get_controller_info_timeout() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -548,7 +491,7 @@ mod tests {
             .with_timeout(Duration::from_millis(50))
             .context("Failed to create client")?;
 
-        let result = client.get_user_info("1234567").await;
+        let result = client.get_controller_info("1234567").await;
 
         assert!(result.is_err());
         assert!(
@@ -561,7 +504,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_missing_facility_type() -> anyhow::Result<()> {
+    async fn get_controller_info_missing_facility_type() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -574,17 +517,17 @@ mod tests {
             .with_timeout(Duration::from_millis(50))
             .context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_empty_callsign() -> anyhow::Result<()> {
+    async fn get_controller_info_empty_callsign() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -597,17 +540,17 @@ mod tests {
             .with_timeout(Duration::from_millis(50))
             .context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_missing_callsign() -> anyhow::Result<()> {
+    async fn get_controller_info_missing_callsign() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -620,17 +563,17 @@ mod tests {
             .with_timeout(Duration::from_millis(50))
             .context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_empty_frequency() -> anyhow::Result<()> {
+    async fn get_controller_info_empty_frequency() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -643,17 +586,17 @@ mod tests {
             .with_timeout(Duration::from_millis(50))
             .context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_missing_frequency() -> anyhow::Result<()> {
+    async fn get_controller_info_missing_frequency() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -666,17 +609,17 @@ mod tests {
             .with_timeout(Duration::from_millis(50))
             .context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_user_info_empty_csv_record() -> anyhow::Result<()> {
+    async fn get_controller_info_empty_csv_record() -> anyhow::Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -689,12 +632,12 @@ mod tests {
             .with_timeout(Duration::from_millis(50))
             .context("Failed to create client")?;
 
-        let user_info = client
-            .get_user_info("1234567")
+        let controller_info = client
+            .get_controller_info("1234567")
             .await
-            .context("Failed to get user info")?;
+            .context("Failed to get controller info")?;
 
-        assert_eq!(user_info, None);
+        assert_eq!(controller_info, None);
         Ok(())
     }
 }
