@@ -12,18 +12,18 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{Instrument, instrument};
-use vacs_protocol::ws::{ClientInfo, SignalingMessage};
+use vacs_protocol::ws::{ClientInfo, DisconnectReason, SignalingMessage};
 
 #[derive(Clone)]
 pub struct ClientSession {
     pub client_info: ClientInfo,
     tx: mpsc::Sender<SignalingMessage>,
-    client_shutdown_tx: watch::Sender<()>,
+    client_shutdown_tx: watch::Sender<Option<DisconnectReason>>,
 }
 
 impl ClientSession {
     pub fn new(client_info: ClientInfo, tx: mpsc::Sender<SignalingMessage>) -> Self {
-        let (client_shutdown_tx, _) = watch::channel(());
+        let (client_shutdown_tx, _) = watch::channel(None);
         Self {
             client_info,
             tx,
@@ -40,9 +40,9 @@ impl ClientSession {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub fn disconnect(&self) {
+    pub fn disconnect(&self, disconnect_reason: Option<DisconnectReason>) {
         tracing::trace!("Disconnecting client");
-        let _ = self.client_shutdown_tx.send(());
+        let _ = self.client_shutdown_tx.send(disconnect_reason);
     }
 
     #[instrument(level = "trace", skip(self), err)]
@@ -180,7 +180,7 @@ impl ClientSession {
     pub async fn spawn_writer<T: WebSocketSink + 'static>(
         mut websocket_tx: T,
         mut app_shutdown_rx: watch::Receiver<()>,
-        mut client_shutdown_rx: watch::Receiver<()>,
+        mut client_shutdown_rx: watch::Receiver<Option<DisconnectReason>>,
     ) -> (JoinHandle<()>, mpsc::Sender<ws::Message>) {
         let (ws_outbound_tx, mut ws_outbound_rx) =
             mpsc::channel::<ws::Message>(config::CLIENT_WEBSOCKET_TASK_CHANNEL_CAPACITY);
@@ -194,12 +194,30 @@ impl ClientSession {
                     biased;
 
                     _ = app_shutdown_rx.changed() => {
-                        tracing::trace!("App shutdown signal received, stopping WebSocket reader task");
+                        tracing::trace!("App shutdown signal received, stopping WebSocket writer task");
                         break;
                     }
 
                     _ = client_shutdown_rx.changed() => {
-                        tracing::trace!("Client shutdown signal received, stopping WebSocket reader task");
+                        let reason_opt = {
+                            client_shutdown_rx.borrow().clone()
+                        };
+
+                        if let Some(reason) = reason_opt {
+                            tracing::trace!(?reason, "Sending Disconnect message before stopping WebSocket writer task");
+                            match SignalingMessage::serialize(&SignalingMessage::Disconnected {reason}) {
+                                Ok(msg) => {
+                                    if let Err(err) = websocket_tx.send(ws::Message::from(msg)).await {
+                                        tracing::warn!(?err, "Failed to send Disconnect message");
+                                    }
+                                },
+                                Err(err) => {
+                                    tracing::warn!(?err, "Failed to serialize Disconnect message");
+                                }
+                            }
+                        } else {
+                            tracing::trace!("Client shutdown signal received, stopping WebSocket writer task");
+                        }
                         break;
                     }
 
@@ -235,7 +253,7 @@ impl ClientSession {
     pub async fn spawn_reader<R: WebSocketStream + 'static>(
         mut websocket_rx: R,
         mut app_shutdown_rx: watch::Receiver<()>,
-        mut client_shutdown_rx: watch::Receiver<()>,
+        mut client_shutdown_rx: watch::Receiver<Option<DisconnectReason>>,
         pong_update_tx: watch::Sender<Instant>,
     ) -> (JoinHandle<()>, mpsc::Receiver<SignalingMessage>) {
         let (ws_inbound_tx, ws_inbound_rx) =

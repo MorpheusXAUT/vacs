@@ -84,7 +84,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         )
         .await;
 
-    state.unregister_client(&client_id).await;
+    state.unregister_client(&controller_info.cid, None).await;
 
     tracing::trace!("Finished handling websocket connection");
 }

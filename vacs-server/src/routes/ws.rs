@@ -39,6 +39,7 @@ mod delete {
     use super::*;
     use crate::http::StatusCodeResult;
     use axum::http::StatusCode;
+    use vacs_protocol::ws::DisconnectReason;
 
     pub async fn terminate_connection(
         auth_session: AuthSession,
@@ -47,7 +48,9 @@ mod delete {
         let user = auth_session.user.expect("User not logged in");
 
         tracing::debug!(?user, "Terminating existing web socket connection");
-        state.unregister_client(user.cid.as_str()).await;
+        state
+            .unregister_client(user.cid.as_str(), Some(DisconnectReason::Terminated))
+            .await;
 
         Ok(StatusCode::NO_CONTENT)
     }
