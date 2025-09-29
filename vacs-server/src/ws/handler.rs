@@ -29,21 +29,18 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
     let (mut websocket_tx, mut websocket_rx) = socket.split();
 
-    let (client_id, user_info) =
+    let controller_info =
         match handle_websocket_login(state.clone(), &mut websocket_rx, &mut websocket_tx).await {
             Some(id) => id,
             None => return,
         };
 
-    tracing::Span::current()
-        .record("client_id", &client_id)
-        .record("display_name", &user_info.callsign)
-        .record("frequency", &user_info.frequency);
+    tracing::Span::current().record("client_id", &controller_info.cid);
 
     let client_info = ClientInfo {
-        id: client_id.to_string(),
-        display_name: user_info.callsign,
-        frequency: user_info.frequency,
+        id: controller_info.cid.clone(),
+        display_name: controller_info.callsign.clone(),
+        frequency: controller_info.frequency.clone(),
     };
 
     let (mut client, mut rx) = match state.register_client(client_info.clone()).await {

@@ -73,7 +73,7 @@ impl AppState {
         if self.broadcast_tx.receiver_count() > 0 {
             tracing::trace!("Broadcasting client connected message");
             if let Err(err) = self.broadcast_tx.send(SignalingMessage::ClientConnected {
-                client: client.get_client_info().clone(),
+                client: client.client_info.clone(),
             }) {
                 tracing::warn!(?err, "Failed to broadcast client connected message");
             }
@@ -124,7 +124,7 @@ impl AppState {
             .await
             .values()
             .cloned()
-            .map(|c| c.get_client_info().clone())
+            .map(|c| c.client_info.clone())
             .collect();
 
         clients.sort_by(|a, b| a.id.cmp(&b.id));

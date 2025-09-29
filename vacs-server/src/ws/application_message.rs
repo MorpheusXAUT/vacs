@@ -18,7 +18,7 @@ pub async fn handle_application_message(
     match message {
         SignalingMessage::ListClients => {
             tracing::trace!("Returning list of clients");
-            let clients = state.list_clients_without_self(client.get_id()).await;
+            let clients = state.list_clients_without_self(client.id()).await;
             if let Err(err) =
                 send_message(ws_outbound_tx, SignalingMessage::ClientList { clients }).await
             {
@@ -73,7 +73,7 @@ async fn handle_call_invite(state: &AppState, client: &ClientSession, peer_id: &
             client,
             peer_id,
             SignalingMessage::CallInvite {
-                peer_id: client.get_id().to_string(),
+                peer_id: client.id().to_string(),
             },
         )
         .await;
@@ -86,7 +86,7 @@ async fn handle_call_accept(state: &AppState, client: &ClientSession, peer_id: &
             client,
             peer_id,
             SignalingMessage::CallAccept {
-                peer_id: client.get_id().to_string(),
+                peer_id: client.id().to_string(),
             },
         )
         .await;
@@ -99,7 +99,7 @@ async fn handle_call_reject(state: &AppState, client: &ClientSession, peer_id: &
             client,
             peer_id,
             SignalingMessage::CallReject {
-                peer_id: client.get_id().to_string(),
+                peer_id: client.id().to_string(),
             },
         )
         .await;
@@ -112,7 +112,7 @@ async fn handle_call_offer(state: &AppState, client: &ClientSession, peer_id: &s
             client,
             peer_id,
             SignalingMessage::CallOffer {
-                peer_id: client.get_id().to_string(),
+                peer_id: client.id().to_string(),
                 sdp: sdp.to_string(),
             },
         )
@@ -126,7 +126,7 @@ async fn handle_call_answer(state: &AppState, client: &ClientSession, peer_id: &
             client,
             peer_id,
             SignalingMessage::CallAnswer {
-                peer_id: client.get_id().to_string(),
+                peer_id: client.id().to_string(),
                 sdp: sdp.to_string(),
             },
         )
@@ -140,7 +140,7 @@ async fn handle_call_end(state: &AppState, client: &ClientSession, peer_id: &str
             client,
             peer_id,
             SignalingMessage::CallEnd {
-                peer_id: client.get_id().to_string(),
+                peer_id: client.id().to_string(),
             },
         )
         .await;
@@ -158,7 +158,7 @@ async fn handle_call_error(
             client,
             peer_id,
             SignalingMessage::CallError {
-                peer_id: client.get_id().to_string(),
+                peer_id: client.id().to_string(),
                 reason,
             },
         )
@@ -177,7 +177,7 @@ async fn handle_call_ice_candidate(
             client,
             peer_id,
             SignalingMessage::CallIceCandidate {
-                peer_id: client.get_id().to_string(),
+                peer_id: client.id().to_string(),
                 candidate: candidate.to_string(),
             },
         )

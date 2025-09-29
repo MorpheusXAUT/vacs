@@ -5,6 +5,7 @@ use crate::ws::message::{MessageResult, receive_message, send_message};
 use crate::ws::traits::{WebSocketSink, WebSocketStream};
 use axum::extract::ws;
 use futures_util::SinkExt;
+use std::fmt::{Debug, Formatter};
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
@@ -15,7 +16,7 @@ use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 
 #[derive(Clone)]
 pub struct ClientSession {
-    client_info: ClientInfo,
+    pub client_info: ClientInfo,
     tx: mpsc::Sender<SignalingMessage>,
     client_shutdown_tx: watch::Sender<()>,
 }
@@ -30,7 +31,7 @@ impl ClientSession {
         }
     }
 
-    pub fn get_id(&self) -> &str {
+    pub fn id(&self) -> &str {
         &self.client_info.id
     }
 
@@ -53,7 +54,7 @@ impl ClientSession {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[instrument(level = "debug", skip_all, fields(client_info = ?client_info))]
+    #[instrument(level = "debug", skip_all, fields(client_id = ?client_info.id))]
     pub async fn handle_interaction<R: WebSocketStream + 'static, T: WebSocketSink + 'static>(
         &mut self,
         app_state: &Arc<AppState>,
@@ -333,6 +334,14 @@ impl ClientSession {
     }
 }
 
+impl Debug for ClientSession {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientSession")
+            .field("client_info", &self.client_info)
+            .finish_non_exhaustive()
+    }
+}
+
 struct TaskDropLogger {
     name: &'static str,
 }
@@ -364,7 +373,7 @@ mod tests {
         let (tx, _rx) = mpsc::channel(10);
         let session = ClientSession::new(client_info_1.clone(), tx);
 
-        assert_eq!(session.get_id(), "client1");
+        assert_eq!(session.id(), "client1");
         assert_eq!(session.get_client_info(), &client_info_1);
     }
 
