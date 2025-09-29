@@ -155,8 +155,15 @@ impl ClientSession {
 
                 msg = broadcast_rx.recv() => {
                     match msg {
-                        Ok(msg) => {
+                        Ok(mut msg) => {
                             tracing::trace!("Received broadcast message");
+                            if let SignalingMessage::ClientInfo {ref info, ref mut own} = msg
+                                && info.id == self.client_info.id {
+                                    tracing::trace!("Setting own flag for client info update broadcast");
+                                    *own = true;
+
+                            }
+
                             if let Err(err) = send_message(&ws_outbound_tx, msg).await {
                                 tracing::warn!(?err, "Failed to send broadcast message");
                             }
