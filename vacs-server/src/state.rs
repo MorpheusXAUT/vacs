@@ -6,10 +6,11 @@ use crate::ws::ClientSession;
 use anyhow::Context;
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::sync::{RwLock, broadcast, mpsc, watch};
+use tokio::sync::{broadcast, mpsc, watch, RwLock};
 use tracing::instrument;
 use uuid::Uuid;
 use vacs_protocol::ws::{ClientInfo, ErrorReason, SignalingMessage};
+use vacs_vatsim::slurper::{SlurperClient, SlurperUserInfo};
 
 pub struct AppState {
     pub config: AppConfig,
@@ -18,6 +19,7 @@ pub struct AppState {
     /// Key: CID
     clients: RwLock<HashMap<String, ClientSession>>,
     broadcast_tx: broadcast::Sender<SignalingMessage>,
+    slurper: SlurperClient,
     shutdown_rx: watch::Receiver<()>,
 }
 
@@ -26,6 +28,7 @@ impl AppState {
         config: AppConfig,
         updates: UpdateChecker,
         store: Store,
+        slurper_client: SlurperClient,
         shutdown_rx: watch::Receiver<()>,
     ) -> Self {
         let (broadcast_tx, _) = broadcast::channel(config::BROADCAST_CHANNEL_CAPACITY);
@@ -34,6 +37,7 @@ impl AppState {
             updates,
             store,
             clients: RwLock::new(HashMap::new()),
+            slurper: slurper_client,
             broadcast_tx,
             shutdown_rx,
         }
@@ -45,25 +49,21 @@ impl AppState {
         (self.broadcast_tx.subscribe(), self.shutdown_rx.clone())
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn register_client(
         &self,
-        client_id: &str,
+        client_info: ClientInfo,
     ) -> anyhow::Result<(ClientSession, mpsc::Receiver<SignalingMessage>)> {
         tracing::trace!("Registering client");
 
-        if self.clients.read().await.contains_key(client_id) {
+        let client_id = client_info.id.clone();
+        if self.clients.read().await.contains_key(&client_id) {
             tracing::trace!("Client already exists");
             anyhow::bail!("Client already exists");
         }
 
         let (tx, rx) = mpsc::channel(config::CLIENT_CHANNEL_CAPACITY);
-        let client = ClientSession::new(
-            ClientInfo {
-                id: client_id.to_string(),
-                display_name: client_id.to_string(), // TODO retrieve actual display name
-            },
-            tx,
-        );
+        let client = ClientSession::new(client_info, tx);
 
         self.clients
             .write()
@@ -215,6 +215,12 @@ impl AppState {
             Ok(None) => anyhow::bail!("Web socket auth token not found"),
             Err(err) => anyhow::bail!(err),
         }
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    pub async fn get_vatsim_user_info(&self, cid: &str) -> anyhow::Result<Option<SlurperUserInfo>> {
+        tracing::debug!("Retrieving connection info from VATSIM slurper");
+        self.slurper.get_user_info(cid).await
     }
 
     pub async fn health_check(&self) -> anyhow::Result<()> {

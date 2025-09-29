@@ -6,13 +6,14 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vacs_server::auth::layer::setup_auth_layer;
 use vacs_server::build::BuildInfo;
 use vacs_server::config::AppConfig;
-use vacs_server::release::UpdateChecker;
 use vacs_server::release::catalog::file::FileCatalog;
 use vacs_server::release::policy::Policy;
+use vacs_server::release::UpdateChecker;
 use vacs_server::routes::create_app;
 use vacs_server::state::AppState;
-use vacs_server::store::Store;
 use vacs_server::store::redis::RedisStore;
+use vacs_server::store::Store;
+use vacs_vatsim::slurper::SlurperClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -20,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
                 format!(
-                    "{}=trace,tower_http=debug,tower_sessions=debug,axum::rejection=trace",
+                    "{}=trace,vacs_=trace,tower_http=debug,tower_sessions=debug,axum::rejection=trace",
                     env!("CARGO_CRATE_NAME")
                 )
                 .into()
@@ -41,12 +42,15 @@ async fn main() -> anyhow::Result<()> {
     let redis_store = RedisStore::new(&config.redis).await?;
     let redis_pool = redis_store.get_pool().clone();
 
+    let slurper = SlurperClient::new(config.vatsim.slurper_base_url.as_str())?;
+
     let (shutdown_tx, shutdown_rx) = watch::channel(());
 
     let app_state = Arc::new(AppState::new(
         config.clone(),
         updates,
         Store::Redis(redis_store),
+        slurper,
         shutdown_rx.clone(),
     ));
 

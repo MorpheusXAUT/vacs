@@ -1,7 +1,7 @@
 use crate::config;
 use crate::state::AppState;
 use crate::ws::application_message::handle_application_message;
-use crate::ws::message::{MessageResult, receive_message, send_message};
+use crate::ws::message::{receive_message, send_message, MessageResult};
 use crate::ws::traits::{WebSocketSink, WebSocketStream};
 use axum::extract::ws;
 use futures_util::SinkExt;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
-use tracing::{Instrument, instrument};
+use tracing::{instrument, Instrument};
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 
 #[derive(Clone)]
@@ -53,7 +53,7 @@ impl ClientSession {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[instrument(level = "debug", skip_all, fields(client_id = %client_id))]
+    #[instrument(level = "debug", skip_all, fields(client_info = ?client_info))]
     pub async fn handle_interaction<R: WebSocketStream + 'static, T: WebSocketSink + 'static>(
         &mut self,
         app_state: &Arc<AppState>,
@@ -62,7 +62,7 @@ impl ClientSession {
         broadcast_rx: &mut broadcast::Receiver<SignalingMessage>,
         rx: &mut mpsc::Receiver<SignalingMessage>,
         app_shutdown_rx: &mut watch::Receiver<()>,
-        client_id: &str,
+        client_info: ClientInfo,
     ) {
         tracing::debug!("Starting to handle client interaction");
 
@@ -84,12 +84,25 @@ impl ClientSession {
         let (ping_handle, mut ping_shutdown_rx) =
             ClientSession::spawn_ping_task(&ws_outbound_tx, pong_update_rx);
 
+        tracing::trace!("Sending initial client info");
+        if let Err(err) = send_message(
+            &ws_outbound_tx,
+            SignalingMessage::ClientInfo {
+                own: true,
+                info: client_info.clone(),
+            },
+        )
+        .await
+        {
+            tracing::warn!(?err, "Failed to send initial client info");
+        }
+
         tracing::trace!("Sending initial client list");
-        let clients = app_state.list_clients_without_self(client_id).await;
+        let clients = app_state.list_clients_without_self(&client_info.id).await;
         if let Err(err) =
             send_message(&ws_outbound_tx, SignalingMessage::ClientList { clients }).await
         {
-            tracing::warn!(?err, "Failed to send initial client list");
+            tracing::warn!(?err, "Failed to send initial client info");
         }
 
         loop {
@@ -350,6 +363,7 @@ mod tests {
         let client_info = ClientInfo {
             id: "client1".to_string(),
             display_name: "Client 1".to_string(),
+            frequency: "123.000".to_string(),
         };
         let (tx, _rx) = mpsc::channel(10);
         let session = ClientSession::new(client_info.clone(), tx);
@@ -363,6 +377,7 @@ mod tests {
         let client_info = ClientInfo {
             id: "client1".to_string(),
             display_name: "Client 1".to_string(),
+            frequency: "123.000".to_string(),
         };
         let (tx, mut rx) = mpsc::channel(10);
         let session = ClientSession::new(client_info, tx);
@@ -371,6 +386,7 @@ mod tests {
             clients: vec![ClientInfo {
                 id: "client2".to_string(),
                 display_name: "Client 2".to_string(),
+                frequency: "124.000".to_string(),
             }],
         };
         let result = session.send_message(message.clone()).await;
@@ -385,6 +401,7 @@ mod tests {
         let client_info = ClientInfo {
             id: "client1".to_string(),
             display_name: "Client 1".to_string(),
+            frequency: "123.000".to_string(),
         };
         let (tx, _) = mpsc::channel(10);
         let session = ClientSession::new(client_info, tx.clone());
@@ -394,6 +411,7 @@ mod tests {
             clients: vec![ClientInfo {
                 id: "client2".to_string(),
                 display_name: "Client 2".to_string(),
+                frequency: "124.000".to_string(),
             }],
         };
         let result = session.send_message(message.clone()).await;

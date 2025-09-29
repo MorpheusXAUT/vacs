@@ -139,9 +139,21 @@ impl Default for OAuthConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct VatsimConfig {
     pub user_service: VatsimUserServiceConfig,
+    pub require_active_connection: bool,
+    pub slurper_base_url: String,
+}
+
+impl Default for VatsimConfig {
+    fn default() -> Self {
+        Self {
+            user_service: Default::default(),
+            require_active_connection: true,
+            slurper_base_url: "https://slurper.vatsim.net".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
