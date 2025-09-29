@@ -13,6 +13,7 @@ use vacs_server::routes::create_app;
 use vacs_server::state::AppState;
 use vacs_server::store::Store;
 use vacs_server::store::redis::RedisStore;
+use vacs_vatsim::data_feed::VatsimDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
 #[tokio::main]
@@ -43,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
     let redis_pool = redis_store.get_pool().clone();
 
     let slurper = SlurperClient::new(config.vatsim.slurper_base_url.as_str())?;
+    let data_feed = Arc::new(VatsimDataFeed::new(config.vatsim.data_feed_url.as_str())?);
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
 
@@ -51,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
         updates,
         Store::Redis(redis_store),
         slurper,
+        data_feed,
         shutdown_rx.clone(),
     ));
 
@@ -60,6 +63,11 @@ async fn main() -> anyhow::Result<()> {
 
     let listener = tokio::net::TcpListener::bind(config.server.bind_addr).await?;
 
+    let controller_update_task = AppState::start_controller_update_task(
+        app_state.clone(),
+        config.vatsim.controller_update_interval,
+    );
+
     tracing::info!(bind_addr = ?listener.local_addr()?, "Started listening");
     axum::serve(
         listener,
@@ -68,6 +76,10 @@ async fn main() -> anyhow::Result<()> {
     )
     .with_graceful_shutdown(shutdown_signal(shutdown_tx))
     .await?;
+
+    if let Err(err) = controller_update_task.await {
+        tracing::warn!(?err, "Controller update task finished with error");
+    }
 
     Ok(())
 }
