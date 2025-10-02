@@ -13,9 +13,9 @@ use tokio::time;
 use tracing::{Instrument, instrument};
 use uuid::Uuid;
 use vacs_protocol::ws::{ClientInfo, DisconnectReason, ErrorReason, SignalingMessage};
-use vacs_vatsim::ControllerInfo;
 use vacs_vatsim::data_feed::DataFeed;
 use vacs_vatsim::slurper::SlurperClient;
+use vacs_vatsim::{ControllerInfo, FacilityType};
 
 pub struct AppState {
     pub config: AppConfig,
@@ -293,12 +293,40 @@ impl AppState {
 
         let mut updates: Vec<SignalingMessage> = Vec::new();
         let mut disconnected_clients: Vec<String> = Vec::new();
+
+        fn flag_or_disconnect_controller(
+            cid: &str,
+            pending_disconnect: &mut HashSet<String>,
+            disconnected_clients: &mut Vec<String>,
+        ) {
+            if pending_disconnect.remove(cid) {
+                tracing::trace!(
+                    ?cid,
+                    "No active VATSIM connection found after grace period, disconnecting client and sending broadcast"
+                );
+                disconnected_clients.push(cid.to_string());
+            } else {
+                tracing::trace!(
+                    ?cid,
+                    "Client not found in data feed, but active VATSIM connection is required, marking for disconnect"
+                );
+                pending_disconnect.insert(cid.to_string());
+            }
+        }
+
         {
             let mut clients = state.clients.write().await;
             for (cid, session) in clients.iter_mut() {
                 tracing::trace!(?cid, ?session, "Checking session for client info update");
 
                 match current.get(cid) {
+                    Some(controller) if controller.facility_type == FacilityType::Unknown => {
+                        flag_or_disconnect_controller(
+                            cid,
+                            pending_disconnect,
+                            &mut disconnected_clients,
+                        )
+                    }
                     Some(controller) => {
                         if pending_disconnect.remove(cid) {
                             tracing::trace!(
@@ -344,29 +372,11 @@ impl AppState {
                             );
                         }
                     }
-                    None => {
-                        if !state.config.vatsim.require_active_connection {
-                            tracing::trace!(
-                                ?cid,
-                                "Client not found in data feed, but active VATSIM connection is not required, ignoring"
-                            );
-                            continue;
-                        }
-
-                        if pending_disconnect.remove(cid) {
-                            tracing::trace!(
-                                ?cid,
-                                "No active VATSIM connection found after grace period, disconnecting client and sending broadcast"
-                            );
-                            disconnected_clients.push(cid.to_string());
-                        } else {
-                            tracing::trace!(
-                                ?cid,
-                                "Client not found in data feed, but active VATSIM connection is required, marking for disconnect"
-                            );
-                            pending_disconnect.insert(cid.to_string());
-                        }
-                    }
+                    None => flag_or_disconnect_controller(
+                        cid,
+                        pending_disconnect,
+                        &mut disconnected_clients,
+                    ),
                 }
             }
         }
