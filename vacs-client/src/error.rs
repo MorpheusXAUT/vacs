@@ -4,7 +4,9 @@ use std::fmt::{Debug, Display, Formatter};
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
-use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, LoginFailureReason};
+use vacs_signaling::protocol::ws::{
+    CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason,
+};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -202,6 +204,11 @@ fn format_signaling_error(err: &SignalingError) -> String {
                     format!("Server error: unexpected message: {msg}")
                 }
             },
+            SignalingRuntimeError::Disconnected(reason) => match reason {
+                None => "Disconnected",
+                Some(DisconnectReason::Terminated) => "Disconnected: Your connection was terminated by another client.",
+                Some(DisconnectReason::NoActiveVatsimConnection) => "Disconnected: No active VATSIM connection was found.",
+            }.to_string(),
             _ => runtime_err.to_string(),
         },
         _ => err.to_string(),
