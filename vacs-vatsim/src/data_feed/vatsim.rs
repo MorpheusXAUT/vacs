@@ -3,13 +3,13 @@ use crate::{ControllerInfo, FacilityType};
 use anyhow::Context;
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use std::fmt::{Debug, Formatter};
 use std::time::{Duration, Instant};
 use tracing::instrument;
 
 const DATA_FEED_DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(1);
-const DATA_FEED_DEFAULT_CACHE_TTL: Duration = Duration::from_secs(30);
+const DATA_FEED_DEFAULT_CACHE_TTL: Duration = Duration::from_secs(15);
 
 #[derive(Debug)]
 pub struct VatsimDataFeed {
@@ -122,60 +122,15 @@ struct VatsimDataFeedController {
     cid: i32,
     callsign: String,
     frequency: String,
-    facility: VatsimDataFeedFacility,
-}
-
-#[derive(Debug, Default)]
-enum VatsimDataFeedFacility {
-    #[default]
-    Unknown,
-    FlightServiceStation,
-    Delivery,
-    Ground,
-    Tower,
-    Approach,
-    Enroute,
-}
-
-impl<'de> serde::Deserialize<'de> for VatsimDataFeedFacility {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let facility_type = i32::deserialize(deserializer)?;
-        match facility_type {
-            1 => Ok(VatsimDataFeedFacility::FlightServiceStation),
-            2 => Ok(VatsimDataFeedFacility::Delivery),
-            3 => Ok(VatsimDataFeedFacility::Ground),
-            4 => Ok(VatsimDataFeedFacility::Tower),
-            5 => Ok(VatsimDataFeedFacility::Approach),
-            6 => Ok(VatsimDataFeedFacility::Enroute),
-            _ => Ok(VatsimDataFeedFacility::Unknown),
-        }
-    }
-}
-
-impl From<VatsimDataFeedFacility> for FacilityType {
-    fn from(value: VatsimDataFeedFacility) -> Self {
-        match value {
-            VatsimDataFeedFacility::Unknown => FacilityType::Unknown,
-            VatsimDataFeedFacility::FlightServiceStation => FacilityType::FlightServiceStation,
-            VatsimDataFeedFacility::Delivery => FacilityType::Delivery,
-            VatsimDataFeedFacility::Ground => FacilityType::Ground,
-            VatsimDataFeedFacility::Tower => FacilityType::Tower,
-            VatsimDataFeedFacility::Approach => FacilityType::Approach,
-            VatsimDataFeedFacility::Enroute => FacilityType::Enroute,
-        }
-    }
 }
 
 impl From<VatsimDataFeedController> for ControllerInfo {
     fn from(value: VatsimDataFeedController) -> Self {
         Self {
             cid: value.cid.to_string(),
-            callsign: value.callsign,
             frequency: value.frequency,
-            facility_type: value.facility.into(),
+            facility_type: FacilityType::from(value.callsign.as_str()),
+            callsign: value.callsign,
         }
     }
 }

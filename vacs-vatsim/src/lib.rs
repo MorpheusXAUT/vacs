@@ -47,9 +47,8 @@ impl FromStr for FacilityType {
             "CTR" => Ok(FacilityType::Enroute),
             "FSS" => Ok(FacilityType::FlightServiceStation),
             "RDO" => Ok(FacilityType::Radio),
-            "TMU" => Ok(FacilityType::TrafficFlow),
-            "FMP" => Ok(FacilityType::TrafficFlow),
-            _ => Ok(FacilityType::Enroute),
+            "TMU" | "FMP" => Ok(FacilityType::TrafficFlow),
+            _ => Ok(FacilityType::Unknown),
         }
     }
 }
