@@ -63,10 +63,14 @@ async fn main() -> anyhow::Result<()> {
 
     let listener = tokio::net::TcpListener::bind(config.server.bind_addr).await?;
 
-    let controller_update_task = AppState::start_controller_update_task(
-        app_state.clone(),
-        config.vatsim.controller_update_interval,
-    );
+    let controller_update_task = if config.vatsim.require_active_connection {
+        Some(AppState::start_controller_update_task(
+            app_state.clone(),
+            config.vatsim.controller_update_interval,
+        ))
+    } else {
+        None
+    };
 
     tracing::info!(bind_addr = ?listener.local_addr()?, "Started listening");
     axum::serve(
@@ -77,7 +81,9 @@ async fn main() -> anyhow::Result<()> {
     .with_graceful_shutdown(shutdown_signal(shutdown_tx))
     .await?;
 
-    if let Err(err) = controller_update_task.await {
+    if let Some(controller_update_task) = controller_update_task
+        && let Err(err) = controller_update_task.await
+    {
         tracing::warn!(?err, "Controller update task finished with error");
     }
 
