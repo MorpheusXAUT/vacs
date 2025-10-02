@@ -173,7 +173,6 @@ impl AppStateInner {
                     let mut state = state.lock().await;
                     state.handle_signaling_connection_closed(app).await;
 
-                    // TODO handle SignalingRuntimeError::Disconnected with disconnect reason
                     if error.can_reconnect() {
                         app.emit("signaling:reconnecting", Value::Null).ok();
                     } else {

@@ -44,13 +44,13 @@ impl SignalingRuntimeError {
     }
 
     pub fn is_fatal(&self) -> bool {
-        matches!(self, SignalingRuntimeError::Disconnected(reason) if reason.is_some())
-            || matches!(
-                self,
-                SignalingRuntimeError::ReconnectFailed(_)
-                    | SignalingRuntimeError::ServerError(_)
-                    | SignalingRuntimeError::Transport(_)
-            )
+        matches!(
+            self,
+            SignalingRuntimeError::Disconnected(_)
+                | SignalingRuntimeError::ReconnectFailed(_)
+                | SignalingRuntimeError::ServerError(_)
+                | SignalingRuntimeError::Transport(_)
+        )
     }
 }
 
