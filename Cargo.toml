@@ -36,7 +36,7 @@ keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "li
 log = "0.4.28"
 oauth2 = { version = "5.0.0", features = ["reqwest"] }
 opus = "0.3.0"
-parking_lot = "0.12.4"
+parking_lot = "0.12.5"
 pretty_assertions = "1.4.1"
 quote = "1.0.41"
 rand = "0.9.2"
