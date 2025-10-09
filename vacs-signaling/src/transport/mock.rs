@@ -112,7 +112,7 @@ impl SignalingReceiver for MockReceiver {
                 biased;
                 _ = self.disconnect_token.cancelled() => {
                     tracing::warn!("Channel closed");
-                    return Err(SignalingRuntimeError::Disconnected);
+                    return Err(SignalingRuntimeError::Disconnected(None));
                 }
                 msg = self.rx.recv() => {
                     tracing::debug!(?msg, "Received tungstenite::Message");
@@ -126,12 +126,12 @@ impl SignalingReceiver for MockReceiver {
                         }
                         Ok(tungstenite::Message::Close(reason)) => {
                             tracing::warn!(?reason, "Received Close WebSocket frame");
-                            return Err(SignalingRuntimeError::Disconnected);
+                            return Err(SignalingRuntimeError::Disconnected(None));
                         }
                         Ok(tungstenite::Message::Ping(data)) => {
                             if let Err(err) = send_tx.send(tungstenite::Message::Pong(data)).await {
                                 tracing::warn!(?err, "Failed to send mock Pong");
-                                return Err(SignalingRuntimeError::Disconnected);
+                                return Err(SignalingRuntimeError::Disconnected(None));
                             }
                         }
                         Ok(other) => {
@@ -139,7 +139,7 @@ impl SignalingReceiver for MockReceiver {
                         }
                         Err(_) => {
                             tracing::warn!("Channel closed");
-                            return Err(SignalingRuntimeError::Disconnected);
+                            return Err(SignalingRuntimeError::Disconnected(None));
                         }
                     }
                 }

@@ -3,12 +3,13 @@ use crate::config::{AppConfig, AuthConfig, VatsimConfig};
 use crate::release::UpdateChecker;
 use crate::routes::create_app;
 use crate::state::AppState;
-use crate::store::Store;
 use crate::store::memory::MemoryStore;
+use crate::store::Store;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use vacs_vatsim::data_feed::mock::MockDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
 pub struct TestApp {
@@ -29,9 +30,13 @@ impl TestApp {
                 user_service: Default::default(),
                 require_active_connection: false,
                 slurper_base_url: Default::default(),
+                controller_update_interval: Default::default(),
+                data_feed_url: Default::default(),
             },
             ..Default::default()
         };
+
+        let mock_data_feed = MockDataFeed::default();
 
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let state = Arc::new(AppState::new(
@@ -39,6 +44,7 @@ impl TestApp {
             UpdateChecker::default(),
             Store::Memory(MemoryStore::default()),
             SlurperClient::new("http://localhost:12345").unwrap(),
+            Arc::new(mock_data_feed),
             shutdown_rx,
         ));
 
