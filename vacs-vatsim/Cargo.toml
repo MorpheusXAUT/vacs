@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+default = []
+test-utils = []
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }

@@ -1,4 +1,7 @@
 mod vatsim;
+#[cfg(feature = "test-utils")]
+pub mod mock;
+
 pub use vatsim::VatsimDataFeed;
 
 use crate::ControllerInfo;
