@@ -31,7 +31,7 @@ async fn login_without_self() {
     let mut broadcast_rx = client.subscribe();
     let res = client.connect().await;
     let connected_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client1" && client_info.display_name == "client1" && client_info.frequency == ""),
+        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client1" && client_info.display_name == "client1" && client_info.frequency.is_empty()),
     ).await;
     let client_list_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
 
@@ -64,7 +64,7 @@ async fn login() {
     let mut broadcast_rx1 = client1.subscribe();
     let res1 = client1.connect().await;
     let connected_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client1" && client_info.display_name == "client1" && client_info.frequency == ""),
+        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client1" && client_info.display_name == "client1" && client_info.frequency.is_empty()),
     ).await;
     let client_list_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
 
@@ -89,7 +89,7 @@ async fn login() {
     let mut broadcast_rx2 = client2.subscribe();
     let res2 = client2.connect().await;
     let connected_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client2" && client_info.display_name == "client2" && client_info.frequency == ""),
+        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client2" && client_info.display_name == "client2" && client_info.frequency.is_empty()),
     ).await;
     let client_list_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == "client1")).await;
 
