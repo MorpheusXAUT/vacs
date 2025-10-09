@@ -1,6 +1,6 @@
-mod vatsim;
 #[cfg(feature = "test-utils")]
 pub mod mock;
+mod vatsim;
 
 pub use vatsim::VatsimDataFeed;
 
