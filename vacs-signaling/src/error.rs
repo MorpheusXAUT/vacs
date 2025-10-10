@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+use std::time::Instant;
 use thiserror::Error;
 use tokio_tungstenite::tungstenite;
 use vacs_protocol::ws::{DisconnectReason, ErrorReason, LoginFailureReason};
@@ -24,6 +26,8 @@ pub enum SignalingRuntimeError {
     Disconnected(Option<DisconnectReason>),
     #[error("reconnect failed: {0:?}")]
     ReconnectFailed(ReconnectFailureReason),
+    #[error("aborting automatic reconnect due to rapid failures")]
+    ReconnectSuppressed(UntilInstant),
     #[error("server error: {0:?}")]
     ServerError(ErrorReason),
     #[error("transport error: {0:?}")]
@@ -48,6 +52,7 @@ impl SignalingRuntimeError {
             self,
             SignalingRuntimeError::Disconnected(_)
                 | SignalingRuntimeError::ReconnectFailed(_)
+                | SignalingRuntimeError::ReconnectSuppressed(_)
                 | SignalingRuntimeError::ServerError(_)
                 | SignalingRuntimeError::Transport(_)
         )
@@ -92,6 +97,18 @@ impl From<SignalingError> for ReconnectFailureReason {
                 }
             },
             SignalingError::Other(reason) => ReconnectFailureReason::Other(reason),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UntilInstant(pub Instant);
+
+impl Display for UntilInstant {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.0.checked_duration_since(Instant::now()) {
+            Some(dur) => write!(f, "{:.0?}", dur),
+            None => write!(f, "0s"),
         }
     }
 }
