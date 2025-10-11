@@ -6,7 +6,9 @@ import {defineConfig} from "eslint/config";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
-export default defineConfig(
+import type { ConfigObject } from "@eslint/core";
+
+const config: ConfigObject[] = defineConfig(
     {
         ignores: ["dist"],
     },
@@ -44,3 +46,5 @@ export default defineConfig(
         }
     },
 );
+
+export default config;
