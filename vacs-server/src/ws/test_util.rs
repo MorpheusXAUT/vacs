@@ -72,8 +72,6 @@ pub struct TestSetup {
     pub session: ClientSession,
     pub mock_stream: MockStream,
     pub mock_sink: MockSink,
-    #[allow(dead_code)]
-    pub mock_data_feed: Arc<MockDataFeed>,
     pub websocket_tx: Arc<Mutex<mpsc::Sender<ws::Message>>>,
     pub websocket_rx: Arc<Mutex<mpsc::Receiver<ws::Message>>>,
     pub rx: mpsc::Receiver<SignalingMessage>,
@@ -124,7 +122,6 @@ impl TestSetup {
             session,
             mock_stream,
             mock_sink,
-            mock_data_feed,
             websocket_tx: Arc::new(Mutex::new(websocket_tx)),
             websocket_rx: Arc::new(Mutex::new(websocket_rx)),
             rx,

@@ -332,12 +332,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
         tracing::debug!("Awaiting authentication response from server");
         match self.recv_with_timeout(self.login_timeout).await? {
-            SignalingMessage::ClientInfo { own, info } => {
-                if !own {
-                    return Err(SignalingError::ProtocolError(
-                        "Expected own client info after Login".to_string(),
-                    ));
-                }
+            SignalingMessage::ClientInfo { own, info } if own => {
                 tracing::info!(?info, "Login successful, received own client info");
                 Ok(info)
             }
@@ -354,7 +349,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
             other => {
                 tracing::error!(?other, "Received unexpected message from server");
                 Err(SignalingError::ProtocolError(
-                    "Expected ClientList after Login".to_string(),
+                    "Expected own client info after Login".to_string(),
                 ))
             }
         }
@@ -1262,7 +1257,7 @@ mod tests {
 
         let res = client.connect().await;
         assert!(res.is_err());
-        assert_matches!(res.unwrap_err(), SignalingError::ProtocolError(reason) if reason == "Expected ClientList after Login");
+        assert_matches!(res.unwrap_err(), SignalingError::ProtocolError(reason) if reason == "Expected own client info after Login");
         assert_matches!(client.state(), State::Disconnected);
     }
 
