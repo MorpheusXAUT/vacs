@@ -64,7 +64,10 @@ function DAKey({client}: DAKeyProps) {
             highlight={beingCalled || isRejected ? "green" : undefined}
             onClick={handleClick}
         >
-            <p className="wrap-break-word w-full">{client.displayName}<br/>{client.frequency}</p>
+            <p className="wrap-break-word w-full">
+                {client.displayName}
+                {client.frequency !== "" && <><br/>{client.frequency}</>}
+            </p>
         </Button>
     );
     // 320-340<br/>E2<br/>EC
