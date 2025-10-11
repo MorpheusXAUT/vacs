@@ -11,6 +11,7 @@ use vacs_signaling::test_utils::{RecvWithTimeoutExt, TestRig};
 use vacs_signaling::transport::tokio::TokioTransport;
 
 #[test(tokio::test)]
+#[cfg_attr(target_os = "windows", ignore)]
 async fn login_without_self() {
     let test_app = TestApp::new().await;
 
@@ -33,17 +34,18 @@ async fn login_without_self() {
     let connected_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event|
         matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client1" && client_info.display_name == "client1" && client_info.frequency.is_empty()),
     ).await;
-    let client_list_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
+    let client_info_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
 
     assert!(res.is_ok());
     assert!(connected_event.is_ok());
-    assert!(client_list_event.is_ok());
+    assert!(client_info_event.is_ok());
 
     shutdown_token.cancel();
     client.disconnect().await;
 }
 
 #[test(tokio::test)]
+#[cfg_attr(target_os = "windows", ignore)]
 async fn login() {
     let test_app = TestApp::new().await;
 

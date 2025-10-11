@@ -394,6 +394,8 @@ impl AppStateInner {
                 app.emit("signaling:client-list", clients).ok();
             }
             SignalingMessage::ClientInfo { own, info } => {
+                log::trace!("Received client info. Own: {own}, info: {info:?}");
+
                 let event = if own {
                     "signaling:connected"
                 } else {
