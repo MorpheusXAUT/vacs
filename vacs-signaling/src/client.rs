@@ -18,7 +18,6 @@ use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 
 const BROADCAST_CHANNEL_SIZE: usize = 100;
 const SEND_CHANNEL_SIZE: usize = 100;
-const RECONNECT_STABLE_AFTER: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -481,7 +480,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
                                 if err.can_reconnect() {
                                     {
                                         let mut gate = self.reconnect_gate.lock();
-                                        if let Err(until) = gate.allow(Instant::now()) {
+                                        if let Err(until) = gate.can_reconnect(Instant::now()) {
                                             tracing::warn!(?until, "Reconnect suppressed due to rapid failures");
                                             if let Err(err) = self.broadcast_tx.send(SignalingEvent::Error(SignalingRuntimeError::ReconnectSuppressed(UntilInstant(until)))) {
                                                 tracing::warn!(?err, "Failed to broadcast reconnect suppressed error event");
@@ -537,26 +536,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         for attempt in 1..=self.reconnect_max_tries {
             tracing::trace!(?attempt, "Reconnecting");
             match self.connect().await {
-                Ok(()) => {
-                    let gate = self.reconnect_gate.clone();
-                    let disconnect_token = self.disconnect_token.lock().clone();
-                    tokio::runtime::Handle::current().spawn(async move {
-                        tracing::trace!("Reconnect successful, checking if connection is stable");
-
-                        tokio::select! {
-                            biased;
-                            _ = disconnect_token.cancelled() => {
-                                tracing::debug!("Disconnect signal received, not flagging reconnect as stable");
-                            }
-                            _ = tokio::time::sleep(RECONNECT_STABLE_AFTER) => {
-                                tracing::debug!("Marking reconnect as stable");
-                                gate.lock().on_stable(Instant::now());
-                            }
-                        }
-                    });
-
-                    return Ok(());
-                }
+                Ok(()) => return Ok(()),
                 Err(err) => {
                     tracing::warn!(?err, ?attempt, "Failed to reconnect");
                     reconnect_error = err;
@@ -792,13 +772,11 @@ impl ReconnectGate {
         }
     }
 
-    fn allow(&mut self, now: Instant) -> Result<(), Instant> {
+    fn can_reconnect(&mut self, now: Instant) -> Result<(), Instant> {
         if let Some(until) = self.suppressed_until {
             if now < until {
-                tracing::error!(?until, "allow: suppressed");
                 return Err(until);
             }
-            tracing::error!(?until, "allow: suppression expired");
             self.suppressed_until = None;
         }
 
@@ -807,28 +785,17 @@ impl ReconnectGate {
         if self.recent.len() >= self.max_in_window as usize {
             let until = now + self.cooldown;
             self.suppressed_until = Some(until);
-            tracing::error!(?until, "allow: suppressing now");
             return Err(until);
         }
-
-        tracing::error!("allow: Ok");
         Ok(())
-    }
-
-    fn on_stable(&mut self, now: Instant) {
-        tracing::error!("on_stable");
-        self.prune(now);
-        self.suppressed_until = None;
     }
 
     fn on_reconnect(&mut self, now: Instant) {
         self.recent.push_back(now);
         self.prune(now);
-        tracing::error!(?self.recent, "on_reconnect");
     }
 
     fn clear(&mut self) {
-        tracing::error!("clear");
         self.recent.clear();
         self.suppressed_until = None;
     }
@@ -1446,22 +1413,22 @@ mod tests {
             let mut g = gate(3, 10, 30);
             let t0 = Instant::now();
 
-            assert!(g.allow(t0).is_ok());
+            assert!(g.can_reconnect(t0).is_ok());
             g.on_reconnect(t0);
             assert_eq!(g.recent.len(), 1);
 
             let t1 = t0 + Duration::from_secs(1);
-            assert!(g.allow(t1).is_ok());
+            assert!(g.can_reconnect(t1).is_ok());
             g.on_reconnect(t1);
             assert_eq!(g.recent.len(), 2);
 
             let t2 = t0 + Duration::from_secs(2);
-            assert!(g.allow(t2).is_ok());
+            assert!(g.can_reconnect(t2).is_ok());
             g.on_reconnect(t2);
             assert_eq!(g.recent.len(), 3);
 
             let t3 = t0 + Duration::from_secs(3);
-            let until = g.allow(t3).unwrap_err();
+            let until = g.can_reconnect(t3).unwrap_err();
             assert_eq!(until, t3 + Duration::from_secs(30));
             assert_eq!(g.suppressed_until, Some(until));
 
@@ -1473,22 +1440,22 @@ mod tests {
             let mut g = gate(1, 10, 30);
             let t0 = Instant::now();
 
-            assert!(g.allow(t0).is_ok());
+            assert!(g.can_reconnect(t0).is_ok());
             g.on_reconnect(t0);
             assert_eq!(g.recent.len(), 1);
 
             let t1 = t0 + Duration::from_secs(1);
-            let until = g.allow(t1).unwrap_err();
+            let until = g.can_reconnect(t1).unwrap_err();
             assert_eq!(until, t1 + Duration::from_secs(30));
             assert_eq!(g.suppressed_until, Some(until));
 
             let mid = t1 + Duration::from_secs(10);
-            let mid_err = g.allow(mid).unwrap_err();
+            let mid_err = g.can_reconnect(mid).unwrap_err();
             assert_eq!(mid_err, until);
             assert_eq!(g.suppressed_until, Some(until));
 
             let t_after = until;
-            assert!(g.allow(t_after).is_ok());
+            assert!(g.can_reconnect(t_after).is_ok());
             assert_eq!(g.suppressed_until, None);
         }
 
@@ -1497,17 +1464,17 @@ mod tests {
             let mut g = gate(1, 10, 30);
 
             let t0 = Instant::now();
-            assert!(g.allow(t0).is_ok());
+            assert!(g.can_reconnect(t0).is_ok());
             g.on_reconnect(t0);
             assert_eq!(g.recent.len(), 1);
 
             let t1 = t0 + Duration::from_secs(11);
-            assert!(g.allow(t1).is_ok());
+            assert!(g.can_reconnect(t1).is_ok());
             g.on_reconnect(t1);
             assert_eq!(g.recent.len(), 1);
 
             let t2 = t1 + Duration::from_secs(1);
-            let until = g.allow(t2).unwrap_err();
+            let until = g.can_reconnect(t2).unwrap_err();
             assert_eq!(until, t2 + Duration::from_secs(30));
         }
 
@@ -1516,25 +1483,10 @@ mod tests {
             let mut g = gate(1, 10, 30);
 
             let t0 = Instant::now();
-            assert!(g.allow(t0).is_ok());
-            assert!(g.allow(t0 + Duration::from_secs(1)).is_ok());
-            assert!(g.allow(t0 + Duration::from_secs(2)).is_ok());
+            assert!(g.can_reconnect(t0).is_ok());
+            assert!(g.can_reconnect(t0 + Duration::from_secs(1)).is_ok());
+            assert!(g.can_reconnect(t0 + Duration::from_secs(2)).is_ok());
             assert_eq!(g.recent.len(), 0);
-            assert!(g.suppressed_until.is_none());
-        }
-
-        #[test]
-        fn on_stable_resets_suppression() {
-            let mut g = gate(1, 10, 30);
-
-            let t0 = Instant::now();
-            assert!(g.allow(t0).is_ok());
-            g.on_reconnect(t0);
-            assert_eq!(g.recent.len(), 1);
-
-            let t1 = t0 + Duration::from_secs(1);
-            g.on_stable(t1);
-            assert_eq!(g.recent.len(), 1);
             assert!(g.suppressed_until.is_none());
         }
     }
