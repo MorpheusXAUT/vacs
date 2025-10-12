@@ -33,12 +33,8 @@ where
         .layer(middleware::from_fn(
             async |request: extract::Request, next: Next| {
                 let (mut parts, body) = request.into_parts();
-                match ClientIp::from_request_parts(&mut parts, &()).await {
-                    Ok(ip) => {
-                        tracing::warn!(client_ip = ?ip.0, "Client IP extracted");
-                        Span::current().record("client_ip", ip.0.to_string());
-                    }
-                    Err(err) => tracing::warn!(?err, "Failed to extract client IP"),
+                if let Ok(ip) = ClientIp::from_request_parts(&mut parts, &()).await {
+                    Span::current().record("client_ip", ip.0.to_string());
                 }
                 next.run(Request::from_parts(parts, body)).await
             },
