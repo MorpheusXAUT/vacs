@@ -259,6 +259,7 @@ impl CallError {
 pub enum StartupError {
     Audio,
     Config,
+    Keybinds,
     Other,
 }
 
@@ -267,6 +268,7 @@ impl Display for StartupError {
         f.write_str(match self {
             StartupError::Audio => "No suitable output audio device found. Check your logs for further details.",
             StartupError::Config => "Failed to load configuration. Check your config files for errors or logs for further details.",
+            StartupError::Keybinds => "Failed to register keybinds according to your transmit mode. Check your config files or logs for further details.",
             StartupError::Other => "A fatal error occurred during startup. Check your logs for further details.",
         })
     }

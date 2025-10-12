@@ -2,7 +2,7 @@ use crate::app::state::AppState;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::config::AudioConfig;
+use crate::config::{AudioConfig, TransmitMode};
 use crate::error::{Error, FrontendError};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -119,6 +119,7 @@ impl AudioManager {
         app: AppHandle,
         audio_config: &AudioConfig,
         tx: mpsc::Sender<EncodedAudioFrame>,
+        transmit_mode: TransmitMode,
     ) -> Result<(), Error> {
         let (device, is_fallback) = DeviceSelector::open(
             DeviceType::Input,
@@ -171,6 +172,7 @@ impl AudioManager {
             audio_config.input_device_volume,
             audio_config.input_device_volume_amp,
             error_tx,
+            transmit_mode == TransmitMode::PushToTalk,
         )?);
         Ok(())
     }
