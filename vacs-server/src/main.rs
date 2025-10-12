@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
     let auth_layer = setup_auth_layer(&config, redis_pool).await?;
 
-    let app = create_app(auth_layer);
+    let app = create_app(auth_layer, config.server.client_ip_source.clone());
 
     let listener = tokio::net::TcpListener::bind(config.server.bind_addr).await?;
 

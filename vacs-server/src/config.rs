@@ -1,4 +1,5 @@
 use anyhow::Context;
+use axum_client_ip::ClientIpSource;
 use config::{Config, Environment, File};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -61,12 +62,14 @@ pub fn config_file_path(file_name: impl AsRef<Path>) -> anyhow::Result<String> {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServerConfig {
     pub bind_addr: String,
+    pub client_ip_source: ClientIpSource,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             bind_addr: "0.0.0.0:3000".to_string(),
+            client_ip_source: ClientIpSource::ConnectInfo,
         }
     }
 }

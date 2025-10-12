@@ -2,10 +2,10 @@ use crate::state::AppState;
 use crate::ws::auth::handle_websocket_login;
 use crate::ws::message::send_message_raw;
 use axum::extract::ws::{CloseCode, CloseFrame, Message, Utf8Bytes, WebSocket};
-use axum::extract::{ConnectInfo, State, WebSocketUpgrade};
+use axum::extract::{State, WebSocketUpgrade};
 use axum::response::IntoResponse;
+use axum_client_ip::ClientIp;
 use futures_util::{SinkExt, StreamExt};
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode as TungsteniteCloseCode;
 use tracing::Instrument;
@@ -13,11 +13,11 @@ use vacs_protocol::ws::{ClientInfo, LoginFailureReason, SignalingMessage};
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    ClientIp(ip): ClientIp,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| {
-        let span = tracing::trace_span!("websocket_connection", addr = %addr, client_id = tracing::field::Empty);
+        let span = tracing::trace_span!("websocket_connection", client_ip = ?ip, client_id = tracing::field::Empty);
         async move {
             handle_socket(socket, state).await;
         }.instrument(span)
