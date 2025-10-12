@@ -32,6 +32,7 @@ cpal = "0.16.0"
 csv = "1.4.0"
 dashmap = "6.1.0"
 futures-util = "0.3.31"
+keyboard-types = { version = "0.8.3", features = ["serde"] }
 keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "linux-native-sync-persistent", "crypto-openssl"] }
 log = "0.4.28"
 oauth2 = { version = "5.0.0", features = ["reqwest"] }
@@ -51,7 +52,6 @@ syn = { version = "2.0.107", features = ["full"] }
 tauri = "2.9.0"
 tauri-build = "2.5.0"
 tauri-plugin-deep-link = "2.4.3"
-tauri-plugin-global-shortcut = "2.3.0"
 tauri-plugin-log = "2.7.0"
 tauri-plugin-opener = "2.5.0"
 tauri-plugin-single-instance = "2.3.4"
@@ -78,6 +78,14 @@ vacs-vatsim = { path = "vacs-vatsim" }
 vacs-webrtc = { path = "vacs-webrtc" }
 vergen-git2 = { version = "1.0.7", features = ["build", "cargo", "rustc"] }
 webrtc = "0.14.0"
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Input",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_Graphics_Gdi"
+]}
 wiremock = "0.6.5"
 
 [workspace.lints]

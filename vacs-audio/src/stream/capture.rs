@@ -45,11 +45,12 @@ impl CaptureStream {
         mut volume: f32,
         amp: f32,
         error_tx: mpsc::Sender<AudioError>,
+        muted: bool,
     ) -> Result<Self, AudioError> {
         tracing::debug!("Starting input capture stream");
         debug_assert!(matches!(device.device_type, DeviceType::Input));
 
-        let muted = Arc::new(AtomicBool::new(false));
+        let muted = Arc::new(AtomicBool::new(muted));
         let muted_clone = muted.clone();
 
         // buffer for ~100ms of input data

@@ -1,12 +1,11 @@
 use crate::error::Error;
 use anyhow::Context;
 use config::{Config, Environment, File};
+use keyboard_types::Code;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use std::str::FromStr;
 use std::time::Duration;
-use tauri_plugin_global_shortcut::{Code, Shortcut};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_webrtc::config::WebrtcConfig;
 
@@ -221,31 +220,8 @@ pub enum TransmitMode {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TransmitConfig {
     pub mode: TransmitMode,
-    #[serde(with = "shortcut_code_opt")]
-    pub push_to_talk: Option<Shortcut>,
-    #[serde(with = "shortcut_code_opt")]
-    pub push_to_mute: Option<Shortcut>,
-}
-
-mod shortcut_code_opt {
-    use super::*;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    pub fn serialize<S>(value: &Option<Shortcut>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let as_code: Option<Code> = value.as_ref().map(|s| s.key);
-        as_code.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Shortcut>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let opt_code = Option::<Code>::deserialize(deserializer)?;
-        Ok(opt_code.map(|code| Shortcut::new(None, code)))
-    }
+    pub push_to_talk: Option<Code>,
+    pub push_to_mute: Option<Code>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -260,8 +236,8 @@ impl From<TransmitConfig> for FrontendTransmitConfig {
     fn from(transmit_config: TransmitConfig) -> Self {
         Self {
             mode: transmit_config.mode,
-            push_to_talk: transmit_config.push_to_talk.map(|s| s.key.to_string()),
-            push_to_mute: transmit_config.push_to_mute.map(|s| s.key.to_string()),
+            push_to_talk: transmit_config.push_to_talk.map(|k| k.to_string()),
+            push_to_mute: transmit_config.push_to_mute.map(|k| k.to_string()),
         }
     }
 }
@@ -275,13 +251,13 @@ impl TryFrom<FrontendTransmitConfig> for TransmitConfig {
             push_to_talk: value
                 .push_to_talk
                 .as_ref()
-                .map(|s| Code::from_str(s).map(|code| Shortcut::new(None, code)))
+                .map(|s| s.parse::<Code>())
                 .transpose()
                 .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.push_to_talk.unwrap_or_default()))))?,
             push_to_mute: value
                 .push_to_mute
                 .as_ref()
-                .map(|s| Code::from_str(s).map(|code| Shortcut::new(None, code)))
+                .map(|s| s.parse::<Code>())
                 .transpose()
                 .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.push_to_mute.unwrap_or_default()))))?,
         })
