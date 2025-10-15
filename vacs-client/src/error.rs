@@ -1,3 +1,4 @@
+use crate::keybinds::KeybindsError;
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt::{Debug, Display, Formatter};
@@ -22,6 +23,8 @@ pub enum Error {
     Reqwest(#[from] Box<reqwest::Error>),
     #[error("WebRTC error: {0}")]
     Webrtc(#[from] Box<vacs_webrtc::error::WebrtcError>),
+    #[error("Keybinds error: {0}")]
+    Keybinds(#[from] Box<KeybindsError>),
     #[error(transparent)]
     Other(#[from] Box<anyhow::Error>),
 }
@@ -41,6 +44,12 @@ impl From<SignalingError> for Error {
 impl From<SignalingRuntimeError> for Error {
     fn from(err: SignalingRuntimeError) -> Self {
         Error::Signaling(Box::new(err.into()))
+    }
+}
+
+impl From<KeybindsError> for Error {
+    fn from(err: KeybindsError) -> Self {
+        Error::Keybinds(Box::new(err))
     }
 }
 
@@ -171,6 +180,7 @@ impl From<&Error> for FrontendError {
                 FrontendError::new("Signaling error", format_signaling_error(err))
             }
             Error::Webrtc(err) => FrontendError::new("WebRTC error", err.to_string()),
+            Error::Keybinds(err) => FrontendError::new("Keybinds error", err.to_string()),
             Error::Other(err) => FrontendError::new("Error", err.to_string()),
         }
     }
