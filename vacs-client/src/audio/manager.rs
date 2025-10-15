@@ -1,11 +1,12 @@
 use crate::app::state::AppState;
-use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::config::{AudioConfig, TransmitMode};
 use crate::error::{Error, FrontendError};
+use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
@@ -87,6 +88,8 @@ pub struct AudioManager {
     source_ids: HashMap<SourceType, AudioSourceId>,
 }
 
+pub type AudioManagerHandle = Arc<RwLock<AudioManager>>;
+
 impl AudioManager {
     pub fn new(app: AppHandle, audio_config: &AudioConfig) -> Result<Self, Error> {
         let (output, source_ids) = Self::create_playback_stream(app, audio_config, false)?;
@@ -155,7 +158,9 @@ impl AudioManager {
                         log::warn!("Failed to send call end signaling message: {:?}", err);
                     };
                     state.set_outgoing_call_peer_id(None);
-                    state.audio_manager().stop(SourceType::Ringback);
+                    app.state::<AudioManagerHandle>()
+                        .read()
+                        .stop(SourceType::Ringback);
 
                     app.emit("signaling:call-end", &peer_id).ok();
                 }
@@ -193,10 +198,9 @@ impl AudioManager {
 
         tauri::async_runtime::spawn(async move {
             while let Some(err) = error_rx.recv().await {
-                let state = app.state::<AppState>();
-                let mut state = state.lock().await;
-
-                state.audio_manager_mut().detach_input_device();
+                app.state::<AudioManagerHandle>()
+                    .write()
+                    .detach_input_device();
 
                 app.emit("audio:stop-input-level-meter", Value::Null).ok();
                 app.emit::<FrontendError>("error", Error::from(err).into())
@@ -365,16 +369,18 @@ impl AudioManager {
                             log::warn!("Failed to send call end signaling message: {:?}", err);
                         };
                         state.set_outgoing_call_peer_id(None);
-                        state.audio_manager().stop(SourceType::Ringback);
+                        app.state::<AudioManagerHandle>()
+                            .read()
+                            .stop(SourceType::Ringback);
 
                         app.emit("signaling:call-end", &peer_id).ok();
                     }
 
-                    if let Err(err) = state.audio_manager_mut().switch_output_device(
-                        app.clone(),
-                        &audio_config_clone,
-                        true,
-                    ) {
+                    if let Err(err) = app
+                        .state::<AudioManagerHandle>()
+                        .write()
+                        .switch_output_device(app.clone(), &audio_config_clone, true)
+                    {
                         log::error!("Failed to switch output device after failure: {:?}", err);
 
                         app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(

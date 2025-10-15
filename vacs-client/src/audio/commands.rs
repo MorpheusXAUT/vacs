@@ -1,7 +1,6 @@
 use crate::app::state::AppState;
-use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::audio::manager::SourceType;
+use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::audio::{AudioDevices, AudioHosts, AudioVolumes, VolumeType};
 use crate::config::{AUDIO_SETTINGS_FILE_NAME, Persistable, PersistedAudioConfig};
 use crate::error::Error;
@@ -40,6 +39,7 @@ pub async fn audio_get_hosts(app_state: State<'_, AppState>) -> Result<AudioHost
 pub async fn audio_set_host(
     app: AppHandle,
     app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     host_name: String,
 ) -> Result<(), Error> {
     let mut state = app_state.lock().await;
@@ -57,8 +57,8 @@ pub async fn audio_set_host(
         let mut audio_config = state.config.audio.clone();
         audio_config.host_name = Some(host_name).filter(|x| !x.is_empty());
 
-        state
-            .audio_manager_mut()
+        audio_manager
+            .write()
             .switch_output_device(app.clone(), &audio_config, false)?;
 
         state.config.audio = audio_config;
@@ -78,6 +78,7 @@ pub async fn audio_set_host(
 #[vacs_macros::log_err]
 pub async fn audio_get_devices(
     app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     device_type: DeviceType,
 ) -> Result<AudioDevices, Error> {
     log::info!("Getting audio devices (type: {:?})", device_type);
@@ -105,7 +106,7 @@ pub async fn audio_get_devices(
                 .output_device_name
                 .clone()
                 .unwrap_or_default();
-            let picked = state.audio_manager().output_device_name();
+            let picked = audio_manager.read().output_device_name();
             (preferred, picked)
         }
     };
@@ -127,12 +128,14 @@ pub async fn audio_get_devices(
 pub async fn audio_set_device(
     app: AppHandle,
     app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     device_type: DeviceType,
     device_name: String,
 ) -> Result<(), Error> {
     let mut state = app_state.lock().await;
+    let mut audio_manager = audio_manager.write();
 
-    if state.audio_manager().is_input_device_attached() {
+    if audio_manager.is_input_device_attached() {
         return Err(AudioError::Other(anyhow::anyhow!(
             "Cannot set audio device while call is active"
         ))
@@ -153,11 +156,7 @@ pub async fn audio_set_device(
                 let mut audio_config = state.config.audio.clone();
                 audio_config.output_device_name = device_name;
 
-                state.audio_manager_mut().switch_output_device(
-                    app.clone(),
-                    &audio_config,
-                    false,
-                )?;
+                audio_manager.switch_output_device(app.clone(), &audio_config, false)?;
 
                 state.config.audio = audio_config;
             }
@@ -196,6 +195,7 @@ pub async fn audio_get_volumes(app_state: State<'_, AppState>) -> Result<AudioVo
 pub async fn audio_set_volume(
     app: AppHandle,
     app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     volume_type: VolumeType,
     volume: f32,
 ) -> Result<(), Error> {
@@ -205,34 +205,25 @@ pub async fn audio_set_volume(
         volume
     );
     let mut state = app_state.lock().await;
+    let audio_manager = audio_manager.read();
 
     match volume_type {
         VolumeType::Input => {
-            state.audio_manager().set_input_volume(volume);
+            audio_manager.set_input_volume(volume);
             state.config.audio.input_device_volume = volume;
         }
         VolumeType::Output => {
-            state
-                .audio_manager()
-                .set_output_volume(SourceType::Opus, volume);
-            state
-                .audio_manager()
-                .set_output_volume(SourceType::Ringback, volume);
-            state
-                .audio_manager()
-                .set_output_volume(SourceType::RingbackOneshot, volume);
+            audio_manager.set_output_volume(SourceType::Opus, volume);
+            audio_manager.set_output_volume(SourceType::Ringback, volume);
+            audio_manager.set_output_volume(SourceType::RingbackOneshot, volume);
             state.config.audio.output_device_volume = volume;
         }
         VolumeType::Click => {
-            state
-                .audio_manager()
-                .set_output_volume(SourceType::Click, volume);
+            audio_manager.set_output_volume(SourceType::Click, volume);
             state.config.audio.click_volume = volume;
         }
         VolumeType::Chime => {
-            state
-                .audio_manager()
-                .set_output_volume(SourceType::Ring, volume);
+            audio_manager.set_output_volume(SourceType::Ring, volume);
             state.config.audio.chime_volume = volume;
         }
     }
@@ -250,16 +241,14 @@ pub async fn audio_set_volume(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn audio_play_ui_click(app_state: State<'_, AppState>) -> Result<(), Error> {
-    log::trace!("Playing UI click");
-
-    match tokio::time::timeout(Duration::from_millis(500), app_state.lock()).await {
-        Ok(state) => {
-            state.audio_manager().start(SourceType::Click);
-        }
-        Err(_) => {
-            log::warn!("Play UI click state lock acquire timed out");
-        }
+pub async fn audio_play_ui_click(
+    audio_manager: State<'_, AudioManagerHandle>,
+) -> Result<(), Error> {
+    if let Some(audio_manager) = audio_manager.try_read_for(Duration::from_millis(500)) {
+        log::trace!("Playing UI click");
+        audio_manager.start(SourceType::Click);
+    } else {
+        log::warn!("Play UI click state lock acquire timed out");
     }
 
     Ok(())
@@ -269,21 +258,23 @@ pub async fn audio_play_ui_click(app_state: State<'_, AppState>) -> Result<(), E
 #[vacs_macros::log_err]
 pub async fn audio_start_input_level_meter(
     app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     app: AppHandle,
 ) -> Result<(), Error> {
     log::trace!("Starting input level meter");
 
-    let mut state = app_state.lock().await;
+    let state = app_state.lock().await;
     let audio_config = &state.config.audio.clone();
+    let mut audio_manager = audio_manager.write();
 
-    if state.audio_manager().is_input_device_attached() {
+    if audio_manager.is_input_device_attached() {
         return Err(AudioError::Other(anyhow::anyhow!(
             "Cannot start input level meter while call is active"
         ))
         .into());
     }
 
-    state.audio_manager_mut().attach_input_level_meter(
+    audio_manager.attach_input_level_meter(
         app.clone(),
         audio_config,
         Box::new(move |level| {
@@ -296,14 +287,12 @@ pub async fn audio_start_input_level_meter(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn audio_stop_input_level_meter(app_state: State<'_, AppState>) -> Result<(), Error> {
+pub async fn audio_stop_input_level_meter(
+    audio_manager: State<'_, AudioManagerHandle>,
+) -> Result<(), Error> {
     log::trace!("Stopping input level meter");
 
-    app_state
-        .lock()
-        .await
-        .audio_manager_mut()
-        .detach_input_device();
+    audio_manager.write().detach_input_device();
 
     Ok(())
 }
@@ -311,14 +300,13 @@ pub async fn audio_stop_input_level_meter(app_state: State<'_, AppState>) -> Res
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn audio_set_input_muted(
-    app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     muted: bool,
 ) -> Result<(), Error> {
-    log::info!("Setting audio input muted (muted: {muted})");
-    app_state
-        .lock()
-        .await
-        .audio_manager()
-        .set_input_muted(muted);
+    log::info!(
+        "Setting audio input {}",
+        if muted { "muted" } else { "unmuted" }
+    );
+    audio_manager.read().set_input_muted(muted);
     Ok(())
 }

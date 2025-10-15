@@ -6,13 +6,15 @@ pub(crate) mod webrtc;
 
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::Call;
-use crate::audio::manager::AudioManager;
+use crate::audio::manager::{AudioManager, AudioManagerHandle};
 use crate::config::AppConfig;
 use crate::error::{StartupError, StartupErrorExt};
 use crate::signaling::auth::TauriTokenProvider;
+use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use tauri::{AppHandle, Manager};
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as TokioMutex;
 use tokio_util::sync::CancellationToken;
 use vacs_signaling::client::SignalingClient;
 use vacs_signaling::transport::tokio::TokioTransport;
@@ -21,14 +23,14 @@ pub struct AppStateInner {
     pub config: AppConfig,
     shutdown_token: CancellationToken,
     signaling_client: SignalingClient<TokioTransport, TauriTokenProvider>,
-    audio_manager: AudioManager,
+    audio_manager: AudioManagerHandle,
     active_call: Option<Call>,
     held_calls: HashMap<String, Call>,       // peer_id -> call
     outgoing_call_peer_id: Option<String>,   // peer_id
     incoming_call_peer_ids: HashSet<String>, // peer_id
 }
 
-pub type AppState = Mutex<AppStateInner>;
+pub type AppState = TokioMutex<AppStateInner>;
 
 impl AppStateInner {
     pub fn new(app: &AppHandle) -> Result<Self, StartupError> {
@@ -49,8 +51,10 @@ impl AppStateInner {
                 config.client.max_signaling_reconnect_attempts(),
             ),
             shutdown_token,
-            audio_manager: AudioManager::new(app.clone(), &config.audio)
-                .map_startup_err(StartupError::Audio)?,
+            audio_manager: Arc::new(RwLock::new(
+                AudioManager::new(app.clone(), &config.audio)
+                    .map_startup_err(StartupError::Audio)?,
+            )),
             active_call: None,
             held_calls: HashMap::new(),
             outgoing_call_peer_id: None,

@@ -12,10 +12,12 @@ use crate::app::open_fatal_error_dialog;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::http::HttpState;
 use crate::app::state::{AppState, AppStateInner};
+use crate::audio::manager::AudioManagerHandle;
 use crate::build::VersionInfo;
 use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use crate::keybinds::KeybindsTrait;
 use anyhow::Context;
+use parking_lot::RwLock;
 use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -23,6 +25,7 @@ use std::thread;
 use tauri::async_runtime::handle;
 use tauri::{App, Emitter, Manager, RunEvent};
 use tokio::sync::Mutex;
+use tokio::sync::Mutex as TokioMutex;
 
 pub fn run() {
     tauri::Builder::default()
@@ -114,6 +117,9 @@ pub fn run() {
 
                 app.manage(Mutex::new(state));
                 app.manage(HttpState::new(app.handle())?);
+                app.manage::<HttpState>(HttpState::new(app.handle())?);
+                app.manage::<AudioManagerHandle>(state.audio_manager_handle());
+                app.manage::<AppState>(TokioMutex::new(state));
 
                 Ok(())
             }

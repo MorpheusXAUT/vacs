@@ -1,4 +1,3 @@
-use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::{AppState, AppStateInner, sealed};
 use crate::config::ENCODED_AUDIO_FRAME_BUFFER_SIZE;
@@ -114,8 +113,9 @@ impl AppStateWebrtcExt for AppStateInner {
                                     && call.peer_id == peer_id_clone
                                 {
                                     call.peer.pause();
-                                    state.audio_manager_mut().detach_call_output();
-                                    state.audio_manager_mut().detach_input_device();
+                                    let mut audio_manager = state.audio_manager.write();
+                                    audio_manager.detach_call_output();
+                                    audio_manager.detach_input_device();
                                 }
 
                                 app.emit("webrtc:call-disconnected", &peer_id_clone).ok();
@@ -220,8 +220,11 @@ impl AppStateWebrtcExt for AppStateInner {
         let res = if let Some(call) = &mut self.active_call
             && call.peer_id == peer_id
         {
-            self.audio_manager.detach_call_output();
-            self.audio_manager.detach_input_device();
+            {
+                let mut audio_manager = self.audio_manager.write();
+                audio_manager.detach_call_output();
+                audio_manager.detach_input_device();
+            }
             let result = call.peer.close().await;
             self.active_call = None;
             result
@@ -273,8 +276,9 @@ impl AppStateInner {
             }
 
             let audio_config = self.config.audio.clone();
+            let mut audio_manager = self.audio_manager.write();
             log::debug!("Attaching call to audio manager");
-            if let Err(err) = self.audio_manager_mut().attach_call_output(
+            if let Err(err) = audio_manager.attach_call_output(
                 output_rx,
                 audio_config.output_device_volume,
                 audio_config.output_device_volume_amp,
@@ -285,7 +289,7 @@ impl AppStateInner {
 
             let transmit_mode = self.config.client.transmit_config.mode.clone();
             log::debug!("Attaching input device to audio manager");
-            if let Err(err) = self.audio_manager_mut().attach_input_device(
+            if let Err(err) = audio_manager.attach_input_device(
                 app.clone(),
                 &audio_config,
                 input_tx,

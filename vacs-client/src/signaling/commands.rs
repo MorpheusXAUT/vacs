@@ -1,9 +1,8 @@
 use crate::app::state::AppState;
-use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::http::HttpState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::audio::manager::SourceType;
+use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::config::BackendEndpoint;
 use crate::error::{Error, HandleUnauthorizedExt};
 use tauri::{AppHandle, Manager, State};
@@ -54,6 +53,7 @@ pub async fn signaling_terminate(
 pub async fn signaling_start_call(
     app: AppHandle,
     app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     peer_id: String,
 ) -> Result<(), Error> {
     log::debug!("Starting call with {peer_id}");
@@ -69,7 +69,7 @@ pub async fn signaling_start_call(
     state.add_call_to_call_list(&app, &peer_id, false);
 
     state.set_outgoing_call_peer_id(Some(peer_id));
-    state.audio_manager().restart(SourceType::Ringback);
+    audio_manager.read().restart(SourceType::Ringback);
 
     Ok(())
 }
@@ -78,6 +78,7 @@ pub async fn signaling_start_call(
 #[vacs_macros::log_err]
 pub async fn signaling_accept_call(
     app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     peer_id: String,
 ) -> Result<(), Error> {
     log::debug!("Accepting call from {peer_id}");
@@ -91,7 +92,7 @@ pub async fn signaling_accept_call(
         .await?;
     state.remove_incoming_call_peer_id(&peer_id);
 
-    state.audio_manager().stop(SourceType::Ring);
+    audio_manager.read().stop(SourceType::Ring);
 
     Ok(())
 }
@@ -100,6 +101,7 @@ pub async fn signaling_accept_call(
 #[vacs_macros::log_err]
 pub async fn signaling_end_call(
     app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     peer_id: String,
 ) -> Result<(), Error> {
     log::debug!("Ending call with {peer_id}");
@@ -113,7 +115,7 @@ pub async fn signaling_end_call(
         .await?;
 
     state.set_outgoing_call_peer_id(None);
-    state.audio_manager().stop(SourceType::Ringback);
+    audio_manager.read().stop(SourceType::Ringback);
 
     Ok(())
 }

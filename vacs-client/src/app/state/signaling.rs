@@ -1,4 +1,3 @@
-use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::app::state::{AppState, AppStateInner, sealed};
 use crate::audio::manager::SourceType;
@@ -93,7 +92,7 @@ impl AppStateSignalingExt for AppStateInner {
             && id == peer_id
         {
             self.outgoing_call_peer_id = None;
-            self.audio_manager.stop(SourceType::Ringback);
+            self.audio_manager.read().stop(SourceType::Ringback);
             true
         } else {
             false
@@ -111,7 +110,7 @@ impl AppStateSignalingExt for AppStateInner {
     fn remove_incoming_call_peer_id(&mut self, peer_id: &str) -> bool {
         let found = self.incoming_call_peer_ids.remove(peer_id);
         if self.incoming_call_peer_ids.is_empty() {
-            self.audio_manager.stop(SourceType::Ring);
+            self.audio_manager.read().stop(SourceType::Ring);
         }
         found
     }
@@ -209,7 +208,7 @@ impl AppStateInner {
                 state.add_incoming_call_peer_id(&peer_id);
                 app.emit("signaling:call-invite", &peer_id).ok();
 
-                state.audio_manager().restart(SourceType::Ring);
+                state.audio_manager.read().restart(SourceType::Ring);
             }
             SignalingMessage::CallAccept { peer_id } => {
                 log::trace!("Call accept received from {peer_id}");
@@ -468,11 +467,14 @@ impl AppStateInner {
         self.incoming_call_peer_ids.clear();
         self.outgoing_call_peer_id = None;
 
-        self.audio_manager.stop(SourceType::Ring);
-        self.audio_manager.stop(SourceType::Ringback);
+        {
+            let mut audio_manager = self.audio_manager.write();
+            audio_manager.stop(SourceType::Ring);
+            audio_manager.stop(SourceType::Ringback);
 
-        self.audio_manager.detach_call_output();
-        self.audio_manager.detach_input_device();
+            audio_manager.detach_call_output();
+            audio_manager.detach_input_device();
+        }
 
         if let Some(peer_id) = self.active_call_peer_id().cloned() {
             self.end_call(&peer_id).await;
