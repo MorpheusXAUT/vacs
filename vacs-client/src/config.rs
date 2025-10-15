@@ -224,6 +224,16 @@ pub struct TransmitConfig {
     pub push_to_mute: Option<Code>,
 }
 
+impl TransmitConfig {
+    pub fn code_for_mode(&self) -> Option<Code> {
+        match &self.mode {
+            TransmitMode::PushToTalk => self.push_to_talk,
+            TransmitMode::PushToMute => self.push_to_mute,
+            TransmitMode::VoiceActivation => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FrontendTransmitConfig {

@@ -16,16 +16,13 @@ use crate::audio::manager::AudioManagerHandle;
 use crate::build::VersionInfo;
 use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use crate::keybinds::KeybindsTrait;
+use crate::keybinds::engine::{KeybindEngine, KeybindEngineHandle};
 use anyhow::Context;
 use parking_lot::RwLock;
 use serde_json::Value;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
-use tauri::async_runtime::handle;
 use tauri::{App, Emitter, Manager, RunEvent};
-use tokio::sync::Mutex;
 use tokio::sync::Mutex as TokioMutex;
+use tokio_util::sync::CancellationToken;
 
 pub fn run() {
     tauri::Builder::default()
@@ -81,45 +78,22 @@ pub fn run() {
                     }
                 }
 
-                // thread::spawn(move || {
-                //     let is_pressed = Arc::new(AtomicBool::new(false));
-                //     rdev::listen(move |event| {
-                //         let handle = handle.clone();
-                //         let is_pressed = is_pressed.clone();
-                //         tauri::async_runtime::spawn(async move {
-                //             let state = handle.state::<AppState>();
-                //             let state = state.lock().await;
-                //             match event.event_type {
-                //                 rdev::EventType::KeyPress(rdev::Key::AltGr) => {
-                //                     if !is_pressed.load(Ordering::Relaxed) {
-                //                         is_pressed.store(true, Ordering::Relaxed);
-                //                         state.audio_manager().set_input_muted(true);
-                //                         println!("Muted");
-                //                     }
-                //                 }
-                //                 rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
-                //                     state.audio_manager().set_input_muted(false);
-                //                     is_pressed.store(false, Ordering::Relaxed);
-                //                     println!("Unmuted");
-                //                 }
-                //                 _ => {}
-                //             }
-                //         });
-                //     }).expect("Failed to listen for key events");
-                // });
+                let transmit_config = state.config.client.transmit_config.clone();
+                let keybind_engine = KeybindEngine::new(
+                    app.handle().clone(),
+                    &transmit_config,
+                    CancellationToken::new(),
+                )
+                .map_startup_err(StartupError::Keybinds)?;
 
-                state
-                    .config
-                    .client
-                    .transmit_config
-                    .register_keybinds(app.handle())
-                    .map_startup_err(StartupError::Keybinds)?;
-
-                app.manage(Mutex::new(state));
-                app.manage(HttpState::new(app.handle())?);
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
                 app.manage::<AudioManagerHandle>(state.audio_manager_handle());
+                app.manage::<KeybindEngineHandle>(RwLock::new(keybind_engine));
                 app.manage::<AppState>(TokioMutex::new(state));
+
+                transmit_config
+                    .register_keybinds(app.handle().clone())
+                    .map_startup_err(StartupError::Keybinds)?;
 
                 Ok(())
             }
@@ -154,7 +128,7 @@ pub fn run() {
             auth::commands::auth_logout,
             auth::commands::auth_open_oauth_url,
             keybinds::commands::keybinds_get_transmit_config,
-            // keybinds::commands::keybinds_set_transmit_config,
+            keybinds::commands::keybinds_set_transmit_config,
             signaling::commands::signaling_accept_call,
             signaling::commands::signaling_connect,
             signaling::commands::signaling_disconnect,
@@ -172,6 +146,8 @@ pub fn run() {
                         .state::<HttpState>()
                         .persist()
                         .expect("Failed to persist http state");
+
+                    app_handle.state::<KeybindEngineHandle>().write().stop();
 
                     app_handle.state::<AppState>().lock().await.shutdown();
                 });

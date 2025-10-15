@@ -36,12 +36,13 @@ pub async fn keybinds_set_transmit_config(
             .config
             .client
             .transmit_config
-            .unregister_keybinds(&app)
-            .ok();
+            .unregister_keybinds(app.clone());
 
         let transmit_config: TransmitConfig = transmit_config.try_into()?;
 
-        transmit_config.register_keybinds(&app)?;
+        if transmit_config.code_for_mode().is_some() {
+            transmit_config.register_keybinds(app.clone())?;
+        }
 
         state.config.client.transmit_config = transmit_config;
         state.config.client.clone().into()
