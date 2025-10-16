@@ -18,7 +18,7 @@ use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use crate::keybinds::KeybindsTrait;
 use crate::keybinds::engine::{KeybindEngine, KeybindEngineHandle};
 use anyhow::Context;
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 use serde_json::Value;
 use tauri::{App, Emitter, Manager, RunEvent};
 use tokio::sync::Mutex as TokioMutex;
@@ -88,7 +88,7 @@ pub fn run() {
 
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
                 app.manage::<AudioManagerHandle>(state.audio_manager_handle());
-                app.manage::<KeybindEngineHandle>(RwLock::new(keybind_engine));
+                app.manage::<KeybindEngineHandle>(Mutex::new(keybind_engine));
                 app.manage::<AppState>(TokioMutex::new(state));
 
                 transmit_config
