@@ -77,7 +77,7 @@ vacs-signaling = { path = "vacs-signaling" }
 vacs-vatsim = { path = "vacs-vatsim" }
 vacs-webrtc = { path = "vacs-webrtc" }
 vergen-git2 = { version = "1.0.7", features = ["build", "cargo", "rustc"] }
-webrtc = "0.13.0"
+webrtc = "0.14.0"
 wiremock = "0.6.5"
 
 [workspace.lints]
