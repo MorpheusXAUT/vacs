@@ -30,10 +30,10 @@ pub trait KeybindsTrait {
 
 impl KeybindsTrait for TransmitConfig {
     fn register_keybinds(&self, app: AppHandle) -> Result<(), Error> {
-        app.state::<KeybindEngineHandle>().write().set_config(self)
+        app.state::<KeybindEngineHandle>().lock().set_config(self)
     }
 
     fn unregister_keybinds(&self, app: AppHandle) {
-        app.state::<KeybindEngineHandle>().write().stop();
+        app.state::<KeybindEngineHandle>().lock().stop();
     }
 }
