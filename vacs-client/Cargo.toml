@@ -12,6 +12,10 @@ publish.workspace = true
 name = "vacs_client_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = []
+log-key-events = []
+
 [build-dependencies]
 tauri-build = { workspace = true, features = [] }
 vergen-git2 = { workspace = true }

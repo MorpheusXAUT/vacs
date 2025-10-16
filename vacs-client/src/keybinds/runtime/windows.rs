@@ -174,6 +174,7 @@ impl WindowsKeybindRuntime {
                     let code: Result<Code, KeybindsError> = raw_key.try_into();
                     match code {
                         Ok(code) => {
+                            #[cfg(feature = "log-key-events")]
                             log::trace!("{code:?} ({raw_key:?}) -> {state:?}");
                             Self::with_key_event_tx(hwnd, |tx| {
                                 if let Err(err) = tx.send((code, state)) {
