@@ -10,7 +10,7 @@ const getNextChar = (char: string, chars: string[]): string => {
 
 export function useDialPadInput() {
     const [dialInput, setDialInput] = useState<string>("");
-    const multipleTapTimeout = useRef<number | undefined>(undefined);
+    const multipleTapTimeoutRef = useRef<number | undefined>(undefined);
 
     const handleDialClick = (digit: string, buttonChars: string) => {
         if (buttonChars === "") {
@@ -21,8 +21,8 @@ export function useDialPadInput() {
         const chars = [...buttonChars];
         const lastChar = dialInput[dialInput.length - 1] ?? "";
 
-        if (multipleTapTimeout.current !== undefined) {
-            clearTimeout(multipleTapTimeout.current);
+        if (multipleTapTimeoutRef.current !== undefined) {
+            clearTimeout(multipleTapTimeoutRef.current);
 
             if (lastChar === digit || chars.includes(lastChar)) {
                 // Same button within 1 second
@@ -35,7 +35,7 @@ export function useDialPadInput() {
             // No button within 1 second
             setDialInput(dialInput => dialInput + digit);
         }
-        multipleTapTimeout.current = setTimeout(() => multipleTapTimeout.current = undefined, 1000);
+        multipleTapTimeoutRef.current = setTimeout(() => multipleTapTimeoutRef.current = undefined, 1000);
     };
 
     const clearLastChar = () => {

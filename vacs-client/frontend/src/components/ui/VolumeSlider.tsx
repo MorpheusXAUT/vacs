@@ -12,7 +12,7 @@ type VolumeSliderProps = {
 function VolumeSlider(props: VolumeSliderProps) {
     const {position, setPosition} = props;
     const [dragging, setDragging] = useState<boolean>(false);
-    const isDragging = useRef<boolean>(false);
+    const isDraggingRef = useRef<boolean>(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
     const updatePositionFromClientY = (clientY: number)=> {
@@ -32,22 +32,22 @@ function VolumeSlider(props: VolumeSliderProps) {
 
     const handleMouseDown = (event: MouseEvent | JSX.TargetedMouseEvent<HTMLDivElement>)=> {
         if (event.button !== 0) return;
-        isDragging.current = true;
+        isDraggingRef.current = true;
         setDragging(true);
         updatePositionFromClientY(event.clientY);
     }
 
     const handleMouseMove = (event: MouseEvent)=> {
-        if (!isDragging.current) return;
+        if (!isDraggingRef.current) return;
         updatePositionFromClientY(event.clientY);
     }
 
     const handleMouseUp = ()=> {
-        if (isDragging.current) {
+        if (isDraggingRef.current) {
             props.savePosition(position);
         }
 
-        isDragging.current = false;
+        isDraggingRef.current = false;
         setDragging(false);
     }
 

@@ -15,17 +15,13 @@ const config: ConfigObject[] = defineConfig(
     js.configs.recommended,
     ...tseslint.configs.recommended,
     react.configs.flat.recommended,
+    reactHooks.configs.flat.recommended,
     {
         languageOptions: {
             ...react.configs.flat.recommended.languageOptions,
             globals: globals.browser,
         },
-        plugins: {
-            "react-hooks": reactHooks,
-        },
         rules: {
-            "react-hooks/rules-of-hooks": "error",
-            "react-hooks/exhaustive-deps": "warn",
             "react/react-in-jsx-scope": "off",
             "react/jsx-key": ["error", {checkFragmentShorthand: true}],
 
