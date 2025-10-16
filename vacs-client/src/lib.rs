@@ -147,7 +147,7 @@ pub fn run() {
                         .persist()
                         .expect("Failed to persist http state");
 
-                    app_handle.state::<KeybindEngineHandle>().write().stop();
+                    app_handle.state::<KeybindEngineHandle>().lock().shutdown();
 
                     app_handle.state::<AppState>().lock().await.shutdown();
                 });

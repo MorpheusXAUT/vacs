@@ -37,23 +37,22 @@ impl KeybindRuntime for WindowsKeybindRuntime {
         let (key_event_tx, key_event_rx) = unbounded_channel::<KeyEvent>();
         let (startup_res_tx, start_res_rx) = mpsc::sync_channel::<Result<u32, KeybindsError>>(1);
 
-        let thread_handle = thread::spawn(move || unsafe {
-            log::debug!("Message thread started");
-            match Self::setup_input_listener(key_event_tx) {
-                Ok(hwnd) => {
-                    let thread_id = GetCurrentThreadId();
-                    log::trace!(
-                        "Successfully created hidden message window {hwnd:?}, running message loop on thread {thread_id}"
-                    );
-                    let _ = startup_res_tx.send(Ok(thread_id));
-                    Self::run_message_loop();
+        let thread_handle = thread::Builder::new().name("VACS_RawInput_MessageLoop".to_string())
+            .spawn(move || unsafe {
+                log::debug!("Message thread started");
+                match Self::setup_input_listener(key_event_tx) {
+                    Ok(hwnd) => {
+                        let thread_id = GetCurrentThreadId();
+                        log::trace!("Successfully created hidden message window {hwnd:?}, running message loop on thread {thread_id}");
+                        let _ = startup_res_tx.send(Ok(thread_id));
+                        Self::run_message_loop();
+                    }
+                    Err(err) => {
+                        let _ = startup_res_tx.send(Err(err));
+                    }
                 }
-                Err(err) => {
-                    let _ = startup_res_tx.send(Err(err));
-                }
-            }
-            log::debug!("Message thread finished");
-        });
+                log::debug!("Message thread finished");
+            }).map_err(|err| KeybindsError::Runtime(format!("Failed to spawn thread: {err}")))?;
 
         match start_res_rx.recv_timeout(Duration::from_secs(1)) {
             Ok(Ok(thread_id)) => Ok((
@@ -171,23 +170,21 @@ impl WindowsKeybindRuntime {
     extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         match msg {
             WM_INPUT => unsafe {
-                if let Some(tx) = Self::take_key_event_tx(hwnd) {
-                    if let Some((raw_key, state)) = Self::read_raw_input(HRAWINPUT(lparam.0 as _)) {
-                        let code: Result<Code, KeybindsError> = raw_key.try_into();
-                        match code {
-                            Ok(code) => {
-                                log::trace!("{code:?} ({raw_key:?}) -> {state:?}");
+                if let Some((raw_key, state)) = Self::read_raw_input(HRAWINPUT(lparam.0 as _)) {
+                    let code: Result<Code, KeybindsError> = raw_key.try_into();
+                    match code {
+                        Ok(code) => {
+                            log::trace!("{code:?} ({raw_key:?}) -> {state:?}");
+                            Self::with_key_event_tx(hwnd, |tx| {
                                 if let Err(err) = tx.send((code, state)) {
-                                    log::error!("Failed to send keybinds event: {err:?}")
+                                    log::error!("Failed to send keybinds event: {err}")
                                 }
-                            }
-                            Err(err) => {
-                                log::warn!("Failed to convert virtual key to code: {err:?}");
-                            }
+                            });
+                        }
+                        Err(err) => {
+                            log::warn!("Failed to convert virtual key to code: {err}");
                         }
                     }
-
-                    Self::put_key_event_tx(hwnd, tx);
                 }
 
                 LRESULT(0)
@@ -279,6 +276,20 @@ impl WindowsKeybindRuntime {
         }
     }
 
+    /// Calls the provided `F` if the [`UnboundedSender<KeyEvent>`] could successfully be retrieved from the window's [`GWLP_USERDATA`].
+    /// This call borrows the raw pointer and does not change ownership or drop it afterward.
+    #[inline]
+    unsafe fn with_key_event_tx<F: FnOnce(&UnboundedSender<KeyEvent>)>(hwnd: HWND, f: F) {
+        unsafe {
+            let p = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut UnboundedSender<KeyEvent>;
+            if !p.is_null() {
+                f(&*p);
+            }
+        }
+    }
+
+    /// Returns the [`UnboundedSender<KeyEvent>`] stored in the window's [`GWLP_USERDATA`], if present.
+    /// The raw pointer is wrapped in [`Box`], taking ownership and dropping it once it goes out of scope.
     #[inline]
     unsafe fn take_key_event_tx(hwnd: HWND) -> Option<Box<UnboundedSender<KeyEvent>>> {
         unsafe {

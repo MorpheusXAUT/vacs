@@ -18,6 +18,7 @@ pub struct KeybindEngine {
     runtime: Option<PlatformKeybindRuntime>,
     rx_task: Option<JoinHandle<()>>,
     shutdown_token: CancellationToken,
+    stop_token: Option<CancellationToken>,
 }
 
 pub type KeybindEngineHandle = Mutex<KeybindEngine>;
@@ -35,6 +36,7 @@ impl KeybindEngine {
             runtime: None,
             rx_task: None,
             shutdown_token,
+            stop_token: None,
         })
     }
 
@@ -42,9 +44,14 @@ impl KeybindEngine {
         if self.rx_task.is_some() {
             return Ok(());
         }
+        if self.mode == TransmitMode::VoiceActivation {
+            log::trace!("TransmitMode set to voice activation, no keybind engine required");
+            return Ok(());
+        }
 
         let (runtime, rx) = PlatformKeybindRuntime::start()?;
         self.runtime = Some(runtime);
+        self.stop_token = Some(self.shutdown_token.child_token());
         self.spawn_rx_loop(rx);
 
         Ok(())
@@ -54,15 +61,23 @@ impl KeybindEngine {
         if let Some(mut runtime) = self.runtime.take() {
             runtime.stop();
         }
+        if let Some(stop_token) = self.stop_token.take() {
+            stop_token.cancel()
+        }
         if let Some(rx_task) = self.rx_task.take() {
             rx_task.abort();
         }
+
+        self.reset_input_state();
+    }
+
+    pub fn shutdown(&mut self) {
+        self.shutdown_token.cancel();
+        self.stop();
     }
 
     pub fn set_config(&mut self, config: &TransmitConfig) -> Result<(), Error> {
         self.stop();
-
-        self.reset_input_state();
 
         self.code = Self::select_active_code(config)?;
         self.mode = config.mode.clone();
@@ -75,9 +90,13 @@ impl KeybindEngine {
     fn reset_input_state(&self) {
         let muted = match &self.mode {
             TransmitMode::PushToTalk => true,
-            TransmitMode::PushToMute => false,
-            TransmitMode::VoiceActivation => return,
+            TransmitMode::PushToMute | TransmitMode::VoiceActivation => false,
         };
+
+        log::trace!(
+            "Resetting audio input {}",
+            if muted { "muted" } else { "unmuted" }
+        );
 
         self.app
             .state::<AudioManagerHandle>()
@@ -91,15 +110,19 @@ impl KeybindEngine {
             return;
         };
         let mode = self.mode.clone();
-        let shutdown_token = self.shutdown_token.clone();
+        let stop_token = self
+            .stop_token
+            .clone()
+            .unwrap_or(self.shutdown_token.child_token());
 
         let handle = tauri::async_runtime::spawn(async move {
+            log::trace!("Keybinds engine loop started");
             let mut pressed = false;
 
             loop {
                 tokio::select! {
                     biased;
-                    _ = shutdown_token.cancelled() => break,
+                    _ = stop_token.cancelled() => break,
                     res = rx.recv() => {
                         match res {
                             Some((code, state)) => {
@@ -128,7 +151,7 @@ impl KeybindEngine {
                                 };
 
                                 if let Some(muted) = muted_changed {
-                                    log::trace!("Setting input as {}", if muted {"muted"} else {"unmuted"});
+                                    log::trace!("Setting audio input {}", if muted {"muted"} else {"unmuted"});
                                     app.state::<AudioManagerHandle>().read().set_input_muted(muted);
                                 }
                             }
@@ -139,6 +162,8 @@ impl KeybindEngine {
                     }
                 }
             }
+
+            log::trace!("Keybinds engine loop finished");
         });
 
         self.rx_task = Some(handle);
@@ -159,5 +184,11 @@ impl KeybindEngine {
                     .ok_or(Error::from(KeybindsError::MissingKeybind))?,
             )),
         }
+    }
+}
+
+impl Drop for KeybindEngine {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
