@@ -15,9 +15,7 @@ pub enum KeybindsError {
     Runtime(String),
     #[error("Unrecognized keybinds code: {0}")]
     UnrecognizedCode(String),
-    #[error("Missing keybind for selected transmit mode")]
-    MissingKeybind,
-    #[error("Other keybinds error: {0}")]
+    #[error("{0}")]
     Other(String),
 }
 

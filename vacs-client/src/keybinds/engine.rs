@@ -2,7 +2,7 @@ use crate::audio::manager::AudioManagerHandle;
 use crate::config::{TransmitConfig, TransmitMode};
 use crate::error::Error;
 use crate::keybinds::runtime::{KeybindRuntime, PlatformKeybindRuntime};
-use crate::keybinds::{KeyEvent, KeybindsError};
+use crate::keybinds::KeyEvent;
 use keyboard_types::{Code, KeyState};
 use parking_lot::Mutex;
 use tauri::async_runtime::JoinHandle;
@@ -24,20 +24,16 @@ pub struct KeybindEngine {
 pub type KeybindEngineHandle = Mutex<KeybindEngine>;
 
 impl KeybindEngine {
-    pub fn new(
-        app: AppHandle,
-        config: &TransmitConfig,
-        shutdown_token: CancellationToken,
-    ) -> Result<Self, Error> {
-        Ok(Self {
+    pub fn new(app: AppHandle, config: &TransmitConfig, shutdown_token: CancellationToken) -> Self {
+        Self {
             mode: config.mode,
-            code: Self::select_active_code(config)?,
+            code: Self::select_active_code(config),
             app,
             runtime: None,
             rx_task: None,
             shutdown_token,
             stop_token: None,
-        })
+        }
     }
 
     pub fn start(&mut self) -> Result<(), Error> {
@@ -47,6 +43,12 @@ impl KeybindEngine {
         }
         if self.mode == TransmitMode::VoiceActivation {
             log::trace!("TransmitMode set to voice activation, no keybind engine required");
+            return Ok(());
+        } else if self.code.is_none() {
+            log::trace!(
+                "No keybind set for TransmitMode {:?}, keybind engine not starting",
+                self.mode
+            );
             return Ok(());
         }
 
@@ -81,7 +83,7 @@ impl KeybindEngine {
     pub fn set_config(&mut self, config: &TransmitConfig) -> Result<(), Error> {
         self.stop();
 
-        self.code = Self::select_active_code(config)?;
+        self.code = Self::select_active_code(config);
         self.mode = config.mode;
 
         self.reset_input_state();
@@ -178,19 +180,11 @@ impl KeybindEngine {
     }
 
     #[inline]
-    fn select_active_code(config: &TransmitConfig) -> Result<Option<Code>, Error> {
+    fn select_active_code(config: &TransmitConfig) -> Option<Code> {
         match config.mode {
-            TransmitMode::VoiceActivation => Ok(None),
-            TransmitMode::PushToTalk => Ok(Some(
-                config
-                    .push_to_talk
-                    .ok_or(Error::from(KeybindsError::MissingKeybind))?,
-            )),
-            TransmitMode::PushToMute => Ok(Some(
-                config
-                    .push_to_mute
-                    .ok_or(Error::from(KeybindsError::MissingKeybind))?,
-            )),
+            TransmitMode::VoiceActivation => None,
+            TransmitMode::PushToTalk => config.push_to_talk,
+            TransmitMode::PushToMute => config.push_to_mute,
         }
     }
 }

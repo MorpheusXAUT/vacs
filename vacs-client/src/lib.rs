@@ -83,8 +83,7 @@ pub fn run() {
                     app.handle().clone(),
                     &transmit_config,
                     CancellationToken::new(),
-                )
-                .map_startup_err(StartupError::Keybinds)?;
+                );
 
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
                 app.manage::<AudioManagerHandle>(state.audio_manager_handle());
