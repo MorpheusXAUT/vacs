@@ -427,179 +427,187 @@ impl TryFrom<RawKey> for Code {
 
     fn try_from(value: RawKey) -> Result<Self, Self::Error> {
         use Code::*;
-        use windows::Win32::UI::Input::KeyboardAndMouse::*;
+        use windows::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
         // mapping based on Standard "102" keyboard layout: https://w3c.github.io/uievents-code/#keyboard-102
-        match value.vk {
+        // and Scan 1 Make codes: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#scan-codes
+        match value.make {
             // Alphanumerical section
             // Row E
-            VK_OEM_3 => Ok(Backquote),
-            VK_1 => Ok(Digit1),
-            VK_2 => Ok(Digit2),
-            VK_3 => Ok(Digit3),
-            VK_4 => Ok(Digit4),
-            VK_5 => Ok(Digit5),
-            VK_6 => Ok(Digit6),
-            VK_7 => Ok(Digit7),
-            VK_8 => Ok(Digit8),
-            VK_9 => Ok(Digit9),
-            VK_0 => Ok(Digit0),
-            VK_OEM_MINUS => Ok(Minus),
-            VK_OEM_PLUS => Ok(Equal),
-            VK_BACK => Ok(Backspace),
+            0x0029 => Ok(Backquote),
+            0x0002 => Ok(Digit1),
+            0x0003 => Ok(Digit2),
+            0x0004 => Ok(Digit3),
+            0x0005 => Ok(Digit4),
+            0x0006 => Ok(Digit5),
+            0x0007 => Ok(Digit6),
+            0x0008 => Ok(Digit7),
+            0x0009 => Ok(Digit8),
+            0x000A => Ok(Digit9),
+            0x000B => Ok(Digit0),
+            0x000C => Ok(Minus),
+            0x000D => Ok(Equal),
+            0x000E => Ok(Backspace),
             // Row D
-            VK_TAB => Ok(Tab),
-            VK_Q => Ok(KeyQ),
-            VK_W => Ok(KeyW),
-            VK_E => Ok(KeyE),
-            VK_R => Ok(KeyR),
-            VK_T => Ok(KeyT),
-            VK_Y => Ok(KeyY),
-            VK_U => Ok(KeyU),
-            VK_I => Ok(KeyI),
-            VK_O => Ok(KeyO),
-            VK_P => Ok(KeyP),
-            VK_OEM_4 => Ok(BracketLeft),
-            VK_OEM_6 => Ok(BracketRight),
-            VK_OEM_5 => Ok(Backslash),
+            0x000F => Ok(Tab),
+            0x0010 => Ok(KeyQ),
+            0x0011 => Ok(KeyW),
+            0x0012 => Ok(KeyE),
+            0x0013 => Ok(KeyR),
+            0x0014 => Ok(KeyT),
+            0x0015 => Ok(KeyY),
+            0x0016 => Ok(KeyU),
+            0x0017 => Ok(KeyI),
+            0x0018 => Ok(KeyO),
+            0x0019 => Ok(KeyP),
+            0x001A => Ok(BracketLeft),
+            0x001B => Ok(BracketRight),
+            0x002B => Ok(Backslash),
             // Row C
-            VK_CAPITAL => Ok(CapsLock),
-            VK_A => Ok(KeyA),
-            VK_S => Ok(KeyS),
-            VK_D => Ok(KeyD),
-            VK_F => Ok(KeyF),
-            VK_G => Ok(KeyG),
-            VK_H => Ok(KeyH),
-            VK_J => Ok(KeyJ),
-            VK_K => Ok(KeyK),
-            VK_L => Ok(KeyL),
-            VK_OEM_1 => Ok(Semicolon),
-            VK_OEM_7 => Ok(Quote),
-            VK_RETURN => Ok(if value.extended { NumpadEnter } else { Enter }),
+            0x003A => Ok(CapsLock),
+            0x001E => Ok(KeyA),
+            0x001F => Ok(KeyS),
+            0x0020 => Ok(KeyD),
+            0x0021 => Ok(KeyF),
+            0x0022 => Ok(KeyG),
+            0x0023 => Ok(KeyH),
+            0x0024 => Ok(KeyJ),
+            0x0025 => Ok(KeyK),
+            0x0026 => Ok(KeyL),
+            0x0027 => Ok(Semicolon),
+            0x0028 => Ok(Quote),
+            0x001C => Ok(if value.extended { NumpadEnter } else { Enter }),
             // Row B
-            VK_SHIFT | VK_LSHIFT | VK_RSHIFT => Ok(match value.make {
-                0x2A => ShiftLeft,
-                0x36 => ShiftRight,
-                _ => ShiftLeft,
+            0x002A => Ok(if value.extended && value.vk == VIRTUAL_KEY(0xFF) {
+                // "fake" extended Shift triggered at the beginning of a PrintScreen sequence
+                PrintScreen
+            } else {
+                ShiftLeft
             }),
-            VK_OEM_102 => Ok(IntlBackslash),
-            VK_Z => Ok(KeyZ),
-            VK_X => Ok(KeyX),
-            VK_C => Ok(KeyC),
-            VK_V => Ok(KeyV),
-            VK_B => Ok(KeyB),
-            VK_N => Ok(KeyN),
-            VK_M => Ok(KeyM),
-            VK_OEM_COMMA => Ok(Comma),
-            VK_OEM_PERIOD => Ok(Period),
-            VK_OEM_2 => Ok(Slash),
+            0x0056 => Ok(IntlBackslash),
+            0x002C => Ok(KeyZ),
+            0x002D => Ok(KeyX),
+            0x002E => Ok(KeyC),
+            0x002F => Ok(KeyV),
+            0x0030 => Ok(KeyB),
+            0x0031 => Ok(KeyN),
+            0x0032 => Ok(KeyM),
+            0x0033 => Ok(Comma),
+            0x0034 => Ok(Period),
+            0x0035 => Ok(if value.extended { NumpadDivide } else { Slash }),
+            0x0036 => Ok(ShiftRight),
             // Row A
-            VK_CONTROL | VK_LCONTROL | VK_RCONTROL => Ok(if value.extended {
+            0x001D => Ok(if value.extended {
                 ControlRight
             } else {
                 ControlLeft
             }),
-            VK_LWIN => Ok(MetaLeft),
-            VK_MENU | VK_LMENU | VK_RMENU => Ok(if value.extended { AltRight } else { AltLeft }),
-            VK_SPACE => Ok(Space),
-            VK_RWIN => Ok(MetaRight),
-            VK_APPS => Ok(ContextMenu),
-
-            // Control pad section
-            // Row E
-            VK_INSERT => Ok(Insert),
-            VK_HOME => Ok(Home),
-            VK_PRIOR => Ok(PageUp),
-            // Row D
-            VK_DELETE => Ok(Delete),
-            VK_END => Ok(End),
-            VK_NEXT => Ok(PageDown),
+            0x005B => Ok(MetaLeft),
+            0x0038 => Ok(if value.extended {
+                if value.vk == VK_CONTROL {
+                    ControlRight
+                } else {
+                    AltRight
+                }
+            } else {
+                AltLeft
+            }),
+            0x0039 => Ok(Space),
+            0xE038 => Ok(AltRight),
+            0x005C => Ok(MetaRight),
+            0x005D => Ok(ContextMenu),
+            0xE01D => Ok(ControlRight),
 
             // Arrow pad section
             // Row B
-            VK_UP => Ok(ArrowUp),
+            0xE048 => Ok(ArrowUp),
             // Row A
-            VK_LEFT => Ok(ArrowLeft),
-            VK_DOWN => Ok(ArrowDown),
-            VK_RIGHT => Ok(ArrowRight),
+            0xE04B => Ok(ArrowLeft),
+            0xE050 => Ok(ArrowDown),
+            0xE04D => Ok(ArrowRight),
 
+            // Control pad section
             // Numpad section
             // Row E
-            VK_NUMLOCK => Ok(NumLock),
-            VK_DIVIDE => Ok(NumpadDivide),
-            VK_MULTIPLY => Ok(NumpadMultiply),
-            VK_SUBTRACT => Ok(NumpadSubtract),
+            0x0045 | 0xE045 => Ok(NumLock),
+            0x0037 => Ok(if value.extended {
+                PrintScreen
+            } else {
+                NumpadMultiply
+            }),
+            0x004A => Ok(NumpadSubtract),
             // Row D
-            VK_NUMPAD7 => Ok(Numpad7),
-            VK_NUMPAD8 => Ok(Numpad8),
-            VK_NUMPAD9 => Ok(Numpad9),
-            VK_ADD => Ok(NumpadAdd),
+            0x0047 => Ok(if value.extended { Home } else { Numpad7 }),
+            0x0048 => Ok(Numpad8),
+            0x0049 => Ok(if value.extended { PageUp } else { Numpad9 }),
+            0x004E => Ok(NumpadAdd),
             // Row C
-            VK_NUMPAD4 => Ok(Numpad4),
-            VK_NUMPAD5 => Ok(Numpad5),
-            VK_NUMPAD6 => Ok(Numpad6),
+            0x004B => Ok(Numpad4),
+            0x004C => Ok(Numpad5),
+            0x004D => Ok(Numpad6),
             // Row B
-            VK_NUMPAD1 => Ok(Numpad1),
-            VK_NUMPAD2 => Ok(Numpad2),
-            VK_NUMPAD3 => Ok(Numpad3),
-            // NumpadEnter
+            0x004F => Ok(if value.extended { End } else { Numpad1 }),
+            0x0050 => Ok(Numpad2),
+            0x0051 => Ok(if value.extended { PageDown } else { Numpad3 }),
             // Row A
-            VK_NUMPAD0 => Ok(Numpad0),
-            VK_DECIMAL => Ok(NumpadDecimal),
+            0x0052 => Ok(if value.extended { Insert } else { Numpad0 }),
+            0x0053 => Ok(if value.extended {
+                Delete
+            } else {
+                NumpadDecimal
+            }),
 
             // Function section
             // Row K
-            VK_ESCAPE => Ok(Escape),
-            VK_F1 => Ok(F1),
-            VK_F2 => Ok(F2),
-            VK_F3 => Ok(F3),
-            VK_F4 => Ok(F4),
-            VK_F5 => Ok(F5),
-            VK_F6 => Ok(F6),
-            VK_F7 => Ok(F7),
-            VK_F8 => Ok(F8),
-            VK_F9 => Ok(F9),
-            VK_F10 => Ok(F10),
-            VK_F11 => Ok(F11),
-            VK_F12 => Ok(F12),
-            VK_PRINT | VK_SNAPSHOT => Ok(PrintScreen),
-            // "fake" extended Shift triggered at the beginning of a PrintScreen sequence
-            VIRTUAL_KEY(0xFF) if value.make == 0x002A && value.extended => Ok(PrintScreen),
-            VK_SCROLL => Ok(ScrollLock),
-            VK_PAUSE => Ok(Pause),
+            0x0001 => Ok(Escape),
+            0x003B => Ok(F1),
+            0x003C => Ok(F2),
+            0x003D => Ok(F3),
+            0x003E => Ok(F4),
+            0x003F => Ok(F5),
+            0x0040 => Ok(F6),
+            0x0041 => Ok(F7),
+            0x0042 => Ok(F8),
+            0x0043 => Ok(F9),
+            0x0044 => Ok(F10),
+            0x0057 => Ok(F11),
+            0x0058 => Ok(F12),
+            0xE037 | 0x0054 => Ok(PrintScreen),
+            0x0046 => Ok(ScrollLock),
+            0xE046 => Ok(Pause),
             // Hidden
-            VK_F13 => Ok(F13),
-            VK_F14 => Ok(F14),
-            VK_F15 => Ok(F15),
-            VK_F16 => Ok(F16),
-            VK_F17 => Ok(F17),
-            VK_F18 => Ok(F18),
-            VK_F19 => Ok(F19),
-            VK_F20 => Ok(F20),
-            VK_F21 => Ok(F21),
-            VK_F22 => Ok(F22),
-            VK_F23 => Ok(F23),
-            VK_F24 => Ok(F24),
+            0x0064 => Ok(F13),
+            0x0065 => Ok(F14),
+            0x0066 => Ok(F15),
+            0x0067 => Ok(F16),
+            0x0068 => Ok(F17),
+            0x0069 => Ok(F18),
+            0x006A => Ok(F19),
+            0x006B => Ok(F20),
+            0x006C => Ok(F21),
+            0x006D => Ok(F22),
+            0x006E => Ok(F23),
+            0x0076 => Ok(F24),
 
             // Media keys
-            VK_BROWSER_BACK => Ok(BrowserBack),
-            VK_BROWSER_FAVORITES => Ok(BrowserFavorites),
-            VK_BROWSER_FORWARD => Ok(BrowserForward),
-            VK_BROWSER_HOME => Ok(BrowserHome),
-            VK_BROWSER_REFRESH => Ok(BrowserRefresh),
-            VK_BROWSER_SEARCH => Ok(BrowserSearch),
-            VK_BROWSER_STOP => Ok(BrowserStop),
-            VK_LAUNCH_APP1 => Ok(LaunchApp1),
-            VK_LAUNCH_APP2 => Ok(LaunchApp2),
-            VK_LAUNCH_MAIL => Ok(LaunchMail),
-            VK_MEDIA_PLAY_PAUSE => Ok(MediaPlayPause),
-            VK_LAUNCH_MEDIA_SELECT => Ok(MediaSelect),
-            VK_MEDIA_STOP => Ok(MediaStop),
-            VK_MEDIA_NEXT_TRACK => Ok(MediaTrackNext),
-            VK_MEDIA_PREV_TRACK => Ok(MediaTrackPrevious),
-            VK_SLEEP => Ok(Sleep),
-            VK_VOLUME_DOWN => Ok(AudioVolumeDown),
-            VK_VOLUME_MUTE => Ok(AudioVolumeMute),
-            VK_VOLUME_UP => Ok(AudioVolumeUp),
+            0xE06A => Ok(BrowserBack),
+            0xE066 => Ok(BrowserFavorites),
+            0xE069 => Ok(BrowserForward),
+            0xE032 => Ok(BrowserHome),
+            0xE067 => Ok(BrowserRefresh),
+            0xE065 => Ok(BrowserSearch),
+            0xE068 => Ok(BrowserStop),
+            0xE06D => Ok(LaunchControlPanel),
+            0xE06C => Ok(LaunchMail),
+            0xE022 => Ok(MediaPlayPause),
+            0xE024 => Ok(MediaStop),
+            0xE019 => Ok(MediaTrackNext),
+            0xE010 => Ok(MediaTrackPrevious),
+            0xE05E => Ok(Power),
+            0xE05F => Ok(Sleep),
+            0xE063 => Ok(WakeUp),
+            0xE02E => Ok(AudioVolumeDown),
+            0xE020 => Ok(AudioVolumeMute),
+            0xE030 => Ok(AudioVolumeUp),
 
             _ => Err(KeybindsError::UnrecognizedCode(format!("{:?}", value))),
         }
