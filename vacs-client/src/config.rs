@@ -209,7 +209,7 @@ impl ClientConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
 pub enum TransmitMode {
     #[default]
     VoiceActivation,
@@ -222,16 +222,6 @@ pub struct TransmitConfig {
     pub mode: TransmitMode,
     pub push_to_talk: Option<Code>,
     pub push_to_mute: Option<Code>,
-}
-
-impl TransmitConfig {
-    pub fn code_for_mode(&self) -> Option<Code> {
-        match &self.mode {
-            TransmitMode::PushToTalk => self.push_to_talk,
-            TransmitMode::PushToMute => self.push_to_mute,
-            TransmitMode::VoiceActivation => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

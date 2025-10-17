@@ -30,7 +30,7 @@ impl KeybindEngine {
         shutdown_token: CancellationToken,
     ) -> Result<Self, Error> {
         Ok(Self {
-            mode: config.mode.clone(),
+            mode: config.mode,
             code: Self::select_active_code(config)?,
             app,
             runtime: None,
@@ -42,6 +42,7 @@ impl KeybindEngine {
 
     pub fn start(&mut self) -> Result<(), Error> {
         if self.rx_task.is_some() {
+            debug_assert!(self.runtime.is_some());
             return Ok(());
         }
         if self.mode == TransmitMode::VoiceActivation {
@@ -49,9 +50,11 @@ impl KeybindEngine {
             return Ok(());
         }
 
+        self.stop_token = Some(self.shutdown_token.child_token());
+
         let (runtime, rx) = PlatformKeybindRuntime::start()?;
         self.runtime = Some(runtime);
-        self.stop_token = Some(self.shutdown_token.child_token());
+
         self.spawn_rx_loop(rx);
 
         Ok(())
@@ -60,6 +63,7 @@ impl KeybindEngine {
     pub fn stop(&mut self) {
         if let Some(mut runtime) = self.runtime.take() {
             runtime.stop();
+            self.reset_input_state();
         }
         if let Some(stop_token) = self.stop_token.take() {
             stop_token.cancel()
@@ -67,8 +71,6 @@ impl KeybindEngine {
         if let Some(rx_task) = self.rx_task.take() {
             rx_task.abort();
         }
-
-        self.reset_input_state();
     }
 
     pub fn shutdown(&mut self) {
@@ -80,7 +82,9 @@ impl KeybindEngine {
         self.stop();
 
         self.code = Self::select_active_code(config)?;
-        self.mode = config.mode.clone();
+        self.mode = config.mode;
+
+        self.reset_input_state();
 
         self.start()?;
 
@@ -109,14 +113,18 @@ impl KeybindEngine {
         let Some(active) = self.code else {
             return;
         };
-        let mode = self.mode.clone();
+        let mode = self.mode;
         let stop_token = self
             .stop_token
             .clone()
             .unwrap_or(self.shutdown_token.child_token());
 
         let handle = tauri::async_runtime::spawn(async move {
-            log::trace!("Keybinds engine loop started");
+            log::debug!(
+                "Keybind engine starting: mode={:?}, code={:?}",
+                mode,
+                active
+            );
             let mut pressed = false;
 
             loop {

@@ -40,9 +40,7 @@ pub async fn keybinds_set_transmit_config(
 
         let transmit_config: TransmitConfig = transmit_config.try_into()?;
 
-        if transmit_config.code_for_mode().is_some() {
-            transmit_config.register_keybinds(app.clone())?;
-        }
+        transmit_config.register_keybinds(app.clone())?;
 
         state.config.client.transmit_config = transmit_config;
         state.config.client.clone().into()
