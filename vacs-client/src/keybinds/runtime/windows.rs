@@ -4,15 +4,15 @@ use keyboard_types::{Code, KeyState};
 use std::fmt::{Debug, Formatter};
 use std::mem::zeroed;
 use std::sync::mpsc;
-use std::thread;
 use std::time::Duration;
+use std::{ptr, thread};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use windows::Win32::Foundation::{GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY;
 use windows::Win32::UI::Input::{
-    GetRawInputData, HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER, RID_INPUT,
+    GetRawInputData, HRAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER, RAWKEYBOARD, RID_INPUT,
     RIDEV_INPUTSINK, RIM_TYPEKEYBOARD, RegisterRawInputDevices,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -34,15 +34,16 @@ impl KeybindRuntime for WindowsKeybindRuntime {
     where
         Self: Sized,
     {
+        log::debug!("Starting windows keybind runtime");
         let (key_event_tx, key_event_rx) = unbounded_channel::<KeyEvent>();
         let (startup_res_tx, start_res_rx) = mpsc::sync_channel::<Result<u32, KeybindsError>>(1);
 
         let thread_handle = thread::Builder::new().name("VACS_RawInput_MessageLoop".to_string())
-            .spawn(move || unsafe {
+            .spawn(move || {
                 log::debug!("Message thread started");
                 match Self::setup_input_listener(key_event_tx) {
                     Ok(hwnd) => {
-                        let thread_id = GetCurrentThreadId();
+                        let thread_id = unsafe { GetCurrentThreadId() };
                         log::trace!("Successfully created hidden message window {hwnd:?}, running message loop on thread {thread_id}");
                         let _ = startup_res_tx.send(Ok(thread_id));
                         Self::run_message_loop();
@@ -70,11 +71,18 @@ impl KeybindRuntime for WindowsKeybindRuntime {
     }
 
     fn stop(&mut self) {
-        unsafe {
-            let _ = PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0));
-        }
         if let Some(handle) = self.thread_handle.take() {
-            let _ = handle.join();
+            log::debug!("Stopping Windows keybind runtime");
+            unsafe {
+                if let Err(err) = PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0))
+                {
+                    log::warn!(
+                        "Failed to send quit message to thread: {err} - {:?}",
+                        GetLastError()
+                    );
+                };
+            }
+            _ = handle.join();
         }
     }
 }
@@ -86,17 +94,19 @@ impl Drop for WindowsKeybindRuntime {
 }
 
 impl WindowsKeybindRuntime {
-    unsafe fn setup_input_listener(tx: UnboundedSender<KeyEvent>) -> Result<HWND, KeybindsError> {
-        unsafe {
-            let hmodule = GetModuleHandleW(None).map_err(|_| {
+    fn setup_input_listener(tx: UnboundedSender<KeyEvent>) -> Result<HWND, KeybindsError> {
+        let hmodule = unsafe {
+            GetModuleHandleW(None).map_err(|_| {
                 KeybindsError::Runtime(format!("GetModuleHandleW failed: {:?}", GetLastError()))
-            })?;
-            let hinstance = HINSTANCE(hmodule.0);
-            let class_name = w!("VACS_RawInput_HiddenWindow");
+            })?
+        };
+        let hinstance = HINSTANCE(hmodule.0);
 
-            let _ = Self::ensure_class(hinstance, &class_name)?;
+        let class_name = w!("VACS_RawInput_HiddenWindow");
+        Self::ensure_class(hinstance, class_name)?;
 
-            let hwnd = CreateWindowExW(
+        let hwnd = unsafe {
+            CreateWindowExW(
                 Default::default(),
                 class_name,
                 w!(""),
@@ -112,59 +122,60 @@ impl WindowsKeybindRuntime {
             )
             .map_err(|_| {
                 KeybindsError::Runtime(format!("CreateWindowExW failed: {:?}", GetLastError()))
-            })?;
+            })?
+        };
 
-            if hwnd.0.is_null() {
-                return Err(KeybindsError::Runtime(format!(
-                    "CreateWindowExW returned null: {:?}",
-                    GetLastError()
-                )));
-            }
+        if hwnd.0.is_null() {
+            return Err(KeybindsError::Runtime(format!(
+                "CreateWindowExW returned null: {:?}",
+                unsafe { GetLastError() }
+            )));
+        }
 
+        unsafe {
             Self::put_key_event_tx(hwnd, Box::new(tx));
+        }
 
-            let rid = RAWINPUTDEVICE {
-                usUsagePage: 0x01, // Generic Desktop Controls
-                usUsage: 0x06,     // Keyboard
-                dwFlags: RIDEV_INPUTSINK,
-                hwndTarget: hwnd,
-            };
+        let rid = RAWINPUTDEVICE {
+            usUsagePage: 0x01, // Generic Desktop Controls
+            usUsage: 0x06,     // Keyboard
+            dwFlags: RIDEV_INPUTSINK,
+            hwndTarget: hwnd,
+        };
 
+        unsafe {
             RegisterRawInputDevices(&[rid], size_of::<RAWINPUTDEVICE>() as u32).map_err(|_| {
                 KeybindsError::Runtime(format!(
                     "RegisterRawInputDevices failed: {:?}",
                     GetLastError()
                 ))
             })?;
-
-            Ok(hwnd)
         }
+
+        Ok(hwnd)
     }
 
-    unsafe fn ensure_class(
-        hinstance: HINSTANCE,
-        class_name: &PCWSTR,
-    ) -> Result<u16, KeybindsError> {
-        unsafe {
-            let wnd_class = WNDCLASSW {
-                style: CS_HREDRAW | CS_VREDRAW,
-                lpfnWndProc: Some(Self::wnd_proc),
-                hInstance: hinstance,
-                lpszClassName: *class_name,
-                ..zeroed()
-            };
-            let atom = RegisterClassW(&wnd_class);
-            if atom == 0 {
-                let err = GetLastError();
-                if err != windows::Win32::Foundation::ERROR_CLASS_ALREADY_EXISTS {
-                    return Err(KeybindsError::Runtime(format!(
-                        "RegisterClassW failed: {:?}",
-                        err
-                    )));
-                }
+    fn ensure_class(hinstance: HINSTANCE, class_name: PCWSTR) -> Result<(), KeybindsError> {
+        let wnd_class = WNDCLASSW {
+            style: CS_HREDRAW | CS_VREDRAW,
+            lpfnWndProc: Some(Self::wnd_proc),
+            hInstance: hinstance,
+            lpszClassName: class_name,
+            ..Default::default()
+        };
+
+        let atom = unsafe { RegisterClassW(&wnd_class) };
+        if atom == 0 {
+            let err = unsafe { GetLastError() };
+            if err != windows::Win32::Foundation::ERROR_CLASS_ALREADY_EXISTS {
+                return Err(KeybindsError::Runtime(format!(
+                    "RegisterClassW failed: {:?}",
+                    err
+                )));
             }
-            Ok(atom)
         }
+
+        Ok(())
     }
 
     extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -202,55 +213,67 @@ impl WindowsKeybindRuntime {
         }
     }
 
-    unsafe fn read_raw_input(hraw: HRAWINPUT) -> Option<(RawKey, KeyState)> {
+    fn read_raw_input(hraw: HRAWINPUT) -> Option<(RawKey, KeyState)> {
         let mut needed: u32 = 0;
-        let header_size = size_of::<RAWINPUTHEADER>() as u32;
+        let header_size = size_of::<RAWINPUTHEADER>();
 
-        let kb = unsafe {
-            if GetRawInputData(hraw, RID_INPUT, None, &mut needed, header_size) != 0 || needed == 0
-            {
-                return None;
-            }
+        if unsafe { GetRawInputData(hraw, RID_INPUT, None, &mut needed, header_size as u32) } != 0
+            || needed == 0
+        {
+            return None;
+        }
 
-            let mut buf = vec![0u8; needed as usize];
-            let read = GetRawInputData(
+        let mut buf = vec![0u8; needed as usize];
+        let read = unsafe {
+            GetRawInputData(
                 hraw,
                 RID_INPUT,
                 Some(buf.as_mut_ptr() as *mut _),
                 &mut needed,
-                header_size,
-            );
-            if read == 0 || read != needed {
-                return None;
-            }
-
-            let raw = &*(buf.as_ptr() as *const RAWINPUT);
-            if raw.header.dwType != RIM_TYPEKEYBOARD.0 {
-                return None;
-            }
-
-            &raw.data.keyboard
+                header_size as u32,
+            )
         };
+        if read == 0 || read != needed {
+            return None;
+        }
+
+        if buf.len() < header_size {
+            return None;
+        }
+
+        let header: RAWINPUTHEADER =
+            unsafe { ptr::read_unaligned(buf.as_ptr() as *const RAWINPUTHEADER) };
+        if header.dwType != RIM_TYPEKEYBOARD.0 {
+            return None;
+        }
+
+        let need = header_size + size_of::<RAWKEYBOARD>();
+        if buf.len() < need {
+            return None;
+        }
+
+        let kb_ptr = unsafe { buf.as_ptr().add(header_size) } as *const RAWKEYBOARD;
+        let kb: RAWKEYBOARD = unsafe { ptr::read_unaligned(kb_ptr) };
 
         let state = match kb.Message {
             WM_KEYDOWN | WM_SYSKEYDOWN => KeyState::Down,
             WM_KEYUP | WM_SYSKEYUP => KeyState::Up,
             _ => return None,
         };
-
-        let e0 = (kb.Flags & RI_KEY_E0 as u16) != 0;
+        let extended = (kb.Flags & RI_KEY_E0 as u16) != 0;
 
         Some((
             RawKey {
                 vk: VIRTUAL_KEY(kb.VKey),
                 make: kb.MakeCode,
-                extended: e0,
+                extended,
             },
             state,
         ))
     }
 
     unsafe fn run_message_loop() {
+    fn run_message_loop() {
         unsafe {
             let mut msg: MSG = zeroed();
             loop {
@@ -270,15 +293,44 @@ impl WindowsKeybindRuntime {
         }
     }
 
+    /// Stores a boxed `UnboundedSender<KeyEvent>` in the window’s `GWLP_USERDATA`.
+    ///
+    /// This transfers ownership of `tx` into the window. The pointer must later be
+    /// reclaimed exactly once (e.g. via [`Self::take_key_event_tx`] or [`Self::drop_key_event_tx`])
+    /// to avoid a memory leak.
+    ///
+    /// # Safety
+    ///
+    /// - `hwnd` must be a valid window handle for the lifetime of the stored pointer.
+    /// - You must not overwrite a previously stored pointer without first reclaiming it
+    ///   (otherwise you will leak or later double-free).
+    /// - The pointer stored in `GWLP_USERDATA` is assumed to be produced by
+    ///   `Box::into_raw::<UnboundedSender<KeyEvent>>` and not mutated to another type.
+    /// - This function transfers ownership of `tx`; do not use `tx` after this call.
     #[inline]
     unsafe fn put_key_event_tx(hwnd: HWND, tx: Box<UnboundedSender<KeyEvent>>) {
         unsafe {
+            debug_assert_eq!(
+                GetWindowLongPtrW(hwnd, GWLP_USERDATA),
+                0,
+                "GWLP_USERDATA not empty"
+            );
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, Box::into_raw(tx) as isize);
         }
     }
 
-    /// Calls the provided `F` if the [`UnboundedSender<KeyEvent>`] could successfully be retrieved from the window's [`GWLP_USERDATA`].
-    /// This call borrows the raw pointer and does not change ownership or drop it afterward.
+    /// Retrieves the `UnboundedSender<KeyEvent>` from `GWLP_USERDATA` (if any) and
+    /// passes a shared reference to the provided closure `f`.
+    ///
+    /// Ownership is **not** taken; the pointer remains stored in the window.
+    ///
+    /// # Safety
+    ///
+    /// - `hwnd` must be a valid window handle, and its `GWLP_USERDATA` (if non-null)
+    ///   must point to a valid `UnboundedSender<KeyEvent>` that has not been freed.
+    /// - No other code may concurrently free or mutate the stored pointer during this call.
+    /// - The reference passed to `f` must not escape the closure (no storing it with
+    ///   a longer lifetime than the underlying allocation).
     #[inline]
     unsafe fn with_key_event_tx<F: FnOnce(&UnboundedSender<KeyEvent>)>(hwnd: HWND, f: F) {
         unsafe {
@@ -289,8 +341,20 @@ impl WindowsKeybindRuntime {
         }
     }
 
-    /// Returns the [`UnboundedSender<KeyEvent>`] stored in the window's [`GWLP_USERDATA`], if present.
-    /// The raw pointer is wrapped in [`Box`], taking ownership and dropping it once it goes out of scope.
+    /// Takes ownership of the `UnboundedSender<KeyEvent>` stored in `GWLP_USERDATA`,
+    /// if present, by reconstructing the `Box` from the raw pointer.
+    ///
+    /// After a successful take, the pointer is no longer valid to read/deref until
+    /// reinstalled. This function does **not** clear `GWLP_USERDATA`; pair it with
+    /// a `SetWindowLongPtrW(..., 0)` if you want to explicitly clear the slot (e.g., using [`Self::drop_key_Event_tx`]).
+    ///
+    /// # Safety
+    ///
+    /// - `hwnd` must be a valid window handle.
+    /// - If `GWLP_USERDATA` is non-null, it must have been produced by
+    ///   `Box::into_raw::<UnboundedSender<KeyEvent>>` and not previously taken or freed.
+    /// - Calling this twice without reinstalling a fresh pointer will cause a double free.
+    /// - No other code may concurrently take/free the same pointer.
     #[inline]
     unsafe fn take_key_event_tx(hwnd: HWND) -> Option<Box<UnboundedSender<KeyEvent>>> {
         unsafe {
@@ -302,12 +366,25 @@ impl WindowsKeybindRuntime {
         }
     }
 
+    /// Drops (frees) the `UnboundedSender<KeyEvent>` stored in `GWLP_USERDATA` (if any)
+    /// and clears the slot to `0`.
+    ///
+    /// This is a convenience that combines [`Self::take_key_event_tx`] with clearing the
+    /// window data to prevent accidental reuse of a dangling pointer.
+    ///
+    /// # Safety
+    ///
+    /// - `hwnd` must be a valid window handle.
+    /// - The pointer in `GWLP_USERDATA` (if non-null) must have been produced by
+    ///   `Box::into_raw::<UnboundedSender<KeyEvent>>` and not already freed.
+    /// - No other code may concurrently take/free the same pointer.
+    /// - After this call, `GWLP_USERDATA` is set to `0`.
     #[inline]
     unsafe fn drop_key_event_tx(hwnd: HWND) {
         unsafe {
             if let Some(tx) = Self::take_key_event_tx(hwnd) {
-                drop(tx);
                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                drop(tx);
             }
         }
     }
@@ -470,6 +547,8 @@ impl TryFrom<RawKey> for Code {
             VK_F11 => Ok(F11),
             VK_F12 => Ok(F12),
             VK_PRINT | VK_SNAPSHOT => Ok(PrintScreen),
+            // "fake" extended Shift triggered at the beginning of a PrintScreen sequence
+            VIRTUAL_KEY(0xFF) if value.make == 0x002A && value.extended => Ok(PrintScreen),
             VK_SCROLL => Ok(ScrollLock),
             VK_PAUSE => Ok(Pause),
             // Hidden
