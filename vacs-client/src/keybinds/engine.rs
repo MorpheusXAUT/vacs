@@ -1,8 +1,8 @@
 use crate::audio::manager::AudioManagerHandle;
 use crate::config::{TransmitConfig, TransmitMode};
 use crate::error::Error;
-use crate::keybinds::runtime::{KeybindRuntime, PlatformKeybindRuntime};
 use crate::keybinds::KeyEvent;
+use crate::keybinds::runtime::{KeybindRuntime, PlatformKeybindRuntime};
 use keyboard_types::{Code, KeyState};
 use parking_lot::Mutex;
 use tauri::async_runtime::JoinHandle;
