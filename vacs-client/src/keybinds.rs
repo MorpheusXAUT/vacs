@@ -21,7 +21,13 @@ pub enum KeybindsError {
     Other(String),
 }
 
-pub type KeyEvent = (Code, KeyState);
+#[derive(Debug, Clone)]
+pub struct KeyEvent {
+    code: Code,
+    #[allow(dead_code)]
+    label: String,
+    state: KeyState,
+}
 
 pub trait KeybindsTrait {
     fn register_keybinds(&self, app: AppHandle) -> Result<(), Error>;

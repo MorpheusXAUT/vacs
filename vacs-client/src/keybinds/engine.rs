@@ -133,12 +133,12 @@ impl KeybindEngine {
                     _ = stop_token.cancelled() => break,
                     res = rx.recv() => {
                         match res {
-                            Some((code, state)) => {
-                                if code != active {
+                            Some(event) => {
+                                if event.code != active {
                                     continue;
                                 }
 
-                                let muted_changed = match (&mode, state) {
+                                let muted_changed = match (&mode, &event.state) {
                                     (TransmitMode::PushToTalk, KeyState::Down) if !pressed => {
                                         pressed = true;
                                         Some(false)

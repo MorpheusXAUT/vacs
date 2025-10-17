@@ -10,7 +10,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use windows::Win32::Foundation::{GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
-use windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY;
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyNameTextW, VIRTUAL_KEY};
 use windows::Win32::UI::Input::{
     GetRawInputData, HRAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER, RAWKEYBOARD, RID_INPUT,
     RIDEV_INPUTSINK, RIM_TYPEKEYBOARD, RegisterRawInputDevices,
@@ -185,10 +185,12 @@ impl WindowsKeybindRuntime {
                     let code: Result<Code, KeybindsError> = raw_key.try_into();
                     match code {
                         Ok(code) => {
+                            let label = Self::physical_key_label(raw_key.make, raw_key.extended)
+                                .unwrap_or_else(|| code.to_string());
                             #[cfg(feature = "log-key-events")]
-                            log::trace!("{code:?} ({raw_key:?}) -> {state:?}");
+                            log::trace!("{code:?} [{label}] ({raw_key:?}) -> {state:?}");
                             Self::with_key_event_tx(hwnd, |tx| {
-                                if let Err(err) = tx.send((code, state)) {
+                                if let Err(err) = tx.send(KeyEvent { code, label, state }) {
                                     log::error!("Failed to send keybinds event: {err}")
                                 }
                             });
@@ -272,7 +274,20 @@ impl WindowsKeybindRuntime {
         ))
     }
 
-    unsafe fn run_message_loop() {
+    fn physical_key_label(scan_code: u16, extended: bool) -> Option<String> {
+        let lparam: i32 = ((scan_code as i32) << 16) | if extended { 1 << 24 } else { 0 };
+
+        let mut buf = [0u16; 64];
+        let n = unsafe { GetKeyNameTextW(lparam, &mut buf) };
+        if n > 0 {
+            String::from_utf16(&buf[..n as usize])
+                .map(|s| s.to_uppercase())
+                .ok()
+        } else {
+            None
+        }
+    }
+
     fn run_message_loop() {
         unsafe {
             let mut msg: MSG = zeroed();
