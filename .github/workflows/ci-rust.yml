@@ -7,6 +7,7 @@ on:
       - '**/*.rs'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
+      - '**/deny.toml'
       - '.github/workflows/ci-rust.yml'
   push:
     branches: [ main ]
@@ -14,6 +15,7 @@ on:
       - '**/*.rs'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
+      - '**/deny.toml'
       - '.github/workflows/ci-rust.yml'
 
 permissions:
@@ -24,6 +26,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  cargo-deny:
+    if: >
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.head_commit.message, '[ci skip]')
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        checks:
+          - advisories
+          - bans licenses sources
+    # prevent a sudden announcement of a new advisory from failing CI
+    continue-on-error: ${{ matrix.checks == 'advisories' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: cargo deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          arguments: --all-features
+          command: check ${{ matrix.checks }}
+
+  cargo-machete:
+    if: >
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.head_commit.message, '[ci skip]')
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: cargo-machete
+      - name: cargo machete
+        run: cargo machete
+
   check:
     if: >
       !contains(github.event.head_commit.message, '[skip ci]') &&
