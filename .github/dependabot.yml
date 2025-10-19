@@ -11,13 +11,6 @@ updates:
     rebase-strategy: auto
     versioning-strategy: auto
     labels: ["dependencies", "rust"]
-    groups:
-      rust-patch-minor:
-        patterns: ["*"]
-        update-types: ["patch", "minor"]
-      rust-major:
-        patterns: ["*"]
-        update-types: ["major"]
 
   - package-ecosystem: "npm"
     directory: "/vacs-client"
@@ -28,32 +21,22 @@ updates:
     rebase-strategy: auto
     versioning-strategy: increase
     labels: ["dependencies", "node"]
-    groups:
-      npm-patch-minor:
-        patterns: ["*"]
-        update-types: ["patch", "minor"]
-      npm-major:
-        patterns: ["*"]
-        update-types: ["major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: weekly
-      day: saturday
+      day: friday
       time: "06:30" # UTC
     open-pull-requests-limit: 10
     rebase-strategy: auto
     labels: ["dependencies"]
-    groups:
-      gha-all:
-        patterns: ["*"]
 
-  - package-ecosystem: docker
+  - package-ecosystem: "docker"
     directory: "/vacs-server"
     schedule:
       interval: weekly
-      day: saturday
+      day: friday
       time: "07:00" # UTC
     open-pull-requests-limit: 10
     rebase-strategy: auto
