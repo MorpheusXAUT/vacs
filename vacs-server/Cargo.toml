@@ -17,7 +17,6 @@ axum-login = { workspace = true }
 bytes = { workspace = true }
 config = { workspace = true }
 dashmap = { workspace = true }
-directories = { workspace = true }
 futures-util = { workspace = true }
 oauth2 = { workspace = true }
 parking_lot = { workspace = true }

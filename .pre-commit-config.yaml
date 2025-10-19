@@ -12,3 +12,7 @@ repos:
       - id: fmt
       - id: cargo-check
       - id: clippy
+  - repo: https://github.com/bnjbvr/cargo-machete
+    rev: v0.9.1
+    hooks:
+      - id: cargo-machete
