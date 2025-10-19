@@ -5,6 +5,7 @@ mod build;
 mod config;
 mod error;
 mod keybinds;
+mod platform;
 mod secrets;
 mod signaling;
 
