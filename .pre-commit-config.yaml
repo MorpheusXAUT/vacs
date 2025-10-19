@@ -16,3 +16,7 @@ repos:
     rev: v0.9.1
     hooks:
       - id: cargo-machete
+  - repo: https://github.com/EmbarkStudios/cargo-deny
+    rev: 0.18.5
+    hooks:
+      - id: cargo-deny
