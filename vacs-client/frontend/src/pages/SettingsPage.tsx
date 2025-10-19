@@ -11,8 +11,27 @@ import {useEffect, useState} from "preact/hooks";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {useUpdateStore} from "../stores/update-store.ts";
 import TransmitModeSettings from "../components/TransmitModeSettings.tsx";
+import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
+import {Capabilities} from "../types/capabilities.ts";
 
 function SettingsPage() {
+    const capAlwaysOnTop = useCapabilitiesStore(state => state.alwaysOnTop);
+    const capKeybinds = useCapabilitiesStore(state => state.keybinds);
+    const {setCapabilities} = useCapabilitiesStore(state => state.actions);
+
+    useEffect(() => {
+        const fetchCapabilities = async () => {
+            try {
+                const capabilities = await invokeStrict<Capabilities>("app_platform_capabilities");
+
+                setCapabilities(capabilities);
+            } catch {
+            }
+        };
+
+        void fetchCapabilities();
+    }, [setCapabilities]);
+
     return (
         <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col overflow-auto">
             <p className="w-full text-white bg-blue-700 font-semibold text-center">Settings</p>
@@ -26,14 +45,19 @@ function SettingsPage() {
                             <DeviceSelector deviceType="Output"/>
                             <DeviceSelector deviceType="Input"/>
                         </div>
-                        <p className="w-full text-center border-t-2 pt-1 border-zinc-200 uppercase font-semibold">Transmit Mode</p>
-                        <TransmitModeSettings/>
+                        {capKeybinds &&
+                            <div>
+                                <p className="w-full text-center border-t-2 pt-1 border-zinc-200 uppercase font-semibold">Transmit
+                                    Mode</p>
+                                <TransmitModeSettings/>
+                            </div>
+                        }
                     </div>
                 </div>
                 <div
                     className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:px-1 [&>button]:shrink-0">
                     <div className="h-full flex flex-row gap-2 items-center">
-                        <AlwaysOnTopButton/>
+                        {capAlwaysOnTop && <AlwaysOnTopButton/>}
                         <UpdateButton/>
                         <Button color="gray" className="w-24 h-full rounded"
                                 onClick={() => invokeSafe("app_open_logs_folder")}>Open logs<br/>folder</Button>
