@@ -25,6 +25,8 @@ pub enum Error {
     Webrtc(#[from] Box<vacs_webrtc::error::WebrtcError>),
     #[error("Keybinds error: {0}")]
     Keybinds(#[from] Box<KeybindsError>),
+    #[error("Capability {0} not available on your platform")]
+    CapabilityNotAvailable(String),
     #[error(transparent)]
     Other(#[from] Box<anyhow::Error>),
 }
@@ -181,6 +183,10 @@ impl From<&Error> for FrontendError {
             }
             Error::Webrtc(err) => FrontendError::new("WebRTC error", err.to_string()),
             Error::Keybinds(err) => FrontendError::new("Keybinds error", err.to_string()),
+            Error::CapabilityNotAvailable(capability) => FrontendError::new(
+                "Unavailable",
+                format!("{capability} functionality is not available on your platform"),
+            ),
             Error::Other(err) => FrontendError::new("Error", err.to_string()),
         }
     }

@@ -18,6 +18,7 @@ use crate::build::VersionInfo;
 use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use crate::keybinds::KeybindsTrait;
 use crate::keybinds::engine::{KeybindEngine, KeybindEngineHandle};
+use crate::platform::Capabilities;
 use anyhow::Context;
 use parking_lot::Mutex;
 use serde_json::Value;
@@ -65,17 +66,23 @@ pub fn run() {
                     .context("Failed to register deep link")
                     .map_startup_err(StartupError::Other)?;
 
+                let capabilities = Capabilities::default();
+
                 let state = AppStateInner::new(app.handle())?;
 
                 if state.config.client.always_on_top {
-                    let main_window = app
-                        .get_webview_window("main")
-                        .context("Failed to get main window")
-                        .map_startup_err(StartupError::Other)?;
-                    if let Err(err) = main_window.set_always_on_top(true) {
-                        log::warn!("Failed to set main window to be always on top: {err}");
+                    if capabilities.always_on_top {
+                        let main_window = app
+                            .get_webview_window("main")
+                            .context("Failed to get main window")
+                            .map_startup_err(StartupError::Other)?;
+                        if let Err(err) = main_window.set_always_on_top(true) {
+                            log::warn!("Failed to set main window to be always on top: {err}");
+                        } else {
+                            log::debug!("Set main window to be always on top");
+                        }
                     } else {
-                        log::debug!("Set main window to be always on top");
+                        log::warn!("Your platform ({}) does not support always on top windows, setting is ignored.", capabilities.platform)
                     }
                 }
 
@@ -91,9 +98,13 @@ pub fn run() {
                 app.manage::<KeybindEngineHandle>(Mutex::new(keybind_engine));
                 app.manage::<AppState>(TokioMutex::new(state));
 
-                transmit_config
-                    .register_keybinds(app.handle().clone())
-                    .map_startup_err(StartupError::Keybinds)?;
+                if capabilities.keybinds {
+                    transmit_config
+                        .register_keybinds(app.handle().clone())
+                        .map_startup_err(StartupError::Keybinds)?;
+                } else {
+                    log::warn!("Your platform ({}) does not support keybinds, skipping registration", capabilities.platform);
+                }
 
                 Ok(())
             }
@@ -112,6 +123,7 @@ pub fn run() {
             app::commands::app_check_for_update,
             app::commands::app_frontend_ready,
             app::commands::app_open_logs_folder,
+            app::commands::app_platform_capabilities,
             app::commands::app_set_always_on_top,
             app::commands::app_update,
             audio::commands::audio_get_devices,

@@ -3,6 +3,7 @@ use crate::app::{UpdateInfo, get_update, open_fatal_error_dialog, open_logs_fold
 use crate::build::VersionInfo;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
 use crate::error::Error;
+use crate::platform::Capabilities;
 use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 
@@ -110,12 +111,23 @@ pub async fn app_update(app: AppHandle) -> Result<(), Error> {
 
 #[tauri::command]
 #[vacs_macros::log_err]
+pub async fn app_platform_capabilities() -> Result<Capabilities, Error> {
+    Ok(Capabilities::default())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
 pub async fn app_set_always_on_top(
     window: Window,
     app: AppHandle,
     app_state: State<'_, AppState>,
     always_on_top: bool,
 ) -> Result<bool, Error> {
+    let capabilities = Capabilities::default();
+    if !capabilities.always_on_top {
+        return Err(Error::CapabilityNotAvailable("Always on top".to_string()));
+    }
+
     let persisted_client_config: PersistedClientConfig = {
         window
             .set_always_on_top(always_on_top)

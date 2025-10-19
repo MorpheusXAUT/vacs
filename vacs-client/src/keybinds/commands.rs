@@ -5,6 +5,7 @@ use crate::config::{
 };
 use crate::error::Error;
 use crate::keybinds::KeybindsTrait;
+use crate::platform::Capabilities;
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
@@ -29,6 +30,11 @@ pub async fn keybinds_set_transmit_config(
     app_state: State<'_, AppState>,
     transmit_config: FrontendTransmitConfig,
 ) -> Result<(), Error> {
+    let capabilities = Capabilities::default();
+    if !capabilities.keybinds {
+        return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
+    }
+
     let persisted_client_config: PersistedClientConfig = {
         let mut state = app_state.lock().await;
 
