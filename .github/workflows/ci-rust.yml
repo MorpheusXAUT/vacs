@@ -56,12 +56,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: cargo-machete
       - name: cargo machete
-        run: cargo machete
+        uses: bnjbvr/cargo-machete@v0.9.1
 
   check:
     if: >
