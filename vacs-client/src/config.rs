@@ -222,6 +222,7 @@ pub struct TransmitConfig {
     pub mode: TransmitMode,
     pub push_to_talk: Option<Code>,
     pub push_to_mute: Option<Code>,
+    pub external_radio_push_to_talk: Option<Code>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -230,6 +231,7 @@ pub struct FrontendTransmitConfig {
     pub mode: TransmitMode,
     pub push_to_talk: Option<String>,
     pub push_to_mute: Option<String>,
+    pub external_radio_push_to_talk: Option<String>,
 }
 
 impl From<TransmitConfig> for FrontendTransmitConfig {
@@ -238,6 +240,9 @@ impl From<TransmitConfig> for FrontendTransmitConfig {
             mode: transmit_config.mode,
             push_to_talk: transmit_config.push_to_talk.map(|k| k.to_string()),
             push_to_mute: transmit_config.push_to_mute.map(|k| k.to_string()),
+            external_radio_push_to_talk: transmit_config
+                .external_radio_push_to_talk
+                .map(|k| k.to_string()),
         }
     }
 }
@@ -260,6 +265,12 @@ impl TryFrom<FrontendTransmitConfig> for TransmitConfig {
                 .map(|s| s.parse::<Code>())
                 .transpose()
                 .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.push_to_mute.unwrap_or_default()))))?,
+            external_radio_push_to_talk: value
+                .external_radio_push_to_talk
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.external_radio_push_to_talk.unwrap_or_default()))))?,
         })
     }
 }
