@@ -4,7 +4,8 @@ use crate::error::Error;
 use crate::keybinds::KeyEvent;
 use crate::keybinds::runtime::{KeybindRuntime, PlatformKeybindRuntime};
 use keyboard_types::{Code, KeyState};
-use parking_lot::Mutex;
+use parking_lot::RwLock;
+use std::sync::Arc;
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Manager};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -21,7 +22,7 @@ pub struct KeybindEngine {
     stop_token: Option<CancellationToken>,
 }
 
-pub type KeybindEngineHandle = Mutex<KeybindEngine>;
+pub type KeybindEngineHandle = Arc<RwLock<KeybindEngine>>;
 
 impl KeybindEngine {
     pub fn new(app: AppHandle, config: &TransmitConfig, shutdown_token: CancellationToken) -> Self {

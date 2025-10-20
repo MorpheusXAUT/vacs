@@ -1,5 +1,6 @@
 pub(crate) mod audio;
 pub(crate) mod http;
+pub(crate) mod keybinds;
 mod sealed;
 pub(crate) mod signaling;
 pub(crate) mod webrtc;
@@ -9,6 +10,7 @@ use crate::app::state::webrtc::Call;
 use crate::audio::manager::{AudioManager, AudioManagerHandle};
 use crate::config::AppConfig;
 use crate::error::{StartupError, StartupErrorExt};
+use crate::keybinds::engine::{KeybindEngine, KeybindEngineHandle};
 use crate::signaling::auth::TauriTokenProvider;
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
@@ -24,6 +26,7 @@ pub struct AppStateInner {
     shutdown_token: CancellationToken,
     signaling_client: SignalingClient<TokioTransport, TauriTokenProvider>,
     audio_manager: AudioManagerHandle,
+    keybind_engine: KeybindEngineHandle,
     active_call: Option<Call>,
     held_calls: HashMap<String, Call>,       // peer_id -> call
     outgoing_call_peer_id: Option<String>,   // peer_id
@@ -50,11 +53,16 @@ impl AppStateInner {
                 shutdown_token.child_token(),
                 config.client.max_signaling_reconnect_attempts(),
             ),
-            shutdown_token,
             audio_manager: Arc::new(RwLock::new(
                 AudioManager::new(app.clone(), &config.audio)
                     .map_startup_err(StartupError::Audio)?,
             )),
+            keybind_engine: Arc::new(RwLock::new(KeybindEngine::new(
+                app.clone(),
+                &config.client.transmit_config,
+                shutdown_token.child_token(),
+            ))),
+            shutdown_token,
             active_call: None,
             held_calls: HashMap::new(),
             outgoing_call_peer_id: None,

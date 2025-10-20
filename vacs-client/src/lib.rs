@@ -12,19 +12,18 @@ mod signaling;
 use crate::app::open_fatal_error_dialog;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::http::HttpState;
+use crate::app::state::keybinds::AppStateKeybindsExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::AudioManagerHandle;
 use crate::build::VersionInfo;
 use crate::error::{FrontendError, StartupError, StartupErrorExt};
 use crate::keybinds::KeybindsTrait;
-use crate::keybinds::engine::{KeybindEngine, KeybindEngineHandle};
+use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
 use anyhow::Context;
-use parking_lot::Mutex;
 use serde_json::Value;
 use tauri::{App, Emitter, Manager, RunEvent};
 use tokio::sync::Mutex as TokioMutex;
-use tokio_util::sync::CancellationToken;
 
 pub fn run() {
     tauri::Builder::default()
@@ -87,15 +86,10 @@ pub fn run() {
                 }
 
                 let transmit_config = state.config.client.transmit_config.clone();
-                let keybind_engine = KeybindEngine::new(
-                    app.handle().clone(),
-                    &transmit_config,
-                    CancellationToken::new(),
-                );
 
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
                 app.manage::<AudioManagerHandle>(state.audio_manager_handle());
-                app.manage::<KeybindEngineHandle>(Mutex::new(keybind_engine));
+                app.manage::<KeybindEngineHandle>(state.keybind_engine_handle());
                 app.manage::<AppState>(TokioMutex::new(state));
 
                 if capabilities.keybinds {
@@ -159,7 +153,7 @@ pub fn run() {
                         .persist()
                         .expect("Failed to persist http state");
 
-                    app_handle.state::<KeybindEngineHandle>().lock().shutdown();
+                    app_handle.state::<KeybindEngineHandle>().write().shutdown();
 
                     app_handle.state::<AppState>().lock().await.shutdown();
                 });

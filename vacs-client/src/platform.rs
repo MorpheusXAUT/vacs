@@ -1,5 +1,4 @@
 use serde::Serialize;
-use std::env;
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -49,6 +48,7 @@ pub fn detect_platform() -> Platform {
 
     #[cfg(target_os = "linux")]
     {
+        use std::env;
         if let Ok(xdg_session_type) = env::var("XDG_SESSION_TYPE") {
             match xdg_session_type.to_lowercase().as_str() {
                 "wayland" => return Platform::LinuxWayland,
