@@ -287,13 +287,12 @@ impl AppStateInner {
                 return Err(err);
             }
 
-            let transmit_mode = self.config.client.transmit_config.mode;
             log::debug!("Attaching input device to audio manager");
             if let Err(err) = audio_manager.attach_input_device(
                 app.clone(),
                 &audio_config,
                 input_tx,
-                transmit_mode,
+                self.keybind_engine.read().should_mute_input(),
             ) {
                 log::warn!("Failed to attach input device to audio manager: {err:?}");
                 return Err(err);

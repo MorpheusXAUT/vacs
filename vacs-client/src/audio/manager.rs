@@ -1,7 +1,7 @@
 use crate::app::state::AppState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::config::{AudioConfig, TransmitMode};
+use crate::config::AudioConfig;
 use crate::error::{Error, FrontendError};
 use parking_lot::RwLock;
 use serde_json::Value;
@@ -122,7 +122,7 @@ impl AudioManager {
         app: AppHandle,
         audio_config: &AudioConfig,
         tx: mpsc::Sender<EncodedAudioFrame>,
-        transmit_mode: TransmitMode,
+        muted: bool,
     ) -> Result<(), Error> {
         let (device, is_fallback) = DeviceSelector::open(
             DeviceType::Input,
@@ -177,7 +177,7 @@ impl AudioManager {
             audio_config.input_device_volume,
             audio_config.input_device_volume_amp,
             error_tx,
-            transmit_mode == TransmitMode::PushToTalk,
+            muted,
         )?);
         Ok(())
     }

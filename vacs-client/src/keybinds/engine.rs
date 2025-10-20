@@ -6,6 +6,7 @@ use crate::keybinds::runtime::{KeybindRuntime, PlatformKeybindRuntime};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Manager};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -20,6 +21,7 @@ pub struct KeybindEngine {
     rx_task: Option<JoinHandle<()>>,
     shutdown_token: CancellationToken,
     stop_token: Option<CancellationToken>,
+    pressed: Arc<AtomicBool>,
 }
 
 pub type KeybindEngineHandle = Arc<RwLock<KeybindEngine>>;
@@ -34,6 +36,7 @@ impl KeybindEngine {
             rx_task: None,
             shutdown_token,
             stop_token: None,
+            pressed: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -94,7 +97,16 @@ impl KeybindEngine {
         Ok(())
     }
 
+    pub fn should_mute_input(&self) -> bool {
+        matches!(
+            (self.mode, self.pressed.load(Ordering::Relaxed)),
+            (TransmitMode::PushToTalk, false) | (TransmitMode::PushToMute, true)
+        )
+    }
+
     fn reset_input_state(&self) {
+        self.pressed.store(false, Ordering::Relaxed);
+
         let muted = match &self.mode {
             TransmitMode::PushToTalk => true,
             TransmitMode::PushToMute | TransmitMode::VoiceActivation => false,
@@ -121,6 +133,7 @@ impl KeybindEngine {
             .stop_token
             .clone()
             .unwrap_or(self.shutdown_token.child_token());
+        let pressed = self.pressed.clone();
 
         let handle = tauri::async_runtime::spawn(async move {
             log::debug!(
@@ -128,7 +141,6 @@ impl KeybindEngine {
                 mode,
                 active
             );
-            let mut pressed = false;
 
             loop {
                 tokio::select! {
@@ -141,25 +153,25 @@ impl KeybindEngine {
                                     continue;
                                 }
 
-                                let muted_changed = match (&mode, &event.state) {
-                                    (TransmitMode::PushToTalk, KeyState::Down) if !pressed => {
-                                        pressed = true;
-                                        Some(false)
-                                    }
-                                    (TransmitMode::PushToTalk, KeyState::Up) if pressed => {
-                                        pressed = false;
-                                        Some(true)
-                                    }
-                                    (TransmitMode::PushToMute, KeyState::Down) if !pressed => {
-                                        pressed = true;
-                                        Some(true)
-                                    }
-                                    (TransmitMode::PushToMute, KeyState::Up) if pressed => {
-                                        pressed = false;
-                                        Some(false)
-                                    }
-                                    _ => None,
-                                };
+                        let muted_changed = match (&mode, &event.state, pressed.load(Ordering::Relaxed)) {
+                            (TransmitMode::PushToTalk, KeyState::Down, false) => {
+                                pressed.store(true, Ordering::Relaxed);
+                                Some(false)
+                            }
+                            (TransmitMode::PushToTalk, KeyState::Up, true) => {
+                                pressed.store(false, Ordering::Relaxed);
+                                Some(true)
+                            }
+                            (TransmitMode::PushToMute, KeyState::Down, false) => {
+                                pressed.store(true, Ordering::Relaxed);
+                                Some(true)
+                            }
+                            (TransmitMode::PushToMute, KeyState::Up, true) => {
+                                pressed.store(false, Ordering::Relaxed);
+                                Some(false)
+                            }
+                            _ => None,
+                        };
 
                                 if let Some(muted) = muted_changed {
                                     log::trace!("Setting audio input {}", if muted {"muted"} else {"unmuted"});
