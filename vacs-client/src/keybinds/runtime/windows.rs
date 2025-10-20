@@ -404,10 +404,10 @@ impl WindowsKeybindRuntime {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct RawKey {
-    vk: VIRTUAL_KEY,
-    make: u16, // Scan 1 Make code: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#scan-codes
-    extended: bool,
+struct RawKey {
+    pub(crate) vk: VIRTUAL_KEY,
+    pub(crate) make: u16, // Scan 1 Make code: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#scan-codes
+    pub(crate) extended: bool,
 }
 
 impl Debug for RawKey {
@@ -606,6 +606,187 @@ impl TryFrom<RawKey> for Code {
             0xE02E => Ok(AudioVolumeDown),
             0xE020 => Ok(AudioVolumeMute),
             0xE030 => Ok(AudioVolumeUp),
+
+            _ => Err(KeybindsError::UnrecognizedCode(format!("{:?}", value))),
+        }
+    }
+}
+
+impl TryFrom<Code> for RawKey {
+    type Error = KeybindsError;
+
+    fn try_from(value: Code) -> Result<Self, Self::Error> {
+        use Code::*;
+        fn rk(make: u16, extended: bool) -> Result<RawKey, KeybindsError> {
+            Ok(RawKey {
+                vk: VIRTUAL_KEY(0),
+                make,
+                extended,
+            })
+        }
+        // mapping based on Standard "102" keyboard layout: https://w3c.github.io/uievents-code/#keyboard-102
+        // and Scan 1 Make codes: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#scan-codes
+        match value {
+            // Alphanumerical section
+            // Row E
+            Backquote => rk(0x0029, false),
+            Digit1 => rk(0x0002, false),
+            Digit2 => rk(0x0003, false),
+            Digit3 => rk(0x0004, false),
+            Digit4 => rk(0x0005, false),
+            Digit5 => rk(0x0006, false),
+            Digit6 => rk(0x0007, false),
+            Digit7 => rk(0x0008, false),
+            Digit8 => rk(0x0009, false),
+            Digit9 => rk(0x000A, false),
+            Digit0 => rk(0x000B, false),
+            Minus => rk(0x000C, false),
+            Equal => rk(0x000D, false),
+            Backspace => rk(0x000E, false),
+            // Row D
+            Tab => rk(0x000F, false),
+            KeyQ => rk(0x0010, false),
+            KeyW => rk(0x0011, false),
+            KeyE => rk(0x0012, false),
+            KeyR => rk(0x0013, false),
+            KeyT => rk(0x0014, false),
+            KeyY => rk(0x0015, false),
+            KeyU => rk(0x0016, false),
+            KeyI => rk(0x0017, false),
+            KeyO => rk(0x0018, false),
+            KeyP => rk(0x0019, false),
+            BracketLeft => rk(0x001A, false),
+            BracketRight => rk(0x001B, false),
+            Backslash => rk(0x002B, false),
+            // Row C
+            CapsLock => rk(0x003A, false),
+            KeyA => rk(0x001E, false),
+            KeyS => rk(0x001F, false),
+            KeyD => rk(0x0020, false),
+            KeyF => rk(0x0021, false),
+            KeyG => rk(0x0022, false),
+            KeyH => rk(0x0023, false),
+            KeyJ => rk(0x0024, false),
+            KeyK => rk(0x0025, false),
+            KeyL => rk(0x0026, false),
+            Semicolon => rk(0x0027, false),
+            Quote => rk(0x0028, false),
+            Enter => rk(0x001C, false),
+            NumpadEnter => rk(0x001C, true),
+            // Row B
+            NumpadMultiply => rk(0x0037, false),
+            PrintScreen => rk(0x0037, true),
+            ShiftLeft => rk(0x002A, false),
+            IntlBackslash => rk(0x0056, false),
+            KeyZ => rk(0x002C, false),
+            KeyX => rk(0x002D, false),
+            KeyC => rk(0x002E, false),
+            KeyV => rk(0x002F, false),
+            KeyB => rk(0x0030, false),
+            KeyN => rk(0x0031, false),
+            KeyM => rk(0x0032, false),
+            Comma => rk(0x0033, false),
+            Period => rk(0x0034, false),
+            Slash => rk(0x0035, false),
+            NumpadDivide => rk(0x0035, true),
+            ShiftRight => rk(0x0036, false),
+            // Row A
+            ControlLeft => rk(0x001D, false),
+            ControlRight => rk(0x001D, true),
+            MetaLeft => rk(0x005B, false),
+            AltLeft => rk(0x0038, false),
+            AltRight => rk(0x0038, true),
+            Space => rk(0x0039, false),
+            MetaRight => rk(0x005C, false),
+            ContextMenu => rk(0x005D, false),
+
+            // Arrow pad section
+            // Row B
+            ArrowUp => rk(0xE048, false),
+            // Row A
+            ArrowLeft => rk(0xE04B, false),
+            ArrowDown => rk(0xE050, false),
+            ArrowRight => rk(0xE04D, false),
+
+            // Control pad section
+            // Numpad section
+            // Row E
+            NumLock => rk(0x0045, false),
+            Pause => rk(0x0045, true),
+            NumpadSubtract => rk(0x004A, false),
+            // Row D
+            Numpad7 => rk(0x0047, false),
+            Home => rk(0x0047, true),
+            Numpad8 => rk(0x0048, false),
+            Numpad9 => rk(0x0049, false),
+            PageUp => rk(0x0049, true),
+            NumpadAdd => rk(0x004E, false),
+            // Row C
+            Numpad4 => rk(0x004B, false),
+            Numpad5 => rk(0x004C, false),
+            Numpad6 => rk(0x004D, false),
+            // Row B
+            Numpad1 => rk(0x004F, false),
+            End => rk(0x004F, true),
+            Numpad2 => rk(0x0050, false),
+            Numpad3 => rk(0x0051, false),
+            PageDown => rk(0x0051, true),
+            // Row A
+            Numpad0 => rk(0x0052, false),
+            Insert => rk(0x0052, true),
+            NumpadDecimal => rk(0x0053, false),
+            Delete => rk(0x0053, true),
+
+            // Function section
+            // Row K
+            Escape => rk(0x0001, false),
+            F1 => rk(0x003B, false),
+            F2 => rk(0x003C, false),
+            F3 => rk(0x003D, false),
+            F4 => rk(0x003E, false),
+            F5 => rk(0x003F, false),
+            F6 => rk(0x0040, false),
+            F7 => rk(0x0041, false),
+            F8 => rk(0x0042, false),
+            F9 => rk(0x0043, false),
+            F10 => rk(0x0044, false),
+            F11 => rk(0x0057, false),
+            F12 => rk(0x0058, false),
+            ScrollLock => rk(0x0046, false),
+            // Hidden
+            F13 => rk(0x0064, false),
+            F14 => rk(0x0065, false),
+            F15 => rk(0x0066, false),
+            F16 => rk(0x0067, false),
+            F17 => rk(0x0068, false),
+            F18 => rk(0x0069, false),
+            F19 => rk(0x006A, false),
+            F20 => rk(0x006B, false),
+            F21 => rk(0x006C, false),
+            F22 => rk(0x006D, false),
+            F23 => rk(0x006E, false),
+            F24 => rk(0x0076, false),
+
+            // Media keys
+            BrowserBack => rk(0xE06A, false),
+            BrowserFavorites => rk(0xE066, false),
+            BrowserForward => rk(0xE069, false),
+            BrowserHome => rk(0xE032, false),
+            BrowserRefresh => rk(0xE067, false),
+            BrowserSearch => rk(0xE065, false),
+            BrowserStop => rk(0xE068, false),
+            LaunchControlPanel => rk(0xE06D, false),
+            LaunchMail => rk(0xE06C, false),
+            MediaPlayPause => rk(0xE022, false),
+            MediaStop => rk(0xE024, false),
+            MediaTrackNext => rk(0xE019, false),
+            MediaTrackPrevious => rk(0xE010, false),
+            Power => rk(0xE05E, false),
+            Sleep => rk(0xE05F, false),
+            WakeUp => rk(0xE063, false),
+            AudioVolumeDown => rk(0xE02E, false),
+            AudioVolumeMute => rk(0xE020, false),
+            AudioVolumeUp => rk(0xE030, false),
 
             _ => Err(KeybindsError::UnrecognizedCode(format!("{:?}", value))),
         }
