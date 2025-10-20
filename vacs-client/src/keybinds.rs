@@ -7,8 +7,10 @@ pub mod runtime;
 
 #[derive(Debug, Clone, Error)]
 pub enum KeybindsError {
-    #[error("Keybinds runtime error: {0}")]
-    Runtime(String),
+    #[error("Keybinds listener error: {0}")]
+    Listener(String),
+    #[error("Keybinds emitter error: {0}")]
+    Emitter(String),
     #[error("Unrecognized keybinds code: {0}")]
     UnrecognizedCode(String),
     #[error("{0}")]

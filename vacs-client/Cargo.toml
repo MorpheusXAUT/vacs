@@ -20,6 +20,7 @@ vergen-git2 = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
+cfg-if = { workspace = true }
 chacha20poly1305 = { workspace = true }
 config = { workspace = true }
 cookie_store = { workspace = true }

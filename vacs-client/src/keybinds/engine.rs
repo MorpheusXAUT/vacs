@@ -2,9 +2,13 @@ use crate::audio::manager::AudioManagerHandle;
 use crate::config::{TransmitConfig, TransmitMode};
 use crate::error::Error;
 use crate::keybinds::KeyEvent;
-use crate::keybinds::runtime::{KeybindRuntime, PlatformKeybindRuntime};
+use crate::keybinds::runtime::{
+    DynKeybindEmitter, DynKeybindListener, KeybindEmitter, KeybindListener, PlatformEmitter,
+    PlatformListener,
+};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::async_runtime::JoinHandle;
@@ -16,12 +20,16 @@ use tokio_util::sync::CancellationToken;
 pub struct KeybindEngine {
     mode: TransmitMode,
     code: Option<Code>,
+    external_radio_code: Option<Code>,
     app: AppHandle,
-    runtime: Option<PlatformKeybindRuntime>,
+    listener: RwLock<Option<DynKeybindListener>>,
+    emitter: RwLock<Option<DynKeybindEmitter>>,
     rx_task: Option<JoinHandle<()>>,
     shutdown_token: CancellationToken,
     stop_token: Option<CancellationToken>,
     pressed: Arc<AtomicBool>,
+    call_active: Arc<AtomicBool>,
+    radio_prio: Arc<AtomicBool>,
 }
 
 pub type KeybindEngineHandle = Arc<RwLock<KeybindEngine>>;
@@ -31,18 +39,23 @@ impl KeybindEngine {
         Self {
             mode: config.mode,
             code: Self::select_active_code(config),
+            external_radio_code: config.external_radio_push_to_talk,
             app,
-            runtime: None,
+            listener: RwLock::new(None),
+            emitter: RwLock::new(None),
             rx_task: None,
             shutdown_token,
             stop_token: None,
             pressed: Arc::new(AtomicBool::new(false)),
+            call_active: Arc::new(AtomicBool::new(false)),
+            radio_prio: Arc::new(AtomicBool::new(false)),
         }
     }
 
     pub fn start(&mut self) -> Result<(), Error> {
         if self.rx_task.is_some() {
-            debug_assert!(self.runtime.is_some());
+            debug_assert!(self.listener.read().is_some());
+            debug_assert!(self.code.is_some());
             return Ok(());
         }
         if self.mode == TransmitMode::VoiceActivation {
@@ -58,8 +71,13 @@ impl KeybindEngine {
 
         self.stop_token = Some(self.shutdown_token.child_token());
 
-        let (runtime, rx) = PlatformKeybindRuntime::start()?;
-        self.runtime = Some(runtime);
+        let (listener, rx) = PlatformListener::start()?;
+        *self.listener.write() = Some(Arc::new(listener));
+
+        if self.external_radio_code.is_some() {
+            let emitter = PlatformEmitter::start()?;
+            *self.emitter.write() = Some(Arc::new(emitter));
+        }
 
         self.spawn_rx_loop(rx);
 
@@ -67,13 +85,29 @@ impl KeybindEngine {
     }
 
     pub fn stop(&mut self) {
-        if let Some(mut runtime) = self.runtime.take() {
-            runtime.stop();
-            self.reset_input_state();
+        {
+            let mut listener = self.listener.write();
+            if listener.take().is_some() {
+                self.reset_input_state();
+            }
         }
+
+        {
+            let mut emitter = self.emitter.write();
+            if let Some(emitter) = emitter.take()
+                && let Some(external_radio_code) = self.external_radio_code
+                && let Err(err) = emitter.emit(external_radio_code, KeyState::Up)
+            {
+                log::warn!(
+                    "Failed to send external radio code {external_radio_code} Up while stopping keybind engine: {err}"
+                );
+            }
+        }
+
         if let Some(stop_token) = self.stop_token.take() {
             stop_token.cancel()
         }
+
         if let Some(rx_task) = self.rx_task.take() {
             rx_task.abort();
         }
@@ -95,6 +129,47 @@ impl KeybindEngine {
         self.start()?;
 
         Ok(())
+    }
+
+    pub fn set_call_active(&self, active: bool) {
+        self.call_active.store(active, Ordering::Relaxed);
+        if !active
+            && let Some(external_radio_code) = self.external_radio_code
+            && let Some(emitter) = self.emitter.read().deref()
+            && let Err(err) = emitter.emit(external_radio_code, KeyState::Up)
+        {
+            log::warn!(
+                "Failed to send external radio code {external_radio_code} Up while setting call inactive: {err}"
+            );
+        }
+    }
+
+    pub fn set_radio_prio(&self, prio: bool) {
+        self.radio_prio.store(prio, Ordering::Relaxed);
+
+        if self.mode == TransmitMode::VoiceActivation {
+            log::info!(
+                "Setting audio input {}",
+                if prio { "muted" } else { "unmuted" }
+            );
+            self.app
+                .state::<AudioManagerHandle>()
+                .read()
+                .set_input_muted(prio);
+        }
+    }
+
+    pub fn reset_call_state(&self) {
+        self.call_active.store(false, Ordering::Relaxed);
+        self.radio_prio.store(false, Ordering::Relaxed);
+        if let Some(external_radio_code) = self.external_radio_code
+            && let Some(emitter) = self.emitter.read().deref()
+            && let Err(err) = emitter.emit(external_radio_code, KeyState::Up)
+        {
+            log::warn!(
+                "Failed to send external radio code {external_radio_code} Up while resetting call state: {err}"
+            );
+        }
     }
 
     pub fn should_mute_input(&self) -> bool {
@@ -133,7 +208,11 @@ impl KeybindEngine {
             .stop_token
             .clone()
             .unwrap_or(self.shutdown_token.child_token());
+        let emitter = self.emitter.read().clone();
+        let external_radio_code = self.external_radio_code;
         let pressed = self.pressed.clone();
+        let call_active = self.call_active.clone();
+        let radio_prio = self.radio_prio.clone();
 
         let handle = tauri::async_runtime::spawn(async move {
             log::debug!(
@@ -147,11 +226,8 @@ impl KeybindEngine {
                     biased;
                     _ = stop_token.cancelled() => break,
                     res = rx.recv() => {
-                        match res {
-                            Some(event) => {
-                                if event.code != active {
-                                    continue;
-                                }
+                        let Some(event) = res else { break; };
+                        if event.code != active { continue; }
 
                         let muted_changed = match (&mode, &event.state, pressed.load(Ordering::Relaxed)) {
                             (TransmitMode::PushToTalk, KeyState::Down, false) => {
@@ -173,13 +249,46 @@ impl KeybindEngine {
                             _ => None,
                         };
 
-                                if let Some(muted) = muted_changed {
-                                    log::trace!("Setting audio input {}", if muted {"muted"} else {"unmuted"});
-                                    app.state::<AudioManagerHandle>().read().set_input_muted(muted);
-                                }
+                        let Some(muted) = muted_changed else { continue; };
+                        let call_active = call_active.load(Ordering::Relaxed);
+                        let radio_prio = radio_prio.load(Ordering::Relaxed);
+
+                        match (call_active, radio_prio, external_radio_code) {
+                            // No call active, no external radio code defined --> nothing to do
+                            (false, _, None) => {
+                                continue;
                             }
-                            None => {
-                                break;
+
+                            // No call active, external radio code defined --> emit external radio code
+                            (false, _, Some(external_radio_code)) => {
+                                let Some(emitter) = &emitter else { continue; };
+                                log::trace!("No call active, emitting external radio code {external_radio_code:?} {:?}", event.state);
+                                Self::emit_external_radio_code(emitter, external_radio_code, event.state);
+                            }
+
+                            // Call active, external radio code defined, radio prio active --> emit external radio code
+                            (true, true, Some(external_radio_code)) => {
+                                let Some(emitter) = &emitter else { continue; };
+                                let input_muted = match (&event.state, &mode) {
+                                    (KeyState::Down, _) => true,
+                                    (KeyState::Up, TransmitMode::PushToTalk) => true,
+                                    (KeyState::Up, TransmitMode::PushToMute | TransmitMode::VoiceActivation) => false,
+                                };
+
+                                log::trace!(
+                                    "Call active, radio prio set, setting audio input {} and emitting external radio code {external_radio_code:?} {:?}",
+                                    if input_muted { "muted" } else { "unmuted" },
+                                    event.state
+                                );
+                                Self::set_input_muted(&app, input_muted);
+                                Self::emit_external_radio_code(emitter, external_radio_code, event.state);
+                            }
+
+                            // Call active, external radio code not defined, radio prio active or
+                            // call active, radio prio not active --> change local audio input
+                            (true, true, None) | (true, false, _) => {
+                                log::trace!("Call active, setting audio input {}", if muted { "muted" } else { "unmuted" });
+                                Self::set_input_muted(&app, muted);
                             }
                         }
                     }
@@ -198,6 +307,23 @@ impl KeybindEngine {
             TransmitMode::VoiceActivation => None,
             TransmitMode::PushToTalk => config.push_to_talk,
             TransmitMode::PushToMute => config.push_to_mute,
+        }
+    }
+
+    #[inline]
+    fn set_input_muted(app: &AppHandle, muted: bool) {
+        app.state::<AudioManagerHandle>()
+            .read()
+            .set_input_muted(muted);
+    }
+
+    #[inline]
+    fn emit_external_radio_code(runtime: &DynKeybindEmitter, code: Code, state: KeyState) {
+        if let Err(err) = runtime.emit(code, state) {
+            log::warn!(
+                "Failed to emit external radio code {code} {:?}: {err}",
+                state
+            );
         }
     }
 }

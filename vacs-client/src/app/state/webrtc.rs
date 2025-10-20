@@ -225,6 +225,9 @@ impl AppStateWebrtcExt for AppStateInner {
                 audio_manager.detach_call_output();
                 audio_manager.detach_input_device();
             }
+
+            self.keybind_engine.read().reset_call_state();
+
             let result = call.peer.close().await;
             self.active_call = None;
             result
@@ -297,6 +300,8 @@ impl AppStateInner {
                 log::warn!("Failed to attach input device to audio manager: {err:?}");
                 return Err(err);
             }
+
+            self.keybind_engine.read().set_call_active(true);
 
             log::info!("Successfully established call to peer");
             app.emit("webrtc:call-connected", peer_id).ok();
