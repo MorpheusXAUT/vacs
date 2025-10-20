@@ -4,6 +4,7 @@ use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::audio::{AudioDevices, AudioHosts, AudioVolumes, VolumeType};
 use crate::config::{AUDIO_SETTINGS_FILE_NAME, Persistable, PersistedAudioConfig};
 use crate::error::Error;
+use crate::keybinds::engine::KeybindEngineHandle;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use vacs_audio::device::{DeviceSelector, DeviceType};
@@ -299,14 +300,10 @@ pub async fn audio_stop_input_level_meter(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn audio_set_input_muted(
-    audio_manager: State<'_, AudioManagerHandle>,
-    muted: bool,
+pub async fn audio_set_radio_prio(
+    keybind_engine: State<'_, KeybindEngineHandle>,
+    prio: bool,
 ) -> Result<(), Error> {
-    log::info!(
-        "Setting audio input {}",
-        if muted { "muted" } else { "unmuted" }
-    );
-    audio_manager.read().set_input_muted(muted);
+    keybind_engine.read().set_radio_prio(prio);
     Ok(())
 }
