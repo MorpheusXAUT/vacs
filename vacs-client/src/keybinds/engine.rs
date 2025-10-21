@@ -30,6 +30,7 @@ pub struct KeybindEngine {
     pressed: Arc<AtomicBool>,
     call_active: Arc<AtomicBool>,
     radio_prio: Arc<AtomicBool>,
+    implicit_radio_prio: Arc<AtomicBool>,
 }
 
 pub type KeybindEngineHandle = Arc<RwLock<KeybindEngine>>;
@@ -49,6 +50,7 @@ impl KeybindEngine {
             pressed: Arc::new(AtomicBool::new(false)),
             call_active: Arc::new(AtomicBool::new(false)),
             radio_prio: Arc::new(AtomicBool::new(false)),
+            implicit_radio_prio: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -133,14 +135,31 @@ impl KeybindEngine {
 
     pub fn set_call_active(&self, active: bool) {
         self.call_active.store(active, Ordering::Relaxed);
-        if !active
-            && let Some(external_radio_code) = self.external_radio_code
-            && let Some(emitter) = self.emitter.read().deref()
-            && let Err(err) = emitter.emit(external_radio_code, KeyState::Up)
-        {
-            log::warn!(
-                "Failed to send external radio code {external_radio_code} Up while setting call inactive: {err}"
-            );
+
+        let pressed = self.pressed.load(Ordering::Relaxed);
+        let radio_prio = self.radio_prio.load(Ordering::Relaxed);
+
+        if active {
+            if matches!(
+                self.mode,
+                TransmitMode::PushToMute | TransmitMode::PushToTalk
+            ) && pressed
+                && !radio_prio
+            {
+                log::trace!(
+                    "Setting implicit radio prio after entering call while {:?} key is pressed",
+                    self.mode
+                );
+
+                self.radio_prio.store(true, Ordering::Relaxed);
+                self.implicit_radio_prio.store(true, Ordering::Relaxed);
+            }
+        } else {
+            if self.implicit_radio_prio.swap(false, Ordering::Relaxed) {
+                self.radio_prio.store(false, Ordering::Relaxed);
+            }
+
+            self.reset_external_radio_code();
         }
     }
 
@@ -162,21 +181,14 @@ impl KeybindEngine {
     pub fn reset_call_state(&self) {
         self.call_active.store(false, Ordering::Relaxed);
         self.radio_prio.store(false, Ordering::Relaxed);
-        if let Some(external_radio_code) = self.external_radio_code
-            && let Some(emitter) = self.emitter.read().deref()
-            && let Err(err) = emitter.emit(external_radio_code, KeyState::Up)
-        {
-            log::warn!(
-                "Failed to send external radio code {external_radio_code} Up while resetting call state: {err}"
-            );
-        }
+        self.reset_external_radio_code();
     }
 
-    pub fn should_mute_input(&self) -> bool {
-        matches!(
-            (self.mode, self.pressed.load(Ordering::Relaxed)),
-            (TransmitMode::PushToTalk, false) | (TransmitMode::PushToMute, true)
-        )
+    pub fn should_attach_input_muted(&self) -> bool {
+        if self.pressed.load(Ordering::Relaxed) {
+            return true;
+        }
+        matches!(self.mode, TransmitMode::PushToTalk)
     }
 
     fn reset_input_state(&self) {
@@ -213,6 +225,7 @@ impl KeybindEngine {
         let pressed = self.pressed.clone();
         let call_active = self.call_active.clone();
         let radio_prio = self.radio_prio.clone();
+        let implicit_radio_prio = self.implicit_radio_prio.clone();
 
         let handle = tauri::async_runtime::spawn(async move {
             log::debug!(
@@ -250,10 +263,8 @@ impl KeybindEngine {
                         };
 
                         let Some(muted) = muted_changed else { continue; };
-                        let call_active = call_active.load(Ordering::Relaxed);
-                        let radio_prio = radio_prio.load(Ordering::Relaxed);
 
-                        match (call_active, radio_prio, external_radio_code) {
+                        match (call_active.load(Ordering::Relaxed), radio_prio.load(Ordering::Relaxed), external_radio_code) {
                             // No call active, no external radio code defined --> nothing to do
                             (false, _, None) => {
                                 continue;
@@ -291,6 +302,11 @@ impl KeybindEngine {
                                 Self::set_input_muted(&app, muted);
                             }
                         }
+
+                        if event.state.is_up() && implicit_radio_prio.swap(false, Ordering::Relaxed) {
+                            log::trace!("Implicit radio prio cleared on {:?} key release", mode);
+                            radio_prio.store(false, Ordering::Relaxed);
+                        }
                     }
                 }
             }
@@ -299,6 +315,18 @@ impl KeybindEngine {
         });
 
         self.rx_task = Some(handle);
+    }
+
+    #[inline]
+    fn reset_external_radio_code(&self) {
+        if let Some(external_radio_code) = self.external_radio_code
+            && let Some(emitter) = self.emitter.read().deref()
+            && let Err(err) = emitter.emit(external_radio_code, KeyState::Up)
+        {
+            log::warn!(
+                "Failed to send external radio code {external_radio_code} Up while resetting: {err}"
+            );
+        }
     }
 
     #[inline]

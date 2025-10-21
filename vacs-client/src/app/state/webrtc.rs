@@ -295,7 +295,7 @@ impl AppStateInner {
                 app.clone(),
                 &audio_config,
                 input_tx,
-                self.keybind_engine.read().should_mute_input(),
+                self.keybind_engine.read().should_attach_input_muted(),
             ) {
                 log::warn!("Failed to attach input device to audio manager: {err:?}");
                 return Err(err);

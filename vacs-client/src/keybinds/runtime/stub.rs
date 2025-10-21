@@ -19,8 +19,6 @@ impl KeybindListener for NoopKeybindListener {
         let (tx, rx) = unbounded_channel();
         Ok((Self { _tx: tx }, rx))
     }
-
-    fn stop(mut self) {}
 }
 
 #[derive(Debug, Default)]
@@ -36,8 +34,6 @@ impl KeybindEmitter for NoopKeybindEmitter {
         );
         Ok(Self)
     }
-
-    fn stop(mut self) {}
 
     fn emit(&self, _code: Code, _state: KeyState) -> Result<(), KeybindsError> {
         Ok(())
