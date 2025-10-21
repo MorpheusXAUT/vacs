@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@preact/signals": "^2.3.2",
-    "@tailwindcss/vite": "^4.1.14",
+    "@tailwindcss/vite": "^4.1.15",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-deep-link": "^2.4.0",
     "@tauri-apps/plugin-log": "^2.6.0",
@@ -27,16 +27,16 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
-    "@eslint/js": "^9.37.0",
+    "@eslint/js": "^9.38.0",
     "@preact/preset-vite": "^2.10.2",
-    "eslint": "^9.37.0",
+    "eslint": "^9.38.0",
     "eslint-config-preact": "^2.0.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.0",
     "globals": "^16.4.0",
     "jiti": "^2.6.1",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.46.1",
-    "vite": "^7.1.10"
+    "typescript-eslint": "^8.46.2",
+    "vite": "^7.1.11"
   }
 }
