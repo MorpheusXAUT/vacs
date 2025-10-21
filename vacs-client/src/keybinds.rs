@@ -1,8 +1,4 @@
-use crate::config::TransmitConfig;
-use crate::error::Error;
-use crate::keybinds::engine::KeybindEngineHandle;
 use keyboard_types::{Code, KeyState};
-use tauri::{AppHandle, Manager};
 use thiserror::Error;
 
 pub mod commands;
@@ -25,19 +21,4 @@ pub struct KeyEvent {
     #[allow(dead_code)]
     label: String,
     state: KeyState,
-}
-
-pub trait KeybindsTrait {
-    fn register_keybinds(&self, app: AppHandle) -> Result<(), Error>;
-    fn unregister_keybinds(&self, app: AppHandle);
-}
-
-impl KeybindsTrait for TransmitConfig {
-    fn register_keybinds(&self, app: AppHandle) -> Result<(), Error> {
-        app.state::<KeybindEngineHandle>().write().set_config(self)
-    }
-
-    fn unregister_keybinds(&self, app: AppHandle) {
-        app.state::<KeybindEngineHandle>().write().stop();
-    }
 }

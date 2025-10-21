@@ -184,7 +184,7 @@ impl From<&Error> for FrontendError {
             Error::Webrtc(err) => FrontendError::new("WebRTC error", err.to_string()),
             Error::Keybinds(err) => FrontendError::new("Keybinds error", err.to_string()),
             Error::CapabilityNotAvailable(capability) => FrontendError::new(
-                "Unavailable",
+                "Not implemented",
                 format!("{capability} functionality is not available on your platform"),
             ),
             Error::Other(err) => FrontendError::new("Error", err.to_string()),

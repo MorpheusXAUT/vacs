@@ -17,7 +17,6 @@ use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::AudioManagerHandle;
 use crate::build::VersionInfo;
 use crate::error::{FrontendError, StartupError, StartupErrorExt};
-use crate::keybinds::KeybindsTrait;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
 use anyhow::Context;
@@ -86,19 +85,21 @@ pub fn run() {
                 }
 
                 let transmit_config = state.config.client.transmit_config.clone();
+                let keybind_engine = state.keybind_engine_handle();
 
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
                 app.manage::<AudioManagerHandle>(state.audio_manager_handle());
-                app.manage::<KeybindEngineHandle>(state.keybind_engine_handle());
                 app.manage::<AppState>(TokioMutex::new(state));
 
                 if capabilities.keybinds {
-                    transmit_config
-                        .register_keybinds(app.handle().clone())
+                    keybind_engine
+                        .write().set_config(&transmit_config)
                         .map_startup_err(StartupError::Keybinds)?;
                 } else {
                     log::warn!("Your platform ({}) does not support keybinds, skipping registration", capabilities.platform);
                 }
+
+                app.manage::<KeybindEngineHandle>(keybind_engine);
 
                 Ok(())
             }

@@ -4,7 +4,7 @@ use crate::config::{
     TransmitConfig,
 };
 use crate::error::Error;
-use crate::keybinds::KeybindsTrait;
+use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
 use tauri::{AppHandle, Manager, State};
 
@@ -28,6 +28,7 @@ pub async fn keybinds_get_transmit_config(
 pub async fn keybinds_set_transmit_config(
     app: AppHandle,
     app_state: State<'_, AppState>,
+    keybind_engine: State<'_, KeybindEngineHandle>,
     transmit_config: FrontendTransmitConfig,
 ) -> Result<(), Error> {
     let capabilities = Capabilities::default();
@@ -38,15 +39,9 @@ pub async fn keybinds_set_transmit_config(
     let persisted_client_config: PersistedClientConfig = {
         let mut state = app_state.lock().await;
 
-        state
-            .config
-            .client
-            .transmit_config
-            .unregister_keybinds(app.clone());
-
         let transmit_config: TransmitConfig = transmit_config.try_into()?;
 
-        transmit_config.register_keybinds(app.clone())?;
+        keybind_engine.write().set_config(&transmit_config)?;
 
         state.config.client.transmit_config = transmit_config;
         state.config.client.clone().into()
