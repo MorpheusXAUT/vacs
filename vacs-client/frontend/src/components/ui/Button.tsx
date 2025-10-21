@@ -14,6 +14,7 @@ export type ButtonProps = {
     softDisabled?: boolean;
     muted?: boolean;
     highlight?: ButtonHighlightColor;
+    title?: string;
 };
 
 const ButtonColors: Record<ButtonColor, string> = {
@@ -78,6 +79,7 @@ function Button(props: ButtonProps) {
                 props.onClick?.(event);
             }}
             disabled={props.disabled}
+            title={props.title}
         >
             {props.highlight === undefined ? (
                 content

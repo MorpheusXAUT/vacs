@@ -26,6 +26,7 @@ import RadioPrioButton from "./components/ui/RadioPrioButton.tsx";
 import EndButton from "./components/ui/EndButton.tsx";
 import {setupWebrtcListeners} from "./listeners/webrtc-listener.ts";
 import UpdateOverlay from "./components/UpdateOverlay.tsx";
+import {fetchCapabilities} from "./stores/capabilities-store.ts";
 
 function App() {
     const connected = useSignalingStore(state => state.connectionState === "connected");
@@ -42,6 +43,8 @@ function App() {
         cleanups.push(setupWebrtcListeners());
 
         void invokeSafe("auth_check_session");
+
+        void fetchCapabilities();
 
         return () => {
             cleanups.forEach((cleanup) => cleanup());

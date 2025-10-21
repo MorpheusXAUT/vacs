@@ -12,25 +12,11 @@ import {getCurrentWindow} from "@tauri-apps/api/window";
 import {useUpdateStore} from "../stores/update-store.ts";
 import TransmitModeSettings from "../components/TransmitModeSettings.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
-import {Capabilities} from "../types/capabilities.ts";
 
 function SettingsPage() {
     const capAlwaysOnTop = useCapabilitiesStore(state => state.alwaysOnTop);
     const capKeybinds = useCapabilitiesStore(state => state.keybinds);
-    const {setCapabilities} = useCapabilitiesStore(state => state.actions);
-
-    useEffect(() => {
-        const fetchCapabilities = async () => {
-            try {
-                const capabilities = await invokeStrict<Capabilities>("app_platform_capabilities");
-
-                setCapabilities(capabilities);
-            } catch {
-            }
-        };
-
-        void fetchCapabilities();
-    }, [setCapabilities]);
+    const capPlatform = useCapabilitiesStore(state => state.platform);
 
     return (
         <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col overflow-auto">
@@ -45,19 +31,18 @@ function SettingsPage() {
                             <DeviceSelector deviceType="Output"/>
                             <DeviceSelector deviceType="Input"/>
                         </div>
-                        {capKeybinds &&
-                            <div>
-                                <p className="w-full text-center border-t-2 pt-1 border-zinc-200 uppercase font-semibold">Transmit
-                                    Mode</p>
-                                <TransmitModeSettings/>
-                            </div>
-                        }
+                        <p className="w-full text-center border-t-2 pt-1 border-zinc-200 uppercase font-semibold">Transmit
+                            Mode</p>
+                        {capKeybinds ? <TransmitModeSettings/> :
+                            <div className="text-sm py-3 text-center text-gray-700"><p
+                                title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}>Not
+                                available.</p></div>}
                     </div>
                 </div>
                 <div
                     className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:px-1 [&>button]:shrink-0">
                     <div className="h-full flex flex-row gap-2 items-center">
-                        {capAlwaysOnTop && <AlwaysOnTopButton/>}
+                        <AlwaysOnTopButton disabled={!capAlwaysOnTop}/>
                         <UpdateButton/>
                         <Button color="gray" className="w-24 h-full rounded"
                                 onClick={() => invokeSafe("app_open_logs_folder")}>Open logs<br/>folder</Button>
@@ -151,8 +136,9 @@ function UpdateButton() {
     );
 }
 
-function AlwaysOnTopButton() {
+function AlwaysOnTopButton({disabled}: { disabled: boolean }) {
     const [alwaysOnTop, setAlwaysOnTop] = useState<boolean>(false);
+    const capPlatform = useCapabilitiesStore(state => state.platform);
 
     const toggleAlwaysOnTop = useAsyncDebounce(async () => {
         const isAlwaysOnTop = await invokeSafe<boolean>("app_set_always_on_top", {alwaysOnTop: !alwaysOnTop});
@@ -173,6 +159,8 @@ function AlwaysOnTopButton() {
             color={alwaysOnTop ? "blue" : "cyan"}
             className="h-full rounded"
             onClick={toggleAlwaysOnTop}
+            disabled={disabled}
+            title={disabled ? `Unfortunately, always-on-top is not yet supported on ${capPlatform}` : undefined}
         >
             <p>Always<br/>on Top</p>
         </Button>

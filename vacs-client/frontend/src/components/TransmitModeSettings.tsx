@@ -133,7 +133,7 @@ function TransmitModeSettings() {
                         <div
                             ref={keySelectRef}
                             onClick={handleKeySelectOnClick}
-                            className={clsx("relative w-full h-full truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
+                            className={clsx("w-full h-full truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
                                 "bg-gray-300 border-2",
                                 capturing ?
                                     "border-r-gray-100 border-b-gray-100 border-t-gray-700 border-l-gray-700 [&>*]:translate-y-[1px] [&>*]:translate-x-[1px]"
