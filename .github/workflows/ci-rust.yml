@@ -86,6 +86,9 @@ jobs:
             libssl-dev libasound2-dev libgtk-3-dev libopus-dev \
             cmake patchelf
 
+      - name: Free disk space on runner
+        run: rm -rf /opt/hostedtoolcache
+
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
