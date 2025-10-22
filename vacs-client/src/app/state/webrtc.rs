@@ -226,7 +226,7 @@ impl AppStateWebrtcExt for AppStateInner {
                 audio_manager.detach_input_device();
             }
 
-            self.keybind_engine.read().reset_call_state();
+            self.keybind_engine.read().set_call_active(false);
 
             let result = call.peer.close().await;
             self.active_call = None;

@@ -8,7 +8,6 @@ use crate::keybinds::runtime::{
 };
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
-use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::async_runtime::JoinHandle;
@@ -155,11 +154,8 @@ impl KeybindEngine {
                 self.implicit_radio_prio.store(true, Ordering::Relaxed);
             }
         } else {
-            if self.implicit_radio_prio.swap(false, Ordering::Relaxed) {
-                self.radio_prio.store(false, Ordering::Relaxed);
-            }
-
-            self.reset_external_radio_code();
+            self.implicit_radio_prio.store(false, Ordering::Relaxed);
+            self.radio_prio.store(false, Ordering::Relaxed);
         }
     }
 
@@ -176,12 +172,6 @@ impl KeybindEngine {
                 .read()
                 .set_input_muted(prio);
         }
-    }
-
-    pub fn reset_call_state(&self) {
-        self.call_active.store(false, Ordering::Relaxed);
-        self.radio_prio.store(false, Ordering::Relaxed);
-        self.reset_external_radio_code();
     }
 
     pub fn should_attach_input_muted(&self) -> bool {
@@ -315,18 +305,6 @@ impl KeybindEngine {
         });
 
         self.rx_task = Some(handle);
-    }
-
-    #[inline]
-    fn reset_external_radio_code(&self) {
-        if let Some(external_radio_code) = self.external_radio_code
-            && let Some(emitter) = self.emitter.read().deref()
-            && let Err(err) = emitter.emit(external_radio_code, KeyState::Up)
-        {
-            log::warn!(
-                "Failed to send external radio code {external_radio_code} Up while resetting: {err}"
-            );
-        }
     }
 
     #[inline]
