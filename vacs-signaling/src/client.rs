@@ -657,7 +657,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
                     msg = send_rx.recv() => {
                         match msg {
                             Some(msg) => {
-                                if !matches!(msg, tungstenite::Message::Pong(_)) {
+                                if !matches!(msg, tungstenite::Message::Ping(_) | tungstenite::Message::Pong(_)) {
                                     tracing::debug!(?msg, "Sending message to transport");
                                 }
 
