@@ -177,7 +177,10 @@ impl TryFrom<RawKey> for Code {
             0x38 => {
                 if value.extended {
                     if value.vk == VK_CONTROL {
-                        ControlRight
+                        // ignore extended flag here as other applications often capture AltGr as
+                        // `ControlLeft` + `AltRight` (effectively using `ControlLeft` as their key bind)
+                        // instead of the technical correct `ControlRight` + `AltRight` key combination
+                        ControlLeft
                     } else {
                         AltRight
                     }
