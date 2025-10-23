@@ -31,8 +31,6 @@ function SettingsPage() {
                             <DeviceSelector deviceType="Output"/>
                             <DeviceSelector deviceType="Input"/>
                         </div>
-                        <p className="w-full text-center border-t-2 pt-1 border-zinc-200 uppercase font-semibold">Transmit
-                            Mode</p>
                         {capKeybinds ? <TransmitModeSettings/> :
                             <div className="text-sm py-3 text-center text-gray-700"><p
                                 title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}>Not

@@ -28,7 +28,7 @@ function Select(props: SelectProps) {
             className={clsx("w-full truncate mb-3 text-sm p-1 rounded cursor-pointer",
                 "bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
                 "open:border-r-gray-100 open:border-b-gray-100 open:border-t-gray-700 open:border-l-gray-700",
-                "disabled:text-gray-500",
+                "disabled:text-gray-500 disabled:cursor-not-allowed",
                 props.className)}
             title={title}
             onChange={handleSelectChange}
