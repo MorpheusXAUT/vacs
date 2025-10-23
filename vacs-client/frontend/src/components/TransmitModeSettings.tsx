@@ -23,6 +23,13 @@ function TransmitModeSettings() {
         // Since we want to remain layout independent, we prefer to use the code value, but fall back to the key if required.
         let code = event.code || event.key;
 
+        // Additionally, we need to check if the NumLock key is active, since the code returned by the event will always be the numpad digit,
+        // however, in case it's deactivated, we want to bind the key instead (e.g., ArrowLeft instead of Numpad4).
+        // The DOM_KEY_LOCATION defines the location of the key on the keyboard, where DOM_KEY_LOCATION_NUMPAD (value 3) corresponds to the numpad.
+        if (event.location === KeyboardEvent.DOM_KEY_LOCATION_NUMPAD && !event.getModifierState("NumLock")) {
+            code = event.key;
+        }
+
         let newConfig: TransmitConfig;
         if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") {
             return;
