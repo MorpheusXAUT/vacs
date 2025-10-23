@@ -13,6 +13,8 @@ pub enum KeybindsError {
     Emitter(String),
     #[error("Unrecognized keybinds code: {0}")]
     UnrecognizedCode(String),
+    #[error("Fake marker")]
+    FakeMarker,
     #[error("{0}")]
     Other(String),
 }

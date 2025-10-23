@@ -30,11 +30,21 @@ impl TryFrom<RawKey> for Code {
 
     fn try_from(value: RawKey) -> Result<Self, Self::Error> {
         use Code::*;
-        use windows::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
+        use windows::Win32::UI::Input::KeyboardAndMouse::{VK__none_, VK_CONTROL};
         // mapping based on Standard "102" keyboard layout: https://w3c.github.io/uievents-code/#keyboard-102
         // and Scan 1 Make codes: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#scan-codes
         // as some applications/drivers might not pick up scan code only emits for special (well-known) keys,
         // we're emitting the corresponding virtual key for those instead since they are keyboard-layout agnostic
+
+        if value.vk == VK__none_ {
+            // Windows emits "fake" markers in combinations with other keys sometimes.
+            // For instance, pressing the left arrow emits an extended ShiftLeft key Down,
+            // followed by the actual LeftArrow down event.
+            // These fake markers have a virtual key code of 0xFF, which is outside the
+            // mapped range of virtual keys.
+            return Err(KeybindsError::FakeMarker);
+        }
+
         Ok(match value.make {
             // Alphanumerical section
             // Row E
@@ -118,14 +128,7 @@ impl TryFrom<RawKey> for Code {
                 }
             }
             // Row B
-            0x2A => {
-                if value.extended && value.vk == VIRTUAL_KEY(0xFF) {
-                    // "fake" extended Shift triggered at the beginning of a PrintScreen sequence
-                    PrintScreen
-                } else {
-                    ShiftLeft
-                }
-            }
+            0x2A => ShiftLeft,
             0x56 => IntlBackslash,
             0x2C => KeyZ,
             0x2D => KeyX,

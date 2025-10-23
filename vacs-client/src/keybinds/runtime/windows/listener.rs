@@ -189,6 +189,9 @@ impl WindowsKeybindListener {
                                 }
                             });
                         }
+                        Err(KeybindsError::FakeMarker) => {
+                            // ignore fake markers and don't emit them
+                        }
                         Err(err) => {
                             log::warn!("Failed to convert virtual key to code: {err}");
                         }
