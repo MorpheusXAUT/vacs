@@ -1,4 +1,4 @@
-const ALL_TRANSMIT_MODES = ["VoiceActivation", "PushToTalk", "PushToMute"] as const;
+const ALL_TRANSMIT_MODES = ["VoiceActivation", "PushToTalk", "PushToMute", "RadioIntegration"] as const;
 export type TransmitMode = typeof ALL_TRANSMIT_MODES[number];
 
 export function isTransmitMode(value: string): value is TransmitMode {
