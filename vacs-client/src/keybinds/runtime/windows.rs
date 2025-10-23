@@ -30,7 +30,7 @@ impl TryFrom<RawKey> for Code {
 
     fn try_from(value: RawKey) -> Result<Self, Self::Error> {
         use Code::*;
-        use windows::Win32::UI::Input::KeyboardAndMouse::{VK__none_, VK_CONTROL};
+        use windows::Win32::UI::Input::KeyboardAndMouse::*;
         // mapping based on Standard "102" keyboard layout: https://w3c.github.io/uievents-code/#keyboard-102
         // and Scan 1 Make codes: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#scan-codes
         // as some applications/drivers might not pick up scan code only emits for special (well-known) keys,
@@ -210,21 +210,28 @@ impl TryFrom<RawKey> for Code {
             0x4A => NumpadSubtract,
             // Row D
             0x47 => {
-                if value.extended {
+                // In theory, there's a distinction between the Home key (VK 0x24, scan code 0x47, extended true),
+                // the Numpad Home key (VK 0x24, scan code 0x47, extended false), and the Numpad 7 key (VK 0x67, scan code 0x47, extended false).
+                // However, the w3c spec does not specify a separate `NumpadHome` key, so we're using the `Home` key for both.
+                // While capturing keys in our application, skipping this distinction is fine, as both keys will simply map to the `Home` key,
+                // however, when we're emitting key events to other applications, the distinction is lost. This means that applications strictly
+                // listening for the exact keys emitted when NumLock is disabled will not pick up our Numpad equivalents.
+                // These restrictions apply to all numpad keys gated behind NumLock equally.
+                if value.extended || value.vk == VK_HOME {
                     Home
                 } else {
                     Numpad7
                 }
             }
             0x48 => {
-                if value.extended {
+                if value.extended || value.vk == VK_UP {
                     ArrowUp
                 } else {
                     Numpad8
                 }
             }
             0x49 => {
-                if value.extended {
+                if value.extended || value.vk == VK_PRIOR {
                     PageUp
                 } else {
                     Numpad9
@@ -233,7 +240,7 @@ impl TryFrom<RawKey> for Code {
             0x4E => NumpadAdd,
             // Row C
             0x4B => {
-                if value.extended {
+                if value.extended || value.vk == VK_LEFT {
                     ArrowLeft
                 } else {
                     Numpad4
@@ -241,7 +248,7 @@ impl TryFrom<RawKey> for Code {
             }
             0x4C => Numpad5,
             0x4D => {
-                if value.extended {
+                if value.extended || value.vk == VK_RIGHT {
                     ArrowRight
                 } else {
                     Numpad6
@@ -249,21 +256,21 @@ impl TryFrom<RawKey> for Code {
             }
             // Row B
             0x4F => {
-                if value.extended {
+                if value.extended || value.vk == VK_END {
                     End
                 } else {
                     Numpad1
                 }
             }
             0x50 => {
-                if value.extended {
+                if value.extended || value.vk == VK_DOWN {
                     ArrowDown
                 } else {
                     Numpad2
                 }
             }
             0x51 => {
-                if value.extended {
+                if value.extended || value.vk == VK_NEXT {
                     PageDown
                 } else {
                     Numpad3
@@ -271,14 +278,14 @@ impl TryFrom<RawKey> for Code {
             }
             // Row A
             0x52 => {
-                if value.extended {
+                if value.extended || value.vk == VK_INSERT {
                     Insert
                 } else {
                     Numpad0
                 }
             }
             0x53 => {
-                if value.extended {
+                if value.extended || value.vk == VK_DELETE {
                     Delete
                 } else {
                     NumpadDecimal
