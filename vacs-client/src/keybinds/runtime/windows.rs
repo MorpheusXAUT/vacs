@@ -379,6 +379,28 @@ impl TryFrom<RawKey> for Code {
             0x5F if value.extended => Sleep,
             0x63 if value.extended => WakeUp,
 
+            // Although the Windows documentation claims that media keys are emitted with a scan code set
+            // (e.g., 0xE022 for `MediaPlayPause`, aka 0x22 with extended flag set), this is not the case.
+            // Instead, these keys seem to have a scan code of 0x0 with their virtual key set to the
+            // corresponding media key code and the extended flag set.
+            0x0 if value.extended && value.vk == VK_BROWSER_BACK => BrowserBack,
+            0x0 if value.extended && value.vk == VK_BROWSER_FAVORITES => BrowserFavorites,
+            0x0 if value.extended && value.vk == VK_BROWSER_FORWARD => BrowserForward,
+            0x0 if value.extended && value.vk == VK_BROWSER_HOME => BrowserHome,
+            0x0 if value.extended && value.vk == VK_BROWSER_REFRESH => BrowserRefresh,
+            0x0 if value.extended && value.vk == VK_BROWSER_SEARCH => BrowserSearch,
+            0x0 if value.extended && value.vk == VK_BROWSER_STOP => BrowserStop,
+            0x0 if value.extended && value.vk == VK_LAUNCH_APP1 => LaunchApp1,
+            0x0 if value.extended && value.vk == VK_LAUNCH_APP2 => LaunchApp2,
+            0x0 if value.extended && value.vk == VK_LAUNCH_MAIL => LaunchMail,
+            0x0 if value.extended && value.vk == VK_MEDIA_PLAY_PAUSE => MediaPlayPause,
+            0x0 if value.extended && value.vk == VK_MEDIA_STOP => MediaStop,
+            0x0 if value.extended && value.vk == VK_MEDIA_NEXT_TRACK => MediaTrackNext,
+            0x0 if value.extended && value.vk == VK_MEDIA_PREV_TRACK => MediaTrackPrevious,
+            0x0 if value.extended && value.vk == VK_VOLUME_DOWN => AudioVolumeDown,
+            0x0 if value.extended && value.vk == VK_VOLUME_MUTE => AudioVolumeMute,
+            0x0 if value.extended && value.vk == VK_VOLUME_UP => AudioVolumeUp,
+
             _ => return Err(KeybindsError::UnrecognizedCode(format!("{:?}", value))),
         })
     }
@@ -540,25 +562,27 @@ impl TryFrom<Code> for RawKey {
             F24 => vk(VK_F24, 0x76, false),
 
             // Media keys
-            BrowserBack => vk(VK_BROWSER_BACK, 0x6A, true),
-            BrowserFavorites => vk(VK_BROWSER_FAVORITES, 0x66, true),
-            BrowserForward => vk(VK_BROWSER_FORWARD, 0x69, true),
-            BrowserHome => vk(VK_BROWSER_HOME, 0x32, true),
-            BrowserRefresh => vk(VK_BROWSER_REFRESH, 0x67, true),
-            BrowserSearch => vk(VK_BROWSER_SEARCH, 0x65, true),
-            BrowserStop => vk(VK_BROWSER_STOP, 0x68, true),
-            LaunchControlPanel => vk(VK_LAUNCH_APP1, 0x6D, true),
-            LaunchMail => vk(VK_LAUNCH_MAIL, 0x6C, true),
-            MediaPlayPause => vk(VK_MEDIA_PLAY_PAUSE, 0x22, true),
-            MediaStop => vk(VK_MEDIA_STOP, 0x24, true),
-            MediaTrackNext => vk(VK_MEDIA_NEXT_TRACK, 0x19, true),
-            MediaTrackPrevious => vk(VK_MEDIA_PREV_TRACK, 0x10, true),
+            BrowserBack => vk(VK_BROWSER_BACK, 0x0, true),
+            BrowserFavorites => vk(VK_BROWSER_FAVORITES, 0x0, true),
+            BrowserForward => vk(VK_BROWSER_FORWARD, 0x0, true),
+            BrowserHome => vk(VK_BROWSER_HOME, 0x0, true),
+            BrowserRefresh => vk(VK_BROWSER_REFRESH, 0x0, true),
+            BrowserSearch => vk(VK_BROWSER_SEARCH, 0x0, true),
+            BrowserStop => vk(VK_BROWSER_STOP, 0x0, true),
+            LaunchApp1 => vk(VK_LAUNCH_APP1, 0x0, true),
+            LaunchControlPanel => vk(VK_LAUNCH_APP1, 0x0, true),
+            LaunchApp2 => vk(VK_LAUNCH_APP2, 0x0, true),
+            LaunchMail => vk(VK_LAUNCH_MAIL, 0x0, true),
+            MediaPlayPause => vk(VK_MEDIA_PLAY_PAUSE, 0x0, true),
+            MediaStop => vk(VK_MEDIA_STOP, 0x0, true),
+            MediaTrackNext => vk(VK_MEDIA_NEXT_TRACK, 0x0, true),
+            MediaTrackPrevious => vk(VK_MEDIA_PREV_TRACK, 0x0, true),
+            AudioVolumeDown => vk(VK_VOLUME_DOWN, 0x0, true),
+            AudioVolumeMute => vk(VK_VOLUME_MUTE, 0x0, true),
+            AudioVolumeUp => vk(VK_VOLUME_UP, 0x0, true),
             Power => sc(0x5E, true),
             Sleep => vk(VK_SLEEP, 0x5F, true),
             WakeUp => sc(0x63, true),
-            AudioVolumeDown => vk(VK_VOLUME_DOWN, 0x2E, true),
-            AudioVolumeMute => vk(VK_VOLUME_MUTE, 0x20, true),
-            AudioVolumeUp => vk(VK_VOLUME_UP, 0x30, true),
 
             _ => return Err(KeybindsError::UnrecognizedCode(format!("{:?}", value))),
         })

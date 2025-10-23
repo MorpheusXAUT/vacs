@@ -19,13 +19,17 @@ function TransmitModeSettings() {
     const handleKeyDownEvent = useCallback(async (event: KeyboardEvent) => {
         event.preventDefault();
 
+        // For some keys (e.g., the MediaPlayPause one), the code returned is empty and the event only contains a key.
+        // Since we want to remain layout independent, we prefer to use the code value, but fall back to the key if required.
+        let code = event.code || event.key;
+
         let newConfig: TransmitConfig;
         if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") {
             return;
         } else if (transmitConfig.mode === "PushToTalk") {
-            newConfig = {...transmitConfig, pushToTalk: event.code};
+            newConfig = {...transmitConfig, pushToTalk: code};
         } else {
-            newConfig = {...transmitConfig, pushToMute: event.code};
+            newConfig = {...transmitConfig, pushToMute: code};
         }
 
         try {
