@@ -11,7 +11,7 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::async_runtime::JoinHandle;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::sync::CancellationToken;
 
@@ -152,10 +152,12 @@ impl KeybindEngine {
 
                 self.radio_prio.store(true, Ordering::Relaxed);
                 self.implicit_radio_prio.store(true, Ordering::Relaxed);
+                self.app.emit("audio:implicit-radio-prio", true).ok();
             }
         } else {
             self.implicit_radio_prio.store(false, Ordering::Relaxed);
             self.radio_prio.store(false, Ordering::Relaxed);
+            self.app.emit("audio:implicit-radio-prio", false).ok();
         }
     }
 
@@ -296,6 +298,7 @@ impl KeybindEngine {
                         if event.state.is_up() && implicit_radio_prio.swap(false, Ordering::Relaxed) {
                             log::trace!("Implicit radio prio cleared on {:?} key release", mode);
                             radio_prio.store(false, Ordering::Relaxed);
+                            app.emit("audio:implicit-radio-prio", false).ok();
                         }
                     }
                 }
