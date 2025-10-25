@@ -5,15 +5,51 @@ export function isTransmitMode(value: string): value is TransmitMode {
     return ALL_TRANSMIT_MODES.includes(value as TransmitMode);
 }
 
+const ALL_RADIO_INTEGRATIONS = ["AudioForVatsim", "TrackAudio"] as const;
+export type RadioIntegration = typeof ALL_RADIO_INTEGRATIONS[number];
+
+export function isRadioIntegration(value: string): value is RadioIntegration {
+    return ALL_RADIO_INTEGRATIONS.includes(value as RadioIntegration);
+}
+
 export type TransmitConfig = {
     mode: TransmitMode;
     pushToTalk: string | null;
     pushToMute: string | null;
+    radioPushToTalk: string | null;
 }
 
 export type TransmitConfigWithLabels = TransmitConfig & {
     pushToTalkLabel: string | null;
     pushToMuteLabel: string | null;
+    radioPushToTalkLabel: string | null;
+}
+
+export type RadioConfig = {
+    integration: RadioIntegration;
+    audioForVatsim: AudioForVatsimRadioConfig | null;
+    trackAudio: TrackAudioRadioConfig | null;
+}
+
+export type RadioConfigWithLabels = RadioConfig & {
+    audioForVatsim: AudioForVatsimRadioConfigLabels | null;
+    trackAudio: TrackAudioRadioConfigLabels | null;
+}
+
+export type AudioForVatsimRadioConfig = {
+    emit: string | null;
+}
+
+export type AudioForVatsimRadioConfigLabels = {
+    emitLabel: string | null;
+}
+
+export type TrackAudioRadioConfig = {
+    emit: string | null;
+}
+
+export type TrackAudioRadioConfigLabels = {
+    emitLabel: string | null;
 }
 
 export async function withLabels(config: TransmitConfig): Promise<TransmitConfigWithLabels> {
@@ -21,7 +57,22 @@ export async function withLabels(config: TransmitConfig): Promise<TransmitConfig
         ...config,
         pushToTalkLabel: config.pushToTalk && await codeToLabel(config.pushToTalk),
         pushToMuteLabel: config.pushToMute && await codeToLabel(config.pushToMute),
+        radioPushToTalkLabel: config.radioPushToTalk && await codeToLabel(config.radioPushToTalk),
     };
+}
+
+export async function withRadioLabels(config: RadioConfig): Promise<RadioConfigWithLabels> {
+    return {
+        ...config,
+        audioForVatsim: config.audioForVatsim && {
+            ...config.audioForVatsim,
+            emitLabel: config.audioForVatsim.emit && await codeToLabel(config.audioForVatsim.emit)
+        },
+        trackAudio: config.trackAudio && {
+            ...config.trackAudio,
+            emitLabel: config.trackAudio.emit && await codeToLabel(config.trackAudio.emit)
+        },
+    }
 }
 
 export async function codeToLabel(code: string): Promise<string> {
