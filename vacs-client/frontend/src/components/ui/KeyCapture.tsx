@@ -34,7 +34,7 @@ function KeyCapture(props: KeyCaptureProps) {
         } finally {
             setCapturing(false);
         }
-    }, []);
+    }, [props]);
 
     const handleClickOutside = useCallback((event: MouseEvent) => {
         if (keySelectRef.current === null || keySelectRef.current.contains(event.target as Node)) return;
