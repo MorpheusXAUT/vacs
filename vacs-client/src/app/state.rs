@@ -60,6 +60,7 @@ impl AppStateInner {
             keybind_engine: Arc::new(RwLock::new(KeybindEngine::new(
                 app.clone(),
                 &config.client.transmit_config,
+                &config.client.radio,
                 shutdown_token.child_token(),
             ))),
             shutdown_token,

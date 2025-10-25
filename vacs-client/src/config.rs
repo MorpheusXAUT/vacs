@@ -1,10 +1,13 @@
 use crate::error::Error;
+use crate::radio::push_to_talk::PushToTalkRadio;
+use crate::radio::{DynRadio, RadioIntegration};
 use anyhow::Context;
 use config::{Config, Environment, File};
 use keyboard_types::Code;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_webrtc::config::WebrtcConfig;
@@ -190,6 +193,7 @@ pub struct ClientConfig {
     pub release_channel: ReleaseChannel,
     pub signaling_auto_reconnect: bool,
     pub transmit_config: TransmitConfig,
+    pub radio: RadioConfig,
 }
 
 impl Default for ClientConfig {
@@ -199,6 +203,7 @@ impl Default for ClientConfig {
             release_channel: ReleaseChannel::default(),
             signaling_auto_reconnect: true,
             transmit_config: TransmitConfig::default(),
+            radio: RadioConfig::default(),
         }
     }
 }
@@ -215,6 +220,7 @@ pub enum TransmitMode {
     VoiceActivation,
     PushToTalk,
     PushToMute,
+    RadioIntegration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -222,7 +228,7 @@ pub struct TransmitConfig {
     pub mode: TransmitMode,
     pub push_to_talk: Option<Code>,
     pub push_to_mute: Option<Code>,
-    pub external_radio_push_to_talk: Option<Code>,
+    pub radio_push_to_talk: Option<Code>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -231,18 +237,16 @@ pub struct FrontendTransmitConfig {
     pub mode: TransmitMode,
     pub push_to_talk: Option<String>,
     pub push_to_mute: Option<String>,
-    pub external_radio_push_to_talk: Option<String>,
+    pub radio_push_to_talk: Option<String>,
 }
 
 impl From<TransmitConfig> for FrontendTransmitConfig {
     fn from(transmit_config: TransmitConfig) -> Self {
         Self {
             mode: transmit_config.mode,
-            push_to_talk: transmit_config.push_to_talk.map(|k| k.to_string()),
-            push_to_mute: transmit_config.push_to_mute.map(|k| k.to_string()),
-            external_radio_push_to_talk: transmit_config
-                .external_radio_push_to_talk
-                .map(|k| k.to_string()),
+            push_to_talk: transmit_config.push_to_talk.map(|c| c.to_string()),
+            push_to_mute: transmit_config.push_to_mute.map(|c| c.to_string()),
+            radio_push_to_talk: transmit_config.radio_push_to_talk.map(|c| c.to_string()),
         }
     }
 }
@@ -265,12 +269,146 @@ impl TryFrom<FrontendTransmitConfig> for TransmitConfig {
                 .map(|s| s.parse::<Code>())
                 .transpose()
                 .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.push_to_mute.unwrap_or_default()))))?,
-            external_radio_push_to_talk: value
-                .external_radio_push_to_talk
+            radio_push_to_talk: value
+                .radio_push_to_talk
                 .as_ref()
                 .map(|s| s.parse::<Code>())
                 .transpose()
-                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.external_radio_push_to_talk.unwrap_or_default()))))?,
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.radio_push_to_talk.unwrap_or_default()))))?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RadioConfig {
+    pub integration: RadioIntegration,
+    pub audio_for_vatsim: Option<AudioForVatsimRadioConfig>,
+    pub track_audio: Option<TrackAudioRadioConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AudioForVatsimRadioConfig {
+    pub emit: Option<Code>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TrackAudioRadioConfig {
+    pub emit: Option<Code>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendRadioConfig {
+    pub integration: RadioIntegration,
+    pub audio_for_vatsim: Option<FrontendAudioForVatsimRadioConfig>,
+    pub track_audio: Option<FrontendTrackAudioRadioConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendAudioForVatsimRadioConfig {
+    pub emit: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendTrackAudioRadioConfig {
+    pub emit: Option<String>,
+}
+
+impl RadioConfig {
+    pub fn radio(&self) -> Result<Option<DynRadio>, Error> {
+        match self.integration {
+            RadioIntegration::AudioForVatsim => {
+                let Some(config) = self.audio_for_vatsim.as_ref() else {
+                    return Ok(None);
+                };
+                let Some(emit) = config.emit else {
+                    return Ok(None);
+                };
+                log::debug!("Initializing AudioForVatsim radio integration");
+                let radio = PushToTalkRadio::new(emit).map_err(Error::from)?;
+                Ok(Some(Arc::new(radio)))
+            }
+            RadioIntegration::TrackAudio => {
+                let Some(config) = self.track_audio.as_ref() else {
+                    return Ok(None);
+                };
+                let Some(emit) = config.emit else {
+                    return Ok(None);
+                };
+                log::debug!("Initializing TrackAudio radio integration");
+                let radio = PushToTalkRadio::new(emit).map_err(Error::from)?;
+                Ok(Some(Arc::new(radio)))
+            }
+        }
+    }
+}
+
+impl From<RadioConfig> for FrontendRadioConfig {
+    fn from(radio_integration: RadioConfig) -> Self {
+        Self {
+            integration: radio_integration.integration,
+            audio_for_vatsim: radio_integration.audio_for_vatsim.map(|c| c.into()),
+            track_audio: radio_integration.track_audio.map(|c| c.into()),
+        }
+    }
+}
+
+impl From<AudioForVatsimRadioConfig> for FrontendAudioForVatsimRadioConfig {
+    fn from(value: AudioForVatsimRadioConfig) -> Self {
+        Self {
+            emit: value.emit.map(|c| c.to_string()),
+        }
+    }
+}
+
+impl From<TrackAudioRadioConfig> for FrontendTrackAudioRadioConfig {
+    fn from(value: TrackAudioRadioConfig) -> Self {
+        Self {
+            emit: value.emit.map(|c| c.to_string()),
+        }
+    }
+}
+
+impl TryFrom<FrontendRadioConfig> for RadioConfig {
+    type Error = Error;
+
+    fn try_from(value: FrontendRadioConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            integration: value.integration,
+            audio_for_vatsim: value.audio_for_vatsim.map(|c| c.try_into()).transpose()?,
+            track_audio: value.track_audio.map(|c| c.try_into()).transpose()?,
+        })
+    }
+}
+
+impl TryFrom<FrontendAudioForVatsimRadioConfig> for AudioForVatsimRadioConfig {
+    type Error = Error;
+
+    fn try_from(value: FrontendAudioForVatsimRadioConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            emit: value
+                .emit
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.emit.unwrap_or_default()))))?,
+        })
+    }
+}
+
+impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
+    type Error = Error;
+
+    fn try_from(value: FrontendTrackAudioRadioConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            emit: value
+                .emit
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.emit.unwrap_or_default()))))?,
         })
     }
 }

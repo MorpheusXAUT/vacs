@@ -1,4 +1,5 @@
 use crate::keybinds::KeybindsError;
+use crate::radio::RadioError;
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt::{Debug, Display, Formatter};
@@ -25,6 +26,8 @@ pub enum Error {
     Webrtc(#[from] Box<vacs_webrtc::error::WebrtcError>),
     #[error("Keybinds error: {0}")]
     Keybinds(#[from] Box<KeybindsError>),
+    #[error("Radio error: {0}")]
+    Radio(#[from] Box<RadioError>),
     #[error("Capability {0} not available on your platform")]
     CapabilityNotAvailable(String),
     #[error(transparent)]
@@ -52,6 +55,12 @@ impl From<SignalingRuntimeError> for Error {
 impl From<KeybindsError> for Error {
     fn from(err: KeybindsError) -> Self {
         Error::Keybinds(Box::new(err))
+    }
+}
+
+impl From<RadioError> for Error {
+    fn from(err: RadioError) -> Self {
+        Error::Radio(Box::new(err))
     }
 }
 
@@ -183,6 +192,7 @@ impl From<&Error> for FrontendError {
             }
             Error::Webrtc(err) => FrontendError::new("WebRTC error", err.to_string()),
             Error::Keybinds(err) => FrontendError::new("Keybinds error", err.to_string()),
+            Error::Radio(err) => FrontendError::new("Radio error", err.to_string()),
             Error::CapabilityNotAvailable(capability) => FrontendError::new(
                 "Not implemented",
                 format!("{capability} functionality is not available on your platform"),

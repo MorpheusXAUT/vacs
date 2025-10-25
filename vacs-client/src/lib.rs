@@ -6,6 +6,7 @@ mod config;
 mod error;
 mod keybinds;
 mod platform;
+mod radio;
 mod secrets;
 mod signaling;
 

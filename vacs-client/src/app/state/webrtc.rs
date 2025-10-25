@@ -290,6 +290,8 @@ impl AppStateInner {
                 return Err(err);
             }
 
+            self.keybind_engine.read().set_call_active(true);
+
             log::debug!("Attaching input device to audio manager");
             if let Err(err) = audio_manager.attach_input_device(
                 app.clone(),
@@ -300,8 +302,6 @@ impl AppStateInner {
                 log::warn!("Failed to attach input device to audio manager: {err:?}");
                 return Err(err);
             }
-
-            self.keybind_engine.read().set_call_active(true);
 
             log::info!("Successfully established call to peer");
             app.emit("webrtc:call-connected", peer_id).ok();
