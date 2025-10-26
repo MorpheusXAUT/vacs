@@ -32,7 +32,8 @@ function TransmitModeSettings() {
         try {
             await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
             setTransmitConfig(await withLabels(newConfig));
-        } catch {}
+        } catch {
+        }
     };
 
     const handleOnRadioCapture = async (code: string) => {
@@ -163,8 +164,8 @@ function TransmitModeSettings() {
         <div className="py-0.5 flex flex-col gap-2">
             {transmitConfig !== undefined && radioConfig !== undefined ? (
                 <>
-                    <div className="grow flex flex-col gap-0.5">
-                        <p className="text-center font-semibold pt-1 uppercase border-t-2 border-zinc-200">
+                    <div className="grow pt-1 flex flex-col gap-0.5">
+                        <p className="text-center font-semibold uppercase border-t-2 border-zinc-200">
                             Transmit Mode
                         </p>
                         <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
@@ -188,10 +189,18 @@ function TransmitModeSettings() {
                     </div>
                     <div className="grow flex flex-col gap-0.5">
                         <div
-                            className="w-full flex flex-row gap-2 items-center justify-center border-t-2 border-zinc-200">
-                            <p className="font-semibold pt-1 uppercase">Radio Integration</p>
-                            <span
-                                className="text-sm w-4 h-4 text-center bg-gray-400 text-gray-300 rounded-full">?</span>
+                            className="w-full pt-1 flex flex-row gap-2 items-center justify-center border-t-2 border-zinc-200">
+                            <p className="font-semibold uppercase">Radio Integration</p>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                 fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                                 strokeLinejoin="round"
+                                 className="stroke-gray-600 cursor-help"
+                            >
+                                <title>RTFM</title>
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                                <path d="M12 17h.01"/>
+                            </svg>
                         </div>
                         <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
                             <Select
