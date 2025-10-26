@@ -10,6 +10,7 @@ type KeyCaptureProps = {
 };
 
 function KeyCapture(props: KeyCaptureProps) {
+    const {onCapture} = props;
     const [capturing, setCapturing] = useState<boolean>(false);
     const keySelectRef = useRef<HTMLDivElement | null>(null);
 
@@ -30,11 +31,11 @@ function KeyCapture(props: KeyCaptureProps) {
         }
 
         try {
-            await props.onCapture(code);
+            await onCapture(code);
         } finally {
             setCapturing(false);
         }
-    }, [props]);
+    }, [onCapture]);
 
     const handleClickOutside = useCallback((event: MouseEvent) => {
         if (keySelectRef.current === null || keySelectRef.current.contains(event.target as Node)) return;
