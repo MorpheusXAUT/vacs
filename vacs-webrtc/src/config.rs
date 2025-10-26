@@ -13,11 +13,7 @@ pub struct WebrtcConfig {
 impl Default for WebrtcConfig {
     fn default() -> Self {
         Self {
-            ice_servers: vec![
-                "stun:stun.nextcloud.com:3478".to_string(),
-                "stun:stun.1und1.de:3478".to_string(),
-                "stun:stun.l.google.com:19302".to_string(),
-            ],
+            ice_servers: vec!["stun:stun.l.google.com:19302".to_string()],
         }
     }
 }
