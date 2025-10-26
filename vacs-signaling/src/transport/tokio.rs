@@ -205,6 +205,7 @@ impl TokioReceiver {
         let cancel = self.cancel.clone();
         self.heartbeat_handle = Some(tokio::spawn(async move {
             let mut ticker = tokio::time::interval(HEARTBEAT_PING_INTERVAL);
+            let mut last_tick = Instant::now();
 
             loop {
                 tokio::select! {
@@ -214,6 +215,15 @@ impl TokioReceiver {
                         break;
                     }
                     _ = ticker.tick() => {
+                        let now = Instant::now();
+                        let delta = now.duration_since(last_tick);
+                        last_tick = now;
+                        if delta > HEARTBEAT_PING_INTERVAL * 3 {
+                            tracing::warn!(?delta, "Long pause between heartbeat pings detected, assuming system sleep or interruption, forcing reconnect");
+                            heartbeat_state.disconnected.notify_one();
+                            break;
+                        }
+
                         if heartbeat_state.last_rx().elapsed() < HEARTBEAT_PING_INTERVAL / 2 {
                             continue;
                         }
