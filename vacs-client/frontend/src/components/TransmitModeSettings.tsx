@@ -13,43 +13,49 @@ function TransmitModeSettings() {
     const [transmitConfig, setTransmitConfig] = useState<TransmitConfigWithLabels | undefined>(undefined);
     const [radioConfig, setRadioConfig] = useState<RadioConfigWithLabels | undefined>(undefined);
 
-    const handleOnCapture = async (code: string) => {
+    const handleOnTransmitCapture = async (code: string) => {
+        if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") return;
+
         let newConfig: TransmitConfig;
-        if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") {
-            return;
-        } else if (transmitConfig.mode === "PushToTalk") {
-            newConfig = {...transmitConfig, pushToTalk: code};
-        } else if (transmitConfig.mode === "PushToMute") {
-            newConfig = {...transmitConfig, pushToMute: code};
-        } else {
-            newConfig = {...transmitConfig, radioPushToTalk: code};
+        switch (transmitConfig.mode) {
+            case "PushToTalk":
+                newConfig = {...transmitConfig, pushToTalk: code};
+                break;
+            case "PushToMute":
+                newConfig = {...transmitConfig, pushToMute: code};
+                break;
+            case "RadioIntegration":
+                newConfig = {...transmitConfig, radioPushToTalk: code};
+                break;
         }
 
         try {
             await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
             setTransmitConfig(await withLabels(newConfig));
-        } catch {
-        }
+        } catch {}
     };
 
     const handleOnRadioCapture = async (code: string) => {
-        let newConfig: RadioConfig;
         if (transmitConfig === undefined || transmitConfig.mode !== "RadioIntegration" || radioConfig === undefined) {
             return;
-        } else if (radioConfig.integration === "AudioForVatsim") {
-            newConfig = {
-                ...radioConfig, audioForVatsim: {
-                    ...radioConfig.audioForVatsim,
-                    emit: code,
-                }
-            };
-        } else {
-            newConfig = {
-                ...radioConfig, trackAudio: {
-                    ...radioConfig.trackAudio,
-                    emit: code,
-                }
-            };
+        }
+
+        let newConfig: RadioConfig;
+        switch (radioConfig.integration) {
+            case "AudioForVatsim":
+                newConfig = {
+                    ...radioConfig, audioForVatsim: {
+                        emit: code,
+                    }
+                };
+                break;
+            case "TrackAudio":
+                newConfig = {
+                    ...radioConfig, trackAudio: {
+                        emit: code,
+                    }
+                };
+                break;
         }
 
         try {
@@ -59,7 +65,7 @@ function TransmitModeSettings() {
         }
     };
 
-    const handleOnModeChange = async (value: string) => {
+    const handleOnTransmitModeChange = async (value: string) => {
         if (!isTransmitMode(value) || transmitConfig === undefined) return;
 
         const previousTransmitConfig = transmitConfig;
@@ -89,16 +95,20 @@ function TransmitModeSettings() {
         }
     };
 
-    const handleOnRemoveClick = async () => {
-        if (transmitConfig === undefined) return;
+    const handleOnTransmitRemoveClick = async () => {
+        if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") return;
 
         let newConfig: TransmitConfig;
-        if (transmitConfig.mode === "PushToTalk") {
-            newConfig = {...transmitConfig, pushToTalk: null};
-        } else if (transmitConfig.mode === "PushToMute") {
-            newConfig = {...transmitConfig, pushToMute: null};
-        } else {
-            newConfig = {...transmitConfig, radioPushToTalk: null};
+        switch (transmitConfig.mode) {
+            case "PushToTalk":
+                newConfig = {...transmitConfig, pushToTalk: null};
+                break;
+            case "PushToMute":
+                newConfig = {...transmitConfig, pushToMute: null};
+                break;
+            case "RadioIntegration":
+                newConfig = {...transmitConfig, radioPushToTalk: null};
+                break;
         }
 
         try {
@@ -112,20 +122,21 @@ function TransmitModeSettings() {
         if (radioConfig === undefined) return;
 
         let newConfig: RadioConfig;
-        if (radioConfig.integration === "AudioForVatsim") {
-            newConfig = {
-                ...radioConfig, audioForVatsim: {
-                    ...radioConfig.audioForVatsim,
-                    emit: null
-                }
-            };
-        } else {
-            newConfig = {
-                ...radioConfig, trackAudio: {
-                    ...radioConfig.trackAudio,
-                    emit: null
-                }
-            };
+        switch (radioConfig.integration) {
+            case "AudioForVatsim":
+                newConfig = {
+                    ...radioConfig, audioForVatsim: {
+                        emit: null
+                    }
+                };
+                break;
+            case "TrackAudio":
+                newConfig = {
+                    ...radioConfig, trackAudio: {
+                        emit: null
+                    }
+                };
+                break;
         }
 
         try {
@@ -143,7 +154,7 @@ function TransmitModeSettings() {
             if (radioConfig === undefined) return;
 
             setTransmitConfig(await withLabels(transmitConfig));
-            setRadioConfig(await withRadioLabels(radioConfig))
+            setRadioConfig(await withRadioLabels(radioConfig));
         };
         void fetchConfig();
     }, []);
@@ -153,8 +164,9 @@ function TransmitModeSettings() {
             {transmitConfig !== undefined && radioConfig !== undefined ? (
                 <>
                     <div className="grow flex flex-col gap-0.5">
-                        <p className="text-center font-semibold pt-1 uppercase border-t-2 border-zinc-200">Transmit
-                            Mode</p>
+                        <p className="text-center font-semibold pt-1 uppercase border-t-2 border-zinc-200">
+                            Transmit Mode
+                        </p>
                         <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
                             <Select
                                 className="w-min h-full !mb-0"
@@ -166,11 +178,11 @@ function TransmitModeSettings() {
                                     {value: "RadioIntegration", text: "Radio Integration"}
                                 ]}
                                 selected={transmitConfig.mode}
-                                onChange={handleOnModeChange}
+                                onChange={handleOnTransmitModeChange}
                             />
                             <KeyCapture
                                 label={transmitConfig.mode === "PushToTalk" ? transmitConfig.pushToTalkLabel : transmitConfig.mode === "PushToMute" ? transmitConfig.pushToMuteLabel : transmitConfig.radioPushToTalkLabel}
-                                onCapture={handleOnCapture} onRemove={handleOnRemoveClick}
+                                onCapture={handleOnTransmitCapture} onRemove={handleOnTransmitRemoveClick}
                                 disabled={transmitConfig.mode === "VoiceActivation"}/>
                         </div>
                     </div>
