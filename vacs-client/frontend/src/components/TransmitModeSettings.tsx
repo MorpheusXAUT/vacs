@@ -196,7 +196,7 @@ function TransmitModeSettings() {
                                  strokeLinejoin="round"
                                  className="stroke-gray-600 cursor-help"
                             >
-                                <title>RTFM</title>
+                                <title>Use one key for all transmissions. Configure the radio integration’s PTT key and let vacs press it automatically: when not in a call, pressing the vacs PTT keys your radio; in a call, it transmits on vacs; with RADIO PRIO enabled, you can (temporarily) key the radio without interrupting your coordination.</title>
                                 <circle cx="12" cy="12" r="10"/>
                                 <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
                                 <path d="M12 17h.01"/>
