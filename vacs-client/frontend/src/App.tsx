@@ -27,6 +27,7 @@ import EndButton from "./components/ui/EndButton.tsx";
 import {setupWebrtcListeners} from "./listeners/webrtc-listener.ts";
 import UpdateOverlay from "./components/UpdateOverlay.tsx";
 import {fetchCapabilities} from "./stores/capabilities-store.ts";
+import RadioButton from "./components/ui/RadioButton.tsx";
 
 function App() {
     const connected = useSignalingStore(state => state.connectionState === "connected");
@@ -92,7 +93,7 @@ function App() {
                 {/* Bottom Button Row */}
                 <div className="h-20 w-full p-2 pl-4 flex flex-row justify-between gap-20">
                     <div className="h-full flex flex-row gap-3">
-                        <Button color="gray" className="text-xl w-46 text-gray-500" disabled={true}>Radio</Button>
+                        <RadioButton/>
                         <Button color="cyan" className="text-xl text-slate-400" disabled={true}>CPL</Button>
                         <RadioPrioButton/>
                         <PhoneButton/>
