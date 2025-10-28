@@ -57,6 +57,16 @@ function DAKey({client}: DAKeyProps) {
         }
     });
 
+    const [stationName, stationType] = (() => {
+        const parts = client.displayName.split("_");
+
+        if (parts.length <= 1) {
+            return [parts[0], ""];
+        }
+
+        return [parts.slice(0, parts.length - 1).join(" "), parts[parts.length - 1]];
+    })();
+
     return (
         <Button
             color={inCall ? "green" : (isCalling || isRejected) && blink ? "green" : isError && blink ? "red" : "gray"}
@@ -64,10 +74,9 @@ function DAKey({client}: DAKeyProps) {
             highlight={beingCalled || isRejected ? "green" : undefined}
             onClick={handleClick}
         >
-            <p className="wrap-break-word w-full">
-                {client.displayName}
-                {client.frequency !== "" && <><br/>{client.frequency}</>}
-            </p>
+            <p className="w-full truncate" title={stationName}>{stationName}</p>
+            {stationType !== "" && <p>{stationType}</p>}
+            {client.frequency !== "" && <p className="w-full truncate" title={client.frequency}>{client.frequency}</p>}
         </Button>
     );
     // 320-340<br/>E2<br/>EC

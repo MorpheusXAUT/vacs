@@ -38,7 +38,7 @@ function ConnectPage() {
         <div className="h-full w-full flex justify-center items-center p-4">
             <Button
                 color="green"
-                className={clsx("w-44 px-5 py-3 text-xl", connecting && "brightness-90 cursor-not-allowed")}
+                className={clsx("w-50 px-5 py-3 text-xl", connecting && "brightness-90 cursor-not-allowed")}
                 onClick={handleConnectClick}
             >
                 {!connecting ? "Connect" : "Connecting..."}

@@ -42,7 +42,7 @@ function SettingsPage() {
                     <div className="h-full flex flex-row gap-2 items-center">
                         <AlwaysOnTopButton disabled={!capAlwaysOnTop}/>
                         <UpdateButton/>
-                        <Button color="gray" className="w-24 h-full rounded"
+                        <Button color="gray" className="w-24 h-full rounded text-sm"
                                 onClick={() => invokeSafe("app_open_logs_folder")}>Open logs<br/>folder</Button>
                     </div>
                     <DisconnectLogoutButtons/>
@@ -74,9 +74,9 @@ function DisconnectLogoutButtons() {
 
     return (
         <div className="h-full flex flex-row gap-2">
-            <Button color="salmon" className="w-auto px-3 rounded" disabled={!connected}
+            <Button color="salmon" className="w-auto px-3 text-sm rounded" disabled={!connected}
                     onClick={handleDisconnectClick}>Disconnect</Button>
-            <Button color="salmon" className="rounded" disabled={!isAuthenticated}
+            <Button color="salmon" className="text-sm rounded" disabled={!isAuthenticated}
                     onClick={handleLogoutClick}>Logout</Button>
         </div>
     );
@@ -124,7 +124,7 @@ function UpdateButton() {
     return (
         <Button
             color={newVersion === undefined ? "gray" : "green"}
-            className="w-24 h-full rounded"
+            className="w-24 h-full rounded text-sm"
             onClick={handleOnClick}
             disabled={noNewVersion}
         >
@@ -155,7 +155,7 @@ function AlwaysOnTopButton({disabled}: { disabled: boolean }) {
     return (
         <Button
             color={alwaysOnTop ? "blue" : "cyan"}
-            className="h-full rounded"
+            className="h-full rounded text-sm"
             onClick={toggleAlwaysOnTop}
             disabled={disabled}
             title={disabled ? `Unfortunately, always-on-top is not yet supported on ${capPlatform}` : undefined}

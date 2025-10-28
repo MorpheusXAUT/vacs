@@ -35,7 +35,7 @@ function VolumeSettings() {
                 <div className="w-full grow px-3 py-1.5 flex flex-row gap-3.5">
                     <div className="w-full flex flex-col items-center">
                         <img src={headphones} className="pt-1 h-12 w-12" alt=""/>
-                        <p className="font-bold text-center pt-3 pb-1">Output</p>
+                        <p className="font-semibold text-center pt-3 pb-1">Output</p>
                         <VolumeSlider position={volumes.output}
                                       setPosition={(position) => setVolumes((prev) => ({...prev, output: position}))}
                                       savePosition={(position) => handleVolumeSave("output", position)}/>
@@ -43,7 +43,7 @@ function VolumeSettings() {
                     <div className="w-full flex flex-row items-center">
                         <div className="w-full h-full flex flex-col items-center">
                             <img src={mic} className="pt-1 h-12 w-12" alt=""/>
-                            <p className="font-bold text-center pt-3 pb-1">Input</p>
+                            <p className="font-semibold text-center pt-3 pb-1">Input</p>
                             <VolumeSlider position={volumes.input}
                                           setPosition={(position) => setVolumes((prev) => ({...prev, input: position}))}
                                           savePosition={(position) => handleVolumeSave("input", position)}/>
@@ -58,14 +58,14 @@ function VolumeSettings() {
                 <div className="w-full grow px-3 py-1.5 flex flex-row gap-3.5">
                     <div className="w-full flex flex-col items-center">
                         <img src={mousePointerClick} className="pt-1 h-12 w-12" alt=""/>
-                        <p className="font-bold text-center pt-1 leading-4">Click<br/>Volume</p>
+                        <p className="font-semibold text-center pt-1 leading-4">Click<br/>Volume</p>
                         <VolumeSlider position={volumes.click}
                                       setPosition={(position) => setVolumes((prev) => ({...prev, click: position}))}
                                       savePosition={(position) => handleVolumeSave("click", position)}/>
                     </div>
                     <div className="w-full flex flex-col items-center">
                         <img src={bellRing} className="pt-1 h-12 w-12" alt=""/>
-                        <p className="font-bold text-center pt-1 leading-4">Chime<br/>Volume</p>
+                        <p className="font-semibold text-center pt-1 leading-4">Chime<br/>Volume</p>
                         <VolumeSlider position={volumes.chime}
                                       setPosition={(position) => setVolumes((prev) => ({...prev, chime: position}))}
                                       savePosition={(position) => handleVolumeSave("chime", position)}/>

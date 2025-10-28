@@ -55,7 +55,9 @@ function CallQueue() {
                             highlight={callDisplay.type === "outgoing" || callDisplay.type === "rejected" ? "green" : undefined}
                             softDisabled={true}
                             onClick={() => handleCallDisplayClick(callDisplay.peer.id)}
-                            className="h-16 text-sm p-1.5"><p className="wrap-break-word max-w-full leading-3.5">{callDisplay.peer.displayName}</p></Button>
+                            className="h-16 text-sm p-1.5">
+                        <p className="max-w-full leading-3.5">{callDisplay.peer.displayName.replaceAll("_", " ")}</p>
+                    </Button>
                 </div>
             ) : (
                 <div className="w-full border rounded-md min-h-16"></div>
