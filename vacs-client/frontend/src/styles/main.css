@@ -1,11 +1,20 @@
 @import "tailwindcss";
 
+@font-face {
+    font-display: swap;
+    font-family: 'Noto Sans Mono';
+    font-style: normal;
+    font-weight: auto;
+    src: url('../assets/fonts/NotoSansMono-VariableFont_wdth,wght.ttf') format('truetype');
+}
+
 .active-blue {
     @apply !border !border-cyan-900;
 }
 
 body {
     @apply bg-gray-500 select-none overscroll-none;
+    font-family: "Noto Sans Mono", monospace;
 }
 
 .loader {

@@ -170,7 +170,7 @@ function TransmitModeSettings() {
                         </p>
                         <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
                             <Select
-                                className="w-min h-full !mb-0"
+                                className="!w-[21ch] h-full !mb-0"
                                 name="keybind-mode"
                                 options={[
                                     {value: "VoiceActivation", text: "Voice activation"},
@@ -204,7 +204,7 @@ function TransmitModeSettings() {
                         </div>
                         <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
                             <Select
-                                className="w-min h-full !mb-0"
+                                className="!w-[21ch] h-full !mb-0"
                                 name="radio-integration"
                                 options={[
                                     {value: "AudioForVatsim", text: "Audio for Vatsim"},

@@ -5,6 +5,7 @@ import {useCallStore} from "../stores/call-store.ts";
 import {useUpdateStore} from "../stores/update-store.ts";
 import {navigate} from "wouter/use-browser-location";
 import {invokeSafe} from "../error.ts";
+import {clsx} from "clsx";
 
 function InfoGrid() {
     const cid = useAuthStore(state => state.cid);
@@ -13,7 +14,8 @@ function InfoGrid() {
     const currentVersion = useUpdateStore(state => state.currentVersion);
     const newVersion = useUpdateStore(state => state.newVersion);
 
-    const versionText = `${newVersion === undefined ? "Version: " : ""}v${currentVersion}${newVersion ? ` - UPDATE AVAILABLE (v${newVersion})` : ""}`;
+    const currentVersionText = `Version: v${currentVersion}`;
+    const updateAvailableText = newVersion !== undefined ? `UPDATE AVAILABLE (v${newVersion})` : "";
 
     const handleVersionClick = () => {
         void invokeSafe("audio_play_ui_click");
@@ -23,11 +25,13 @@ function InfoGrid() {
     return (
         <div className="grid grid-rows-2 w-full h-full" style={{gridTemplateColumns: "25% 32.5% 42.5%"}}>
             <div className="info-grid-cell" title={cid}>{cid}</div>
-            <div className="info-grid-cell cursor-pointer" title={versionText}
-                 onClick={handleVersionClick}>{currentVersion !== "" ? versionText : ""}</div>
+            <div className="info-grid-cell cursor-pointer" title={currentVersionText}
+                 onClick={handleVersionClick}>{currentVersionText}</div>
             <div className="info-grid-cell"></div>
             <div className="info-grid-cell" title={clientInfo}>{clientInfo}</div>
-            <div className="info-grid-cell"></div>
+            <div className={clsx("info-grid-cell", newVersion !== undefined && "cursor-pointer")}
+                 title={updateAvailableText}
+                 onClick={() => newVersion !== undefined && handleVersionClick()}>{updateAvailableText}</div>
             <div className="info-grid-cell uppercase" title={callErrorReason}>{callErrorReason}</div>
         </div>
     );
