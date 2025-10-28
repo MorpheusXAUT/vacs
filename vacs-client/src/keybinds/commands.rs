@@ -96,3 +96,16 @@ pub async fn keybinds_set_radio_config(
 
     Ok(())
 }
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn keybinds_has_radio(
+    keybind_engine: State<'_, KeybindEngineHandle>,
+) -> Result<bool, Error> {
+    let capabilities = Capabilities::default();
+    if !capabilities.keybinds {
+        return Ok(false);
+    }
+
+    Ok(keybind_engine.read().has_radio())
+}

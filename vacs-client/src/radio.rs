@@ -21,7 +21,7 @@ pub enum RadioIntegration {
     TrackAudio,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum TransmissionState {
     Active,
     Inactive,

@@ -2,7 +2,7 @@ import {clsx} from "clsx";
 import {ComponentChildren} from "preact";
 import {invokeSafe} from "../../error.ts";
 
-type ButtonColor = "gray" | "cyan" | "green" | "blue" | "emerald" | "red" | "salmon";
+type ButtonColor = "gray" | "cyan" | "green" | "blue" | "cornflower" | "emerald" | "red" | "salmon";
 type ButtonHighlightColor = "green" | "gray";
 
 export type ButtonProps = {
@@ -22,7 +22,8 @@ const ButtonColors: Record<ButtonColor, string> = {
     green: "bg-[#4b8747] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950",
     gray: "bg-gray-300 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700 shadow-[0_0_0_1px_#364153]",
     blue: "bg-blue-700 border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900 text-white",
-    emerald: "bg-[#4b8747] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950", // same background color as green, kept for separation of button types
+    cornflower: "bg-[#5B95F9] border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900",
+    emerald: "bg-[#05cf9c] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950",
     red: "bg-red-500 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900",
     salmon: "bg-red-400 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900"
 };
@@ -32,6 +33,7 @@ const ActiveButtonColors: Record<ButtonColor, string> = {
     green: "active:border-r-green-200 active:border-b-green-200 active:border-t-green-950 active:border-l-green-950",
     gray: "active:border-r-gray-100 active:border-b-gray-100 active:border-t-gray-700 active:border-l-gray-700",
     blue: "active:border-r-blue-300 active:border-b-blue-300 active:border-t-blue-900 active:border-l-blue-900",
+    cornflower: "active:border-r-blue-300 active:border-b-blue-300 active:border-t-blue-900 active:border-l-blue-900",
     emerald: "active:border-r-green-200 active:border-b-green-200 active:border-t-green-950 active:border-l-green-950",
     red: "active:border-r-red-200 active:border-b-red-200 active:border-t-red-900 active:border-l-red-900",
     salmon: "active:border-r-red-200 active:border-b-red-200 active:border-t-red-900 active:border-l-red-900",
@@ -42,6 +44,7 @@ export const ForceDisabledButtonColors: Record<ButtonColor, string> = {
     green: "!border-green-950 !border",
     gray: "!border-gray-700 !border !shadow-none",
     blue: "!border-blue-950 !border",
+    cornflower: "!border-blue-950 !border",
     emerald: "!border-emerald-950 !border",
     red: "!border-red-950 !border",
     salmon: "!border-red-950 !border"
