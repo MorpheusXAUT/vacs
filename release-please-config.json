@@ -1,7 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "plugins": [
-    "cargo-workspace"
+    "cargo-workspace",
+    "node-workspace"
   ],
   "separate-pull-requests": true,
   "include-component-in-tag": true,
@@ -27,6 +28,21 @@
           "type": "json",
           "path": "frontend/package.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "package-lock.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "package-lock.json",
+          "jsonpath": "$.packages[\"\"].version"
+        },
+        {
+          "type": "json",
+          "path": "package-lock.json",
+          "jsonpath": "$.packages[\"frontend\"].version"
         }
       ]
     },
