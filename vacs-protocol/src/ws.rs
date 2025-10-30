@@ -267,7 +267,9 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"Login\",\"token\":\"token1\",\"protocolVersion\":\"0.0.0\"}"
+            format!(
+                "{{\"type\":\"Login\",\"token\":\"token1\",\"protocolVersion\":\"{VACS_PROTOCOL_VERSION}\"}}"
+            )
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -277,7 +279,7 @@ mod tests {
                 protocol_version,
             } => {
                 assert_eq!(token, "token1");
-                assert_eq!(protocol_version, "0.0.0");
+                assert_eq!(protocol_version, VACS_PROTOCOL_VERSION);
             }
             _ => panic!("Expected Login message"),
         }
