@@ -28,6 +28,11 @@ pub enum ErrorReason {
     PeerConnection,
     /// The client or server encountered an unexpected message.
     UnexpectedMessage(String),
+    /// The client is currently rate-limited and should try to perform the requested action again later.
+    RateLimited {
+        /// The number of seconds until the client can try again.
+        retry_after_secs: u64,
+    },
 }
 
 /// Possible reasons for a call error.
