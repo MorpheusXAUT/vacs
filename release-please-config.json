@@ -1,13 +1,64 @@
 {
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "plugins": [
+    "cargo-workspace"
+  ],
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "include-v-in-tag": true,
+  "tag-separator": "-",
   "packages": {
-    ".": {
-      "changelog-path": "CHANGELOG.md",
+    "vacs-audio": {
       "release-type": "rust",
-      "bump-minor-pre-major": false,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false
+      "changelog-path": "vacs-audio/CHANGELOG.md",
+      "extra-label": "crate: vacs-audio"
+    },
+    "vacs-client": {
+      "release-type": "rust",
+      "changelog-path": "vacs-client/CHANGELOG.md",
+      "extra-label": "crate: vacs-client",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "vacs-client/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "vacs-client/frontend/package.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
+    "vacs-macros": {
+      "release-type": "rust",
+      "changelog-path": "vacs-macros/CHANGELOG.md",
+      "extra-label": "crate: vacs-macros"
+    },
+    "vacs-protocol": {
+      "release-type": "rust",
+      "changelog-path": "vacs-protocol/CHANGELOG.md",
+      "extra-label": "crate: vacs-protocol"
+    },
+    "vacs-server": {
+      "release-type": "rust",
+      "changelog-path": "vacs-server/CHANGELOG.md",
+      "extra-label": "crate: vacs-server"
+    },
+    "vacs-signaling": {
+      "release-type": "rust",
+      "changelog-path": "vacs-signaling/CHANGELOG.md",
+      "extra-label": "crate: vacs-signaling"
+    },
+    "vacs-vatsim": {
+      "release-type": "rust",
+      "changelog-path": "vacs-vatsim/CHANGELOG.md",
+      "extra-label": "crate: vacs-vatsim"
+    },
+    "vacs-webrtc": {
+      "release-type": "rust",
+      "changelog-path": "vacs-webrtc/CHANGELOG.md",
+      "extra-label": "crate: vacs-webrtc"
     }
-  },
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+  }
 }
