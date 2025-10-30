@@ -194,6 +194,7 @@ pub struct ClientConfig {
     pub signaling_auto_reconnect: bool,
     pub transmit_config: TransmitConfig,
     pub radio: RadioConfig,
+    pub auto_hangup_seconds: u64,
 }
 
 impl Default for ClientConfig {
@@ -204,6 +205,7 @@ impl Default for ClientConfig {
             signaling_auto_reconnect: true,
             transmit_config: TransmitConfig::default(),
             radio: RadioConfig::default(),
+            auto_hangup_seconds: 30,
         }
     }
 }

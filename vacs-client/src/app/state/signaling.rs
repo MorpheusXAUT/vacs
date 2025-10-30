@@ -1,11 +1,12 @@
-use crate::app::state::webrtc::AppStateWebrtcExt;
+use crate::app::state::webrtc::{AppStateWebrtcExt, UnansweredCallGuard};
 use crate::app::state::{AppState, AppStateInner, sealed};
-use crate::audio::manager::SourceType;
+use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::config::WS_LOGIN_TIMEOUT;
 use crate::error::{Error, FrontendError};
 use crate::signaling::auth::TauriTokenProvider;
 use serde::Serialize;
 use serde_json::Value;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
@@ -32,6 +33,8 @@ pub trait AppStateSignalingExt: sealed::Sealed {
         shutdown_token: CancellationToken,
         max_reconnect_attempts: u8,
     ) -> SignalingClient<TokioTransport, TauriTokenProvider>;
+    fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &str);
+    fn cancel_unanswered_call_timer(&mut self, peer_id: &str);
 }
 
 impl AppStateSignalingExt for AppStateInner {
@@ -151,6 +154,67 @@ impl AppStateSignalingExt for AppStateInner {
             tauri::async_runtime::handle().inner(),
         )
     }
+
+    fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &str) {
+        self.cancel_unanswered_call_timer(peer_id);
+
+        let timeout = Duration::from_secs(self.config.client.auto_hangup_seconds);
+        if timeout.is_zero() {
+            return;
+        }
+
+        let cancel = self.shutdown_token.child_token();
+
+        let handle = tauri::async_runtime::handle().spawn({
+            let app = app.clone();
+            let peer_id = peer_id.to_string();
+            let cancel = cancel.clone();
+            async move {
+                log::debug!("Starting unanswered call timer of {timeout:?} for peer {peer_id}");
+                tokio::select! {
+                    biased;
+                    _ = cancel.cancelled() => {
+                        log::debug!("Unanswered call timer cancelled for peer {peer_id}");
+                    }
+                    _ = tokio::time::sleep(timeout) => {
+                        log::debug!("Unanswered call timer expired for peer {peer_id}, hanging up");
+
+                        let state = app.state::<AppState>();
+                        let mut state = state.lock().await;
+
+                        if let Err(err) = state.send_signaling_message(SignalingMessage::CallEnd { peer_id: peer_id.clone() }).await {
+                            log::warn!("Failed to send call end message after call timer expired: {err:?}");
+                        }
+
+                        state.end_call(&peer_id).await;
+                        state.set_outgoing_call_peer_id(None);
+
+                        let audio_manager = app.state::<AudioManagerHandle>();
+                        audio_manager.read().stop(SourceType::Ringback);
+
+                        state.emit_call_error(&app, peer_id, false, CallErrorReason::AutoHangup);
+                    }
+                }
+            }
+        });
+
+        self.unanswered_call_guard = Some(UnansweredCallGuard {
+            peer_id: peer_id.to_string(),
+            cancel,
+            handle,
+        });
+    }
+
+    fn cancel_unanswered_call_timer(&mut self, peer_id: &str) {
+        if let Some(guard) = self.unanswered_call_guard.take_if(|g| g.peer_id == peer_id) {
+            log::trace!(
+                "Cancelling unanswered call timer for peer {}",
+                guard.peer_id
+            );
+            guard.cancel.cancel();
+            guard.handle.abort();
+        }
+    }
 }
 
 impl AppStateInner {
@@ -218,6 +282,7 @@ impl AppStateInner {
 
                 let res = if state.remove_outgoing_call_peer_id(&peer_id) {
                     app.emit("signaling:call-accept", peer_id.clone()).ok();
+                    state.cancel_unanswered_call_timer(&peer_id);
 
                     match state.init_call(app.clone(), peer_id.clone(), None).await {
                         Ok(sdp) => {
@@ -339,6 +404,7 @@ impl AppStateInner {
                 let mut state = state.lock().await;
 
                 if state.remove_outgoing_call_peer_id(&peer_id) {
+                    state.cancel_unanswered_call_timer(&peer_id);
                     app.emit("signaling:call-reject", peer_id).ok();
                 } else {
                     log::warn!("Received call reject message for peer that is not set as outgoing");
@@ -365,6 +431,8 @@ impl AppStateInner {
                 state.remove_outgoing_call_peer_id(&peer_id);
                 state.remove_incoming_call_peer_id(&peer_id);
 
+                state.cancel_unanswered_call_timer(&peer_id);
+
                 app.emit("signaling:peer-not-found", peer_id).ok();
             }
             SignalingMessage::ClientConnected { client } => {
@@ -384,6 +452,8 @@ impl AppStateInner {
                 // Remove from outgoing and incoming states
                 state.remove_outgoing_call_peer_id(&id);
                 state.remove_incoming_call_peer_id(&id);
+
+                state.cancel_unanswered_call_timer(&id);
 
                 app.emit("signaling:client-disconnected", id).ok();
             }
@@ -445,6 +515,8 @@ impl AppStateInner {
                     state.remove_outgoing_call_peer_id(&peer_id);
                     state.remove_incoming_call_peer_id(&peer_id);
 
+                    state.cancel_unanswered_call_timer(&peer_id);
+
                     state.emit_call_error(app, peer_id, false, CallErrorReason::SignalingFailure);
                 }
                 ErrorReason::UnexpectedMessage(ref msg) => {
@@ -485,6 +557,15 @@ impl AppStateInner {
         for peer_id in peer_ids {
             self.end_call(&peer_id).await;
             app.emit("signaling:call-end", &peer_id).ok();
+        }
+
+        if let Some(guard) = self.unanswered_call_guard.take() {
+            log::trace!(
+                "Cancelling unanswered call timer for peer {}",
+                guard.peer_id
+            );
+            guard.cancel.cancel();
+            guard.handle.abort();
         }
     }
 }

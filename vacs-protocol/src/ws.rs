@@ -41,6 +41,8 @@ pub enum CallErrorReason {
     CallFailure,
     /// An error with the signaling connection to the peer occurred.
     SignalingFailure,
+    /// A call was automatically ended because the peer did not respond to the call invite within the specified timeout.
+    AutoHangup,
     /// An unspecified error occurred.
     Other,
 }

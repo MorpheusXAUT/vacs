@@ -6,7 +6,7 @@ pub(crate) mod signaling;
 pub(crate) mod webrtc;
 
 use crate::app::state::signaling::AppStateSignalingExt;
-use crate::app::state::webrtc::Call;
+use crate::app::state::webrtc::{Call, UnansweredCallGuard};
 use crate::audio::manager::{AudioManager, AudioManagerHandle};
 use crate::config::AppConfig;
 use crate::error::{StartupError, StartupErrorExt};
@@ -28,6 +28,7 @@ pub struct AppStateInner {
     audio_manager: AudioManagerHandle,
     keybind_engine: KeybindEngineHandle,
     active_call: Option<Call>,
+    unanswered_call_guard: Option<UnansweredCallGuard>,
     held_calls: HashMap<String, Call>,       // peer_id -> call
     outgoing_call_peer_id: Option<String>,   // peer_id
     incoming_call_peer_ids: HashSet<String>, // peer_id
@@ -65,6 +66,7 @@ impl AppStateInner {
             ))),
             shutdown_token,
             active_call: None,
+            unanswered_call_guard: None,
             held_calls: HashMap::new(),
             outgoing_call_peer_id: None,
             incoming_call_peer_ids: HashSet::new(),

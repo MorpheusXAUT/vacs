@@ -4,12 +4,21 @@ use crate::config::ENCODED_AUDIO_FRAME_BUFFER_SIZE;
 use crate::error::{CallError, Error};
 use anyhow::Context;
 use std::fmt::{Debug, Formatter};
+use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
 use vacs_webrtc::error::WebrtcError;
 use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
+
+#[derive(Debug)]
+pub struct UnansweredCallGuard {
+    pub peer_id: String,
+    pub cancel: CancellationToken,
+    pub handle: JoinHandle<()>,
+}
 
 pub struct Call {
     pub(super) peer_id: String,

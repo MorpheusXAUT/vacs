@@ -67,8 +67,9 @@ pub async fn signaling_start_call(
         .await?;
 
     state.add_call_to_call_list(&app, &peer_id, false);
-
+    state.start_unanswered_call_timer(&app, &peer_id);
     state.set_outgoing_call_peer_id(Some(peer_id));
+
     audio_manager.read().restart(SourceType::Ringback);
 
     Ok(())
@@ -111,10 +112,14 @@ pub async fn signaling_end_call(
     state.end_call(&peer_id).await;
 
     state
-        .send_signaling_message(SignalingMessage::CallEnd { peer_id })
+        .send_signaling_message(SignalingMessage::CallEnd {
+            peer_id: peer_id.clone(),
+        })
         .await?;
 
+    state.cancel_unanswered_call_timer(&peer_id);
     state.set_outgoing_call_peer_id(None);
+
     audio_manager.read().stop(SourceType::Ringback);
 
     Ok(())
