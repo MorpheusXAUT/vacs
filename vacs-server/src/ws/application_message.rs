@@ -1,3 +1,4 @@
+use crate::ratelimit::Key;
 use crate::state::AppState;
 use crate::ws::ClientSession;
 use crate::ws::message::send_message;
@@ -5,7 +6,7 @@ use axum::extract::ws;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use vacs_protocol::ws::{CallErrorReason, SignalingMessage};
+use vacs_protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
 
 pub async fn handle_application_message(
     state: &Arc<AppState>,
@@ -31,7 +32,27 @@ pub async fn handle_application_message(
             ControlFlow::Break(())
         }
         SignalingMessage::CallInvite { peer_id } => {
-            handle_call_invite(state, client, &peer_id).await;
+            if let Err(until) = state
+                .rate_limiters()
+                .check_call_invite(&Key::from(client.id()))
+            {
+                tracing::debug!(?until, "Rate limit exceeded, rejecting call invite");
+                if let Err(err) = send_message(
+                    ws_outbound_tx,
+                    SignalingMessage::Error {
+                        reason: ErrorReason::RateLimited {
+                            retry_after_secs: until.as_secs(),
+                        },
+                        peer_id: Some(peer_id.to_string()),
+                    },
+                )
+                .await
+                {
+                    tracing::warn!(?err, "Failed to send rate limit error message");
+                }
+            } else {
+                handle_call_invite(state, client, &peer_id).await;
+            }
             ControlFlow::Continue(())
         }
         SignalingMessage::CallAccept { peer_id } => {

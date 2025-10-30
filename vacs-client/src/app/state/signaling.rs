@@ -429,8 +429,7 @@ impl AppStateInner {
                 ErrorReason::PeerConnection => {
                     let peer_id = peer_id.unwrap_or_default();
                     log::warn!(
-                        "Received peer connection error from signaling server with peer {}",
-                        peer_id
+                        "Received peer connection error from signaling server with peer {peer_id}"
                     );
 
                     let state = app.state::<AppState>();
@@ -454,6 +453,28 @@ impl AppStateInner {
                         "error",
                         FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
                             reason,
+                        ))),
+                    )
+                    .ok();
+                }
+                ErrorReason::RateLimited { retry_after_secs } => {
+                    log::warn!(
+                        "Received rate limited error from signaling server, rate limited for {retry_after_secs}"
+                    );
+
+                    if let Some(peer_id) = peer_id {
+                        let state = app.state::<AppState>();
+                        let mut state = state.lock().await;
+
+                        state.end_call(&peer_id).await;
+                        state.remove_outgoing_call_peer_id(&peer_id);
+
+                        app.emit("signaling:call-end", peer_id).ok();
+                    }
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::from(Error::from(SignalingRuntimeError::RateLimited(
+                            retry_after_secs.into(),
                         ))),
                     )
                     .ok();

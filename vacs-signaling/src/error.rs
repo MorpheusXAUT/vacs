@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
-use std::time::Instant;
+use std::ops::Add;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio_tungstenite::tungstenite;
 use vacs_protocol::ws::{DisconnectReason, ErrorReason, LoginFailureReason};
@@ -34,6 +35,8 @@ pub enum SignalingRuntimeError {
     Transport(TransportFailureReason),
     #[error("serialization error: {0}")]
     SerializationError(String),
+    #[error("rate limited for {0}")]
+    RateLimited(UntilInstant),
 }
 
 impl SignalingRuntimeError {
@@ -102,6 +105,7 @@ impl From<SignalingError> for ReconnectFailureReason {
 }
 
 #[derive(Debug, Clone)]
+#[repr(transparent)]
 pub struct UntilInstant(pub Instant);
 
 impl Display for UntilInstant {
@@ -110,5 +114,17 @@ impl Display for UntilInstant {
             Some(dur) => write!(f, "{:.0?}", dur),
             None => write!(f, "0s"),
         }
+    }
+}
+
+impl From<Instant> for UntilInstant {
+    fn from(value: Instant) -> UntilInstant {
+        UntilInstant(value)
+    }
+}
+
+impl From<u64> for UntilInstant {
+    fn from(value: u64) -> UntilInstant {
+        UntilInstant(Instant::now().add(Duration::from_secs(value)))
     }
 }

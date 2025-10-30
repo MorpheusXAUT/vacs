@@ -1,4 +1,5 @@
 use crate::config::{AppConfig, VatsimConfig};
+use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
 use crate::state::AppState;
 use crate::store::Store;
@@ -103,6 +104,7 @@ impl TestSetup {
             Store::Memory(MemoryStore::default()),
             SlurperClient::new("http://localhost:12345").unwrap(),
             mock_data_feed.clone(),
+            RateLimiters::default(),
             shutdown_rx,
         ));
         let client_info = ClientInfo {

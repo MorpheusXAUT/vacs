@@ -1,3 +1,4 @@
+use crate::ratelimit::RateLimitersConfig;
 use anyhow::Context;
 use axum_client_ip::ClientIpSource;
 use config::{Config, Environment, File};
@@ -20,6 +21,7 @@ pub struct AppConfig {
     pub auth: AuthConfig,
     pub vatsim: VatsimConfig,
     pub updates: UpdatesConfig,
+    pub rate_limiters: RateLimitersConfig,
 }
 
 impl AppConfig {
