@@ -7420,7 +7420,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-audio"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "biquad",
@@ -7439,7 +7439,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-client"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7478,7 +7478,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-macros"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "quote",
  "syn 2.0.108",
@@ -7486,7 +7486,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-protocol"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "pretty_assertions",
  "serde",
@@ -7495,7 +7495,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-server"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7530,7 +7530,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-signaling"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -7549,7 +7549,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-vatsim"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7567,7 +7567,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-webrtc"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde",
