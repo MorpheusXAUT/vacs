@@ -158,7 +158,7 @@ impl Default for VatsimConfig {
             require_active_connection: true,
             slurper_base_url: "https://slurper.vatsim.net".to_string(),
             data_feed_url: "https://data.vatsim.net/v3/vatsim-data.json".to_string(),
-            controller_update_interval: Duration::from_secs(60),
+            controller_update_interval: Duration::from_secs(30),
         }
     }
 }
