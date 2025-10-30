@@ -1,0 +1,26 @@
+name: Release • Release Please
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Target branch to prepare releases from (leave empty for default behavior).'
+        required: false
+        default: ''
+        type: string
+
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4.4.0
+        with:
+          target-branch: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref != '' && github.event.inputs.ref || github.ref_name }}
