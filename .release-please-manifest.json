@@ -1,4 +1,5 @@
 {
   "vacs-client": "0.3.0",
-  "vacs-server": "0.1.0"
+  "vacs-server": "0.1.0",
+  "vacs-protocol": "0.1.0"
 }
