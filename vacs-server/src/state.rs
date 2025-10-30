@@ -1,5 +1,6 @@
 use crate::config;
 use crate::config::AppConfig;
+use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
 use crate::store::{Store, StoreBackend};
 use crate::ws::ClientSession;
@@ -26,6 +27,7 @@ pub struct AppState {
     broadcast_tx: broadcast::Sender<SignalingMessage>,
     slurper: SlurperClient,
     data_feed: Arc<dyn DataFeed>,
+    rate_limiters: RateLimiters,
     shutdown_rx: watch::Receiver<()>,
 }
 
@@ -36,6 +38,7 @@ impl AppState {
         store: Store,
         slurper: SlurperClient,
         data_feed: Arc<dyn DataFeed>,
+        rate_limiters: RateLimiters,
         shutdown_rx: watch::Receiver<()>,
     ) -> Self {
         let (broadcast_tx, _) = broadcast::channel(config::BROADCAST_CHANNEL_CAPACITY);
@@ -47,6 +50,7 @@ impl AppState {
             broadcast_tx,
             slurper,
             data_feed,
+            rate_limiters,
             shutdown_rx,
         }
     }
@@ -403,5 +407,9 @@ impl AppState {
 
     pub async fn health_check(&self) -> anyhow::Result<()> {
         self.store.is_healthy().await
+    }
+
+    pub fn rate_limiters(&self) -> &RateLimiters {
+        &self.rate_limiters
     }
 }

@@ -18,6 +18,8 @@ bytes = { workspace = true }
 config = { workspace = true }
 dashmap = { workspace = true }
 futures-util = { workspace = true }
+governor = { workspace = true }
+nonzero_ext = { workspace = true }
 oauth2 = { workspace = true }
 parking_lot = { workspace = true }
 semver = { workspace = true }
