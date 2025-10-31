@@ -1,4 +1,4 @@
-import {invokeSafe} from "../error.ts";
+import {invokeSafe, invokeStrict} from "../error.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {clsx} from "clsx";
 import {useEffect, useState} from "preact/hooks";
@@ -8,9 +8,13 @@ function LoginPage() {
     const [loading, setLoading] = useState<boolean>(false);
 
     const handleLoginClick = useAsyncDebounce(async () => {
-        setLoading(true);
         void invokeSafe("audio_play_ui_click");
-        await invokeSafe("auth_open_oauth_url");
+        setLoading(true);
+        try {
+            await invokeStrict("auth_open_oauth_url");
+        } finally {
+            setLoading(false);
+        }
     });
 
     useEffect(() => {
