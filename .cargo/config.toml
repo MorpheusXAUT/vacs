@@ -1,0 +1,3 @@
+[target.'cfg(target_os = "macos")']
+[patch.crates-io]
+cpal = { git = "https://github.com/RustAudio/cpal", rev = "a8269d3c993f7d375d4655b53d3437429d4f6bd8" }
