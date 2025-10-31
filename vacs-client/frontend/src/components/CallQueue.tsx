@@ -2,7 +2,7 @@ import Button from "./ui/Button.tsx";
 import {useCallStore} from "../stores/call-store.ts";
 import {invokeStrict} from "../error.ts";
 import unplug from "../assets/unplug.svg";
-import {ClientInfo} from "../types/client-info.ts";
+import {ClientInfo, splitDisplayName} from "../types/client-info.ts";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -55,24 +55,38 @@ function CallQueue() {
                             highlight={callDisplay.type === "outgoing" || callDisplay.type === "rejected" ? "green" : undefined}
                             softDisabled={true}
                             onClick={() => handleCallDisplayClick(callDisplay.peer.id)}
-                            className="h-16 text-sm p-1.5">
-                        <p className="max-w-full leading-3.5">{callDisplay.peer.displayName.replaceAll("_", " ")}</p>
+                            className="h-16 text-sm p-1.5 [&_p]:leading-3.5">
+                        {clientLabel(callDisplay.peer)}
                     </Button>
                 </div>
             ) : (
-                <div className="w-full border rounded-md min-h-16"></div>
+                <div className="w-full h-16 border rounded-md"></div>
             )}
 
             {/*Answer Keys*/}
             {incomingCalls.map((peer, idx) => (
-                <Button key={idx} color={blink ? "green" : "gray"} className={"min-h-16 text-sm"}
-                        onClick={() => handleAnswerKeyClick(peer)}><p>{peer.displayName}<br/>{peer.frequency}</p></Button>
+                <Button key={idx} color={blink ? "green" : "gray"} className="h-16 text-sm p-1.5 [&_p]:leading-3.5"
+                        onClick={() => handleAnswerKeyClick(peer)}
+                >
+                    {clientLabel(peer)}
+                </Button>
             ))}
             {Array.from(Array(Math.max(5 - incomingCalls.length, 0)).keys()).map((idx) =>
-                <div key={idx} className="w-full border rounded-md min-h-16"></div>
+                <div key={idx} className="w-full h-16 border rounded-md"></div>
             )}
         </div>
     );
 }
+
+const clientLabel = (client: ClientInfo) => {
+    const [stationName, stationType] = splitDisplayName(client.displayName);
+    return (
+        <>
+            <p className="max-w-full whitespace-nowrap" title={stationName}>{stationName}</p>
+            {stationType !== "" && <p>{stationType}</p>}
+            {client.frequency !== "" && <p title={client.frequency}>{client.frequency}</p>}
+        </>
+    );
+};
 
 export default CallQueue;

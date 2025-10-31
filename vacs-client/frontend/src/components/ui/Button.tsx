@@ -88,7 +88,7 @@ function Button(props: ButtonProps) {
                 content
             ) : (
                 <div className={clsx(
-                    "w-full h-full text-center flex items-center justify-center",
+                    "w-full h-full text-center flex flex-col items-center justify-center",
                     ButtonHighlightColors[props.highlight],
                 )}>
                     {content}

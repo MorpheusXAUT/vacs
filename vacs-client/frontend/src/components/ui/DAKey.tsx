@@ -1,4 +1,4 @@
-import {ClientInfo} from "../../types/client-info.ts";
+import {ClientInfo, splitDisplayName} from "../../types/client-info.ts";
 import Button from "./Button.tsx";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeStrict} from "../../error.ts";
@@ -57,15 +57,7 @@ function DAKey({client}: DAKeyProps) {
         }
     });
 
-    const [stationName, stationType] = (() => {
-        const parts = client.displayName.split("_");
-
-        if (parts.length <= 1) {
-            return [parts[0], ""];
-        }
-
-        return [parts.slice(0, parts.length - 1).join(" "), parts[parts.length - 1]];
-    })();
+    const [stationName, stationType] = splitDisplayName(client.displayName);
 
     return (
         <Button
@@ -76,7 +68,7 @@ function DAKey({client}: DAKeyProps) {
         >
             <p className="w-full truncate" title={stationName}>{stationName}</p>
             {stationType !== "" && <p>{stationType}</p>}
-            {client.frequency !== "" && <p className="w-full truncate" title={client.frequency}>{client.frequency}</p>}
+            {client.frequency !== "" && <p title={client.frequency}>{client.frequency}</p>}
         </Button>
     );
     // 320-340<br/>E2<br/>EC
