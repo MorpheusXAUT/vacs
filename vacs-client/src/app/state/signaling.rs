@@ -165,7 +165,7 @@ impl AppStateSignalingExt for AppStateInner {
 
         let cancel = self.shutdown_token.child_token();
 
-        let handle = tauri::async_runtime::handle().spawn({
+        let handle = tauri::async_runtime::spawn({
             let app = app.clone();
             let peer_id = peer_id.to_string();
             let cancel = cancel.clone();
@@ -403,8 +403,8 @@ impl AppStateInner {
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
+                state.cancel_unanswered_call_timer(&peer_id);
                 if state.remove_outgoing_call_peer_id(&peer_id) {
-                    state.cancel_unanswered_call_timer(&peer_id);
                     app.emit("signaling:call-reject", peer_id).ok();
                 } else {
                     log::warn!("Received call reject message for peer that is not set as outgoing");
