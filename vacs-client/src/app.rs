@@ -1,11 +1,13 @@
 use crate::app::state::AppState;
+use crate::auth;
 use crate::config::BackendEndpoint;
-use crate::error::Error;
+use crate::error::{Error, FrontendError};
 use anyhow::Context;
 use rfd::{MessageButtons, MessageDialogResult};
 use serde::Serialize;
+use serde_json::Value;
 use std::sync::mpsc::sync_channel;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 use url::Url;
@@ -13,6 +15,16 @@ use url::Url;
 pub(crate) mod commands;
 
 pub(crate) mod state;
+
+pub fn handle_deep_link(app: AppHandle, url: String) {
+    let url = url.to_string();
+    tauri::async_runtime::spawn(async move {
+        if let Err(err) = auth::handle_auth_callback(&app, &url).await {
+            app.emit("auth:error", Value::Null).ok();
+            app.emit::<FrontendError>("error", err.into()).ok();
+        }
+    });
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -17,12 +17,12 @@ use crate::app::state::keybinds::AppStateKeybindsExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::AudioManagerHandle;
 use crate::build::VersionInfo;
-use crate::error::{FrontendError, StartupError, StartupErrorExt};
+use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
 use anyhow::Context;
-use serde_json::Value;
-use tauri::{App, Emitter, Manager, RunEvent};
+use tauri::{App, Manager, RunEvent};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tokio::sync::Mutex as TokioMutex;
 
 pub fn run() {
@@ -42,14 +42,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_single_instance::init(|app, argv, _| {
             if let Some(url) = argv.get(1) {
-                let app = app.clone();
-                let url = url.clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Err(err) = auth::handle_auth_callback(&app, &url).await {
-                        app.emit("auth:error", Value::Null).ok();
-                        app.emit::<FrontendError>("error", err.into()).ok();
-                    }
-                });
+                app::handle_deep_link(app.clone(), url.to_string());
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
@@ -58,12 +51,24 @@ pub fn run() {
         .setup(|app| {
             log::info!("{:?}", VersionInfo::gather());
 
+            #[cfg(target_os = "macos")]
+            {
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    if let Some(url) = event.urls().get(0) {
+                        app::handle_deep_link(handle.clone(), url.to_string());
+                    }
+                });
+            }
+
             fn setup(app: &mut App) -> Result<(), StartupError> {
-                use tauri_plugin_deep_link::DeepLinkExt;
-                app.deep_link()
-                    .register_all()
-                    .context("Failed to register deep link")
-                    .map_startup_err(StartupError::Other)?;
+                #[cfg(not(target_os = "macos"))]
+                {
+                    app.deep_link()
+                        .register_all()
+                        .context("Failed to register deep link")
+                        .map_startup_err(StartupError::Other)?;
+                }
 
                 let capabilities = Capabilities::default();
 
