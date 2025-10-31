@@ -29,7 +29,7 @@ cfg-if = "1.0.4"
 chacha20poly1305 = "0.10.1"
 config = "0.15.18"
 cookie_store = "0.22.0"
-cpal = "0.16.0"
+cpal = { git = "https://github.com/RustAudio/cpal.git", rev = "06a07450258be3d5f3dfe84ec4938add93d95f87" }
 csv = "1.4.0"
 dashmap = "6.1.0"
 futures-util = "0.3.31"
