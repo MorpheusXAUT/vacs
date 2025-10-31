@@ -78,6 +78,9 @@
           "alsa-plugins-pulseaudio"
         ]
       }
+    },
+    "macOS": {
+      "entitlements": "./Entitlements.plist"
     }
   },
   "plugins": {
