@@ -205,7 +205,7 @@ impl Default for ClientConfig {
             signaling_auto_reconnect: true,
             transmit_config: TransmitConfig::default(),
             radio: RadioConfig::default(),
-            auto_hangup_seconds: 30,
+            auto_hangup_seconds: 60,
         }
     }
 }

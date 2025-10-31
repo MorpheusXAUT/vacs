@@ -274,7 +274,7 @@ impl CallError {
                     CallErrorReason::AudioFailure => "Audio failure",
                     CallErrorReason::CallFailure => "Call failure",
                     CallErrorReason::SignalingFailure => "Target not reachable",
-                    CallErrorReason::AutoHangup => "Target not reachable",
+                    CallErrorReason::AutoHangup => "Target did not answer",
                     CallErrorReason::Other => "Unknown failure",
                 }
             ),
