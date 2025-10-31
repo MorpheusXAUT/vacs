@@ -154,7 +154,7 @@ jobs:
           includeUpdaterJson: false
 
       - name: Upload bundles as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: bundles-${{ matrix.platform }}
           if-no-files-found: error
