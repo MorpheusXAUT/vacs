@@ -29,7 +29,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@preact/preset-vite": "^2.10.2",
-    "eslint": "^9.38.0",
+    "eslint": "^9.39.1",
     "eslint-config-preact": "^2.0.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
