@@ -1,8 +1,9 @@
 use crate::TARGET_SAMPLE_RATE;
+use crate::cpal;
+use crate::cpal::traits::{DeviceTrait, HostTrait};
+use crate::cpal::{Sample, SampleFormat, SupportedStreamConfig, SupportedStreamConfigRange};
 use crate::error::AudioError;
 use anyhow::Context;
-use cpal::traits::{DeviceTrait, HostTrait};
-use cpal::{Sample, SampleFormat, SupportedStreamConfig, SupportedStreamConfigRange};
 use rubato::{SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
