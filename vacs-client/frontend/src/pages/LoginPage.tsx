@@ -4,16 +4,20 @@ import {clsx} from "clsx";
 import {useEffect, useState} from "preact/hooks";
 import {listen} from "@tauri-apps/api/event";
 
+const LOGIN_TIMEOUT = 30 * 1000;
+
 function LoginPage() {
     const [loading, setLoading] = useState<boolean>(false);
 
     const handleLoginClick = useAsyncDebounce(async () => {
         void invokeSafe("audio_play_ui_click");
         setLoading(true);
+        const timeout = setTimeout(() => setLoading(false), LOGIN_TIMEOUT);
         try {
             await invokeStrict("auth_open_oauth_url");
-        } finally {
+        } catch {
             setLoading(false);
+            clearTimeout(timeout);
         }
     });
 
