@@ -185,7 +185,7 @@ impl WindowsKeybindListener {
                                 .unwrap_or_else(|| code.to_string());
                             Self::with_key_event_tx(hwnd, |tx| {
                                 if let Err(err) = tx.send(KeyEvent { code, label, state }) {
-                                    log::error!("Failed to send keybinds event: {err}")
+                                    log::error!("Failed to send keybinds event: {err}");
                                 }
                             });
                         }

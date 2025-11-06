@@ -27,6 +27,11 @@ cfg_if::cfg_if! {
         mod windows;
         pub use windows::WindowsKeybindEmitter as PlatformEmitter;
         pub use windows::WindowsKeybindListener as PlatformListener;
+    } else if #[cfg(target_os = "macos")] {
+        mod macos;
+        pub use macos::MacOsKeybindListener as PlatformListener;
+        mod stub;
+        pub use stub::NoopKeybindEmitter as PlatformEmitter;
     } else {
         mod stub;
         pub use stub::NoopKeybindEmitter as PlatformEmitter;

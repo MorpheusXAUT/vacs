@@ -17,7 +17,7 @@ impl Default for Capabilities {
 
         Self {
             always_on_top: !matches!(platform, Platform::LinuxWayland),
-            keybinds: matches!(platform, Platform::Windows),
+            keybinds: matches!(platform, Platform::Windows | Platform::MacOs),
             platform,
         }
     }
