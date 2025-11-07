@@ -15,8 +15,6 @@ import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 
 function SettingsPage() {
     const capAlwaysOnTop = useCapabilitiesStore(state => state.alwaysOnTop);
-    const capKeybinds = useCapabilitiesStore(state => state.keybinds);
-    const capPlatform = useCapabilitiesStore(state => state.platform);
 
     return (
         <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col overflow-auto">
@@ -31,10 +29,7 @@ function SettingsPage() {
                             <DeviceSelector deviceType="Output"/>
                             <DeviceSelector deviceType="Input"/>
                         </div>
-                        {capKeybinds ? <TransmitModeSettings/> :
-                            <div className="text-sm py-3 text-center text-gray-700"><p
-                                title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}>Not
-                                available.</p></div>}
+                        <TransmitModeSettings/>
                     </div>
                 </div>
                 <div
