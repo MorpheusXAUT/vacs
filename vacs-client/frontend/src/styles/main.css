@@ -8,10 +8,6 @@
     src: url('../assets/fonts/NotoSansMono-VariableFont_wdth,wght.ttf') format('truetype');
 }
 
-.active-blue {
-    @apply !border !border-cyan-900;
-}
-
 body {
     @apply bg-gray-500 select-none overscroll-none;
     font-family: "Noto Sans Mono", monospace;
@@ -21,24 +17,6 @@ body {
 @supports (font: -apple-system-body) {
     select {
         @apply h-8;
-    }
-}
-
-.loader {
-    border: 0.25rem solid #FFF;
-    border-bottom-color: transparent;
-    border-radius: 50%;
-    display: inline-block;
-    box-sizing: border-box;
-    animation: rotation 1s linear infinite;
-}
-
-@keyframes rotation {
-    0% {
-        transform: rotate(0deg);
-    }
-    100% {
-        transform: rotate(360deg);
     }
 }
 
