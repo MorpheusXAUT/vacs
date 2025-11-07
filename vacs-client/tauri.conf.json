@@ -15,7 +15,8 @@
         "width": 1000,
         "height": 753,
         "visible": false,
-        "backgroundColor": "#B5BBC6"
+        "backgroundColor": "#B5BBC6",
+        "browserExtensionsEnabled": false
       }
     ],
     "security": {
@@ -28,7 +29,6 @@
     "targets": [
       "deb",
       "rpm",
-      "msi",
       "nsis",
       "app",
       "dmg"
@@ -42,6 +42,8 @@
     ],
     "windows": {
       "nsis": {
+        "headerImage": "frontend/icons/installer/header.bmp",
+        "installerIcon": "frontend/icons/installer/icon.ico",
         "installMode": "both"
       }
     },
