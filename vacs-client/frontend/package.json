@@ -12,7 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@preact/signals": "^2.3.2",
+    "@preact/signals": "^2.4.0",
     "@tailwindcss/vite": "^4.1.16",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-deep-link": "^2.4.5",
