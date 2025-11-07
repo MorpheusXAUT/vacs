@@ -4,6 +4,7 @@ import {invokeStrict} from "../error.ts";
 import {AudioDevices} from "../types/audio.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {useCallStore} from "../stores/call-store.ts";
+import {clsx} from "clsx";
 
 type DeviceSelectorProps = {
     deviceType: "Input" | "Output";
@@ -70,7 +71,7 @@ function DeviceSelector(props: DeviceSelectorProps) {
             <p className="w-full text-center font-semibold">{props.deviceType === "Output" ? "Headset" : "Microphone"}</p>
             <Select
                 name={props.deviceType}
-                className={isFallback ? "text-red-500 disabled:!text-[#B34F5C]" : ""}
+                className={clsx("mb-1", isFallback && "text-red-500 disabled:!text-[#B34F5C]")}
                 options={devices}
                 selected={device}
                 onChange={handleOnChange}

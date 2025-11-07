@@ -151,7 +151,7 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
     return (
         <>
             <Select
-                className="!w-[21ch] h-full !mb-0"
+                className="!w-[21ch] h-full"
                 name="keybind-mode"
                 options={[
                     {value: "VoiceActivation", text: "Voice activation"},
@@ -253,7 +253,7 @@ function RadioConfigSettings({transmitConfig, radioConfig, setRadioConfig}: Radi
     return (
         <>
             <Select
-                className="!w-[21ch] h-full !mb-0"
+                className="!w-[21ch] h-full"
                 name="radio-integration"
                 options={[
                     {value: "AudioForVatsim", text: "Audio for Vatsim"},
