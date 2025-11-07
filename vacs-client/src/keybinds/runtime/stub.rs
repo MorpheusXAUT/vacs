@@ -4,7 +4,6 @@ use keyboard_types::{Code, KeyState};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 #[derive(Debug)]
-#[allow(dead_code)] // TODO: Remove me
 pub struct NoopKeybindListener {
     _tx: UnboundedSender<KeyEvent>,
 }
