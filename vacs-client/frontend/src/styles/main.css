@@ -18,6 +18,12 @@ body {
     font-synthesis: none;
 }
 
+@supports (font: -apple-system-body) {
+    select {
+        @apply h-8;
+    }
+}
+
 .loader {
     border: 0.25rem solid #FFF;
     border-bottom-color: transparent;
