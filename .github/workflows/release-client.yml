@@ -244,5 +244,6 @@ jobs:
           name: ${{ needs.prep.outputs.release_name }}
           draft: ${{ needs.prep.outputs.draft }}
           prerelease: ${{ needs.prep.outputs.prerelease }}
+          make_latest: ${{ needs.prep.outputs.draft == 'false' && needs.prep.outputs.prerelease == 'false' }}
           files: |
             dist/**
