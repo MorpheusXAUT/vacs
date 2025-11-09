@@ -7652,7 +7652,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-macros"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "quote",
  "syn 2.0.109",
