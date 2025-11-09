@@ -1522,7 +1522,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim",
- "syn 2.0.108",
+ "syn 2.0.109",
 ]
 
 [[package]]
@@ -1533,7 +1533,7 @@ checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
  "darling_core 0.20.11",
  "quote",
- "syn 2.0.108",
+ "syn 2.0.109",
 ]
 
 [[package]]
@@ -7613,7 +7613,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-client"
-version = "0.4.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7652,7 +7652,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-macros"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "quote",
  "syn 2.0.109",
@@ -7660,7 +7660,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-protocol"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "pretty_assertions",
  "serde",
@@ -7669,7 +7669,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-server"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7706,7 +7706,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-signaling"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -7725,7 +7725,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-vatsim"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7743,7 +7743,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-webrtc"
-version = "0.1.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde",
