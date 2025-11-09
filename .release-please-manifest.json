@@ -1,10 +1,10 @@
 {
-  "vacs-audio": "0.1.0",
+  "vacs-audio": "0.1.1",
   "vacs-client": "0.3.0",
   "vacs-macros": "0.1.0",
   "vacs-protocol": "0.1.0",
   "vacs-server": "0.1.0",
   "vacs-signaling": "0.1.0",
   "vacs-vatsim": "0.1.0",
-  "vacs-webrtc": "0.1.0"
+  "vacs-webrtc": "0.1.1"
 }
