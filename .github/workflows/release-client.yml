@@ -86,6 +86,10 @@ jobs:
             args: ''
           - platform: 'windows-latest'
             args: ''
+          - platform: 'macos-latest' # for Arm based macs (M1 and above).
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest' # for Intel based macs.
+            args: '--target x86_64-apple-darwin'
 
     runs-on: ${{ matrix.platform }}
     permissions:
@@ -170,6 +174,10 @@ jobs:
             target/release/bundle/**/*.rpm.sig
             target/release/bundle/**/*.AppImage
             target/release/bundle/**/*.AppImage.sig
+            target/release/bundle/**/*.app.tar.gz
+            target/release/bundle/**/*.app.tar.gz.sig
+            target/release/bundle/**/*.dmg
+            target/release/bundle/**/*.dmg.sig
 
       - name: Attest build provenance
         if: ${{ !github.event.repository.private || github.event.repository.owner.type == 'Organization' }}
@@ -186,6 +194,10 @@ jobs:
             target/release/bundle/**/*.rpm.sig
             target/release/bundle/**/*.AppImage
             target/release/bundle/**/*.AppImage.sig
+            target/release/bundle/**/*.app.tar.gz
+            target/release/bundle/**/*.app.tar.gz.sig
+            target/release/bundle/**/*.dmg
+            target/release/bundle/**/*.dmg.sig
 
   release:
     needs: [prep, build]
