@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-server-v0.1.0...vacs-server-v0.2.0) (2025-11-09)
+
+
+### Features
+
+* implement basic rate limiting ([e814366](https://github.com/MorpheusXAUT/vacs/commit/e814366e4aeb96b7ea7f825f661bc2b8d03e3c64))
+* **vacs-server:** reduce controller update interval to 30s ([55b8ca9](https://github.com/MorpheusXAUT/vacs/commit/55b8ca9707b8ddd51fd4312cf8c8cbc56591672c))
+
 ## 0.1.0 (2025-10-30)
 
 
