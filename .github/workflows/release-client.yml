@@ -182,6 +182,23 @@ jobs:
           args: ${{ matrix.target && format('--target {0}', matrix.target) }} ${{ env.EXTRA_TAURI_ARGS }}
           includeUpdaterJson: false
 
+      - name: Rename macOS bundles to include version & architecture
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          if [[ "${{ matrix.target }}" == "" ]]; then
+            BUNDLE_DIR="target/release/bundle"
+          else
+            BUNDLE_DIR="target/${{ matrix.target }}/release/bundle"
+          fi
+          
+          if [[ -f "$BUNDLE_DIR/macos/vacs.app.tar.gz" ]]; then
+            mv "$BUNDLE_DIR/macos/vacs.app.tar.gz" "$BUNDLE_DIR/macos/vacs_${{ needs.prep.outputs.version }}_${{ matrix.arch }}.app.tar.gz"
+          fi
+          if [[ -f "$BUNDLE_DIR/macos/vacs.app.tar.gz.sig" ]]; then
+            mv "$BUNDLE_DIR/macos/vacs.app.tar.gz.sig" "$BUNDLE_DIR/macos/vacs_${{ needs.prep.outputs.version }}_${{ matrix.arch }}.app.tar.gz.sig"
+          fi
+
       - name: Upload bundles as artifact
         uses: actions/upload-artifact@v5
         with:
@@ -189,18 +206,40 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
-            target/release/bundle/**/*
-            target/*/release/bundle/**/*
-            !target/**/bundle/**/*.app
+            target/**/release/bundle/**/*.msi
+            target/**/release/bundle/**/*.msi.sig
+            target/**/release/bundle/**/*.exe
+            target/**/release/bundle/**/*.exe.sig
+            target/**/release/bundle/**/*.deb
+            target/**/release/bundle/**/*.deb.sig
+            target/**/release/bundle/**/*.rpm
+            target/**/release/bundle/**/*.rpm.sig
+            target/**/release/bundle/**/*.AppImage
+            target/**/release/bundle/**/*.AppImage.sig
+            target/**/release/bundle/macos/vacs_*_*.app.tar.gz
+            target/**/release/bundle/macos/vacs_*_*.app.tar.gz.sig
+            target/**/release/bundle/dmg/*.dmg
+            target/**/release/bundle/dmg/*.dmg.sig
 
       - name: Attest build provenance
         if: ${{ !github.event.repository.private || github.event.repository.owner.type == 'Organization' }}
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
-            target/release/bundle/**/*
-            target/*/release/bundle/**/*
-            !target/**/bundle/**/*.app
+            target/**/release/bundle/**/*.msi
+            target/**/release/bundle/**/*.msi.sig
+            target/**/release/bundle/**/*.exe
+            target/**/release/bundle/**/*.exe.sig
+            target/**/release/bundle/**/*.deb
+            target/**/release/bundle/**/*.deb.sig
+            target/**/release/bundle/**/*.rpm
+            target/**/release/bundle/**/*.rpm.sig
+            target/**/release/bundle/**/*.AppImage
+            target/**/release/bundle/**/*.AppImage.sig
+            target/**/release/bundle/macos/vacs_*_*.app.tar.gz
+            target/**/release/bundle/macos/vacs_*_*.app.tar.gz.sig
+            target/**/release/bundle/dmg/*.dmg
+            target/**/release/bundle/dmg/*.dmg.sig
 
   release:
     needs: [prep, build]
