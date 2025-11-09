@@ -280,9 +280,9 @@ impl AppStateInner {
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
+                state.cancel_unanswered_call_timer(&peer_id);
                 let res = if state.remove_outgoing_call_peer_id(&peer_id) {
                     app.emit("signaling:call-accept", peer_id.clone()).ok();
-                    state.cancel_unanswered_call_timer(&peer_id);
 
                     match state.init_call(app.clone(), peer_id.clone(), None).await {
                         Ok(sdp) => {
