@@ -83,13 +83,17 @@ jobs:
       matrix:
         include:
           - platform: 'ubuntu-22.04'
-            args: ''
+            arch: 'x86_64'
+            target: ''
           - platform: 'windows-latest'
-            args: ''
-          - platform: 'macos-latest' # for Arm based macs (M1 and above).
-            args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest' # for Intel based macs.
-            args: '--target x86_64-apple-darwin'
+            arch: 'x86_64'
+            target: ''
+          - platform: 'macos-latest'
+            arch: 'aarch64'
+            target: 'aarch64-apple-darwin' # for Arm based macs (M1 and above).
+          - platform: 'macos-latest'
+            arch: 'x86_64'
+            target: 'x86_64-apple-darwin' # for Intel based macs.
 
     runs-on: ${{ matrix.platform }}
     permissions:
@@ -105,7 +109,7 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Prepare additional version information for manual release
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           # create/update a lightweight tag locally so vergen sees it
@@ -125,19 +129,24 @@ jobs:
             libssl-dev libasound2-dev libgtk-3-dev libopus-dev \
             cmake patchelf
 
-      - name: Install build dependencies (macOS)
-        if: matrix.platform == 'macos-latest'
+      - name: Install build dependencies (macOS, aarch64)
+        if: matrix.platform == 'macos-latest' && matrix.arch == 'aarch64'
         run: |
           brew update
           brew install opus
-          
-          if [[ "${{ matrix.args }}" == *"x86_64-apple-darwin"* ]]; then
-            if [ ! -f /usr/local/bin/brew ]; then
-              arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            fi
-            arch -x86_64 /usr/local/bin/brew install opus
-            echo "PKG_CONFIG_PATH=/usr/local/opt/opus/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+
+      - name: Install build dependencies (macOS, x86_64)
+        if: matrix.platform == 'macos-latest' && matrix.arch == 'x86_64'
+        run: |
+          if [ ! -f /usr/local/bin/brew ]; then
+            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           fi
+          
+          arch -x86_64 /usr/local/bin/brew update
+          arch -x86_64 /usr/local/bin/brew install opus
+          
+          echo "PKG_CONFIG_PATH=/usr/local/opt/opus/lib/pkgconfig" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
 
       - name: Setup Node (LTS)
         uses: actions/setup-node@v6
@@ -151,7 +160,7 @@ jobs:
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.target }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -170,46 +179,28 @@ jobs:
         with:
           projectPath: vacs-client
           appVersion: ${{ needs.prep.outputs.version }}
-          args: ${{ matrix.args }} ${{ env.EXTRA_TAURI_ARGS }}
+          args: ${{ matrix.target && format('--target {0}', matrix.target) }} ${{ env.EXTRA_TAURI_ARGS }}
           includeUpdaterJson: false
 
       - name: Upload bundles as artifact
         uses: actions/upload-artifact@v5
         with:
-          name: bundles-${{ matrix.platform }}
+          name: bundles-${{ matrix.platform }}-${{ matrix.arch }}
           if-no-files-found: error
           retention-days: 30
           path: |
-            target/release/bundle/**/*.exe
-            target/release/bundle/**/*.exe.sig
-            target/release/bundle/**/*.deb
-            target/release/bundle/**/*.deb.sig
-            target/release/bundle/**/*.rpm
-            target/release/bundle/**/*.rpm.sig
-            target/release/bundle/**/*.AppImage
-            target/release/bundle/**/*.AppImage.sig
-            target/release/**/bundle/**/*.app.tar.gz
-            target/release/**/bundle/**/*.app.tar.gz.sig
-            target/release/**/bundle/**/*.dmg
-            target/release/**/bundle/**/*.dmg.sig
+            target/release/bundle/**/*
+            target/*/release/bundle/**/*
+            !target/**/bundle/**/*.app
 
       - name: Attest build provenance
         if: ${{ !github.event.repository.private || github.event.repository.owner.type == 'Organization' }}
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
-            target/release/bundle/**/*.exe
-            target/release/bundle/**/*.exe.sig
-            target/release/bundle/**/*.deb
-            target/release/bundle/**/*.deb.sig
-            target/release/bundle/**/*.rpm
-            target/release/bundle/**/*.rpm.sig
-            target/release/bundle/**/*.AppImage
-            target/release/bundle/**/*.AppImage.sig
-            target/release/**/bundle/**/*.app.tar.gz
-            target/release/**/bundle/**/*.app.tar.gz.sig
-            target/release/**/bundle/**/*.dmg
-            target/release/**/bundle/**/*.dmg.sig
+            target/release/bundle/**/*
+            target/*/release/bundle/**/*
+            !target/**/bundle/**/*.app
 
   release:
     needs: [prep, build]
@@ -236,6 +227,7 @@ jobs:
             echo "$sum  $(basename "$f")" >> "$out"
           done < <(find . -type f \
             ! -name 'SHA256SUMS*' \
+            ! -name '*.app' \
             -print0 | sort -z)
 
       - name: Install Cosign
