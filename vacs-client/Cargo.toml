@@ -49,7 +49,12 @@ vacs-webrtc = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { workspace = true }
+tauri-plugin-prevent-default = { workspace = true, features = ["platform-windows"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-graphics = { workspace = true }
 objc2-core-foundation = { workspace = true }
+tauri-plugin-prevent-default = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tauri-plugin-prevent-default = { workspace = true }
