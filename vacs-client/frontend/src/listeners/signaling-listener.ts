@@ -52,7 +52,7 @@ export function setupSignalingListeners() {
                 acceptCall(getClientInfo(event.payload));
             }),
             listen<string>("signaling:call-end", (event) => {
-                removePeer(event.payload);
+                removePeer(event.payload, true);
             }),
             listen<string>("signaling:call-reject", (event) => {
                 rejectPeer(event.payload);
