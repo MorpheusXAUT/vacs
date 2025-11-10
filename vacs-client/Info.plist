@@ -3,6 +3,10 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>This app requires access to your microphone to capture your voice during calls</string>
+  <string>This app requires access to your microphone to capture your voice during calls.</string>
+  <key>NSInputMonitoringUsageDescription</key>
+  <string>This app requires access to monitor keyboard input to capture your keybinds.</string>
+  <key>NSAccessibilityUsageDescription</key>
+  <string>This app requires accessibility access to simulate keyboard events when using the radio integration.</string>
 </dict>
 </plist>
