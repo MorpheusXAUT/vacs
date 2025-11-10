@@ -20,7 +20,7 @@ type CallState = {
         acceptCall: (peer: ClientInfo) => void,
         endCall: () => void,
         addIncomingCall: (peer: ClientInfo) => void,
-        removePeer: (peerId: string) => void,
+        removePeer: (peerId: string, callEnd?: boolean) => void,
         rejectPeer: (peerId: string) => void,
         dismissRejectedPeer: () => void,
         errorPeer: (peerId: string, reason: string) => void,
@@ -61,7 +61,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
 
             set({incomingCalls: [...incomingCalls, peerId]});
         },
-        removePeer: (peerId) => {
+        removePeer: (peerId, callEnd) => {
             const incomingCalls = get().incomingCalls.filter(info => info.id !== peerId);
 
             if (shouldStopBlinking(incomingCalls.length, get().callDisplay)) {
@@ -72,7 +72,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
             }
 
             const callDisplay = get().callDisplay;
-            if (callDisplay?.peer.id === peerId && callDisplay?.type !== "error") {
+            if (callDisplay?.peer.id === peerId && callDisplay?.type !== "error" && (!callEnd || callDisplay?.type !== "outgoing")) {
                 set({callDisplay: undefined});
             }
         },
