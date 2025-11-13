@@ -62,7 +62,7 @@ function DAKey({client}: DAKeyProps) {
     return (
         <Button
             color={inCall ? "green" : (isCalling || isRejected) && blink ? "green" : isError && blink ? "red" : "gray"}
-            className="w-25 h-[calc((100%-3.75rem)/6)] rounded !leading-4.5 p-1.5"
+            className="w-25 h-full rounded !leading-4.5 p-1.5"
             highlight={beingCalled || isRejected ? "green" : undefined}
             onClick={handleClick}
         >
