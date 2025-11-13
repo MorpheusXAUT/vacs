@@ -66,7 +66,7 @@ function DAKey({client}: DAKeyProps) {
             highlight={beingCalled || isRejected ? "green" : undefined}
             onClick={handleClick}
         >
-            <p className="w-full truncate" title={stationName}>{stationName}</p>
+            <p className="w-full truncate" title={client.displayName}>{stationName}</p>
             {stationType !== "" && <p>{stationType}</p>}
             {client.frequency !== "" && <p title={client.frequency}>{client.frequency}</p>}
         </Button>
