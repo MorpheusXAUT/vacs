@@ -45,8 +45,8 @@ jobs:
             RAW="${GITHUB_REF_NAME}"  # e.g. vacs-client-v1.2.3
           fi
 
-          # Extract X.Y.Z from: 1.2.3 | v1.2.3 | vacs-client-v1.2.3
-          if [[ "$RAW" =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+          # Extract X.Y.Z from: 1.2.3 | v1.2.3 | vacs-client-v1.2.3 | 1.2.3-rc.1
+          if [[ "$RAW" =~ ([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?) ]]; then
             VER="${BASH_REMATCH[1]}"
           else
             echo "Could not parse semver from: $RAW" >&2
@@ -64,7 +64,7 @@ jobs:
           fi
 
           # Mark prerelease if version contains a prerelease part (e.g., -rc.1)
-          if [[ "$RAW" =~ -[A-Za-z0-9] ]]; then
+          if [[ "$VER" =~ -[A-Za-z0-9] ]]; then
             PRERELEASE=true
           else
             PRERELEASE=false
