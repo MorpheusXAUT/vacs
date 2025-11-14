@@ -12,7 +12,8 @@
     "vacs-audio": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-audio"
+      "extra-label": "crate: vacs-audio",
+      "skip-github-release": true
     },
     "vacs-client": {
       "release-type": "rust",
@@ -34,32 +35,38 @@
     "vacs-macros": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-macros"
+      "extra-label": "crate: vacs-macros",
+      "skip-github-release": true
     },
     "vacs-protocol": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-protocol"
+      "extra-label": "crate: vacs-protocol",
+      "skip-github-release": true
     },
     "vacs-server": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-server"
+      "extra-label": "crate: vacs-server",
+      "skip-github-release": true
     },
     "vacs-signaling": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-signaling"
+      "extra-label": "crate: vacs-signaling",
+      "skip-github-release": true
     },
     "vacs-vatsim": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-vatsim"
+      "extra-label": "crate: vacs-vatsim",
+      "skip-github-release": true
     },
     "vacs-webrtc": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-webrtc"
+      "extra-label": "crate: vacs-webrtc",
+      "skip-github-release": true
     }
   }
 }
