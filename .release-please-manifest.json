@@ -4,7 +4,7 @@
   "vacs-macros": "0.2.0",
   "vacs-protocol": "1.0.0",
   "vacs-server": "0.2.0",
-  "vacs-signaling": "0.2.1",
+  "vacs-signaling": "0.3.0",
   "vacs-vatsim": "0.2.0",
   "vacs-webrtc": "0.2.0"
 }
