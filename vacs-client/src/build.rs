@@ -4,7 +4,6 @@ use serde::Serialize;
 pub struct BuildInfo {
     pub git_sha: &'static str,
     pub git_branch: &'static str,
-    pub git_tag: &'static str,
     pub git_describe: &'static str,
     pub git_commit_date: &'static str,
     pub git_commit_message: &'static str,
@@ -17,7 +16,6 @@ impl BuildInfo {
         Self {
             git_sha: option_env!("VERGEN_GIT_SHA").unwrap_or("unknown"),
             git_branch: option_env!("VERGEN_GIT_BRANCH").unwrap_or("unknown"),
-            git_tag: option_env!("VERGEN_GIT_TAG").unwrap_or("none"),
             git_describe: option_env!("VERGEN_GIT_DESCRIBE").unwrap_or("unknown"),
             git_commit_date: option_env!("VERGEN_GIT_COMMIT_DATE").unwrap_or_default(),
             git_commit_message: option_env!("VERGEN_GIT_COMMIT_MESSAGE").unwrap_or_default(),

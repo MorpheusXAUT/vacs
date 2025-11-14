@@ -1,4 +1,4 @@
-import {ClientInfo} from "../types/client-info.ts";
+import {ClientInfo, sortClients} from "../types/client-info.ts";
 import {create} from "zustand/react";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
@@ -23,10 +23,10 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
     clients: [],
     setConnectionState: (connectionState) => set({connectionState}),
     setClientInfo: (info) => set({displayName: info.displayName, frequency: info.frequency}),
-    setClients: (clients) => set({clients}),
+    setClients: (clients) => set({clients: sortClients(clients)}),
     addClient: (client) => {
         const clients = get().clients.filter(c => c.id !== client.id);
-        set({clients: [...clients, client]});
+        set({clients: sortClients([...clients, client])});
     },
     getClientInfo: (cid) => {
         const client = get().clients.find(c => c.id === cid);
