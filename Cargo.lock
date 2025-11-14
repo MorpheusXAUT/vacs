@@ -7690,7 +7690,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-client"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7749,7 +7749,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-server"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7786,7 +7786,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-signaling"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "futures-util",

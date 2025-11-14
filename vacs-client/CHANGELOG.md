@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v0.4.0...vacs-client-v1.0.0) (2025-11-14)
+
+
+### Bug Fixes
+
+* **vacs-client:** fix DA key overflow and sorting ([#204](https://github.com/MorpheusXAUT/vacs/issues/204)) ([c1b2da5](https://github.com/MorpheusXAUT/vacs/commit/c1b2da5e39126b033fa24251eb725001c244080a))
+
 ## [0.4.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v0.3.0...vacs-client-v0.4.0) (2025-11-12)
 
 
