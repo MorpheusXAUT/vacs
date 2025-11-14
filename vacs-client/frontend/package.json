@@ -2,6 +2,8 @@
   "name": "vacs-client",
   "private": true,
   "version": "1.0.0",
+  "license": "(MIT OR Apache-2.0)",
+  "repository": "https://github.com/MorpheusXAUT/vacs",
   "type": "module",
   "scripts": {
     "dev": "vite",
