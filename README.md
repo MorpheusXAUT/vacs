@@ -2,7 +2,7 @@
 
 `vacs` is an open-source, cross-platform **Ground-To-Ground Voice Communication System for VATSIM**, meant to provide a seamless coordination experience for virtual air traffic controllers.
 
-We aim to modernize VATSIM controller-to-controller coordination by providing a secure, low-latency, and easy-to-use voice communication system.
+We aim to modernize VATSIM controller-to-controller coordination by providing a low-latency and easy-to-use voice communication system.
 
 ## Features
 
@@ -11,7 +11,7 @@ We aim to modernize VATSIM controller-to-controller coordination by providing a 
 - Simple authentication using [VATSIM Connect](https://vatsim.dev/services/connect/) (no need to provide your VATSIM credentials)
 - Cross-platform desktop client (Windows, Linux, macOS) using [Tauri](https://tauri.app/)
 - UI/UX inspired by real-life equivalents
-- (Partial) Integration with selected radio clients ([Audio For Vatsim](https://audio.vatsim.net/), [TrackAudio](https://github.com/pierr3/TrackAudio))
+- (Partial) Integration with selected radio clients ([Audio For VATSIM](https://audio.vatsim.net/), [TrackAudio](https://github.com/pierr3/TrackAudio))
 
 ## Installation
 
@@ -22,8 +22,13 @@ Releases are provided for:
 - Windows (`*.exe`)
 - Debian-based Linux distributions (`*.deb`)
 - Red Hat-based Linux distributions (`*.rpm`)
-- macOS Apple Silicon (`*aarch64.app.tar.gz`, `*aarch64.dmg`)
-- macOS Intel (`*x86_64.app.tar.gz`, `*x64.dmg`)
+- macOS Apple Silicon (`*aarch64.dmg`)
+- macOS Intel (`*x64.dmg`)
+
+Note that our macOS releases are currently not code signed and are thus automatically flagged as "corrupted". In order to run the application, you have to manually remove it from quarantine by running:
+```bash
+sudo xattr -rd com.apple.quarantine /Applications/vacs.app
+```
 
 The client is self-contained and does not require any additional prerequisites or manual dependency installation.
 
@@ -34,8 +39,6 @@ All releases are signed - you can find instructions on how to verify these signa
 The `vacs` client has a built-in updater that will automatically notify you when a new version is available. 
 
 As we're making changes to our service, we may occasionally introduce breaking/non-backwards-compatible changes that require you to update your client before you can continue using `vacs`.
-
-**Note**: automatic updates are **not** available for macOS clients installed using the `.dmg` installer. Please use the `.app` application bundles instead to receive automatic updates.
 
 ## System requirements
 
@@ -49,12 +52,13 @@ As we're making changes to our service, we may occasionally introduce breaking/n
 - ALSA audio backend required (automatically provided by Pipewire and PulseAudio plugins installed as dependencies)
 
 ### macOS
-- macOS 12.0+ (Intel or Apple Silicon)
-- Microphone permission must be granted on first launch
+- macOS High Sierra 10.13+ (Intel or Apple Silicon)
+- Microphone, input monitoring and accessibility control permissions must be granted on first launch
 
 ### Audio devices
 - `vacs` supports most input devices by resampling captured audio. For best results, use a device supporting 48 kHz sampling rate and either mono or stereo input channels. Note that audio is only transmitted as mono via WebRTC, so spatial input is lost.
-- Audio is resampled to the best available sample rate supported by the selected device. For best results, use a stereo device with a sample rate of 48 kHz.
+- Audio is resampled to the best available sample rate supported by the selected output device. For best results, use a stereo device with a sample rate of 48 kHz.
+- As we currently do not implement any echo cancellation, headset/headphone usage is recommended to avoid audio feedback while in a call.
 
 ## Support
 
@@ -89,10 +93,12 @@ In addition to the production server, we also provide a development server runni
 
 **tl;dr** No audio is recorded, no credentials are stored, and calls are peer-to-peer. Your IP is visible to call participants.
 
-- Neither `vacs-client` nor `vacs-server` store any personal user data or VATSIM credentials
+- Neither `vacs-client` nor `vacs-server` access your personal details (name, rating, etc.), we only process and temporarily store your VATSIM CID
 - `vacs-client` does not record or store any audio data received or sent
 - `vacs-server` does not receive any audio data **at all** as all calls are peer-to-peer
 - Due to the peer-to-peer nature of `vacs-client`, your IP address is exposed to the other party once a call has been accepted and is established
+- To establish peer-to-peer calls across different networks, `vacs-client` uses a [STUN](https://en.wikipedia.org/wiki/STUN) server to discover your public WebRTC endpoints. By default, the Google STUN server is used. No audio or personal data is ever sent to the STUN server — it only exchanges minimal network metadata required for NAT traversal, however your IP address is visible to the service.
+- If you configure a [TURN](https://en.wikipedia.org/wiki/TURN) server, `vacs-client` may relay WebRTC media through it when direct peer-to-peer connections are not possible. Your IP address as well as the (unencrypted) voice data is visible to the service.
 - `vacs-client` does not need or access your VATSIM credentials. The VATSIM Connect API only requires a valid VATSIM account to be logged in, however your password is never sent to `vacs-client` or `vacs-server`
 - The OAuth2 token received from VATSIM Connect is not persisted locally
 - `vacs-server` creates an opaque session for each login and only associated your VATSIM CID. No other user data is stored
@@ -104,7 +110,7 @@ In addition to the production server, we also provide a development server runni
 
 The `vacs` project is a [Rust](https://rust-lang.org/) monorepo containing several crates:
 
-- `vacs-client`: Cross-platform desktop client using [Tauri](https://tauri.app/) and [React](https://react.dev/)
+- `vacs-client`: Cross-platform desktop client using [Tauri](https://tauri.app/) and [Preact](https://preactjs.com/)
 - `vacs-server`: Axum-based signaling server providing HTTP and websocket API
 - `vacs-protocol`: Shared protocol and types between client and server
 - `vacs-audio`: CPAL audio backend including Opus encoder/decoder, a waveform generator and a basic mixer and DSP
