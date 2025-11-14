@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.0.1](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v1.0.0...vacs-client-v1.0.1) (2025-11-14)
+
 ## [1.0.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v0.4.0...vacs-client-v1.0.0) (2025-11-14)
 
 
