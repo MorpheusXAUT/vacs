@@ -40,6 +40,12 @@
       "frontend/icons/icon.icns",
       "frontend/icons/icon.ico"
     ],
+    "resources": {
+      "../LICENSE-APACHE": "LICENSE-APACHE",
+      "../LICENSE-MIT": "LICENSE-MIT",
+      "../README.md": "README.md",
+      "frontend/src/assets/fonts/OFL-noto.txt": "licenses/OFL-noto.txt"
+    },
     "windows": {
       "nsis": {
         "headerImage": "frontend/icons/installer/header.bmp",
