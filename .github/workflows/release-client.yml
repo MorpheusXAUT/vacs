@@ -54,7 +54,7 @@ jobs:
           fi
 
           TAG="vacs-client-v${VER}"
-          REL_NAME="vacs-client v${VER}"
+          REL_NAME="vacs-client: v${VER}"
 
           # Draft release when manual; published on tag-push
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
