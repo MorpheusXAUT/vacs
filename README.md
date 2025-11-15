@@ -1,4 +1,4 @@
-# vacs - VATSIM ATC Communication System 
+# vacs - VATSIM ATC Communication System
 
 `vacs` is an open-source, cross-platform **Ground-To-Ground Voice Communication System for VATSIM**, meant to provide a seamless coordination experience for virtual air traffic controllers.
 
@@ -26,6 +26,7 @@ Releases are provided for:
 - macOS Intel (`*x64.dmg`)
 
 Note that our macOS releases are currently not code signed and are thus automatically flagged as "corrupted". In order to run the application, you have to manually remove it from quarantine by running:
+
 ```bash
 sudo xattr -rd com.apple.quarantine /Applications/vacs.app
 ```
@@ -36,29 +37,50 @@ All releases are signed - you can find instructions on how to verify these signa
 
 ## Updating
 
-The `vacs` client has a built-in updater that will automatically notify you when a new version is available. 
+The `vacs` client has a built-in updater that will automatically notify you when a new version is available.
 
 As we're making changes to our service, we may occasionally introduce breaking/non-backwards-compatible changes that require you to update your client before you can continue using `vacs`.
 
 ## System requirements
 
 ### Windows
+
 - Windows 10 or newer (64-bit)
 - No additional dependencies required (installer might automatically install webview dependency if no browser engine is available at all)
 
 ### Linux
+
 - Ubuntu 22.04+, Fedora 40+, or similar recommended
 - Required system dependencies are automatically selected by the package manager during client installation
 - ALSA audio backend required (automatically provided by Pipewire and PulseAudio plugins installed as dependencies)
 
 ### macOS
+
 - macOS High Sierra 10.13+ (Intel or Apple Silicon)
 - Microphone, input monitoring and accessibility control permissions must be granted on first launch
 
 ### Audio devices
+
 - `vacs` supports most input devices by resampling captured audio. For best results, use a device supporting 48 kHz sampling rate and either mono or stereo input channels. Note that audio is only transmitted as mono via WebRTC, so spatial input is lost.
 - Audio is resampled to the best available sample rate supported by the selected output device. For best results, use a stereo device with a sample rate of 48 kHz.
 - As we currently do not implement any echo cancellation, headset/headphone usage is recommended to avoid audio feedback while in a call.
+
+## Screenshots
+
+![Main radio page displaying DA keys of stations to call](docs/screenshots/radio_page.png "radio page")
+Main radio page displaying DA keys of stations to call
+
+![Settings page for audio and radio configuration](docs/screenshots/settings.png "settings page")
+Settings page for audio and radio configuration
+
+![Outgoing call initiated by user before being picked up](docs/screenshots/outgoing_call.png "outgoing call")
+Outgoing call initiated by user before being picked up
+
+![Incoming call initiated by other user before being picked up](docs/screenshots/incoming_call.png "incoming call")
+Incoming call initiated by other user before being picked up (DA key blinks between green and grey state)
+
+![Established call between two parties](docs/screenshots/active_call.png "active call")
+Established call between two parties (solid green DA key)
 
 ## Support
 
@@ -69,6 +91,13 @@ If you encounter any issues or have questions about `vacs`, please use one of th
 - **Questions & discussions**: start a conversation on our [discussion forum](https://github.com/MorpheusXAUT/vacs/discussions)
 
 Please search existing issues and discussions before creating a new one to avoid duplicates.
+
+### Known issues
+
+- **macOS claims `vacs` is broken and needs to be removed**: see macOS note in [Installation](#installation) section, you'll need to manually allow `vacs` to run since we're currently not using Apple code signing
+- **My Push-To-Talk/Push-To-Mute/Radio Integration key is not being picked up**: if you're running your radar and/or radio client as admin, you'll need to run `vacs` as admin as well, otherwise it won't be able to detect your key presses
+- **My calls fail to establish after a short time**: make sure your operating system and/or firewall are not blocking `vacs` from establishing network connections
+- **I'm transmitting on frequency right after accepting a call while using radio integration**: you'll need to wait for the call to be fully established (indicated by the little green indicator in the top left, below the current time) before pressing your PTT key to coordinate. While the call is still being established (usually takes between 50 and 200 milliseconds after picking up, indicated by a orange connection indicator), your PTT key still triggers your radio
 
 ## Roadmap
 
@@ -87,7 +116,7 @@ By default, all released `vacs` clients will connect to the production server lo
 
 ### Development environment
 
-In addition to the production server, we also provide a development server running on `https://vacs-dev.gusch.jetzt` (`wss://vacs-dev.gusch.jetzt/ws`) that can be used to test new changes before deploying them to production. Furthermore, the dev server does not require live VATSIM credentials but uses the [VATSIM Connect Sandbox environment](https://vatsim.dev/services/connect/sandbox) and its associated credentials. No active VATSIM connection is required to connect to the dev server. 
+In addition to the production server, we also provide a development server running on `https://vacs-dev.gusch.jetzt` (`wss://vacs-dev.gusch.jetzt/ws`) that can be used to test new changes before deploying them to production. Furthermore, the dev server does not require live VATSIM credentials but uses the [VATSIM Connect Sandbox environment](https://vatsim.dev/services/connect/sandbox) and its associated credentials. No active VATSIM connection is required to connect to the dev server.
 
 ## Privacy & data handling
 
@@ -104,7 +133,7 @@ In addition to the production server, we also provide a development server runni
 - `vacs-server` creates an opaque session for each login and only associated your VATSIM CID. No other user data is stored
 - The local session storage in `vacs-client` is encrypted using OS-specific encryption mechanisms and inaccessible to other applications
 - No long-term logs or call metadata are retained
-- The call log displayed in `vacs-client` is client-side only and deleted once the client is closed
+- The call log displayed in `vacs-client` is client-side only and deleted once the client is disconnected
 
 ## Architecture
 
