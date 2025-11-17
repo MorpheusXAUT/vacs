@@ -190,6 +190,7 @@ impl From<AudioConfig> for PersistedAudioConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
     pub always_on_top: bool,
+    pub fullscreen: bool,
     pub release_channel: ReleaseChannel,
     pub signaling_auto_reconnect: bool,
     pub transmit_config: TransmitConfig,
@@ -201,6 +202,7 @@ impl Default for ClientConfig {
     fn default() -> Self {
         Self {
             always_on_top: false,
+            fullscreen: false,
             release_channel: ReleaseChannel::default(),
             signaling_auto_reconnect: true,
             transmit_config: TransmitConfig::default(),

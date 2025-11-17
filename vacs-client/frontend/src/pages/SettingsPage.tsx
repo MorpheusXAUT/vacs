@@ -36,6 +36,7 @@ function SettingsPage() {
                     className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:px-1 [&>button]:shrink-0">
                     <div className="h-full flex flex-row gap-2 items-center">
                         <AlwaysOnTopButton disabled={!capAlwaysOnTop}/>
+                        <FullscreenButton/>
                         <UpdateButton/>
                         <Button color="gray" className="w-24 h-full rounded text-sm"
                                 onClick={() => invokeSafe("app_open_logs_folder")}>Open logs<br/>folder</Button>
@@ -156,6 +157,34 @@ function AlwaysOnTopButton({disabled}: { disabled: boolean }) {
             title={disabled ? `Unfortunately, always-on-top is not yet supported on ${capPlatform}` : undefined}
         >
             <p>Always<br/>on Top</p>
+        </Button>
+    );
+}
+
+function FullscreenButton() {
+    const [fullscreen, setFullscreen] = useState<boolean>(false);
+
+    const toggleFullscreen = useAsyncDebounce(async () => {
+        const isFullscreen = await invokeSafe<boolean>("app_set_fullscreen", {fullscreen: !fullscreen});
+        setFullscreen(isFullscreen ?? false);
+    });
+
+    useEffect(() => {
+        const fetchIsFullscreen = async () => {
+            const isFullscreen = await getCurrentWindow().isFullscreen();
+            setFullscreen(isFullscreen);
+        };
+
+        void fetchIsFullscreen();
+    }, []);
+
+    return (
+        <Button
+            color={fullscreen ? "blue" : "cyan"}
+            className="h-full rounded text-sm"
+            onClick={toggleFullscreen}
+        >
+            <p>Full<br/>Screen</p>
         </Button>
     );
 }

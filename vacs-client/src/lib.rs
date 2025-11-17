@@ -75,12 +75,13 @@ pub fn run() {
 
                 let state = AppStateInner::new(app.handle())?;
 
+                let main_window = app
+                    .get_webview_window("main")
+                    .context("Failed to get main window")
+                    .map_startup_err(StartupError::Other)?;
+
                 if state.config.client.always_on_top {
                     if capabilities.always_on_top {
-                        let main_window = app
-                            .get_webview_window("main")
-                            .context("Failed to get main window")
-                            .map_startup_err(StartupError::Other)?;
                         if let Err(err) = main_window.set_always_on_top(true) {
                             log::warn!("Failed to set main window to be always on top: {err}");
                         } else {
@@ -88,6 +89,14 @@ pub fn run() {
                         }
                     } else {
                         log::warn!("Your platform ({}) does not support always on top windows, setting is ignored.", capabilities.platform)
+                    }
+                }
+
+                if state.config.client.fullscreen {
+                    if let Err(err) = main_window.set_fullscreen(true) {
+                        log::warn!("Failed to set main window to be fullscreen: {err}");
+                    } else {
+                        log::debug!("Set main window to be fullscreen");
                     }
                 }
 
@@ -127,6 +136,7 @@ pub fn run() {
             app::commands::app_open_logs_folder,
             app::commands::app_platform_capabilities,
             app::commands::app_set_always_on_top,
+            app::commands::app_set_fullscreen,
             app::commands::app_update,
             audio::commands::audio_get_devices,
             audio::commands::audio_get_hosts,

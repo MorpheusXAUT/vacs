@@ -146,3 +146,30 @@ pub async fn app_set_always_on_top(
 
     Ok(persisted_client_config.client.always_on_top)
 }
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_set_fullscreen(
+    window: Window,
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    fullscreen: bool,
+) -> Result<bool, Error> {
+    let persisted_client_config: PersistedClientConfig = {
+        window
+            .set_fullscreen(fullscreen)
+            .context("Failed to change window fullscreen")?;
+
+        let mut state = app_state.lock().await;
+        state.config.client.fullscreen = fullscreen;
+        state.config.client.clone().into()
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    Ok(persisted_client_config.client.fullscreen)
+}
