@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::fmt::Display;
+use tauri::LogicalSize;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -90,6 +91,24 @@ impl Platform {
             Platform::LinuxWayland => "LinuxWayland",
             Platform::LinuxUnknown => "LinuxUnknown",
             Platform::Unknown => "Unknown",
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn default_window_size(&self) -> LogicalSize<f64> {
+        match self {
+            Platform::Windows | Platform::Unknown => LogicalSize {
+                width: 1000.0,
+                height: 753.0,
+            },
+            Platform::MacOs => LogicalSize {
+                width: 1000.0,
+                height: 778.0,
+            },
+            Platform::LinuxX11 | Platform::LinuxWayland | Platform::LinuxUnknown => LogicalSize {
+                width: 1000.0,
+                height: 797.0,
+            },
         }
     }
 }

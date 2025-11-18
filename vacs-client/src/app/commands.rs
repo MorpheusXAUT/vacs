@@ -3,7 +3,7 @@ use crate::app::{UpdateInfo, get_update, open_fatal_error_dialog, open_logs_fold
 use crate::build::VersionInfo;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
 use crate::error::Error;
-use crate::platform::Capabilities;
+use crate::platform::{Capabilities, Platform};
 use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
@@ -160,6 +160,15 @@ pub async fn app_set_fullscreen(
         window
             .set_fullscreen(fullscreen)
             .context("Failed to change window fullscreen")?;
+
+        if !fullscreen {
+            let size = Platform::detect().default_window_size();
+            log::debug!(
+                "Restoring window size to {:?} after fullscreen was disabled",
+                size
+            );
+            window.set_size(size).context("Failed to set window size")?;
+        }
 
         let capabilities = Capabilities::default();
         if capabilities.window_state {
