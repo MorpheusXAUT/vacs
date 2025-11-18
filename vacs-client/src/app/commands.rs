@@ -6,6 +6,7 @@ use crate::error::Error;
 use crate::platform::Capabilities;
 use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 #[tauri::command]
 pub fn app_frontend_ready(app: AppHandle, window: Window) {
@@ -159,6 +160,12 @@ pub async fn app_set_fullscreen(
         window
             .set_fullscreen(fullscreen)
             .context("Failed to change window fullscreen")?;
+
+        let capabilities = Capabilities::default();
+        if capabilities.window_state {
+            app.save_window_state(StateFlags::SIZE | StateFlags::POSITION)
+                .context("Failed to save window state")?;
+        }
 
         let mut state = app_state.lock().await;
         state.config.client.fullscreen = fullscreen;

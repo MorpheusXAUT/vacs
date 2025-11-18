@@ -2,6 +2,7 @@ export type Platform = "Windows" | "LinuxX11" | "LinuxWayland" | "LinuxUnknown" 
 
 export type Capabilities = {
     alwaysOnTop: boolean;
+    windowState: boolean;
     keybinds: boolean;
     platform: Platform;
 };

@@ -12,6 +12,7 @@
     "deep-link:default",
     "log:default",
     "opener:default",
-    "updater:default"
+    "updater:default",
+    "window-state:default"
   ]
 }

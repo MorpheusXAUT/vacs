@@ -23,6 +23,7 @@ use crate::platform::Capabilities;
 use anyhow::Context;
 use tauri::{App, Manager, RunEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 use tokio::sync::Mutex as TokioMutex;
 
 pub fn run() {
@@ -47,7 +48,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(tauri_plugin_prevent_default::debug())
         .setup(|app| {
             log::info!("{:?}", VersionInfo::gather());
@@ -79,6 +80,20 @@ pub fn run() {
                     .get_webview_window("main")
                     .context("Failed to get main window")
                     .map_startup_err(StartupError::Other)?;
+
+                if capabilities.window_state {
+                    // Does not work properly on Wayland, window size increases every time the application
+                    // is relaunched. A similar bug (also related to incorrect size, but for shrinking on Windows)
+                    // was reported and supposedly is an upstream tao/muda bug: https://github.com/tauri-apps/plugins-workspace/issues/2733
+                    app.handle().plugin(tauri_plugin_window_state::Builder::default().build())
+                        .context("Failed to build window state plugin")
+                        .map_startup_err(StartupError::Other)?;
+                    if let Err(err) = main_window
+                        .restore_state(StateFlags::SIZE | StateFlags::POSITION)
+                    {
+                        log::warn!("Failed to restore window state: {err}");
+                    }
+                }
 
                 if state.config.client.always_on_top {
                     if capabilities.always_on_top {
@@ -177,6 +192,13 @@ pub fn run() {
                     app_handle.state::<KeybindEngineHandle>().write().shutdown();
 
                     app_handle.state::<AppState>().lock().await.shutdown();
+
+                    let capabilities = Capabilities::default();
+                    if capabilities.window_state {
+                        app_handle.save_window_state(
+                            StateFlags::SIZE | StateFlags::POSITION
+                        ).expect("Failed to save window state");
+                    }
                 });
             }
         });
