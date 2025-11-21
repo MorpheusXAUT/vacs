@@ -54,6 +54,7 @@ impl AppConfig {
                 )
                 .required(false),
             )
+            .add_source(File::with_name("audio.toml").required(false))
             .add_source(
                 File::with_name(
                     config_dir
@@ -63,7 +64,7 @@ impl AppConfig {
                 )
                 .required(false),
             )
-            .add_source(File::with_name("audio.toml").required(false))
+            .add_source(File::with_name("client.toml").required(false))
             .add_source(Environment::with_prefix("vacs_client"))
             .build()
             .context("Failed to build config")?
