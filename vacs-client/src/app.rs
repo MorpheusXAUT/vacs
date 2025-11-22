@@ -13,8 +13,8 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 use url::Url;
 
 pub(crate) mod commands;
-
 pub(crate) mod state;
+pub(crate) mod window;
 
 pub fn handle_deep_link(app: AppHandle, url: String) {
     let url = url.to_string();

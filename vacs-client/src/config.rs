@@ -1,3 +1,4 @@
+use crate::app::window::WindowProvider;
 use crate::error::Error;
 use crate::radio::push_to_talk::PushToTalkRadio;
 use crate::radio::{DynRadio, RadioIntegration};
@@ -9,7 +10,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
+use tauri::{LogicalSize, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_webrtc::config::WebrtcConfig;
 
@@ -222,26 +223,20 @@ impl ClientConfig {
         if self.signaling_auto_reconnect { 8 } else { 0 }
     }
 
-    pub fn default_window_size() -> PhysicalSize<u32> {
-        PhysicalSize::new(1000, 753)
+    pub fn default_window_size<P>(provider: &P) -> Result<PhysicalSize<u32>, Error>
+    where
+        P: WindowProvider + ?Sized,
+    {
+        Ok(LogicalSize::new(1000.0f64, 753.0f64).to_physical(provider.scale_factor()?))
     }
 
-    pub fn update_window_state(&mut self, app: &AppHandle) -> Result<(), Error> {
-        let main_window = app
-            .get_webview_window("main")
-            .context("Failed to get main window")?;
-
-        self.position = Some(
-            main_window
-                .outer_position()
-                .context("Failed to get window position")?,
-        );
-
-        self.size = Some(
-            main_window
-                .inner_size()
-                .context("Failed to get window size")?,
-        );
+    pub fn update_window_state<P>(&mut self, provider: &P) -> Result<(), Error>
+    where
+        P: WindowProvider + ?Sized,
+    {
+        let window = provider.window()?;
+        self.position = Some(window.position()?);
+        self.size = Some(window.size()?);
 
         log::debug!(
             "Updating window position to {:?} and size to {:?}",
@@ -251,20 +246,20 @@ impl ClientConfig {
         Ok(())
     }
 
-    pub fn restore_window_state(&self, app: &AppHandle) -> Result<(), Error> {
-        let main_window = app
-            .get_webview_window("main")
-            .context("Failed to get main window")?;
-
-        let size = self.size.unwrap_or(Self::default_window_size());
+    pub fn restore_window_state<P>(&self, provider: &P) -> Result<(), Error>
+    where
+        P: WindowProvider + ?Sized,
+    {
+        let window = provider.window()?;
 
         log::debug!(
-            "Restoring window position to {:?} and size to {size:?}",
-            self.position
+            "Restoring window position to {:?} and size to {:?}",
+            self.position,
+            self.size
         );
 
         if let Some(position) = self.position {
-            for m in main_window
+            for m in window
                 .available_monitors()
                 .context("Failed to get available monitors")?
             {
@@ -275,6 +270,8 @@ impl ClientConfig {
                 let right = x + width as i32;
                 let top = y;
                 let bottom = y + height as i32;
+
+                let size = self.size.unwrap_or(Self::default_window_size(&window)?);
 
                 let intersects = [
                     (position.x, position.y),
@@ -294,18 +291,14 @@ impl ClientConfig {
                     PhysicalPosition::default()
                 };
 
-                main_window
+                window
                     .set_position(position)
                     .context("Failed to set main window position")?;
             }
         }
 
-        // Do not resize the window if we're already using the default size as that'll shrink it
-        // due to some LogicalSize/PhysicalSize conversions for some reason... We still need the
-        // default size in case we calculate the position above, as the monitor boundaries check
-        // relies on it.
-        if size != Self::default_window_size() {
-            main_window
+        if let Some(size) = self.size {
+            window
                 .set_size(size)
                 .context("Failed to set main window size")?;
 
@@ -327,9 +320,7 @@ impl ClientConfig {
                 // - https://github.com/tauri-apps/tao/issues/929
                 // - https://github.com/tauri-apps/tao/pull/1055
                 std::thread::sleep(Duration::from_millis(50));
-                let actual_size = main_window
-                    .inner_size()
-                    .context("Failed to get window size")?;
+                let actual_size = window.inner_size().context("Failed to get window size")?;
 
                 let width_diff = actual_size.width.saturating_sub(size.width);
                 let height_diff = actual_size.height.saturating_sub(size.height);
@@ -338,7 +329,7 @@ impl ClientConfig {
                     log::warn!(
                         "Window size changed after decorations apply, expected: {size:?}, got: {actual_size:?}. Resizing again"
                     );
-                    main_window
+                    window
                         .set_size(PhysicalSize::new(
                             size.width.saturating_sub(width_diff),
                             size.height.saturating_sub(height_diff),
