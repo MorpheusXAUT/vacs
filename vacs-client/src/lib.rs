@@ -17,13 +17,13 @@ use crate::app::state::keybinds::AppStateKeybindsExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::AudioManagerHandle;
 use crate::build::VersionInfo;
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
 use anyhow::Context;
-use tauri::{App, Manager, RunEvent};
+use tauri::{App, Manager, RunEvent, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
-use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 use tokio::sync::Mutex as TokioMutex;
 
 pub fn run() {
@@ -81,19 +81,29 @@ pub fn run() {
                     .context("Failed to get main window")
                     .map_startup_err(StartupError::Other)?;
 
-                if capabilities.window_state {
-                    // Does not work properly on Wayland, window size increases every time the application
-                    // is relaunched. A similar bug (also related to incorrect size, but for shrinking on Windows)
-                    // was reported and supposedly is an upstream tao/muda bug: https://github.com/tauri-apps/plugins-workspace/issues/2733
-                    app.handle().plugin(tauri_plugin_window_state::Builder::default().build())
-                        .context("Failed to build window state plugin")
-                        .map_startup_err(StartupError::Other)?;
-                    if let Err(err) = main_window
-                        .restore_state(StateFlags::SIZE | StateFlags::POSITION)
-                    {
-                        log::warn!("Failed to restore window state: {err}");
+                let app_handle = app.handle().clone();
+                main_window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { .. } = event {
+                        let app_handle = app_handle.clone();
+                        tauri::async_runtime::block_on(async move {
+                            let mut client_config = app_handle.state::<AppState>().lock().await.config.client.clone();
+                            if !client_config.fullscreen {
+                                match client_config.update_window_state(&app_handle) {
+                                    Ok(()) => {
+                                        let config_dir = app_handle
+                                            .path()
+                                            .app_config_dir()
+                                            .expect("Cannot get config directory");
+                                        let persisted_config: PersistedClientConfig = client_config.into();
+                                        persisted_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)
+                                            .expect("Failed to persist client config");
+                                    }
+                                    Err(err) => log::warn!("Failed to update window state, window position and size will not be persisted: {err}")
+                                }
+                            }
+                        });
                     }
-                }
+                });
 
                 if state.config.client.always_on_top {
                     if capabilities.always_on_top {
@@ -192,13 +202,6 @@ pub fn run() {
                     app_handle.state::<KeybindEngineHandle>().write().shutdown();
 
                     app_handle.state::<AppState>().lock().await.shutdown();
-
-                    let capabilities = Capabilities::default();
-                    if capabilities.window_state {
-                        app_handle.save_window_state(
-                            StateFlags::SIZE | StateFlags::POSITION
-                        ).expect("Failed to save window state");
-                    }
                 });
             }
         });

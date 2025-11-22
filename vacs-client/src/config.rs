@@ -9,6 +9,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_webrtc::config::WebrtcConfig;
 
@@ -191,6 +192,8 @@ impl From<AudioConfig> for PersistedAudioConfig {
 pub struct ClientConfig {
     pub always_on_top: bool,
     pub fullscreen: bool,
+    pub position: Option<PhysicalPosition<i32>>,
+    pub size: Option<PhysicalSize<u32>>,
     pub release_channel: ReleaseChannel,
     pub signaling_auto_reconnect: bool,
     pub transmit_config: TransmitConfig,
@@ -203,6 +206,8 @@ impl Default for ClientConfig {
         Self {
             always_on_top: false,
             fullscreen: false,
+            position: None,
+            size: None,
             release_channel: ReleaseChannel::default(),
             signaling_auto_reconnect: true,
             transmit_config: TransmitConfig::default(),
@@ -215,6 +220,135 @@ impl Default for ClientConfig {
 impl ClientConfig {
     pub fn max_signaling_reconnect_attempts(&self) -> u8 {
         if self.signaling_auto_reconnect { 8 } else { 0 }
+    }
+
+    pub fn default_window_size() -> PhysicalSize<u32> {
+        PhysicalSize::new(1000, 753)
+    }
+
+    pub fn update_window_state(&mut self, app: &AppHandle) -> Result<(), Error> {
+        let main_window = app
+            .get_webview_window("main")
+            .context("Failed to get main window")?;
+
+        self.position = Some(
+            main_window
+                .outer_position()
+                .context("Failed to get window position")?,
+        );
+
+        self.size = Some(
+            main_window
+                .inner_size()
+                .context("Failed to get window size")?,
+        );
+
+        log::debug!(
+            "Updating window position to {:?} and size to {:?}",
+            self.position.unwrap(),
+            self.size.unwrap()
+        );
+        Ok(())
+    }
+
+    pub fn restore_window_state(&self, app: &AppHandle) -> Result<(), Error> {
+        let main_window = app
+            .get_webview_window("main")
+            .context("Failed to get main window")?;
+
+        let size = self.size.unwrap_or(Self::default_window_size());
+
+        log::debug!(
+            "Restoring window position to {:?} and size to {size:?}",
+            self.position
+        );
+
+        if let Some(position) = self.position {
+            for m in main_window
+                .available_monitors()
+                .context("Failed to get available monitors")?
+            {
+                let PhysicalPosition { x, y } = *m.position();
+                let PhysicalSize { width, height } = *m.size();
+
+                let left = x;
+                let right = x + width as i32;
+                let top = y;
+                let bottom = y + height as i32;
+
+                let intersects = [
+                    (position.x, position.y),
+                    (position.x + size.width as i32, position.y),
+                    (position.x, position.y + size.height as i32),
+                    (
+                        position.x + size.width as i32,
+                        position.y + size.height as i32,
+                    ),
+                ]
+                .into_iter()
+                .any(|(x, y)| x >= left && x < right && y >= top && y < bottom);
+
+                let position = if intersects {
+                    position
+                } else {
+                    PhysicalPosition::default()
+                };
+
+                main_window
+                    .set_position(position)
+                    .context("Failed to set main window position")?;
+            }
+        }
+
+        // Do not resize the window if we're already using the default size as that'll shrink it
+        // due to some LogicalSize/PhysicalSize conversions for some reason... We still need the
+        // default size in case we calculate the position above, as the monitor boundaries check
+        // relies on it.
+        if size != Self::default_window_size() {
+            main_window
+                .set_size(size)
+                .context("Failed to set main window size")?;
+
+            #[cfg(target_os = "linux")]
+            {
+                log::debug!("Verifying correct window size after decorations apply");
+
+                // This timeout is **absolutely crucial** as the window manager does not update the
+                // window size immediately after a resize has been requested, but only after a short
+                // delay. If we were to compare the window size immediately after resizing, we would
+                // always receive the expected values, however, the window manager would still apply
+                // decorations later, changing the actual size, which is then incorrectly persisted.
+                // This will result in a short "flicker" of the window size, which we would optimally
+                // hide by simply not showing the window until we're sure its size is correct. However,
+                // since there's another bug that prevents the menu bar from being interactable if the
+                // window is initialized hidden, which is even less desirable, we'll have to live with
+                // the flicker for now.
+                // Upstream tauri/tao issues related to this:
+                // - https://github.com/tauri-apps/tao/issues/929
+                // - https://github.com/tauri-apps/tao/pull/1055
+                std::thread::sleep(Duration::from_millis(50));
+                let actual_size = main_window
+                    .inner_size()
+                    .context("Failed to get window size")?;
+
+                let width_diff = actual_size.width.saturating_sub(size.width);
+                let height_diff = actual_size.height.saturating_sub(size.height);
+
+                if width_diff > 0 || height_diff > 0 {
+                    log::warn!(
+                        "Window size changed after decorations apply, expected: {size:?}, got: {actual_size:?}. Resizing again"
+                    );
+                    main_window
+                        .set_size(PhysicalSize::new(
+                            size.width.saturating_sub(width_diff),
+                            size.height.saturating_sub(height_diff),
+                        ))
+                        .context("Failed to fix main window size")?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

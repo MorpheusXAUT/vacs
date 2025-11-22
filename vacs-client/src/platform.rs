@@ -1,13 +1,11 @@
 use serde::Serialize;
 use std::fmt::Display;
-use tauri::LogicalSize;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
 pub struct Capabilities {
     pub always_on_top: bool,
-    pub window_state: bool,
     pub keybinds: bool,
 
     pub platform: Platform,
@@ -19,7 +17,6 @@ impl Default for Capabilities {
 
         Self {
             always_on_top: !matches!(platform, Platform::LinuxWayland),
-            window_state: !matches!(platform, Platform::LinuxWayland),
             keybinds: matches!(platform, Platform::Windows | Platform::MacOs),
             platform,
         }
@@ -91,24 +88,6 @@ impl Platform {
             Platform::LinuxWayland => "LinuxWayland",
             Platform::LinuxUnknown => "LinuxUnknown",
             Platform::Unknown => "Unknown",
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn default_window_size(&self) -> LogicalSize<f64> {
-        match self {
-            Platform::Windows | Platform::Unknown => LogicalSize {
-                width: 1000.0,
-                height: 753.0,
-            },
-            Platform::MacOs => LogicalSize {
-                width: 1000.0,
-                height: 778.0,
-            },
-            Platform::LinuxX11 | Platform::LinuxWayland | Platform::LinuxUnknown => LogicalSize {
-                width: 1000.0,
-                height: 797.0,
-            },
         }
     }
 }

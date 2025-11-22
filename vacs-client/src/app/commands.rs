@@ -3,14 +3,25 @@ use crate::app::{UpdateInfo, get_update, open_fatal_error_dialog, open_logs_fold
 use crate::build::VersionInfo;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
 use crate::error::Error;
-use crate::platform::{Capabilities, Platform};
+use crate::platform::Capabilities;
 use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
-use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 #[tauri::command]
-pub fn app_frontend_ready(app: AppHandle, window: Window) {
+pub async fn app_frontend_ready(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    window: Window,
+) -> Result<(), Error> {
     log::info!("Frontend ready");
+
+    let state = app_state.lock().await;
+    if !state.config.client.fullscreen
+        && let Err(err) = state.config.client.restore_window_state(&app)
+    {
+        log::warn!("Failed to restore saved window state: {err}");
+    }
+
     if let Err(err) = window.show() {
         log::error!("Failed to show window: {err}");
 
@@ -21,6 +32,8 @@ pub fn app_frontend_ready(app: AppHandle, window: Window) {
 
         app.exit(1);
     };
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -157,27 +170,30 @@ pub async fn app_set_fullscreen(
     fullscreen: bool,
 ) -> Result<bool, Error> {
     let persisted_client_config: PersistedClientConfig = {
-        window
-            .set_fullscreen(fullscreen)
-            .context("Failed to change window fullscreen")?;
-
-        if !fullscreen {
-            let size = Platform::detect().default_window_size();
-            log::debug!(
-                "Restoring window size to {:?} after fullscreen was disabled",
-                size
-            );
-            window.set_size(size).context("Failed to set window size")?;
-        }
-
-        let capabilities = Capabilities::default();
-        if capabilities.window_state {
-            app.save_window_state(StateFlags::SIZE | StateFlags::POSITION)
-                .context("Failed to save window state")?;
-        }
-
         let mut state = app_state.lock().await;
+
         state.config.client.fullscreen = fullscreen;
+
+        if fullscreen {
+            state
+                .config
+                .client
+                .update_window_state(&app)
+                .context("Failed to update window state")?;
+            window
+                .set_fullscreen(true)
+                .context("Failed to enable fullscreen")?;
+        } else {
+            window
+                .set_fullscreen(false)
+                .context("Failed to disable fullscreen")?;
+            state
+                .config
+                .client
+                .restore_window_state(&app)
+                .context("Failed to restore window state")?;
+        }
+
         state.config.client.clone().into()
     };
 
