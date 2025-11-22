@@ -285,15 +285,12 @@ impl ClientConfig {
                 .into_iter()
                 .any(|(x, y)| x >= left && x < right && y >= top && y < bottom);
 
-                let position = if intersects {
-                    position
-                } else {
-                    PhysicalPosition::default()
-                };
-
-                window
-                    .set_position(position)
-                    .context("Failed to set main window position")?;
+                if intersects {
+                    window
+                        .set_position(position)
+                        .context("Failed to set main window position")?;
+                    break;
+                }
             }
         }
 
