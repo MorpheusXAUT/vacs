@@ -81,30 +81,6 @@ pub fn run() {
                     .context("Failed to get main window")
                     .map_startup_err(StartupError::Other)?;
 
-                let app_handle = app.handle().clone();
-                main_window.on_window_event(move |event| {
-                    if let WindowEvent::CloseRequested { .. } = event {
-                        let app_handle = app_handle.clone();
-                        tauri::async_runtime::block_on(async move {
-                            let mut client_config = app_handle.state::<AppState>().lock().await.config.client.clone();
-                            if !client_config.fullscreen {
-                                match client_config.update_window_state(&app_handle) {
-                                    Ok(()) => {
-                                        let config_dir = app_handle
-                                            .path()
-                                            .app_config_dir()
-                                            .expect("Cannot get config directory");
-                                        let persisted_config: PersistedClientConfig = client_config.into();
-                                        persisted_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)
-                                            .expect("Failed to persist client config");
-                                    }
-                                    Err(err) => log::warn!("Failed to update window state, window position and size will not be persisted: {err}")
-                                }
-                            }
-                        });
-                    }
-                });
-
                 if state.config.client.always_on_top {
                     if capabilities.always_on_top {
                         if let Err(err) = main_window.set_always_on_top(true) {
@@ -192,13 +168,29 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("Failed to build tauri application")
         .run(move |app_handle, event| {
-            if let RunEvent::ExitRequested { .. } = event {
+            if let RunEvent::WindowEvent {event: WindowEvent::CloseRequested {..}, ..} = event {
                 let app_handle = app_handle.clone();
                 tauri::async_runtime::block_on(async move {
                     app_handle
                         .state::<HttpState>()
                         .persist()
                         .expect("Failed to persist http state");
+
+                    let mut client_config = app_handle.state::<AppState>().lock().await.config.client.clone();
+                    if !client_config.fullscreen {
+                        match client_config.update_window_state(&app_handle) {
+                            Ok(()) => {
+                                let config_dir = app_handle
+                                    .path()
+                                    .app_config_dir()
+                                    .expect("Cannot get config directory");
+                                let persisted_config: PersistedClientConfig = client_config.into();
+                                persisted_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)
+                                    .expect("Failed to persist client config");
+                            }
+                            Err(err) => log::warn!("Failed to update window state, window position and size will not be persisted: {err}")
+                        }
+                    }
 
                     app_handle.state::<KeybindEngineHandle>().write().shutdown();
 
