@@ -98,6 +98,7 @@ Please search existing issues and discussions before creating a new one to avoid
 - **My Push-To-Talk/Push-To-Mute/Radio Integration key is not being picked up**: if you're running your radar and/or radio client as admin, you'll need to run `vacs` as admin as well, otherwise it won't be able to detect your key presses
 - **My calls fail to establish after a short time**: make sure your operating system and/or firewall are not blocking `vacs` from establishing network connections
 - **I'm transmitting on frequency right after accepting a call while using radio integration**: you'll need to wait for the call to be fully established (indicated by the little green indicator in the top left, below the current time) before pressing your PTT key to coordinate. While the call is still being established (usually takes between 50 and 200 milliseconds after picking up, indicated by a orange connection indicator), your PTT key still triggers your radio
+- **After toggling fullscreen on macOS, the client window is not rendered correctly**: this is a known quirk with our window library, which we effectively cannot work around. Slightly resize the window for all content to render properly again, the reset the size via the settings page. Alternatively, try toggling fullscreen a few times until it magically works. 
 
 ## Roadmap
 

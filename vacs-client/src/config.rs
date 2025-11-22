@@ -227,7 +227,15 @@ impl ClientConfig {
     where
         P: WindowProvider + ?Sized,
     {
-        Ok(LogicalSize::new(1000.0f64, 753.0f64).to_physical(provider.scale_factor()?))
+        Ok(LogicalSize::new(
+            1000.0f64,
+            if cfg!(target_os = "macos") {
+                781.0f64
+            } else {
+                753.0f64
+            },
+        )
+        .to_physical(provider.scale_factor()?))
     }
 
     pub fn update_window_state<P>(&mut self, provider: &P) -> Result<(), Error>
