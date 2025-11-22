@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v1.0.0...vacs-client-v1.1.0) (2025-11-22)
+
+
+### Features
+
+* **vacs-client:** Implement Fullscreen functionality ([#223](https://github.com/MorpheusXAUT/vacs/issues/223)) ([288965e](https://github.com/MorpheusXAUT/vacs/commit/288965e95c683b46d4b9d15aeb74d8207416561f))
+
 ## [1.0.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v0.4.0...vacs-client-v1.0.0) (2025-11-14)
 
 
