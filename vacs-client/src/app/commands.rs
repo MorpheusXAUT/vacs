@@ -1,7 +1,7 @@
 use crate::app::state::AppState;
 use crate::app::{UpdateInfo, get_update, open_fatal_error_dialog, open_logs_folder};
 use crate::build::VersionInfo;
-use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, ClientConfig, Persistable, PersistedClientConfig};
 use crate::error::Error;
 use crate::platform::Capabilities;
 use anyhow::Context;
@@ -213,4 +213,52 @@ pub async fn app_set_fullscreen(
     persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
 
     Ok(persisted_client_config.client.fullscreen)
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_reset_window_size(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    window: WebviewWindow,
+) -> Result<(), Error> {
+    log::debug!("Resetting window size");
+    let persisted_client_config: PersistedClientConfig = {
+        let mut state = app_state.lock().await;
+
+        if state.config.client.fullscreen {
+            state.config.client.fullscreen = false;
+            window
+                .set_fullscreen(false)
+                .context("Failed to disable fullscreen")?;
+
+            // Give window manager some time to update window size after disabling fullscreen to
+            // avoid slight shrinking due to the way decorations apply (mainly under Wayland/KDE Plasma).
+            #[cfg(target_os = "linux")]
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        window
+            .set_size(ClientConfig::default_window_size(&window)?)
+            .context("Failed to reset window size")?;
+
+        #[cfg(target_os = "linux")]
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        state
+            .config
+            .client
+            .update_window_state(&app)
+            .context("Failed to update window state")?;
+
+        state.config.client.clone().into()
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    Ok(())
 }

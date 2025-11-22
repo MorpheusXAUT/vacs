@@ -14,8 +14,6 @@ import TransmitModeSettings from "../components/TransmitModeSettings.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 
 function SettingsPage() {
-    const capAlwaysOnTop = useCapabilitiesStore(state => state.alwaysOnTop);
-
     return (
         <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col overflow-auto">
             <p className="w-full text-white bg-blue-700 font-semibold text-center">Settings</p>
@@ -35,8 +33,7 @@ function SettingsPage() {
                 <div
                     className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:px-1 [&>button]:shrink-0">
                     <div className="h-full flex flex-row gap-2 items-center">
-                        <AlwaysOnTopButton disabled={!capAlwaysOnTop}/>
-                        <FullscreenButton/>
+                        <WindowStateButtons/>
                         <UpdateButton/>
                         <Button color="gray" className="w-24 h-full rounded text-sm"
                                 onClick={() => invokeSafe("app_open_logs_folder")}>Open logs<br/>folder</Button>
@@ -136,8 +133,11 @@ function UpdateButton() {
     );
 }
 
-function AlwaysOnTopButton({disabled}: { disabled: boolean }) {
+function WindowStateButtons() {
     const [alwaysOnTop, setAlwaysOnTop] = useState<boolean>(false);
+    const [fullscreen, setFullscreen] = useState<boolean>(false);
+
+    const capAlwaysOnTop = useCapabilitiesStore(state => state.alwaysOnTop);
     const capPlatform = useCapabilitiesStore(state => state.platform);
 
     const toggleAlwaysOnTop = useAsyncDebounce(async () => {
@@ -145,53 +145,59 @@ function AlwaysOnTopButton({disabled}: { disabled: boolean }) {
         setAlwaysOnTop(alwaysOnTop => isAlwaysOnTop ?? alwaysOnTop);
     });
 
-    useEffect(() => {
-        const fetchIsAlwaysOnTop = async () => {
-            const isAlwaysOnTop = await getCurrentWindow().isAlwaysOnTop();
-            setAlwaysOnTop(alwaysOnTop => isAlwaysOnTop ?? alwaysOnTop);
-        };
-
-        void fetchIsAlwaysOnTop();
-    }, []);
-
-    return (
-        <Button
-            color={alwaysOnTop ? "blue" : "cyan"}
-            className="h-full rounded text-sm"
-            onClick={toggleAlwaysOnTop}
-            disabled={disabled}
-            title={disabled ? `Unfortunately, always-on-top is not yet supported on ${capPlatform}` : undefined}
-        >
-            <p>Always<br/>on Top</p>
-        </Button>
-    );
-}
-
-function FullscreenButton() {
-    const [fullscreen, setFullscreen] = useState<boolean>(false);
-
     const toggleFullscreen = useAsyncDebounce(async () => {
         const isFullscreen = await invokeSafe<boolean>("app_set_fullscreen", {fullscreen: !fullscreen});
         setFullscreen(isFullscreen ?? false);
     });
 
+    const handleResetWindowSizeClick = useAsyncDebounce(async () => {
+        try {
+            await invokeStrict("app_reset_window_size");
+            setFullscreen(false);
+        } catch {
+        }
+    });
+
     useEffect(() => {
+        const fetchIsAlwaysOnTop = async () => {
+            const isAlwaysOnTop = await getCurrentWindow().isAlwaysOnTop();
+            setAlwaysOnTop(alwaysOnTop => isAlwaysOnTop ?? alwaysOnTop);
+        };
         const fetchIsFullscreen = async () => {
             const isFullscreen = await getCurrentWindow().isFullscreen();
             setFullscreen(isFullscreen);
         };
 
+        void fetchIsAlwaysOnTop();
         void fetchIsFullscreen();
     }, []);
 
     return (
-        <Button
-            color={fullscreen ? "blue" : "cyan"}
-            className="h-full rounded text-sm"
-            onClick={toggleFullscreen}
-        >
-            <p>Full<br/>Screen</p>
-        </Button>
+        <div className="h-full flex flex-row gap-2">
+            <Button
+                color={alwaysOnTop ? "blue" : "cyan"}
+                className="h-full rounded text-sm"
+                onClick={toggleAlwaysOnTop}
+                disabled={!capAlwaysOnTop}
+                title={!capAlwaysOnTop ? `Unfortunately, always-on-top is not yet supported on ${capPlatform}` : undefined}
+            >
+                <p>Always<br/>on Top</p>
+            </Button>
+            <Button
+                color={fullscreen ? "blue" : "cyan"}
+                className="h-full rounded text-sm"
+                onClick={toggleFullscreen}
+            >
+                <p>Full<br/>Screen</p>
+            </Button>
+            <Button
+                color="gray"
+                className="h-full rounded text-sm"
+                onClick={handleResetWindowSizeClick}
+            >
+                <p>Reset Size</p>
+            </Button>
+        </div>
     );
 }
 
