@@ -182,7 +182,7 @@ impl HttpState {
 }
 
 fn map_reqwest_error(err: reqwest::Error) -> Error {
-    log::trace!("HTPP request failed: {err:?}");
+    log::trace!("HTTP request failed: {err:?}");
     if err.is_timeout() || err.is_connect() {
         return Error::Network(err.to_string());
     }
