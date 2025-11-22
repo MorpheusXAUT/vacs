@@ -41,14 +41,14 @@ function SettingsPage() {
                         <Button color="gray" className="w-24 h-full rounded text-sm"
                                 onClick={() => invokeSafe("app_open_logs_folder")}>Open logs<br/>folder</Button>
                     </div>
-                    <DisconnectLogoutButtons/>
+                    <AppControlButtons/>
                 </div>
             </div>
         </div>
     );
 }
 
-function DisconnectLogoutButtons() {
+function AppControlButtons() {
     const connected = useSignalingStore(state => state.connectionState === "connected");
     const isAuthenticated = useAuthStore(state => state.status === "authenticated");
 
@@ -68,12 +68,18 @@ function DisconnectLogoutButtons() {
         }
     });
 
+    const handleQuitClick = useAsyncDebounce(async () => {
+        await invokeSafe("app_quit");
+    });
+
     return (
         <div className="h-full flex flex-row gap-2">
             <Button color="salmon" className="w-auto px-3 text-sm rounded" disabled={!connected}
                     onClick={handleDisconnectClick}>Disconnect</Button>
             <Button color="salmon" className="text-sm rounded" disabled={!isAuthenticated}
                     onClick={handleLogoutClick}>Logout</Button>
+            <Button color="salmon" className="text-sm rounded"
+                    onClick={handleQuitClick}>Quit</Button>
         </div>
     );
 }

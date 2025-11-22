@@ -84,6 +84,12 @@ pub async fn app_check_for_update(app: AppHandle) -> Result<UpdateInfo, Error> {
 }
 
 #[tauri::command]
+pub fn app_quit(app: AppHandle) {
+    log::info!("Quitting");
+    app.exit(0);
+}
+
+#[tauri::command]
 #[vacs_macros::log_err]
 pub async fn app_update(app: AppHandle) -> Result<(), Error> {
     if cfg!(debug_assertions) {

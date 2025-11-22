@@ -160,6 +160,7 @@ pub fn run() {
             app::commands::app_frontend_ready,
             app::commands::app_open_logs_folder,
             app::commands::app_platform_capabilities,
+            app::commands::app_quit,
             app::commands::app_set_always_on_top,
             app::commands::app_set_fullscreen,
             app::commands::app_update,
