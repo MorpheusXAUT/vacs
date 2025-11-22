@@ -5,13 +5,13 @@ use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfi
 use crate::error::Error;
 use crate::platform::Capabilities;
 use anyhow::Context;
-use tauri::{AppHandle, Emitter, Manager, State, Window};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 #[tauri::command]
 pub async fn app_frontend_ready(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    window: Window,
+    window: WebviewWindow,
 ) -> Result<(), Error> {
     log::info!("Frontend ready");
 
@@ -84,9 +84,12 @@ pub async fn app_check_for_update(app: AppHandle) -> Result<UpdateInfo, Error> {
 }
 
 #[tauri::command]
-pub fn app_quit(app: AppHandle) {
+pub fn app_quit(app: AppHandle, window: WebviewWindow) {
     log::info!("Quitting");
-    app.exit(0);
+    if let Err(err) = window.close() {
+        log::error!("Failed to close window: {err}");
+        app.exit(1);
+    }
 }
 
 #[tauri::command]
@@ -138,7 +141,7 @@ pub async fn app_platform_capabilities() -> Result<Capabilities, Error> {
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn app_set_always_on_top(
-    window: Window,
+    window: WebviewWindow,
     app: AppHandle,
     app_state: State<'_, AppState>,
     always_on_top: bool,
@@ -170,7 +173,7 @@ pub async fn app_set_always_on_top(
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn app_set_fullscreen(
-    window: Window,
+    window: WebviewWindow,
     app: AppHandle,
     app_state: State<'_, AppState>,
     fullscreen: bool,
