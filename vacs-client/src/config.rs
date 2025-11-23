@@ -6,6 +6,7 @@ use anyhow::Context;
 use config::{Config, Environment, File};
 use keyboard_types::Code;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -29,6 +30,7 @@ pub struct AppConfig {
     #[serde(alias = "webrtc")] // support for old naming scheme
     pub ice: IceConfig,
     pub client: ClientConfig,
+    pub stations: StationsConfig,
 }
 
 impl AppConfig {
@@ -55,6 +57,16 @@ impl AppConfig {
                 .required(false),
             )
             .add_source(File::with_name("audio.toml").required(false))
+            .add_source(
+                File::with_name(
+                    config_dir
+                        .join("stations.toml")
+                        .to_str()
+                        .expect("Failed to get local config path"),
+                )
+                .required(false),
+            )
+            .add_source(File::with_name("stations.toml").required(false))
             .add_source(
                 File::with_name(
                     config_dir
@@ -562,6 +574,80 @@ pub struct PersistedClientConfig {
 impl From<ClientConfig> for PersistedClientConfig {
     fn from(client: ClientConfig) -> Self {
         Self { client }
+    }
+}
+
+/// Configuration for how stations are handled client-side.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StationsConfig {
+    /// Named profiles for different station filtering configurations.
+    /// Users can switch between profiles in the UI.
+    pub profiles: HashMap<String, StationsProfileConfig>,
+}
+
+impl Default for StationsConfig {
+    fn default() -> Self {
+        let mut profiles = HashMap::new();
+        profiles.insert("Default".to_string(), StationsProfileConfig::default());
+        Self { profiles }
+    }
+}
+
+/// Config profile for how stations are filtered, prioritized and displayed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StationsProfileConfig {
+    /// Optional list of callsign patterns to include.
+    ///
+    /// - If this list is empty, all stations are eligible to be shown (subject to `exclude`).
+    /// - If this list is not empty, only stations matching at least one pattern are eligible to be shown.
+    ///
+    /// Glob syntax is supported: `"LO*"`, `"LOWW_*"`, `"*_APP"`, …
+    /// Matching is case-insensitive.
+    ///
+    /// Example:
+    ///   `["LO*", "EDDM_*", "EDMM_*"]`
+    #[serde(default)]
+    pub include: Vec<String>,
+
+    /// Optional list of callsign patterns to exclude.
+    ///
+    /// - Stations matching any pattern here are never shown, even if they match an `include` rule.
+    ///
+    /// Glob syntax is supported: `"LO*"`, `"LOWW_*"`, `"*_APP"`, …
+    /// Matching is case-insensitive.
+    ///
+    /// Example:
+    ///   `["*_TWR", "*_GND", "*_DEL"]`
+    #[serde(default)]
+    pub exclude: Vec<String>,
+
+    /// Optional ordered list of callsign patterns used to assign priority.
+    ///
+    /// The *first* matching pattern in the list determines the station's
+    /// priority bucket. Earlier entries = higher priority.
+    ///
+    /// Glob syntax is supported: `"LO*"`, `"LOWW_*"`, `"*_APP"`, …
+    /// Matching is case-insensitive.
+    ///
+    /// Example:
+    ///   `["LOVV_*", "LOWW_*_APP", "LOWW_*_TWR", "LOWW_*"]`
+    #[serde(default)]
+    pub priority: Vec<String>,
+}
+
+impl Default for StationsProfileConfig {
+    fn default() -> Self {
+        Self {
+            include: vec![],
+            exclude: vec![],
+            priority: vec![
+                "*_FMP".to_string(),
+                "*_CTR".to_string(),
+                "*_APP".to_string(),
+                "*_TWR".to_string(),
+                "*_GND".to_string(),
+            ],
+        }
     }
 }
 
