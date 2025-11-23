@@ -24,7 +24,7 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
     frequency: "",
     clients: [],
     setConnectionState: (connectionState) => set({connectionState}),
-    setClientInfo: (info) => set({id: info.id, displayName: info.displayName, frequency: info.frequency}),
+    setClientInfo: (info) => set(info),
     setClients: (clients) => set({clients: sortClients(clients)}),
     addClient: (client) => {
         const clients = get().clients.filter(c => c.id !== client.id);
