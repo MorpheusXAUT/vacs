@@ -33,7 +33,7 @@ function DialPad() {
         if (event.target instanceof HTMLInputElement) {
             const rawValue = event.target.value;
 
-            const sanitized = rawValue.toUpperCase().replace(/[^A-Z0-9*#]/g, "").slice(0, 7);
+            const sanitized = rawValue.toUpperCase().replace(/[^A-Z0-9*#]/g, "").slice(0, 8);
             event.target.value = sanitized;
 
             setDialInput(sanitized);
