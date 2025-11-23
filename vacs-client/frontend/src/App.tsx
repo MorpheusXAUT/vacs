@@ -20,7 +20,7 @@ import MissionPage from "./pages/MissionPage.tsx";
 import TelephonePage from "./pages/TelephonePage.tsx";
 import LinkButton from "./components/ui/LinkButton.tsx";
 import {setupSignalingListeners} from "./listeners/signaling-listener.ts";
-import {useSignalingStore} from "./stores/signaling-store.ts";
+import {fetchStationsConfig, useSignalingStore} from "./stores/signaling-store.ts";
 import PhoneButton from "./components/ui/PhoneButton.tsx";
 import RadioPrioButton from "./components/ui/RadioPrioButton.tsx";
 import EndButton from "./components/ui/EndButton.tsx";
@@ -46,6 +46,7 @@ function App() {
         void invokeSafe("auth_check_session");
 
         void fetchCapabilities();
+        void fetchStationsConfig();
 
         return () => {
             cleanups.forEach((cleanup) => cleanup());

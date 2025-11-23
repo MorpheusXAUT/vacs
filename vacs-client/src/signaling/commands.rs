@@ -3,7 +3,7 @@ use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::{AudioManagerHandle, SourceType};
-use crate::config::BackendEndpoint;
+use crate::config::{BackendEndpoint, StationsConfig};
 use crate::error::{Error, HandleUnauthorizedExt};
 use tauri::{AppHandle, Manager, State};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
@@ -143,6 +143,14 @@ pub async fn signaling_end_call(
     audio_manager.read().stop(SourceType::Ringback);
 
     Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn signaling_get_stations_config(
+    app_state: State<'_, AppState>,
+) -> Result<StationsConfig, Error> {
+    Ok(app_state.lock().await.config.stations.clone())
 }
 
 async fn refresh_ice_config(http_state: &HttpState, app_state: &mut AppStateInner) {
