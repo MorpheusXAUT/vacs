@@ -77,7 +77,7 @@ function AppControlButtons() {
                     onClick={handleDisconnectClick}>Disconnect</Button>
             <Button color="salmon" className="text-sm rounded" disabled={!isAuthenticated}
                     onClick={handleLogoutClick}>Logout</Button>
-            <Button color="salmon" className="text-sm rounded ml-3"
+            <Button color="salmon" muted={true} className="text-sm rounded ml-3"
                     onClick={handleQuitClick}>Quit</Button>
         </div>
     );
