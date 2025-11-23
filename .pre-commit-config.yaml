@@ -20,3 +20,19 @@ repos:
     rev: 0.18.5
     hooks:
       - id: cargo-deny
+  - repo: local
+    hooks:
+      - id: npm-lint
+        name: eslint
+        entry: npm
+        args: [ 'run', '-w', 'frontend', 'lint', '--prefix', 'vacs-client' ]
+        language: system
+        files: '^vacs-client/frontend/.*\.(ts|tsx|js|jsx)$'
+        pass_filenames: false
+      - id: npm-typecheck
+        name: TypeScript type check
+        entry: npm
+        args: [ 'run', '-w', 'frontend', 'typecheck', '--prefix', 'vacs-client' ]
+        language: system
+        files: '^vacs-client/frontend/.*\.(ts|tsx)$'
+        pass_filenames: false
