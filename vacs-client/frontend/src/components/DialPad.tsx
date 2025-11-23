@@ -5,6 +5,7 @@ import {startCall, useCallStore} from "../stores/call-store.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {TargetedEvent} from "preact";
 import {useSignalingStore} from "../stores/signaling-store.ts";
+import {useState} from "preact/hooks";
 
 const DIAL_BUTTONS: { digit: string, chars: string }[] = [
     {digit: "1", chars: ""},
@@ -29,6 +30,7 @@ function DialPad() {
     const isConnected = useSignalingStore(state => state.connectionState === "connected");
     const callDisplay = useCallStore(state => state.callDisplay);
     const {removePeer} = useCallStore(state => state.actions);
+    const [lastDialledPeerId, setLastDialledPeerId] = useState<string | undefined>(undefined);
 
     const handleChange = (event: TargetedEvent<HTMLInputElement>) => {
         if (event.target instanceof HTMLInputElement) {
@@ -45,8 +47,19 @@ function DialPad() {
         if (isDialInputEmpty || callDisplay !== undefined) return;
         try {
             await startCall(dialInput);
+            setLastDialledPeerId(dialInput);
         } catch {
             removePeer(dialInput);
+            setLastDialledPeerId(undefined);
+        }
+    });
+
+    const handleRedialOnClick = useAsyncDebounce(async () => {
+        if (lastDialledPeerId === undefined || callDisplay !== undefined) return;
+        try {
+            await startCall(lastDialledPeerId);
+        } catch {
+            removePeer(lastDialledPeerId);
         }
     });
 
@@ -59,7 +72,8 @@ function DialPad() {
                 </Button>
                 <Button color="cyan" disabled={true}/>
                 <Button color="cyan" disabled={true}/>
-                <Button color="gray">Redial</Button>
+                <Button color="gray" disabled={!lastDialledPeerId || !isConnected} onClick={handleRedialOnClick}
+                        title={!isConnected ? "Disconnected" : !lastDialledPeerId ? "Nothing dialled yet" : undefined}>Redial</Button>
             </div>
             <div>
                 <input
