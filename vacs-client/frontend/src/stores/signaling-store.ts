@@ -5,11 +5,12 @@ type ConnectionState = "connecting" | "connected" | "disconnected";
 
 type SignalingState = {
     connectionState: ConnectionState;
+    id: string;
     displayName: string;
     frequency: string;
     clients: ClientInfo[];
     setConnectionState: (state: ConnectionState) => void;
-    setClientInfo: (info: Omit<ClientInfo, "id">) => void;
+    setClientInfo: (info: ClientInfo) => void;
     setClients: (clients: ClientInfo[]) => void;
     addClient: (client: ClientInfo) => void;
     getClientInfo: (cid: string) => ClientInfo;
@@ -18,11 +19,12 @@ type SignalingState = {
 
 export const useSignalingStore = create<SignalingState>()((set, get) => ({
     connectionState: "disconnected",
+    id: "",
     displayName: "",
     frequency: "",
     clients: [],
     setConnectionState: (connectionState) => set({connectionState}),
-    setClientInfo: (info) => set({displayName: info.displayName, frequency: info.frequency}),
+    setClientInfo: (info) => set({id: info.id, displayName: info.displayName, frequency: info.frequency}),
     setClients: (clients) => set({clients: sortClients(clients)}),
     addClient: (client) => {
         const clients = get().clients.filter(c => c.id !== client.id);

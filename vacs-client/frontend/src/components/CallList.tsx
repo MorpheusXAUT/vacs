@@ -3,15 +3,14 @@ import "../styles/call-list.css";
 import {CallListItem, useCallListStore} from "../stores/call-list-store.ts";
 import {clsx} from "clsx";
 import {HEADER_HEIGHT_REM, useCallList} from "../hooks/call-list-hook.ts";
-import {invokeStrict} from "../error.ts";
-import {useCallStore} from "../stores/call-store.ts";
+import {startCall, useCallStore} from "../stores/call-store.ts";
 import {Fragment} from "preact";
 
 function CallList() {
     const calls = useCallListStore(state => state.callList);
     const {clearCallList} = useCallListStore(state => state.actions);
     const callDisplay = useCallStore(state => state.callDisplay);
-    const {setOutgoingCall, removePeer} = useCallStore(state => state.actions);
+    const {removePeer} = useCallStore(state => state.actions);
 
     const {
         listContainer,
@@ -87,8 +86,7 @@ function CallList() {
                             const peerId: string | undefined = calls[selectedCall]?.number;
                             if (peerId === undefined || callDisplay !== undefined) return;
                             try {
-                                setOutgoingCall({id: peerId, displayName: peerId, frequency: ""});
-                                await invokeStrict("signaling_start_call", {peerId: peerId});
+                                await startCall(peerId);
                             } catch {
                                 removePeer(peerId);
                             }
