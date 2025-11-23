@@ -1,5 +1,5 @@
 use crate::app::state::AppState;
-use crate::app::{UpdateInfo, get_update, open_fatal_error_dialog, open_logs_folder};
+use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog};
 use crate::build::VersionInfo;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, ClientConfig, Persistable, PersistedClientConfig};
 use crate::error::Error;
@@ -38,8 +38,8 @@ pub async fn app_frontend_ready(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub fn app_open_logs_folder(app: AppHandle) -> Result<(), Error> {
-    open_logs_folder(&app).context("Failed to open logs folder")?;
+pub fn app_open_folder(app: AppHandle, folder: AppFolder) -> Result<(), Error> {
+    open_app_folder(&app, folder).context("Failed to open folder")?;
     Ok(())
 }
 

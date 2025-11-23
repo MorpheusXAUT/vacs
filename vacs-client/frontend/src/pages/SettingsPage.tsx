@@ -35,8 +35,10 @@ function SettingsPage() {
                     <div className="h-full flex flex-row gap-2 items-center">
                         <WindowStateButtons/>
                         <UpdateButton/>
-                        <Button color="gray" className="w-24 h-full rounded text-sm"
-                                onClick={() => invokeSafe("app_open_logs_folder")}>Open logs<br/>folder</Button>
+                        <Button color="gray" className="h-full rounded text-sm"
+                                onClick={() => invokeSafe("app_open_folder", { folder: "Config" })}>Open<br/>Config</Button>
+                        <Button color="gray" className="h-full rounded text-sm"
+                                onClick={() => invokeSafe("app_open_folder", { folder: "Logs" })}>Open<br/>Logs</Button>
                     </div>
                     <AppControlButtons/>
                 </div>

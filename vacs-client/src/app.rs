@@ -4,7 +4,7 @@ use crate::config::BackendEndpoint;
 use crate::error::{Error, FrontendError};
 use anyhow::Context;
 use rfd::{MessageButtons, MessageDialogResult};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::mpsc::sync_channel;
 use tauri::{AppHandle, Emitter, Manager};
@@ -74,7 +74,7 @@ pub fn open_fatal_error_dialog(app: &AppHandle, msg: &str) {
 
     match result {
         MessageDialogResult::Custom(text) if text == open_logs => {
-            if let Err(err) = open_logs_folder(app) {
+            if let Err(err) = open_app_folder(app, AppFolder::Logs) {
                 log::error!("Failed to open logs folder: {err}");
 
                 rfd::MessageDialog::new()
@@ -88,16 +88,28 @@ pub fn open_fatal_error_dialog(app: &AppHandle, msg: &str) {
     };
 }
 
-pub fn open_logs_folder(app: &AppHandle) -> Result<(), Error> {
-    let log_dir = app
-        .path()
-        .app_log_dir()
-        .context("Failed to get logs folder")?;
-    let log_dir = log_dir.to_str().context("Log dir is empty")?;
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub enum AppFolder {
+    Config,
+    Logs,
+}
+
+pub fn open_app_folder(app: &AppHandle, folder: AppFolder) -> Result<(), Error> {
+    let folder_path = match folder {
+        AppFolder::Config => app
+            .path()
+            .app_config_dir()
+            .context("Failed to get config folder")?,
+        AppFolder::Logs => app
+            .path()
+            .app_log_dir()
+            .context("Failed to get logs folder")?,
+    };
+    let folder_path = folder_path.to_str().context("Folder path is empty")?;
 
     app.opener()
-        .open_path(log_dir, None::<&str>)
-        .context("Failed to open logs folder")?;
+        .open_path(folder_path, None::<&str>)
+        .context("Failed to open folder")?;
 
     Ok(())
 }
