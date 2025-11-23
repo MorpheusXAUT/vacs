@@ -27,7 +27,7 @@ function CallList() {
         <div className="w-[37.5rem] h-full flex flex-col gap-3 p-3">
             <div
                 ref={listContainer}
-                className="h-full w-full grid grid-cols-[minmax(3rem,auto)_1fr_1fr_4rem] box-border gap-[1px] [&>div]:outline-1 [&>div]:outline-gray-500"
+                className="h-full w-full grid grid-cols-[minmax(3.5rem,auto)_1fr_1fr_4rem] box-border gap-[1px] [&>div]:outline-1 [&>div]:outline-gray-500"
                 style={{gridTemplateRows: `${HEADER_HEIGHT_REM}rem repeat(${visibleCallIndices.length},1fr)`}}
             >
                 {/*HEADER*/}

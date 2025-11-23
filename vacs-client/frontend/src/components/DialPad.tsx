@@ -1,7 +1,11 @@
 import Button from "./ui/Button.tsx";
 import {useDialPadInput} from "../hooks/dial-pad-hook.ts";
 import {clsx} from "clsx";
-import {JSX} from "preact";
+import {useCallStore} from "../stores/call-store.ts";
+import {invokeStrict} from "../error.ts";
+import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
+import {TargetedEvent} from "preact";
+import {useSignalingStore} from "../stores/signaling-store.ts";
 
 const DIAL_BUTTONS: {digit: string, chars: string}[] = [
     { digit: "1", chars: ""},
@@ -21,17 +25,30 @@ const DIAL_BUTTONS: {digit: string, chars: string}[] = [
 function DialPad() {
     const {dialInput, setDialInput, handleDialClick, clearLastChar, clearAll} = useDialPadInput();
     const isDialInputEmpty = dialInput === "";
+    const isConnected = useSignalingStore(state => state.connectionState === "connected");
+    const callDisplay = useCallStore(state => state.callDisplay);
+    const {setOutgoingCall, removePeer} = useCallStore(state => state.actions);
 
-    const handleChange = (event: JSX.TargetedEvent<HTMLInputElement>) => {
+    const handleChange = (event: TargetedEvent<HTMLInputElement>) => {
         if (event.target instanceof HTMLInputElement) {
             const rawValue = event.target.value;
 
-            const sanitized = rawValue.toUpperCase().replace(/[^A-Z0-9*#]/g, "");
+            const sanitized = rawValue.toUpperCase().replace(/[^A-Z0-9*#]/g, "").slice(0, 7);
             event.target.value = sanitized;
 
             setDialInput(sanitized);
         }
     };
+
+    const handleCallOnClick = useAsyncDebounce(async () => {
+        if (isDialInputEmpty || callDisplay !== undefined) return;
+        try {
+            setOutgoingCall({id: dialInput, displayName: dialInput, frequency: ""});
+            await invokeStrict("signaling_start_call", {peerId: dialInput});
+        } catch {
+            removePeer(dialInput);
+        }
+    });
 
     return (
         <div className="w-full flex flex-row [&_button]:h-15 [&_button]:shrink-0 [&_button]:rounded py-3">
@@ -61,7 +78,7 @@ function DialPad() {
                         </Button>
                     )}
                 </div>
-                <Button color="gray" className="w-full text-xl" disabled={isDialInputEmpty} onClick={() => console.log("call", dialInput)}>Call</Button>
+                <Button color="gray" className="w-full text-xl" title={!isConnected ? "Disconnected" : undefined} disabled={isDialInputEmpty || !isConnected} onClick={handleCallOnClick}>Call</Button>
             </div>
             <div className="flex flex-col gap-3 px-4">
                 <Button color="gray" disabled={isDialInputEmpty}

@@ -13,6 +13,8 @@ export function useDialPadInput() {
     const multipleTapTimeoutRef = useRef<number | undefined>(undefined);
 
     const handleDialClick = (digit: string, buttonChars: string) => {
+        if (dialInput.length >= 7) return;
+
         if (buttonChars === "") {
             setDialInput(dialInput => dialInput + digit);
             return;
