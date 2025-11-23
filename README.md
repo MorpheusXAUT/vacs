@@ -84,6 +84,12 @@ Incoming call initiated by other user before being picked up (DA key blinks betw
 ![Established call between two parties](docs/screenshots/active_call.png "active call")
 Established call between two parties (solid green DA key)
 
+## Configuration
+
+Most settings can be modified on the client's settings page (screwdriver and wrench icon in the top right corner).
+
+Some (more advanced) settings require editing config files directly. See the [configuration docs](vacs-client/docs/config/README.md) for a detailed explanation.
+
 ## Support
 
 If you encounter any issues or have questions about `vacs`, please use one of the following channels:

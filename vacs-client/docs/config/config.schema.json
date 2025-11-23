@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "vacs config",
+  "description": "Full application configuration for vacs - VATSIM ATC Communication System. Config can be split into multiple files or merged into a single file containing all sections",
+  "type": "object",
+  "properties": {
+    "stations": {
+      "type": "object",
+      "title": "StationsConfig",
+      "description": "Configuration for how stations are handled client-side",
+      "properties": {
+        "profiles": {
+          "type": "object",
+          "description": "Named profiles for different station filtering configurations. Users can switch between profiles in the UI.",
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "type": "object",
+              "description": "A station profile configuration",
+              "properties": {
+                "include": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "default": [],
+                  "description": "Optional list of callsign patterns to include. If empty, all stations are eligible (subject to exclude). If not empty, only stations matching at least one pattern are shown. Glob syntax supported (*_APP, LO*, etc.). Case-insensitive."
+                },
+                "exclude": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "default": [],
+                  "description": "Optional list of callsign patterns to exclude. Stations matching any pattern here are never shown, even if they match an include rule. Glob syntax supported. Case-insensitive."
+                },
+                "priority": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "default": [
+                    "*_FMP",
+                    "*_CTR",
+                    "*_APP",
+                    "*_TWR",
+                    "*_GND"
+                  ],
+                  "description": "Optional ordered list of callsign patterns for priority assignment. The first matching pattern determines the station's priority bucket. Earlier entries = higher priority. Glob syntax supported. Case-insensitive."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        }
+      },
+      "required": ["profiles"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
