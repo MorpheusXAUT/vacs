@@ -6,8 +6,8 @@ import LinkButton from "./ui/LinkButton.tsx";
 function FunctionKeys() {
     return (
         <div className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:shrink-0">
-            <Button color="cyan">PRIO</Button>
-            <Button color="cyan" disabled={true}>HOLD</Button>
+            <Button color="cyan" className="text-slate-400" disabled={true}>PRIO</Button>
+            <Button color="cyan" className="text-slate-400" disabled={true}>HOLD</Button>
             <Button color="cyan" className="text-slate-400" disabled={true}>PICKUP</Button>
             <Button color="cyan" className="text-slate-400" disabled={true}>
                 <p>SUITE<br/>PICKUP</p>
