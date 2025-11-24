@@ -30,7 +30,7 @@ export function setupSignalingListeners() {
             }),
             listen("signaling:disconnected", () => {
                 setConnectionState("disconnected");
-                setClientInfo({id: "", displayName: "", frequency: ""});
+                setClientInfo({displayName: "", frequency: ""});
                 setClients([]);
                 resetCallStore();
                 clearCallList();

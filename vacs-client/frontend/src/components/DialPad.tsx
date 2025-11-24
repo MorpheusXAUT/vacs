@@ -6,6 +6,7 @@ import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {TargetedEvent} from "preact";
 import {useSignalingStore} from "../stores/signaling-store.ts";
 import {useState} from "preact/hooks";
+import {useAuthStore} from "../stores/auth-store.ts";
 
 const DIAL_BUTTONS: { digit: string, chars: string }[] = [
     {digit: "1", chars: ""},
@@ -24,7 +25,7 @@ const DIAL_BUTTONS: { digit: string, chars: string }[] = [
 
 function DialPad() {
     const {dialInput, setDialInput, handleDialClick, clearLastChar, clearAll} = useDialPadInput();
-    const ownId = useSignalingStore(state => state.id);
+    const ownId = useAuthStore(state => state.cid);
     const isDialInputEmpty = dialInput === "";
     const isDialInputOwnId = dialInput === ownId;
     const isConnected = useSignalingStore(state => state.connectionState === "connected");
