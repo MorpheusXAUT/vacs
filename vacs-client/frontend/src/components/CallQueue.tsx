@@ -2,7 +2,7 @@ import Button from "./ui/Button.tsx";
 import {useCallStore} from "../stores/call-store.ts";
 import {invokeStrict} from "../error.ts";
 import unplug from "../assets/unplug.svg";
-import {ClientInfo, splitDisplayName} from "../types/client-info.ts";
+import {ClientInfoWithAlias, splitDisplayName} from "../types/client-info.ts";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -30,7 +30,7 @@ function CallQueue() {
         }
     };
 
-    const handleAnswerKeyClick = async (peer: ClientInfo) => {
+    const handleAnswerKeyClick = async (peer: ClientInfoWithAlias) => {
         // Can't accept someone's call if something is in your call display
         if (callDisplay !== undefined) return;
 
@@ -78,8 +78,8 @@ function CallQueue() {
     );
 }
 
-const clientLabel = (client: ClientInfo) => {
-    const [stationName, stationType] = splitDisplayName(client.displayName);
+const clientLabel = (client: ClientInfoWithAlias) => {
+    const [stationName, stationType] = splitDisplayName(client);
     return (
         <>
             <p className="max-w-full whitespace-nowrap" title={stationName}>{stationName}</p>

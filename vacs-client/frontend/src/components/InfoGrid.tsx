@@ -9,7 +9,7 @@ import {clsx} from "clsx";
 
 function InfoGrid() {
     const cid = useAuthStore(state => state.cid);
-    const clientInfo = useSignalingStore(state => `${state.displayName}${state.frequency !== "" ? ` (${state.frequency})` : ""}`);
+    const clientInfo = useSignalingStore(state => `${state.alias ?? state.displayName}${state.frequency !== "" ? ` (${state.frequency})` : ""}`);
     const callErrorReason = useCallStore(state => state.callDisplay?.errorReason);
     const currentVersion = useUpdateStore(state => state.currentVersion);
     const newVersion = useUpdateStore(state => state.newVersion);

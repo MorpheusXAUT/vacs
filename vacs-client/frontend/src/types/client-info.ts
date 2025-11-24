@@ -4,8 +4,12 @@ export type ClientInfo = {
     frequency: string;
 };
 
-export function splitDisplayName(displayName: string): [string, string] {
-    const parts = displayName.split("_");
+export type ClientInfoWithAlias = ClientInfo & {
+    alias: string | undefined
+};
+
+export function splitDisplayName(client: ClientInfoWithAlias): [string, string] {
+    const parts = (client.alias ?? client.displayName).split("_");
 
     if (parts.length <= 1) {
         return [parts[0], ""];

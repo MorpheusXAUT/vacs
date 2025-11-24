@@ -1,4 +1,4 @@
-import {ClientInfo, splitDisplayName} from "./client-info.ts";
+import {ClientInfoWithAlias, splitDisplayName} from "./client-info.ts";
 
 export type StationsConfig = {
     profiles: Record<string, StationsProfileConfig>;
@@ -30,7 +30,7 @@ function findFirstMatchIndex(callsign: string, patterns: string[]): number {
     return patterns.findIndex(pattern => globToRegex(pattern).test(callsign));
 }
 
-function filterClients(clients: ClientInfo[], profile: StationsProfileConfig | undefined): ClientInfo[] {
+function filterClients(clients: ClientInfoWithAlias[], profile: StationsProfileConfig | undefined): ClientInfoWithAlias[] {
     if (!profile) return clients;
 
     return clients.filter(client => {
@@ -40,12 +40,12 @@ function filterClients(clients: ClientInfo[], profile: StationsProfileConfig | u
     })
 }
 
-function sortClients(clients: ClientInfo[], profile: StationsProfileConfig | undefined): ClientInfo[] {
+function sortClients(clients: ClientInfoWithAlias[], profile: StationsProfileConfig | undefined): ClientInfoWithAlias[] {
     if (!profile) return clients;
 
     return clients.sort((a, b) => {
-        const aPriorityIndex = findFirstMatchIndex(a.displayName, profile.priority);
-        const bPriorityIndex = findFirstMatchIndex(b.displayName, profile.priority);
+        const aPriorityIndex = findFirstMatchIndex(a.alias ?? a.displayName, profile.priority);
+        const bPriorityIndex = findFirstMatchIndex(b.alias ?? b.displayName, profile.priority);
 
         // 1. Sort by priority bucket (lower index = higher priority)
         const aEffectivePriority = aPriorityIndex === -1 ? Number.MAX_SAFE_INTEGER : aPriorityIndex;
@@ -55,8 +55,8 @@ function sortClients(clients: ClientInfo[], profile: StationsProfileConfig | und
             return aEffectivePriority - bEffectivePriority;
         }
 
-        const [aStationName, aStationType] = splitDisplayName(a.displayName);
-        const [bStationName, bStationType] = splitDisplayName(b.displayName);
+        const [aStationName, aStationType] = splitDisplayName(a);
+        const [bStationName, bStationType] = splitDisplayName(b);
 
         // 2. Sort non-prioritized station types before clients without any station type
         if (aStationType.length === 0 && bStationType.length > 0) {
@@ -73,7 +73,7 @@ function sortClients(clients: ClientInfo[], profile: StationsProfileConfig | und
     })
 }
 
-export function filterAndSortClients(clients: ClientInfo[], profile: StationsProfileConfig | undefined): ClientInfo[] {
+export function filterAndSortClients(clients: ClientInfoWithAlias[], profile: StationsProfileConfig | undefined): ClientInfoWithAlias[] {
     const filtered = filterClients(clients, profile);
     return sortClients(filtered, profile);
 }

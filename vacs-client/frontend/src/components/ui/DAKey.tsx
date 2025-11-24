@@ -1,11 +1,11 @@
-import {ClientInfo, splitDisplayName} from "../../types/client-info.ts";
+import {ClientInfoWithAlias, splitDisplayName} from "../../types/client-info.ts";
 import Button from "./Button.tsx";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeStrict} from "../../error.ts";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
 
 type DAKeyProps = {
-    client: ClientInfo
+    client: ClientInfoWithAlias
 }
 
 function DAKey({client}: DAKeyProps) {
@@ -47,7 +47,7 @@ function DAKey({client}: DAKeyProps) {
         }
     });
 
-    const [stationName, stationType] = splitDisplayName(client.displayName);
+    const [stationName, stationType] = splitDisplayName(client);
 
     return (
         <Button
