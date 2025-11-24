@@ -1,5 +1,7 @@
 # vacs - VATSIM ATC Communication System
 
+[![Discord](https://img.shields.io/badge/Discord-chat-blue?style=flat&logo=discord)](https://discord.gg/agc4HzExKd)
+
 `vacs` is an open-source, cross-platform **Ground-To-Ground Voice Communication System for VATSIM**, meant to provide a seamless coordination experience for virtual air traffic controllers.
 
 We aim to modernize VATSIM controller-to-controller coordination by providing a low-latency and easy-to-use voice communication system.
@@ -91,6 +93,10 @@ If you encounter any issues or have questions about `vacs`, please use one of th
 - **Questions & discussions**: start a conversation on our [discussion forum](https://github.com/MorpheusXAUT/vacs/discussions)
 
 Please search existing issues and discussions before creating a new one to avoid duplicates.
+
+> [!TIP]
+> **Need help or just want to hang out?**  
+> If you have questions, need support, or simply feel like chatting, check out our [Discord server](https://discord.gg/agc4HzExKd)!
 
 ### Known issues
 
