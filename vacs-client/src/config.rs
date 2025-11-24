@@ -633,6 +633,29 @@ pub struct StationsProfileConfig {
     ///   `["LOVV_*", "LOWW_*_APP", "LOWW_*_TWR", "LOWW_*"]`
     #[serde(default)]
     pub priority: Vec<String>,
+
+    /// Optional alias mapping of frequencies to custom display names.
+    ///
+    /// - If a station's frequency matches a key in this map, the corresponding display name will be
+    ///   used instead of the one received from VATSIM.
+    /// - **Important**: Display names should follow the same underscore-separated format as VATSIM
+    ///   callsigns (e.g., `Station_Name_TYPE`) to ensure proper filtering, sorting and display.
+    ///   The last part after the final underscore is used as the station type.
+    /// - Frequency mapping is exact (no wildcard support).
+    ///
+    /// This is useful for:
+    /// - Customizing station names if the VATSIM callsign doesn't match the sector's desired display name
+    /// - Using local language or abbreviations (e.g., "Wien" instead of "LOWW")
+    /// - Providing a "stable" list of stations even when relieve/personalized callsigns are used
+    ///
+    /// Example:
+    /// ```toml
+    /// [stations.profiles.Default.aliases]
+    /// "132.600" = "AC_CTR"
+    /// "124.400" = "FIC_CTR"
+    /// ```
+    #[serde(default)]
+    pub aliases: HashMap<String, String>,
 }
 
 impl Default for StationsProfileConfig {
@@ -647,6 +670,7 @@ impl Default for StationsProfileConfig {
                 "*_TWR".to_string(),
                 "*_GND".to_string(),
             ],
+            aliases: HashMap::new(),
         }
     }
 }

@@ -8,6 +8,7 @@ export type StationsProfileConfig = {
     include: string[];
     exclude: string[];
     priority: string[];
+    aliases: Record<string, string>;
 }
 
 function globToRegex(pattern: string): RegExp {
