@@ -5,8 +5,8 @@ import {startCall, useCallStore} from "../stores/call-store.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {TargetedEvent} from "preact";
 import {useSignalingStore} from "../stores/signaling-store.ts";
-import {useState} from "preact/hooks";
 import {useAuthStore} from "../stores/auth-store.ts";
+import {useCallListStore} from "../stores/call-list-store.ts";
 
 const DIAL_BUTTONS: { digit: string, chars: string }[] = [
     {digit: "1", chars: ""},
@@ -30,8 +30,7 @@ function DialPad() {
     const isDialInputOwnId = dialInput === ownId;
     const isConnected = useSignalingStore(state => state.connectionState === "connected");
     const callDisplay = useCallStore(state => state.callDisplay);
-    const {removePeer} = useCallStore(state => state.actions);
-    const [lastDialledPeerId, setLastDialledPeerId] = useState<string | undefined>(undefined);
+    const lastDialledPeerId = useCallListStore(state => state.callList.find(item => item.type === "OUT")?.number);
 
     const handleChange = (event: TargetedEvent<HTMLInputElement>) => {
         if (event.target instanceof HTMLInputElement) {
@@ -44,24 +43,9 @@ function DialPad() {
         }
     };
 
-    const handleCallOnClick = useAsyncDebounce(async () => {
-        if (isDialInputEmpty || callDisplay !== undefined) return;
-        try {
-            await startCall(dialInput);
-            setLastDialledPeerId(dialInput);
-        } catch {
-            removePeer(dialInput);
-            setLastDialledPeerId(undefined);
-        }
-    });
-
-    const handleRedialOnClick = useAsyncDebounce(async () => {
-        if (lastDialledPeerId === undefined || callDisplay !== undefined) return;
-        try {
-            await startCall(lastDialledPeerId);
-        } catch {
-            removePeer(lastDialledPeerId);
-        }
+    const handleStartCall = useAsyncDebounce(async (peerId: string | undefined) => {
+        if (peerId === undefined || callDisplay !== undefined) return;
+        await startCall(peerId);
     });
 
     return (
@@ -73,8 +57,8 @@ function DialPad() {
                 </Button>
                 <Button color="cyan" disabled={true}/>
                 <Button color="cyan" disabled={true}/>
-                <Button color="gray" disabled={!lastDialledPeerId || !isConnected} onClick={handleRedialOnClick}
-                        title={!isConnected ? "Disconnected" : !lastDialledPeerId ? "Nothing dialled yet" : undefined}>Redial</Button>
+                <Button color="gray" disabled={!lastDialledPeerId || !isConnected} onClick={() => handleStartCall(lastDialledPeerId)}
+                        title={!isConnected ? "Disconnected" : !lastDialledPeerId ? "No outgoing call in call list" : undefined}>Redial</Button>
             </div>
             <div>
                 <input
@@ -97,7 +81,7 @@ function DialPad() {
                 <Button color="gray" className="w-full text-xl"
                         title={!isConnected ? "Disconnected" : isDialInputOwnId ? "You cannot call yourself" : undefined}
                         disabled={isDialInputEmpty || isDialInputOwnId || !isConnected}
-                        onClick={handleCallOnClick}>Call</Button>
+                        onClick={() => handleStartCall(dialInput)}>Call</Button>
             </div>
             <div className="flex flex-col gap-3 px-4">
                 <Button color="gray" disabled={isDialInputEmpty}
