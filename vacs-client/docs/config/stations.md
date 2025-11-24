@@ -18,7 +18,7 @@ The config directory is dependent on the operating system:
 
 ## Overview
 
-The `stations` configuration allows you to customize how stations are displayed and filtered in the client. It consists of several sections:
+The `stations` configuration allows you to customize how stations are displayed and filtered in the client. It consists of the following sections:
 
 -   **[Profiles](#profiles)** - Define (multiple) filtering configurations that you can switch between in the UI
 
@@ -37,6 +37,10 @@ The `stations` configuration allows you to customize how stations are displayed 
 include = []
 exclude = []
 priority = ["*_FMP", "*_CTR", "*_APP", "*_TWR", "*_GND"]
+
+[stations.profiles.Default.aliases]
+# Aliases for stations, mapping frequencies to callsigns, e.g.:
+# "124.400" = "FIC_CTR"
 ```
 
 ---
@@ -182,6 +186,74 @@ priority = [
 [stations.profiles.centers_first]
 # Simple setup: centers, then everything else (grouped by type, alphabetically, ascending)
 priority = ["*_CTR"]
+```
+
+---
+
+#### `aliases`: customizing station display names
+
+**Type:** Table/Dictionary mapping frequencies to display names  
+**Default:** `{}` (empty)  
+**Optional:** Yes
+
+Allows you to override the display name of stations based on their frequency. This is useful when VATSIM callsigns don't match your preferred display names, or when you want to provide stable naming regardless of which controller is online.
+
+> [!IMPORTANT]  
+> Display names must follow the same underscore-separated format as VATSIM callsigns (e.g., `Station_Name_TYPE`) to ensure proper filtering, sorting, and display.  
+> Underscores will be replaced with spaces in the UI.  
+> The last part after the final underscore is used as the station type.
+
+**When to use aliases:**
+
+-   Customizing station names when VATSIM callsigns don't match sector naming conventions
+-   Using local language or abbreviations (e.g., "VN_APP" instead of "LOWW_N_APP")
+-   Providing consistent naming when controllers use personalized or relief callsigns
+
+**Frequency matching:**
+
+-   Matching is **exact** (no wildcard support)
+-   Frequencies must match the format received from VATSIM (`1xx.xxx`, decimal point)
+-   If a station's frequency matches a key in the aliases table, the mapped display name replaces the original
+
+**Examples:**
+
+```toml
+[stations.profiles.SectorNames]
+# Basic aliases for sectors
+[stations.profiles.SectorNames.aliases]
+"124.400" = "FIC_CTR"
+"134.675" = "VB_APP"
+
+[stations.profiles.Callsigns]
+# Full station callsign
+[stations.profiles.Callsigns.aliases]
+"134.675" = "Wien_Radar_APP" # Will show as "Wien Radar" in the UI
+
+[stations.profiles.Standardized]
+# Standardize sector names regardless of who's online/relief callsign use
+[stations.profiles.Standardized.aliases]
+"132.600" = "LOVV_CTR"
+```
+
+**How aliases interact with other settings:**
+
+-   **Filtering (`include`/`exclude`)**: Operates on the **aliased** VATSIM callsign, not the original
+-   **Priority matching**: Uses the **aliased** VATSIM callsign for pattern matching
+-   **Sorting**: Alphabetical sorting uses the **aliased** display name
+-   **Display**: Shows the **aliased** name in the UI. The original callsign is displayed while hovering for DA key
+
+This means you will need to make sure your patterns match your aliased callsigns instead of the original ones (e.g., `Wien_Radar_*_APP` instead of `LOWW_*_APP`).
+
+**Example with filtering:**
+
+```toml
+[stations.profiles.FIC]
+include = ["FIC*_CTR", "LO*"]
+exclude = ["LON*"]
+priority = ["*_CTR", "*_APP", "*_TWR", "*_GND"]
+
+[stations.profiles.FIC.aliases]
+"124.400" = "FIC_CTR"
 ```
 
 ---
@@ -343,11 +415,12 @@ priority = ["LOVV*_CTR", "EDMM*_CTR", "*_CTR", "LOWW*_APP", "EDDM*_APP", "*_APP"
 
 ### Tips
 
--   Create multiple profiles for different workflows (e.g., "default", "CTR", "APP")
+-   Create multiple profiles for different workflows (e.g., "Default", "CTR", "APP")
 -   Use descriptive profile names that indicate their purpose
 -   Start with simple patterns and add complexity as needed
 -   Use `exclude` to refine broad `include` patterns
 -   Put your most important stations at the top of `priority`
 -   Leave `include` empty to see everything (filtered only by `exclude`)
 -   Remember that `exclude` always wins over `include`
+-   Use `aliases` to customize display names, but keep in mind that your patterns must match the **aliased** callsigns
 -   You can switch between profiles in the UI without restarting the application
