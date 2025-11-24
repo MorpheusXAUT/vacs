@@ -1,7 +1,7 @@
 import {create} from "zustand/react";
 import {ClientInfo} from "../types/client-info.ts";
 import {useSignalingStore} from "./signaling-store.ts";
-import {invokeStrict} from "../error.ts";
+import {invokeSafe} from "../error.ts";
 import {useErrorOverlayStore} from "./error-overlay-store.ts";
 import {useAuthStore} from "./auth-store.ts";
 
@@ -174,5 +174,5 @@ export const startCall = async (peerOrPeerId: ClientInfo | string) => {
     const peer = typeof peerOrPeerId === "string" ? getClientInfo(peerOrPeerId) : peerOrPeerId;
 
     setOutgoingCall(peer);
-    await invokeStrict("signaling_start_call", {peerId});
+    await invokeSafe("signaling_start_call", {peerId});
 }

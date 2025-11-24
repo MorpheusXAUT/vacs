@@ -16,8 +16,7 @@ function DAKey({client}: DAKeyProps) {
         acceptCall,
         endCall,
         dismissRejectedPeer,
-        dismissErrorPeer,
-        removePeer
+        dismissErrorPeer
     } = useCallStore(state => state.actions);
 
     const isCalling = incomingCalls.some(peer => peer.id === client.id);
@@ -33,25 +32,18 @@ function DAKey({client}: DAKeyProps) {
             try {
                 acceptCall(client);
                 await invokeStrict("signaling_accept_call", {peerId: client.id});
-            } catch {
-                removePeer(client.id);
-            }
+            } catch {}
         } else if (beingCalled || inCall) {
             try {
                 await invokeStrict("signaling_end_call", {peerId: client.id});
                 endCall();
-            } catch {
-            }
+            } catch {}
         } else if (isRejected) {
             dismissRejectedPeer();
         } else if (isError) {
             dismissErrorPeer();
         } else if (callDisplay === undefined) {
-            try {
-                await startCall(client);
-            } catch {
-                removePeer(client.id);
-            }
+            await startCall(client);
         }
     });
 

@@ -10,7 +10,6 @@ function CallList() {
     const calls = useCallListStore(state => state.callList);
     const {clearCallList} = useCallListStore(state => state.actions);
     const callDisplay = useCallStore(state => state.callDisplay);
-    const {removePeer} = useCallStore(state => state.actions);
 
     const {
         listContainer,
@@ -85,11 +84,7 @@ function CallList() {
                         onClick={async () => {
                             const peerId: string | undefined = calls[selectedCall]?.number;
                             if (peerId === undefined || callDisplay !== undefined) return;
-                            try {
-                                await startCall(peerId);
-                            } catch {
-                                removePeer(peerId);
-                            }
+                            await startCall(peerId);
                         }}
                 >
                     Call
