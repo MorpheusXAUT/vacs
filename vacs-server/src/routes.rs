@@ -55,7 +55,7 @@ where
         )
         .merge(root::untraced_routes())
         .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
+            StatusCode::GATEWAY_TIMEOUT,
             crate::config::SERVER_SHUTDOWN_TIMEOUT,
         ))
         .layer(auth_layer)
