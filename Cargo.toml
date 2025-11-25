@@ -86,7 +86,7 @@ url = "2.5.7"
 uuid = { version = "1.17.0", features = ["v4"] }
 vacs-audio = { path = "vacs-audio" }
 vacs-macros = { path = "vacs-macros" }
-vacs-protocol = { path = "vacs-protocol" }
+vacs-protocol = { path = "vacs-protocol", default-features = false }
 vacs-server = { path = "vacs-server" }
 vacs-signaling = { path = "vacs-signaling" }
 vacs-vatsim = { path = "vacs-vatsim" }
