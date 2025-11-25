@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/MorpheusXAUT/vacs/compare/vacs-protocol-v1.0.0...vacs-protocol-v1.0.1) (2025-11-25)
+
+
+### Bug Fixes
+
+* **vacs-server:** prevent clients from sending signaling messages to own peer_id ([#244](https://github.com/MorpheusXAUT/vacs/issues/244)) ([098ec4c](https://github.com/MorpheusXAUT/vacs/commit/098ec4cd0d79225b8542710199f79f3e9e84dac0))
+
 ## [1.0.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-protocol-v0.1.0...vacs-protocol-v1.0.0) (2025-11-09)
 
 
