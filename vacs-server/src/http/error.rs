@@ -1,4 +1,5 @@
 use crate::auth::users::Backend;
+use crate::ice::IceError;
 use axum::Json;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -152,6 +153,12 @@ impl From<LoginError<Backend>> for AppError {
 
 impl From<String> for AppError {
     fn from(err: String) -> Self {
+        AppError::InternalServerError(anyhow::anyhow!(err))
+    }
+}
+
+impl From<IceError> for AppError {
+    fn from(err: IceError) -> Self {
         AppError::InternalServerError(anyhow::anyhow!(err))
     }
 }

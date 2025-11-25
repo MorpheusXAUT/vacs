@@ -1,3 +1,4 @@
+use crate::ice::IceConfig;
 use crate::ratelimit::RateLimitersConfig;
 use crate::release::catalog::CatalogConfig;
 use anyhow::Context;
@@ -23,6 +24,7 @@ pub struct AppConfig {
     pub vatsim: VatsimConfig,
     pub updates: UpdatesConfig,
     pub rate_limiters: RateLimitersConfig,
+    pub ice: IceConfig,
 }
 
 impl AppConfig {

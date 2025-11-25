@@ -48,6 +48,8 @@ async fn main() -> anyhow::Result<()> {
 
     let rate_limiters = RateLimiters::from(config.rate_limiters);
 
+    let ice_config_provider = config.ice.create_provider()?;
+
     let (prom_layer, prom_handle) = setup_prometheus_metric_layer();
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
@@ -60,6 +62,7 @@ async fn main() -> anyhow::Result<()> {
         data_feed,
         rate_limiters,
         shutdown_rx.clone(),
+        ice_config_provider,
     ));
 
     let auth_layer = setup_auth_layer(&config, redis_pool).await?;
