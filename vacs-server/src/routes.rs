@@ -5,7 +5,7 @@ mod ws;
 
 use crate::state::AppState;
 use axum::extract::FromRequestParts;
-use axum::http::Request;
+use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
 use axum::{Router, extract, middleware};
 use axum_client_ip::{ClientIp, ClientIpSource};
@@ -54,7 +54,10 @@ where
             }),
         )
         .merge(root::untraced_routes())
-        .layer(TimeoutLayer::new(crate::config::SERVER_SHUTDOWN_TIMEOUT))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            crate::config::SERVER_SHUTDOWN_TIMEOUT,
+        ))
         .layer(auth_layer)
         .layer(client_ip_source.into_extension())
 }
