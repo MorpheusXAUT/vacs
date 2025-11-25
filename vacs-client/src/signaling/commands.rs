@@ -6,16 +6,38 @@ use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::config::BackendEndpoint;
 use crate::error::{Error, HandleUnauthorizedExt};
 use tauri::{AppHandle, Manager, State};
+use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::ws::SignalingMessage;
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn signaling_connect(app: AppHandle) -> Result<(), Error> {
-    app.state::<AppState>()
-        .lock()
+pub async fn signaling_connect(
+    app_state: State<'_, AppState>,
+    http_state: State<'_, HttpState>,
+) -> Result<(), Error> {
+    let mut app_state = app_state.lock().await;
+    app_state.connect_signaling().await?;
+
+    if !app_state.config.ice.is_default() {
+        log::info!("Modified ICE config detected, not fetching from server");
+        return Ok(());
+    }
+
+    let config = match http_state
+        .http_get::<IceConfig>(BackendEndpoint::IceConfig, None)
         .await
-        .connect_signaling()
-        .await
+    {
+        Ok(config) => config,
+        Err(err) => {
+            log::warn!("Failed to fetch ICE config, falling back to default: {err:?}");
+            return Ok(());
+        }
+    };
+
+    log::info!("Received ICE config from server");
+    app_state.set_ice_config(config);
+
+    Ok(())
 }
 
 #[tauri::command]

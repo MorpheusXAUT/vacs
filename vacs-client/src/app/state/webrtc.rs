@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
 use vacs_webrtc::error::WebrtcError;
 use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
@@ -51,6 +52,7 @@ pub trait AppStateWebrtcExt: sealed::Sealed {
         reason: CallErrorReason,
     );
     fn active_call_peer_id(&self) -> Option<&String>;
+    fn set_ice_config(&mut self, config: IceConfig);
 }
 
 impl AppStateWebrtcExt for AppStateInner {
@@ -270,6 +272,10 @@ impl AppStateWebrtcExt for AppStateInner {
 
     fn active_call_peer_id(&self) -> Option<&String> {
         self.active_call.as_ref().map(|call| &call.peer_id)
+    }
+
+    fn set_ice_config(&mut self, config: IceConfig) {
+        self.config.ice = config;
     }
 }
 

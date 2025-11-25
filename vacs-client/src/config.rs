@@ -110,6 +110,7 @@ impl BackendConfig {
             BackendEndpoint::WsToken => &self.endpoints.ws_token,
             BackendEndpoint::TerminateWsSession => &self.endpoints.terminate_ws_session,
             BackendEndpoint::VersionUpdateCheck => &self.endpoints.version_update_check,
+            BackendEndpoint::IceConfig => &self.endpoints.ice_config,
         };
         format!("{}{}", self.base_url, path)
     }
@@ -123,6 +124,7 @@ pub enum BackendEndpoint {
     WsToken,
     TerminateWsSession,
     VersionUpdateCheck,
+    IceConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,6 +136,7 @@ pub struct BackendEndpointsConfigs {
     pub ws_token: String,
     pub terminate_ws_session: String,
     pub version_update_check: String,
+    pub ice_config: String,
 }
 
 impl Default for BackendEndpointsConfigs {
@@ -146,6 +149,7 @@ impl Default for BackendEndpointsConfigs {
             ws_token: "/ws/token".to_string(),
             terminate_ws_session: "/ws".to_string(),
             version_update_check: "/version/update?version={{current_version}}&target={{target}}&arch={{arch}}&bundle_type={{bundle_type}}&channel={{channel}}".to_string(),
+            ice_config: "/webrtc/ice-config".to_string(),
         }
     }
 }
