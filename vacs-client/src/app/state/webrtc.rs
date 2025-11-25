@@ -64,7 +64,7 @@ impl AppStateWebrtcExt for AppStateInner {
             return Err(WebrtcError::CallActive.into());
         }
 
-        let (peer, mut events_rx) = Peer::new(self.config.webrtc.clone())
+        let (peer, mut events_rx) = Peer::new(self.config.ice.clone())
             .await
             .context("Failed to create WebRTC peer")?;
 

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{LogicalSize, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
-use vacs_webrtc::config::WebrtcConfig;
+use vacs_signaling::protocol::http::webrtc::IceConfig;
 
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -25,7 +25,8 @@ pub const ENCODED_AUDIO_FRAME_BUFFER_SIZE: usize = 512;
 pub struct AppConfig {
     pub backend: BackendConfig,
     pub audio: AudioConfig,
-    pub webrtc: WebrtcConfig,
+    #[serde(alias = "webrtc")] // support for old naming scheme
+    pub ice: IceConfig,
     pub client: ClientConfig,
 }
 

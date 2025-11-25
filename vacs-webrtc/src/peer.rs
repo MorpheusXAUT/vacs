@@ -1,5 +1,5 @@
 use crate::config::{
-    PEER_EVENTS_CAPACITY, WEBRTC_CHANNELS, WEBRTC_TRACK_ID, WEBRTC_TRACK_STREAM_ID, WebrtcConfig,
+    IntoRtc, PEER_EVENTS_CAPACITY, WEBRTC_CHANNELS, WEBRTC_TRACK_ID, WEBRTC_TRACK_STREAM_ID,
 };
 use crate::error::WebrtcError;
 use anyhow::Context;
@@ -7,14 +7,13 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 use tracing::instrument;
 use vacs_audio::{EncodedAudioFrame, TARGET_SAMPLE_RATE};
+use vacs_protocol::http::webrtc::IceConfig;
 use webrtc::api::APIBuilder;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MIME_TYPE_OPUS, MediaEngine};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
-use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::RTCPeerConnection;
-use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
@@ -41,7 +40,7 @@ pub struct Peer {
 impl Peer {
     #[instrument(level = "debug", err)]
     pub async fn new(
-        config: WebrtcConfig,
+        config: IceConfig,
     ) -> Result<(Self, broadcast::Receiver<PeerEvent>), WebrtcError> {
         let mut media_engine = MediaEngine::default();
         media_engine
@@ -57,16 +56,8 @@ impl Peer {
             .with_interceptor_registry(registry)
             .build();
 
-        let config = RTCConfiguration {
-            ice_servers: vec![RTCIceServer {
-                urls: config.ice_servers,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
         let peer_connection = api
-            .new_peer_connection(config)
+            .new_peer_connection(config.into_rtc())
             .await
             .context("Failed to create peer connection")?;
 

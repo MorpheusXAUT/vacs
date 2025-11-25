@@ -8236,12 +8236,12 @@ name = "vacs-webrtc"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "serde",
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
  "vacs-audio",
+ "vacs-protocol",
  "webrtc",
 ]
 
