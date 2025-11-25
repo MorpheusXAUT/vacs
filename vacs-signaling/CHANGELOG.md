@@ -1,5 +1,7 @@
 # Changelog
 
+## [0.3.1](https://github.com/MorpheusXAUT/vacs/compare/vacs-signaling-v0.3.0...vacs-signaling-v0.3.1) (2025-11-25)
+
 ## [0.3.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-signaling-v0.2.1...vacs-signaling-v0.3.0) (2025-11-14)
 
 
