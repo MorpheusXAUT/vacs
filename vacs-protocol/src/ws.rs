@@ -26,7 +26,8 @@ pub enum ErrorReason {
     Internal(String),
     /// The message was processed successfully, but an error communicating with the selected peer occurred.
     PeerConnection,
-    /// The client or server encountered an unexpected message.
+    /// The client or server encountered an unexpected message. This is also returned if a client is
+    /// trying to send a message to its own peer_id.
     UnexpectedMessage(String),
     /// The client is currently rate-limited and should try to perform the requested action again later.
     RateLimited {
