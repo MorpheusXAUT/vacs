@@ -32,6 +32,9 @@ pub async fn handle_application_message(
             ControlFlow::Break(())
         }
         SignalingMessage::CallInvite { peer_id } => {
+            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+                return ControlFlow::Continue(());
+            }
             if let Err(until) = state
                 .rate_limiters()
                 .check_call_invite(&Key::from(client.id()))
@@ -56,35 +59,79 @@ pub async fn handle_application_message(
             ControlFlow::Continue(())
         }
         SignalingMessage::CallAccept { peer_id } => {
+            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+                return ControlFlow::Continue(());
+            }
             handle_call_accept(state, client, &peer_id).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallReject { peer_id } => {
+            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+                return ControlFlow::Continue(());
+            }
             handle_call_reject(state, client, &peer_id).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallOffer { peer_id, sdp } => {
+            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+                return ControlFlow::Continue(());
+            }
             handle_call_offer(state, client, &peer_id, &sdp).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallAnswer { peer_id, sdp } => {
+            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+                return ControlFlow::Continue(());
+            }
             handle_call_answer(state, client, &peer_id, &sdp).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallEnd { peer_id } => {
+            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+                return ControlFlow::Continue(());
+            }
             handle_call_end(state, client, &peer_id).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallError { peer_id, reason } => {
+            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+                return ControlFlow::Continue(());
+            }
             handle_call_error(state, client, &peer_id, reason).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallIceCandidate { peer_id, candidate } => {
+            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+                return ControlFlow::Continue(());
+            }
             handle_call_ice_candidate(state, client, &peer_id, &candidate).await;
             ControlFlow::Continue(())
         }
         _ => ControlFlow::Continue(()),
     }
+}
+
+async fn check_self_message(
+    ws_outbound_tx: &mpsc::Sender<ws::Message>,
+    client: &ClientSession,
+    peer_id: String,
+) -> bool {
+    if peer_id == client.id() {
+        tracing::debug!(?peer_id, "Rejecting message to self");
+        if let Err(err) = send_message(
+            ws_outbound_tx,
+            SignalingMessage::Error {
+                reason: ErrorReason::UnexpectedMessage("Rejecting message to self".to_string()),
+                peer_id: Some(peer_id.to_string()),
+            },
+        )
+        .await
+        {
+            tracing::warn!(?err, ?peer_id, "Failed to send self message error message");
+        }
+        return true;
+    }
+    false
 }
 
 async fn handle_call_invite(state: &AppState, client: &ClientSession, peer_id: &str) {
@@ -335,5 +382,31 @@ mod tests {
         )
         .await;
         assert_eq!(control_flow, ControlFlow::Continue(()));
+    }
+
+    #[test(tokio::test)]
+    async fn check_self_message_allows_regular_message() {
+        let setup = TestSetup::new();
+
+        let is_self_message = check_self_message(
+            setup.websocket_tx.lock().await.deref(),
+            &setup.session,
+            "client2".to_string(),
+        )
+        .await;
+        assert_eq!(is_self_message, false);
+    }
+
+    #[test(tokio::test)]
+    async fn check_self_message_rejects_message_to_self() {
+        let setup = TestSetup::new();
+
+        let is_self_message = check_self_message(
+            setup.websocket_tx.lock().await.deref(),
+            &setup.session,
+            "client1".to_string(),
+        )
+        .await;
+        assert_eq!(is_self_message, true);
     }
 }
