@@ -10,6 +10,7 @@ pub fn routes() -> Router<Arc<AppState>> {
 mod get {
     use crate::http::error::{AppError, ProblemDetails};
     use crate::http::{ApiMaybe, MaybeJsonOrProblem};
+    use crate::metrics::VersionMetrics;
     use crate::release::catalog::BundleType;
     use crate::state::AppState;
     use axum::extract::{Query, State};
@@ -60,16 +61,36 @@ mod get {
         match state
             .updates
             .check(
-                channel,
-                client_ver,
-                params.target,
-                params.arch,
-                params.bundle_type,
+                &channel,
+                &client_ver,
+                &params.target,
+                &params.arch,
+                &params.bundle_type,
             )
             .await
         {
-            Ok(Some(rel)) => Ok(MaybeJsonOrProblem::ok(rel)),
-            Ok(None) => Ok(MaybeJsonOrProblem::no_content()),
+            Ok(Some(rel)) => {
+                VersionMetrics::check(
+                    &channel,
+                    &client_ver,
+                    &params.target,
+                    &params.arch,
+                    &params.bundle_type,
+                    true,
+                );
+                Ok(MaybeJsonOrProblem::ok(rel))
+            }
+            Ok(None) => {
+                VersionMetrics::check(
+                    &channel,
+                    &client_ver,
+                    &params.target,
+                    &params.arch,
+                    &params.bundle_type,
+                    false,
+                );
+                Ok(MaybeJsonOrProblem::no_content())
+            }
             Err(err) => Err(err),
         }
     }

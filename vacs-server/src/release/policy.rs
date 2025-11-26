@@ -134,7 +134,7 @@ impl Policy {
         Ok(())
     }
 
-    pub fn is_required(&self, channel: ReleaseChannel, version: &Version) -> bool {
+    pub fn is_required(&self, channel: &ReleaseChannel, version: &Version) -> bool {
         let visible = self.visible_channels(channel);
 
         visible.iter().any(|ch| {
@@ -149,12 +149,12 @@ impl Policy {
         self.compatible_protocol_range.read().matches(version)
     }
 
-    pub fn visible_channels(&self, channel: ReleaseChannel) -> Vec<ReleaseChannel> {
+    pub fn visible_channels(&self, channel: &ReleaseChannel) -> Vec<ReleaseChannel> {
         let visibility = self.visibility.read();
         visibility
-            .get(&channel)
+            .get(channel)
             .cloned()
-            .unwrap_or_else(|| vec![channel])
+            .unwrap_or_else(|| vec![*channel])
     }
 }
 
