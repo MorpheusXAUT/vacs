@@ -2,6 +2,7 @@ pub mod auth;
 pub mod build;
 pub mod config;
 pub mod http;
+pub mod metrics;
 pub mod ratelimit;
 pub mod release;
 pub mod routes;

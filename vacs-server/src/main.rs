@@ -7,6 +7,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vacs_server::auth::layer::setup_auth_layer;
 use vacs_server::build::BuildInfo;
 use vacs_server::config::AppConfig;
+use vacs_server::metrics::register_metrics;
 use vacs_server::ratelimit::RateLimiters;
 use vacs_server::release::UpdateChecker;
 use vacs_server::release::policy::Policy;
@@ -47,6 +48,8 @@ async fn main() -> anyhow::Result<()> {
     let data_feed = Arc::new(VatsimDataFeed::new(config.vatsim.data_feed_url.as_str())?);
 
     let rate_limiters = RateLimiters::from(config.rate_limiters);
+
+    register_metrics();
 
     let (prom_layer, prom_handle) = PrometheusMetricLayer::pair();
 

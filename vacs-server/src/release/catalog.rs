@@ -112,7 +112,7 @@ pub enum BundleType {
 }
 
 impl BundleType {
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             BundleType::Unknown => "unknown",
             BundleType::AppImage => "appimage",
