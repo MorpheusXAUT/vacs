@@ -65,6 +65,7 @@ pub fn config_file_path(file_name: impl AsRef<Path>) -> anyhow::Result<String> {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServerConfig {
     pub bind_addr: String,
+    pub metrics_bind_addr: String,
     pub client_ip_source: ClientIpSource,
 }
 
@@ -72,6 +73,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             bind_addr: "0.0.0.0:3000".to_string(),
+            metrics_bind_addr: "0.0.0.0:9200".to_string(),
             client_ip_source: ClientIpSource::ConnectInfo,
         }
     }

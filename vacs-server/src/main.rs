@@ -1,3 +1,4 @@
+use axum_prometheus::PrometheusMetricLayer;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
@@ -9,7 +10,7 @@ use vacs_server::config::AppConfig;
 use vacs_server::ratelimit::RateLimiters;
 use vacs_server::release::UpdateChecker;
 use vacs_server::release::policy::Policy;
-use vacs_server::routes::create_app;
+use vacs_server::routes::{create_app, create_metrics_app};
 use vacs_server::state::AppState;
 use vacs_server::store::Store;
 use vacs_server::store::redis::RedisStore;
@@ -47,6 +48,8 @@ async fn main() -> anyhow::Result<()> {
 
     let rate_limiters = RateLimiters::from(config.rate_limiters);
 
+    let (prom_layer, prom_handle) = PrometheusMetricLayer::pair();
+
     let (shutdown_tx, shutdown_rx) = watch::channel(());
 
     let app_state = Arc::new(AppState::new(
@@ -61,9 +64,17 @@ async fn main() -> anyhow::Result<()> {
 
     let auth_layer = setup_auth_layer(&config, redis_pool).await?;
 
-    let app = create_app(auth_layer, config.server.client_ip_source.clone());
-
+    let app = create_app(
+        auth_layer,
+        prom_layer,
+        config.server.client_ip_source.clone(),
+    );
     let listener = tokio::net::TcpListener::bind(config.server.bind_addr).await?;
+    tracing::info!(bind_addr = ?listener.local_addr(), "Started main listener");
+
+    let metrics_app = create_metrics_app(prom_handle);
+    let metrics_listener = tokio::net::TcpListener::bind(config.server.metrics_bind_addr).await?;
+    tracing::info!(bind_addr = ?metrics_listener.local_addr(), "Started metrics listener");
 
     let controller_update_task = if config.vatsim.require_active_connection {
         Some(AppState::start_controller_update_task(
@@ -74,14 +85,17 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    tracing::info!(bind_addr = ?listener.local_addr()?, "Started listening");
-    axum::serve(
+    let metrics_server = axum::serve(metrics_listener, metrics_app.into_make_service())
+        .with_graceful_shutdown(shutdown_signal(shutdown_tx.clone()));
+
+    let server = axum::serve(
         listener,
         app.with_state(app_state)
             .into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .with_graceful_shutdown(shutdown_signal(shutdown_tx))
-    .await?;
+    .with_graceful_shutdown(shutdown_signal(shutdown_tx));
+
+    tokio::try_join!(metrics_server, server)?;
 
     if let Some(controller_update_task) = controller_update_task
         && let Err(err) = controller_update_task.await

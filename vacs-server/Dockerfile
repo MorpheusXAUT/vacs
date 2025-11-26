@@ -49,6 +49,7 @@ RUN mkdir -p /etc/vacs-server && chown -R vacs:vacs /etc/vacs-server
 COPY --from=builder /usr/src/vacs/target/release/vacs-server /usr/local/bin/vacs-server
 
 EXPOSE 3000
+EXPOSE 9200
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s \
     CMD curl -fsS http://127.0.0.1:3000/health || exit 1
 
