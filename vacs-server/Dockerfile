@@ -1,6 +1,4 @@
-ARG RUST_VERSION=1.89.0
-ARG DEBIAN_VERSION=trixie
-FROM rust:${RUST_VERSION}-${DEBIAN_VERSION} AS chef
+FROM rust:1.91.1-trixie AS chef
 
 WORKDIR /usr/src/vacs
 RUN cargo install cargo-chef --locked
@@ -21,17 +19,15 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry \
     --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git \
     cargo build --release --bin vacs-server
 
-FROM debian:${DEBIAN_VERSION}-slim AS runtime
+FROM debian:13.2-slim AS runtime
 
-ARG DEBIAN_VERSION
 LABEL org.opencontainers.image.title="vacs-server" \
       org.opencontainers.image.description="VATSIM ATC Comm System – Signaling Server" \
       org.opencontainers.image.url="https://github.com/MorpheusXAUT/vacs" \
       org.opencontainers.image.documentation="https://github.com/MorpheusXAUT/vacs#readme" \
       org.opencontainers.image.source="https://github.com/MorpheusXAUT/vacs" \
       org.opencontainers.image.vendor="vacs" \
-      org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.base.name="debian:${DEBIAN_VERSION}-slim"
+      org.opencontainers.image.licenses="MIT"
 
 # Create a non-root user and group
 RUN useradd -m -u 10001 -U vacs
