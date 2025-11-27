@@ -31,7 +31,6 @@ pub struct CloudflareIceProvider {
 impl Debug for CloudflareIceProvider {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CloudflareIceProvider")
-            .field("url", &self.url)
             .field("ttl", &self.ttl)
             .finish_non_exhaustive()
     }
