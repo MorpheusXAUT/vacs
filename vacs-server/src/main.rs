@@ -1,4 +1,3 @@
-use axum_prometheus::PrometheusMetricLayerBuilder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
@@ -7,7 +6,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vacs_server::auth::layer::setup_auth_layer;
 use vacs_server::build::BuildInfo;
 use vacs_server::config::AppConfig;
-use vacs_server::metrics::register_metrics;
+use vacs_server::metrics::setup_prometheus_metric_layer;
 use vacs_server::ratelimit::RateLimiters;
 use vacs_server::release::UpdateChecker;
 use vacs_server::release::policy::Policy;
@@ -49,12 +48,7 @@ async fn main() -> anyhow::Result<()> {
 
     let rate_limiters = RateLimiters::from(config.rate_limiters);
 
-    register_metrics();
-
-    let (prom_layer, prom_handle) = PrometheusMetricLayerBuilder::new()
-        .with_ignore_patterns(&["/health", "/favicon.ico"])
-        .with_default_metrics()
-        .build_pair();
+    let (prom_layer, prom_handle) = setup_prometheus_metric_layer();
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
 

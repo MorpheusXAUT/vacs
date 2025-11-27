@@ -3,10 +3,62 @@ mod labels;
 
 use crate::metrics::labels::AsMetricLabel;
 use crate::release::catalog::BundleType;
+use axum_prometheus::utils::SECONDS_DURATION_BUCKETS;
+use axum_prometheus::{
+    AXUM_HTTP_REQUESTS_DURATION_SECONDS, PrometheusMetricLayer, PrometheusMetricLayerBuilder,
+};
 use metrics::{Unit, counter, describe_counter, describe_gauge, describe_histogram, histogram};
+use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use semver::Version;
 use vacs_protocol::http::version::ReleaseChannel;
 use vacs_protocol::ws::LoginFailureReason;
+
+pub fn setup_prometheus_metric_layer() -> (PrometheusMetricLayer<'static>, PrometheusHandle) {
+    register_metrics();
+
+    PrometheusMetricLayerBuilder::new()
+        .with_ignore_patterns(&["/health", "/favicon.ico"])
+        .with_metrics_from_fn(|| {
+            PrometheusBuilder::new()
+                .set_buckets_for_metric(
+                    Matcher::Full(AXUM_HTTP_REQUESTS_DURATION_SECONDS.to_string()),
+                    SECONDS_DURATION_BUCKETS,
+                )
+                .unwrap()
+                .set_buckets_for_metric(
+                    Matcher::Full("vacs_calls_duration_seconds".to_string()),
+                    &[
+                        1.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 45.0, 60.0, 90.0, 120.0, 180.0,
+                        300.0,
+                    ],
+                )
+                .unwrap()
+                .set_buckets_for_metric(
+                    Matcher::Full("vacs_calls_attempts_duration_seconds".to_string()),
+                    &[
+                        0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 45.0, 60.0, 90.0, 120.0,
+                    ],
+                )
+                .unwrap()
+                .set_buckets_for_metric(
+                    Matcher::Full("vacs_clients_session_duration_seconds".to_string()),
+                    &[
+                        30.0, 60.0, 300.0, 600.0, 1800.0, 3600.0, 7200.0, 10800.0, 14400.0, 21600.0,
+                    ],
+                )
+                .unwrap()
+                .set_buckets_for_metric(
+                    Matcher::Full("vacs_message_size_bytes".to_string()),
+                    &[
+                        10.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0,
+                    ],
+                )
+                .unwrap()
+                .install_recorder()
+                .unwrap()
+        })
+        .build_pair()
+}
 
 pub fn register_metrics() {
     ClientMetrics::register();
