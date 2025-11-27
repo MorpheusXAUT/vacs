@@ -1,4 +1,4 @@
-use axum_prometheus::PrometheusMetricLayer;
+use axum_prometheus::PrometheusMetricLayerBuilder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
@@ -51,7 +51,10 @@ async fn main() -> anyhow::Result<()> {
 
     register_metrics();
 
-    let (prom_layer, prom_handle) = PrometheusMetricLayer::pair();
+    let (prom_layer, prom_handle) = PrometheusMetricLayerBuilder::new()
+        .with_ignore_patterns(&["/health", "/favicon.ico"])
+        .with_default_metrics()
+        .build_pair();
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
 
@@ -69,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = create_app(
         auth_layer,
-        prom_layer,
+        Some(prom_layer),
         config.server.client_ip_source.clone(),
     );
     let listener = tokio::net::TcpListener::bind(config.server.bind_addr).await?;

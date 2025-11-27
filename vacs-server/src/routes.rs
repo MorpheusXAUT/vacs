@@ -22,14 +22,14 @@ use tracing::{Span, debug_span};
 
 pub fn create_app<B, S>(
     auth_layer: AuthManagerLayer<B, S, SignedCookie>,
-    prom_layer: PrometheusMetricLayer<'static>,
+    prom_layer: Option<PrometheusMetricLayer<'static>>,
     client_ip_source: ClientIpSource,
 ) -> Router<Arc<AppState>>
 where
     B: AuthnBackend + Send + Sync + 'static + Clone,
     S: SessionStore + Send + Sync + 'static + Clone,
 {
-    Router::new()
+    let app = Router::new()
         .nest("/auth", auth::routes())
         .nest("/ws", ws::routes().merge(crate::ws::routes()))
         .nest("/version", version::routes())
@@ -63,8 +63,13 @@ where
             crate::config::SERVER_SHUTDOWN_TIMEOUT,
         ))
         .layer(auth_layer)
-        .layer(prom_layer)
-        .layer(client_ip_source.into_extension())
+        .layer(client_ip_source.into_extension());
+
+    if let Some(prom_layer) = prom_layer {
+        app.layer(prom_layer)
+    } else {
+        app
+    }
 }
 
 pub fn create_metrics_app(prom_handle: PrometheusHandle) -> Router {
