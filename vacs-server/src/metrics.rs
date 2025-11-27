@@ -14,7 +14,6 @@ pub fn register_metrics() {
     MessageMetrics::register();
     ErrorMetrics::register();
     VersionMetrics::register();
-    VatsimMetrics::register();
 }
 
 pub struct ClientMetrics;
@@ -175,29 +174,6 @@ impl VersionMetrics {
         describe_counter!(
             "vacs_version_checks_total",
             "Version checks labeled by version, channel, platform, architecture, bundle, and update availability"
-        );
-    }
-}
-
-pub struct VatsimMetrics;
-
-impl VatsimMetrics {
-    pub fn auth_failure() {
-        counter!("vacs_vatsim_auth_failures_total").increment(1);
-    }
-
-    pub fn no_active_connection() {
-        counter!("vacs_vatsim_no_active_connection_total").increment(1);
-    }
-
-    fn register() {
-        describe_counter!(
-            "vacs_vatsim_auth_failures_total",
-            "VATSIM authentication failures"
-        );
-        describe_counter!(
-            "vacs_vatsim_no_active_connection_total",
-            "Connection failures due to no active VATSIM connection"
         );
     }
 }
