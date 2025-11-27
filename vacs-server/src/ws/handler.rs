@@ -1,4 +1,5 @@
 use crate::metrics::ClientMetrics;
+use crate::metrics::guards::ClientConnectionGuard;
 use crate::state::AppState;
 use crate::ws::auth::handle_websocket_login;
 use crate::ws::message::send_message_raw;
@@ -27,6 +28,7 @@ pub async fn ws_handler(
 
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     tracing::trace!("Handling new websocket connection");
+    let client_connection_guard = ClientConnectionGuard::new();
 
     let (mut websocket_tx, mut websocket_rx) = socket.split();
 
@@ -44,7 +46,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         frequency: controller_info.frequency.clone(),
     };
 
-    let (mut client, mut rx) = match state.register_client(client_info.clone()).await {
+    let res = state
+        .register_client(client_info.clone(), client_connection_guard)
+        .await;
+    let (mut client, mut rx) = match res {
         Ok(client) => client,
         Err(_) => {
             ClientMetrics::login_attempt(false);
