@@ -1,9 +1,24 @@
 use crate::ice::IceError;
 use reqwest::{Client, header};
+use serde::Deserialize;
 use std::fmt::{Debug, Formatter};
 use std::time::Duration;
 use tracing::instrument;
-use vacs_protocol::http::webrtc::IceConfig;
+use vacs_protocol::http::webrtc::{IceConfig, IceServer};
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CloudflareIceConfig {
+    pub ice_servers: Vec<IceServer>,
+}
+
+impl From<CloudflareIceConfig> for IceConfig {
+    fn from(value: CloudflareIceConfig) -> Self {
+        Self {
+            ice_servers: value.ice_servers,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct CloudflareIceProvider {
@@ -71,8 +86,9 @@ impl crate::ice::provider::IceConfigProvider for CloudflareIceProvider {
         };
 
         let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+
         if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
             tracing::warn!(
                 ?status,
                 ?body,
@@ -83,13 +99,13 @@ impl crate::ice::provider::IceConfigProvider for CloudflareIceProvider {
             )));
         }
 
-        match response.json::<IceConfig>().await {
+        match serde_json::from_str::<CloudflareIceConfig>(&body) {
             Ok(ice_config) => {
                 tracing::trace!("Successfully generated TURN credentials");
-                Ok(ice_config)
+                Ok(ice_config.into())
             }
             Err(err) => {
-                tracing::warn!(?err, "Failed to parse TURN credentials response");
+                tracing::warn!(?err, ?body, "Failed to parse TURN credentials response");
                 Err(IceError::Provider(format!(
                     "Failed to parse TURN credentials response: {err}"
                 )))
