@@ -1,3 +1,4 @@
+use crate::metrics::ClientMetrics;
 use crate::state::AppState;
 use crate::ws::auth::handle_websocket_login;
 use crate::ws::message::send_message_raw;
@@ -46,6 +47,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut client, mut rx) = match state.register_client(client_info.clone()).await {
         Ok(client) => client,
         Err(_) => {
+            ClientMetrics::login_attempt(false);
+            ClientMetrics::login_failure(LoginFailureReason::DuplicateId);
+
             if let Err(err) = send_message_raw(
                 &mut websocket_tx,
                 SignalingMessage::LoginFailure {
@@ -69,6 +73,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             return;
         }
     };
+
+    ClientMetrics::login_attempt(true);
 
     let (mut broadcast_rx, mut shutdown_rx) = state.get_client_receivers();
 
