@@ -1,7 +1,9 @@
 use crate::metrics::guards::CallAttemptOutcome;
 use crate::release::catalog::BundleType;
 use vacs_protocol::http::version::ReleaseChannel;
-use vacs_protocol::ws::{DisconnectReason, ErrorReason, LoginFailureReason, SignalingMessage};
+use vacs_protocol::ws::{
+    CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason, SignalingMessage,
+};
 
 pub trait AsMetricLabel {
     fn as_metric_label(&self) -> &'static str;
@@ -42,10 +44,17 @@ impl AsMetricLabel for CallAttemptOutcome {
     fn as_metric_label(&self) -> &'static str {
         match self {
             CallAttemptOutcome::Accepted => "accepted",
-            CallAttemptOutcome::Error => "error",
+            CallAttemptOutcome::Rejected => "rejected",
             CallAttemptOutcome::Cancelled => "cancelled",
-            CallAttemptOutcome::NoAnswer => "no_answer",
             CallAttemptOutcome::Aborted => "aborted",
+            CallAttemptOutcome::Error(CallErrorReason::AudioFailure) => "error_audio_failure",
+            CallAttemptOutcome::Error(CallErrorReason::AutoHangup) => "error_auto_hangup",
+            CallAttemptOutcome::Error(CallErrorReason::WebrtcFailure) => "error_webrtc_failure",
+            CallAttemptOutcome::Error(CallErrorReason::CallFailure) => "error_call_failure",
+            CallAttemptOutcome::Error(CallErrorReason::SignalingFailure) => {
+                "error_signaling_failure"
+            }
+            CallAttemptOutcome::Error(CallErrorReason::Other) => "error_other",
         }
     }
 }

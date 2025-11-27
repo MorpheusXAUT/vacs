@@ -1,7 +1,7 @@
 use crate::metrics::labels::AsMetricLabel;
 use metrics::{counter, gauge, histogram};
 use std::time::Instant;
-use vacs_protocol::ws::DisconnectReason;
+use vacs_protocol::ws::{CallErrorReason, DisconnectReason};
 
 pub struct ClientConnectionGuard {
     start_time: Instant,
@@ -47,9 +47,9 @@ impl Drop for ClientConnectionGuard {
 
 pub enum CallAttemptOutcome {
     Accepted,
-    Error,
+    Rejected,
+    Error(CallErrorReason),
     Cancelled,
-    NoAnswer,
     Aborted,
 }
 
@@ -85,10 +85,11 @@ impl Drop for CallAttemptGuard {
         )
         .increment(1);
 
-        if let Some(CallAttemptOutcome::Accepted) = &self.outcome {
-            histogram!("vacs_calls_answer_duration_seconds")
-                .record(self.start_time.elapsed().as_secs_f64());
-        }
+        histogram!(
+            "vacs_calls_attempts_duration_seconds",
+            "result" => self.outcome.as_metric_label()
+        )
+        .record(self.start_time.elapsed().as_secs_f64());
     }
 }
 

@@ -3,7 +3,7 @@ mod labels;
 
 use crate::metrics::labels::AsMetricLabel;
 use crate::release::catalog::BundleType;
-use metrics::{counter, describe_counter, describe_gauge, describe_histogram, histogram};
+use metrics::{Unit, counter, describe_counter, describe_gauge, describe_histogram, histogram};
 use semver::Version;
 use vacs_protocol::http::version::ReleaseChannel;
 use vacs_protocol::ws::LoginFailureReason;
@@ -52,6 +52,7 @@ impl ClientMetrics {
         );
         describe_histogram!(
             "vacs_clients_session_duration_seconds",
+            Unit::Seconds,
             "Duration of client sessions in seconds"
         );
     }
@@ -69,11 +70,13 @@ impl CallMetrics {
         describe_counter!("vacs_calls_total", "Total number of calls established");
         describe_histogram!(
             "vacs_calls_duration_seconds",
+            Unit::Seconds,
             "Duration of completed calls in seconds"
         );
         describe_histogram!(
-            "vacs_calls_answer_duration_seconds",
-            "Time from invite to answer in seconds"
+            "vacs_calls_attempts_duration_seconds",
+            Unit::Seconds,
+            "Duration of call attempts in seconds, labeled by outcome (accepted, error, cancelled, no_answer, aborted)"
         );
     }
 }
@@ -82,13 +85,22 @@ pub struct MessageMetrics;
 
 impl MessageMetrics {
     pub fn sent(message_type: &impl AsMetricLabel, size_bytes: usize) {
-        counter!("vacs_messages_sent_total", "type" => message_type.as_metric_label()).increment(1);
+        counter!(
+            "vacs_messages_total",
+            "direction" => "sent",
+            "message_type" => message_type.as_metric_label()
+        )
+        .increment(1);
         histogram!("vacs_message_size_bytes", "direction" => "sent").record(size_bytes as f64);
     }
 
     pub fn received(message_type: &impl AsMetricLabel, size_bytes: usize) {
-        counter!("vacs_messages_received_total", "type" => message_type.as_metric_label())
-            .increment(1);
+        counter!(
+            "vacs_messages_total",
+            "direction" => "received",
+            "message_type" => message_type.as_metric_label()
+        )
+        .increment(1);
         histogram!("vacs_message_size_bytes", "direction" => "received").record(size_bytes as f64);
     }
 
@@ -98,12 +110,8 @@ impl MessageMetrics {
 
     fn register() {
         describe_counter!(
-            "vacs_messages_sent_total",
-            "Total messages sent to clients, by message type"
-        );
-        describe_counter!(
-            "vacs_messages_received_total",
-            "Total messages received from clients, by message type"
+            "vacs_messages_total",
+            "Total messages, by message type and direction (sent/received)"
         );
         describe_counter!(
             "vacs_messages_malformed_total",
@@ -111,7 +119,8 @@ impl MessageMetrics {
         );
         describe_histogram!(
             "vacs_message_size_bytes",
-            "Size of WebSocket messages in bytes"
+            Unit::Bytes,
+            "Size of WebSocket messages in bytes, by direction (sent/received)"
         );
     }
 }
@@ -127,8 +136,8 @@ impl ErrorMetrics {
         counter!("vacs_errors_peer_not_found_total").increment(1);
     }
 
-    pub fn rate_limits_hit() {
-        counter!("vacs_errors_rate_limits_hit_total").increment(1);
+    pub fn rate_limit_exceeded(limit: impl Into<String>) {
+        counter!("vacs_errors_rate_limits_exceeded_total", "limit" => limit.into()).increment(1);
     }
 
     fn register() {
@@ -141,8 +150,8 @@ impl ErrorMetrics {
             "Number of times a peer was not found"
         );
         describe_counter!(
-            "vacs_errors_rate_limits_hit_total",
-            "Number of times rate limiting was triggered"
+            "vacs_errors_rate_limits_exceeded_total",
+            "Number of times rate limiting was triggered, labeled by rate limit name"
         );
     }
 }
