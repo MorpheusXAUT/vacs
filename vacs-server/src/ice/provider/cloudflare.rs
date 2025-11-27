@@ -1,8 +1,9 @@
 use crate::ice::IceError;
+use crate::ice::provider::IceConfigProvider;
 use reqwest::{Client, header};
 use serde::Deserialize;
 use std::fmt::{Debug, Formatter};
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 use tracing::instrument;
 use vacs_protocol::http::webrtc::{IceConfig, IceServer};
 
@@ -12,10 +13,11 @@ struct CloudflareIceConfig {
     pub ice_servers: Vec<IceServer>,
 }
 
-impl From<CloudflareIceConfig> for IceConfig {
-    fn from(value: CloudflareIceConfig) -> Self {
-        Self {
-            ice_servers: value.ice_servers,
+impl CloudflareIceConfig {
+    pub fn into_ice_config(self, expiry: u64) -> IceConfig {
+        IceConfig {
+            ice_servers: self.ice_servers,
+            expires_at: Some(expiry),
         }
     }
 }
@@ -56,15 +58,20 @@ impl CloudflareIceProvider {
             ttl,
         })
     }
+
+    fn calculate_expiry(&self) -> u64 {
+        UNIX_EPOCH.elapsed().unwrap_or_default().as_secs() + self.ttl
+    }
 }
 
 #[async_trait::async_trait]
-impl crate::ice::provider::IceConfigProvider for CloudflareIceProvider {
+impl IceConfigProvider for CloudflareIceProvider {
     #[instrument(level = "debug", err)]
     async fn get_ice_config(&self, user_id: &str) -> Result<IceConfig, IceError> {
         tracing::debug!("Providing Cloudflare ICE config");
 
-        tracing::trace!("Generating TURN credentials");
+        let expiry = self.calculate_expiry();
+        tracing::trace!(?expiry, "Generating TURN credentials");
         let res = self
             .client
             .post(&self.url)
@@ -99,9 +106,9 @@ impl crate::ice::provider::IceConfigProvider for CloudflareIceProvider {
         }
 
         match serde_json::from_str::<CloudflareIceConfig>(&body) {
-            Ok(ice_config) => {
-                tracing::trace!("Successfully generated TURN credentials");
-                Ok(ice_config.into())
+            Ok(config) => {
+                tracing::trace!(?expiry, "Successfully generated TURN credentials");
+                Ok(config.into_ice_config(expiry))
             }
             Err(err) => {
                 tracing::warn!(?err, ?body, "Failed to parse TURN credentials response");

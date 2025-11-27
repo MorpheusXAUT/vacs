@@ -20,6 +20,7 @@ pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
 pub const AUDIO_SETTINGS_FILE_NAME: &str = "audio.toml";
 pub const CLIENT_SETTINGS_FILE_NAME: &str = "client.toml";
 pub const ENCODED_AUDIO_FRAME_BUFFER_SIZE: usize = 512;
+pub const ICE_CONFIG_EXPIRY_LEEWAY: Duration = Duration::from_mins(15);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
