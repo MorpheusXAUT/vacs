@@ -1,3 +1,4 @@
+use crate::metrics::ErrorMetrics;
 use axum_client_ip::ClientIp;
 use governor::clock::{Clock, QuantaClock};
 use governor::middleware::NoOpMiddleware;
@@ -104,30 +105,39 @@ impl RateLimiters {
     #[inline]
     pub fn check_call_invite(&self, key: impl Into<Key>) -> Result<(), Duration> {
         let key = key.into();
-        Self::check(&self.call_invite_per_minute, &key)
-            .and_then(|_| Self::check(&self.call_invite, &key))
+        Self::check(&self.call_invite_per_minute, "call_invite_per_minute", &key)
+            .and_then(|_| Self::check(&self.call_invite, "call_invite", &key))
     }
 
     #[inline]
     pub fn check_failed_auth(&self, key: impl Into<Key>) -> Result<(), Duration> {
         let key = key.into();
-        Self::check(&self.failed_auth_per_minute, &key)
-            .and_then(|_| Self::check(&self.failed_auth, &key))
+        Self::check(&self.failed_auth_per_minute, "failed_auth_per_minute", &key)
+            .and_then(|_| Self::check(&self.failed_auth, "failed_auth", &key))
     }
 
     #[inline]
     pub fn check_version_update(&self, key: impl Into<Key>) -> Result<(), Duration> {
         let key = key.into();
-        Self::check(&self.version_update_per_minute, &key)
-            .and_then(|_| Self::check(&self.version_update, &key))
+        Self::check(
+            &self.version_update_per_minute,
+            "version_update_per_minute",
+            &key,
+        )
+        .and_then(|_| Self::check(&self.version_update, "version_update", &key))
     }
 
     #[inline]
-    fn check(limiter: &Option<KeyedLimiter<Key>>, key: &Key) -> Result<(), Duration> {
+    fn check(
+        limiter: &Option<KeyedLimiter<Key>>,
+        limit_name: impl Into<String>,
+        key: &Key,
+    ) -> Result<(), Duration> {
         if let Some(limiter) = limiter {
-            limiter
-                .check_key(key)
-                .map_err(|not_until| not_until.wait_time_from(limiter.clock().now()))
+            limiter.check_key(key).map_err(|not_until| {
+                ErrorMetrics::rate_limit_exceeded(limit_name);
+                not_until.wait_time_from(limiter.clock().now())
+            })
         } else {
             Ok(())
         }

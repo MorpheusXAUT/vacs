@@ -1,5 +1,6 @@
 use crate::config;
 use crate::config::AppConfig;
+use crate::metrics::ErrorMetrics;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
 use crate::store::{Store, StoreBackend};
@@ -170,6 +171,7 @@ impl AppState {
                 tracing::trace!(?peer_id, "Sending message to peer");
                 if let Err(err) = peer.send_message(message).await {
                     tracing::warn!(?err, "Failed to send message to peer");
+                    ErrorMetrics::error(&ErrorReason::PeerConnection);
                     if let Err(e) = client
                         .send_message(SignalingMessage::Error {
                             reason: ErrorReason::PeerConnection,
@@ -183,6 +185,7 @@ impl AppState {
             }
             None => {
                 tracing::warn!(peer_id, "Peer not found");
+                ErrorMetrics::peer_not_found();
                 if let Err(err) = client
                     .send_message(SignalingMessage::PeerNotFound {
                         peer_id: peer_id.to_string(),

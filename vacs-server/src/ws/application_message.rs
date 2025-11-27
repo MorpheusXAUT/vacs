@@ -1,3 +1,4 @@
+use crate::metrics::ErrorMetrics;
 use crate::state::AppState;
 use crate::ws::ClientSession;
 use crate::ws::message::send_message;
@@ -36,12 +37,15 @@ pub async fn handle_application_message(
             }
             if let Err(until) = state.rate_limiters().check_call_invite(client.id()) {
                 tracing::debug!(?until, "Rate limit exceeded, rejecting call invite");
+                let reason = ErrorReason::RateLimited {
+                    retry_after_secs: until.as_secs(),
+                };
+                ErrorMetrics::error(&reason);
+
                 if let Err(err) = send_message(
                     ws_outbound_tx,
                     SignalingMessage::Error {
-                        reason: ErrorReason::RateLimited {
-                            retry_after_secs: until.as_secs(),
-                        },
+                        reason,
                         peer_id: Some(peer_id.to_string()),
                     },
                 )
@@ -114,10 +118,12 @@ async fn check_self_message(
 ) -> bool {
     if peer_id == client.id() {
         tracing::debug!(?peer_id, "Rejecting message to self");
+        let reason = ErrorReason::UnexpectedMessage("Rejecting message to self".to_string());
+        ErrorMetrics::error(&reason);
         if let Err(err) = send_message(
             ws_outbound_tx,
             SignalingMessage::Error {
-                reason: ErrorReason::UnexpectedMessage("Rejecting message to self".to_string()),
+                reason,
                 peer_id: Some(peer_id.to_string()),
             },
         )

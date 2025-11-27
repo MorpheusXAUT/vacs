@@ -1,3 +1,4 @@
+use crate::metrics::ErrorMetrics;
 use crate::state::AppState;
 use crate::ws::message::{MessageResult, receive_message, send_message_raw};
 use axum::extract::ws;
@@ -63,8 +64,10 @@ pub async fn handle_websocket_login(
                                 }
                                 Err(err) => {
                                     tracing::warn!(?cid, ?err, "Failed to retrieve VATSIM user info");
+                                    let reason = ErrorReason::Internal("Failed to retrieve VATSIM connection info".to_string());
+                                    ErrorMetrics::error(&reason);
                                     let login_failure_message = SignalingMessage::Error {
-                                        reason: ErrorReason::Internal("Failed to retrieve VATSIM connection info".to_string()),
+                                        reason,
                                         peer_id: None,
                                     };
                                     if let Err(err) =
