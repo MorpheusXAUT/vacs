@@ -32,22 +32,27 @@ impl ClientMetrics {
     fn register() {
         describe_gauge!(
             "vacs_clients_connected",
+            Unit::Count,
             "Number of currently connected clients"
         );
         describe_counter!(
             "vacs_clients_total",
+            Unit::Count,
             "Total number of client connections established"
         );
         describe_counter!(
             "vacs_clients_login_attempts_total",
+            Unit::Count,
             "Total login attempts, labeled by success/failure"
         );
         describe_counter!(
             "vacs_clients_login_failures_total",
+            Unit::Count,
             "Login failures by reason"
         );
         describe_counter!(
             "vacs_clients_disconnects_total",
+            Unit::Count,
             "Client disconnects by reason (graceful vs forced)"
         );
         describe_histogram!(
@@ -62,12 +67,21 @@ struct CallMetrics;
 
 impl CallMetrics {
     fn register() {
-        describe_gauge!("vacs_calls_active", "Number of currently active calls");
+        describe_gauge!(
+            "vacs_calls_active",
+            Unit::Count,
+            "Number of currently active calls"
+        );
         describe_counter!(
             "vacs_calls_attempts_total",
+            Unit::Count,
             "Total number of calls initiated, labeled by outcome (accepted, error, cancelled, no_answer, aborted)"
         );
-        describe_counter!("vacs_calls_total", "Total number of calls established");
+        describe_counter!(
+            "vacs_calls_total",
+            Unit::Count,
+            "Total number of calls established"
+        );
         describe_histogram!(
             "vacs_calls_duration_seconds",
             Unit::Seconds,
@@ -111,10 +125,12 @@ impl MessageMetrics {
     fn register() {
         describe_counter!(
             "vacs_messages_total",
+            Unit::Count,
             "Total messages, by message type and direction (sent/received)"
         );
         describe_counter!(
             "vacs_messages_malformed_total",
+            Unit::Count,
             "Number of malformed messages received"
         );
         describe_histogram!(
@@ -143,14 +159,17 @@ impl ErrorMetrics {
     fn register() {
         describe_counter!(
             "vacs_errors_total",
+            Unit::Count,
             "Errors encountered by the server, labeled by error type"
         );
         describe_counter!(
             "vacs_errors_peer_not_found_total",
+            Unit::Count,
             "Number of times a peer was not found"
         );
         describe_counter!(
             "vacs_errors_rate_limits_exceeded_total",
+            Unit::Count,
             "Number of times rate limiting was triggered, labeled by rate limit name"
         );
     }
@@ -182,6 +201,7 @@ impl VersionMetrics {
     fn register() {
         describe_counter!(
             "vacs_version_checks_total",
+            Unit::Count,
             "Version checks labeled by version, channel, platform, architecture, bundle, and update availability"
         );
     }
