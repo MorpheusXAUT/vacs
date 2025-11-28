@@ -14,6 +14,8 @@ on:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # action uses separate PAT to trigger other workflows, set minimal permissions for the rest
     outputs:
       prs: ${{ steps.release.outputs.prs }}
 
@@ -27,6 +29,8 @@ jobs:
   update-lockfiles:
     needs: release-please
     if: ${{ needs.release-please.outputs.prs }}
+    permissions:
+      contents: read # action uses separate PAT to trigger other workflows, set minimal permissions for the rest
     strategy:
       fail-fast: false
       matrix:
