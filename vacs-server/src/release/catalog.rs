@@ -130,7 +130,7 @@ impl BundleType {
             BundleType::AppImage => "linux",
             BundleType::Deb => "linux",
             BundleType::Rpm => "linux",
-            BundleType::App => "darwin",
+            BundleType::App => "macos",
             BundleType::Msi => "windows",
             BundleType::Nsis => "windows",
         }

@@ -125,12 +125,10 @@ impl RateLimiters {
     #[inline]
     fn check(limiter: &Option<KeyedLimiter<Key>>, key: &Key) -> Result<(), Duration> {
         if let Some(limiter) = limiter {
-            tracing::trace!("check: {:?}", key);
             limiter
                 .check_key(key)
                 .map_err(|not_until| not_until.wait_time_from(limiter.clock().now()))
         } else {
-            tracing::trace!("no limiter: {:?}", key);
             Ok(())
         }
     }
