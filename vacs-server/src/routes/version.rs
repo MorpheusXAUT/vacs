@@ -46,13 +46,17 @@ mod get {
 
         let channel = params.channel.unwrap_or_default();
 
-        match state.updates.check(
-            channel,
-            client_ver,
-            params.target,
-            params.arch,
-            params.bundle_type,
-        ) {
+        match state
+            .updates
+            .check(
+                channel,
+                client_ver,
+                params.target,
+                params.arch,
+                params.bundle_type,
+            )
+            .await
+        {
             Ok(Some(rel)) => Ok(MaybeJsonOrProblem::ok(rel)),
             Ok(None) => Ok(MaybeJsonOrProblem::no_content()),
             Err(err) => Err(err),
