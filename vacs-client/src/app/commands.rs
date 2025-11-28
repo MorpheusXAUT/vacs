@@ -110,7 +110,6 @@ pub async fn app_update(app: AppHandle) -> Result<(), Error> {
             .download_and_install(
                 |chunk_length, content_length| {
                     downloaded += chunk_length;
-                    log::debug!("Downloaded {downloaded} of {content_length:?}");
                     if let Some(content_length) = content_length {
                         let progress = (downloaded / (content_length as usize)) * 100;
                         app.emit("update:progress", progress.clamp(0, 100)).ok();
