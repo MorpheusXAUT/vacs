@@ -1,6 +1,6 @@
 use crate::auth::users::Backend;
 use axum::Json;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum_login::Error as LoginError;
 use serde::Serialize;
@@ -17,6 +17,8 @@ pub struct ProblemDetails {
     pub detail: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instance: Option<String>,
+    #[serde(skip)]
+    extra_headers: Vec<(HeaderName, HeaderValue)>,
 }
 
 impl ProblemDetails {
@@ -27,6 +29,7 @@ impl ProblemDetails {
             status,
             detail: None,
             instance: None,
+            extra_headers: Vec::new(),
         }
     }
 
@@ -49,6 +52,15 @@ impl ProblemDetails {
         self.instance = Some(instance.to_string());
         self
     }
+
+    pub fn with_header(
+        mut self,
+        name: impl Into<HeaderName>,
+        value: impl Into<HeaderValue>,
+    ) -> Self {
+        self.extra_headers.push((name.into(), value.into()));
+        self
+    }
 }
 
 impl From<StatusCode> for ProblemDetails {
@@ -62,10 +74,22 @@ impl From<StatusCode> for ProblemDetails {
 
 impl IntoResponse for ProblemDetails {
     fn into_response(self) -> Response {
+        let mut headers = HeaderMap::with_capacity(self.extra_headers.len() + 1);
+
+        // RFC7807 media type
+        headers.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/problem+json"),
+        );
+
+        for (name, value) in &self.extra_headers {
+            headers.insert(name.clone(), value.clone());
+        }
+
         (
             StatusCode::from_u16(self.status).unwrap(),
-            [("Content-Type", "application/problem+json")],
-            Json(self),
+            headers,
+            Json(&self),
         )
             .into_response()
     }
@@ -79,6 +103,8 @@ pub enum AppError {
     Unauthorized(String),
     #[error("Not Found")]
     NotFound,
+    #[error("Too Many Requests: retry after {0}")]
+    TooManyRequests(u64),
     #[error(transparent)]
     InternalServerError(#[from] anyhow::Error),
 }
@@ -97,6 +123,12 @@ impl IntoResponse for AppError {
                     .with_detail(&msg)
             }
             AppError::NotFound => ProblemDetails::new(StatusCode::NOT_FOUND.as_u16(), "Not Found"),
+            AppError::TooManyRequests(retry_after_secs) => {
+                tracing::debug!(?retry_after_secs, "Too Many Requests");
+                ProblemDetails::new(StatusCode::TOO_MANY_REQUESTS.as_u16(), "Too Many Requests")
+                    .with_detail(&format!("Rate limit for this endpoint was exceeded. Try again in {retry_after_secs} seconds."))
+                    .with_header(header::RETRY_AFTER, HeaderValue::from_str(&retry_after_secs.to_string()).expect("retry-after header value is valid"))
+            }
             AppError::InternalServerError(err) => {
                 tracing::error!(?err, "Internal server error");
                 ProblemDetails::new(
