@@ -10,6 +10,7 @@ use parking_lot::RwLock;
 use regex::Regex;
 use reqwest::header;
 use semver::Version;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::num::NonZeroUsize;
@@ -23,7 +24,7 @@ const MAX_PAGINATION_PAGES: usize = 10; // Max 1000 releases (100 per page)
 const SIGNATURE_CACHE_SIZE: usize = 100; // LRU cache size for signatures
 const FETCH_SIGNATURES_CONCURRENT_REQUESTS: usize = 5; // Number of asset signature downloads to fetch concurrently
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GitHubCredentials {
     pub app_id: u64,
     pub app_private_key: String,
@@ -84,6 +85,8 @@ pub struct GitHubCatalog {
 }
 
 impl GitHubCatalog {
+    const HTTP_CLIENT_DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
     #[instrument(
         level = "info",
         skip(credentials, release_cache_ttl, signature_cache_ttl),
@@ -121,6 +124,7 @@ impl GitHubCatalog {
 
         let http_client = reqwest::Client::builder()
             .user_agent(APP_USER_AGENT)
+            .timeout(Self::HTTP_CLIENT_DEFAULT_TIMEOUT)
             .build()
             .context("Failed to build HTTP client")?;
 
@@ -548,4 +552,12 @@ impl Debug for GitHubCatalog {
             .field("cached_signatures", &self.signatures.read().len())
             .finish_non_exhaustive()
     }
+}
+
+pub(super) fn default_release_cache_ttl() -> Duration {
+    Duration::from_hours(4)
+}
+
+pub(super) fn default_signature_cache_ttl() -> Duration {
+    Duration::from_hours(24)
 }

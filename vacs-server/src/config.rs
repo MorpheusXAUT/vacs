@@ -1,4 +1,5 @@
 use crate::ratelimit::RateLimitersConfig;
+use crate::release::catalog::CatalogConfig;
 use anyhow::Context;
 use axum_client_ip::ClientIpSource;
 use config::{Config, Environment, File};
@@ -180,17 +181,16 @@ impl Default for VatsimUserServiceConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UpdatesConfig {
-    pub release_manifest_path: String,
     pub policy_path: String,
+    pub catalog: CatalogConfig,
 }
 
 impl Default for UpdatesConfig {
     fn default() -> Self {
         Self {
-            release_manifest_path: config_file_path("releases.toml")
-                .expect("Failed to build release manifest path"),
             policy_path: config_file_path("release_policy.toml")
                 .expect("Failed to build policy path"),
+            catalog: CatalogConfig::default(),
         }
     }
 }

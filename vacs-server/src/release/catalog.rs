@@ -6,7 +6,10 @@ use async_trait::async_trait;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
+use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 use vacs_protocol::http::version::ReleaseChannel;
 
 #[async_trait]
@@ -17,6 +20,57 @@ pub trait Catalog: Send + Sync + 'static {
         meta: &ReleaseMeta,
         asset: &ReleaseAsset,
     ) -> Result<String, AppError>;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "backend")]
+pub enum CatalogConfig {
+    File {
+        #[serde(default = "file::default_catalog_path")]
+        path: PathBuf,
+    },
+    GitHub {
+        owner: String,
+        repo: String,
+        #[serde(default)]
+        credentials: Option<github::GitHubCredentials>,
+        #[serde(default = "github::default_release_cache_ttl")]
+        release_cache_ttl: Duration,
+        #[serde(default = "github::default_signature_cache_ttl")]
+        signature_cache_ttl: Duration,
+    },
+}
+
+impl Default for CatalogConfig {
+    fn default() -> Self {
+        Self::File {
+            path: file::default_catalog_path(),
+        }
+    }
+}
+
+impl CatalogConfig {
+    pub async fn to_catalog(&self) -> Result<Arc<dyn Catalog>, AppError> {
+        match self {
+            CatalogConfig::File { path } => Ok(Arc::new(file::FileCatalog::new(path)?)),
+            CatalogConfig::GitHub {
+                owner,
+                repo,
+                credentials,
+                release_cache_ttl,
+                signature_cache_ttl,
+            } => Ok(Arc::new(
+                github::GitHubCatalog::new(
+                    owner.clone(),
+                    repo.clone(),
+                    credentials.clone(),
+                    *release_cache_ttl,
+                    *signature_cache_ttl,
+                )
+                .await?,
+            )),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -148,6 +202,7 @@ impl BundleType {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ReleaseAsset {
+    #[serde(default)]
     pub name: String,
     pub target: String,
     pub arch: String,

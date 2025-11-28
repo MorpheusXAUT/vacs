@@ -7,6 +7,7 @@ use semver::Version;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use tracing::instrument;
 use vacs_protocol::http::version::ReleaseChannel;
 
@@ -96,6 +97,7 @@ impl Catalog for FileCatalog {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ManifestRelease {
+    #[serde(default)]
     id: u64,
     version: Version,
     #[serde(default)]
@@ -152,4 +154,8 @@ fn validate_and_sort(v: &mut [ReleaseMeta]) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+pub(super) fn default_catalog_path() -> PathBuf {
+    PathBuf::from_str("releases.toml").expect("valid path")
 }
