@@ -69,6 +69,18 @@ impl BundleType {
             BundleType::Nsis => "nsis",
         }
     }
+
+    pub fn target(&self) -> &str {
+        match self {
+            BundleType::Unknown => "unknown",
+            BundleType::AppImage => "linux",
+            BundleType::Deb => "linux",
+            BundleType::Rpm => "linux",
+            BundleType::App => "darwin",
+            BundleType::Msi => "windows",
+            BundleType::Nsis => "windows",
+        }
+    }
 }
 
 impl FromStr for BundleType {
@@ -110,6 +122,27 @@ impl Display for BundleType {
 impl AsRef<str> for BundleType {
     fn as_ref(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl BundleType {
+    pub fn from_file_name(file_name: &str) -> Option<BundleType> {
+        let file_name = file_name.to_ascii_lowercase();
+        if file_name.ends_with(".appimage") {
+            Some(BundleType::AppImage)
+        } else if file_name.ends_with(".deb") {
+            Some(BundleType::Deb)
+        } else if file_name.ends_with(".rpm") {
+            Some(BundleType::Rpm)
+        } else if file_name.ends_with(".app.tar.gz") {
+            Some(BundleType::App)
+        } else if file_name.ends_with(".exe") {
+            Some(BundleType::Nsis)
+        } else if file_name.ends_with(".msi") {
+            Some(BundleType::Msi)
+        } else {
+            None
+        }
     }
 }
 

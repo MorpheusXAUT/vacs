@@ -21,9 +21,14 @@ config = { workspace = true }
 dashmap = { workspace = true }
 futures-util = { workspace = true }
 governor = { workspace = true }
+jsonwebtoken = { workspace = true }
+lru = { workspace = true }
 nonzero_ext = { workspace = true }
 oauth2 = { workspace = true }
+octocrab = { workspace = true }
 parking_lot = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
