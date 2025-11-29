@@ -41,7 +41,11 @@ pub async fn keybinds_set_transmit_config(
 
         let transmit_config: TransmitConfig = transmit_config.try_into()?;
 
-        keybind_engine.write().set_config(&transmit_config)?;
+        keybind_engine
+            .write()
+            .await
+            .set_config(&transmit_config)
+            .await?;
 
         state.config.client.transmit_config = transmit_config;
         state.config.client.clone().into()
@@ -82,7 +86,11 @@ pub async fn keybinds_set_radio_config(
 
         let radio_config: RadioConfig = radio_config.try_into()?;
 
-        keybind_engine.write().set_radio_config(&radio_config)?;
+        keybind_engine
+            .write()
+            .await
+            .set_radio_config(&radio_config)
+            .await?;
 
         state.config.client.radio = radio_config;
         state.config.client.clone().into()
@@ -107,5 +115,5 @@ pub async fn keybinds_has_radio(
         return Ok(false);
     }
 
-    Ok(keybind_engine.read().has_radio())
+    Ok(keybind_engine.read().await.has_radio())
 }

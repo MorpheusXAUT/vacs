@@ -63,7 +63,7 @@ pub fn run() {
                 });
             }
 
-            fn setup(app: &mut App) -> Result<(), StartupError> {
+            async fn setup(app: &mut App) -> Result<(), StartupError> {
                 #[cfg(not(target_os = "macos"))]
                 {
                     app.deep_link()
@@ -85,7 +85,10 @@ pub fn run() {
 
                 if capabilities.keybinds {
                     keybind_engine
-                        .write().set_config(&transmit_config)
+                        .write()
+                        .await
+                        .set_config(&transmit_config)
+                        .await
                         .map_startup_err(StartupError::Keybinds)?;
                 } else {
                     log::warn!("Your platform ({}) does not support keybinds, skipping registration", capabilities.platform);
@@ -96,7 +99,7 @@ pub fn run() {
                 Ok(())
             }
 
-            if let Err(err) = setup(app) {
+            if let Err(err) = tauri::async_runtime::block_on(setup(app)) {
                 log::error!("Startup failed. Err: {err:?}");
 
                 open_fatal_error_dialog(app.handle(), &err.to_string());
@@ -170,7 +173,7 @@ pub fn run() {
                         }
                     }
 
-                    app_handle.state::<KeybindEngineHandle>().write().shutdown();
+                    app_handle.state::<KeybindEngineHandle>().write().await.shutdown();
 
                     app_handle.state::<AppState>().lock().await.shutdown();
                 });

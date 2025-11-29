@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::RwLock as TokioRwLock;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::sync::CancellationToken;
 
@@ -30,7 +31,7 @@ pub struct KeybindEngine {
     implicit_radio_prio: Arc<AtomicBool>,
 }
 
-pub type KeybindEngineHandle = Arc<RwLock<KeybindEngine>>;
+pub type KeybindEngineHandle = Arc<TokioRwLock<KeybindEngine>>;
 
 impl KeybindEngine {
     pub fn new(
@@ -56,7 +57,7 @@ impl KeybindEngine {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub async fn start(&mut self) -> Result<(), Error> {
         if self.rx_task.is_some() {
             debug_assert!(self.listener.read().is_some());
             debug_assert!(self.code.is_some());
@@ -75,7 +76,7 @@ impl KeybindEngine {
 
         self.stop_token = Some(self.shutdown_token.child_token());
 
-        let (listener, rx) = PlatformListener::start()?;
+        let (listener, rx) = PlatformListener::start().await?;
         *self.listener.write() = Some(Arc::new(listener));
 
         if self.mode == TransmitMode::RadioIntegration {
@@ -118,7 +119,7 @@ impl KeybindEngine {
         self.stop();
     }
 
-    pub fn set_config(&mut self, config: &TransmitConfig) -> Result<(), Error> {
+    pub async fn set_config(&mut self, config: &TransmitConfig) -> Result<(), Error> {
         self.stop();
 
         self.code = Self::select_active_code(config);
@@ -126,19 +127,19 @@ impl KeybindEngine {
 
         self.reset_input_state();
 
-        self.start()?;
+        self.start().await?;
 
         Ok(())
     }
 
-    pub fn set_radio_config(&mut self, config: &RadioConfig) -> Result<(), Error> {
+    pub async fn set_radio_config(&mut self, config: &RadioConfig) -> Result<(), Error> {
         self.stop();
 
         self.radio_config = config.clone();
 
         self.reset_input_state();
 
-        self.start()?;
+        self.start().await?;
 
         Ok(())
     }

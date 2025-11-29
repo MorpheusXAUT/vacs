@@ -4,12 +4,13 @@ use keyboard_types::{Code, KeyState};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct NoopKeybindListener {
     _tx: UnboundedSender<KeyEvent>,
 }
 
 impl KeybindListener for NoopKeybindListener {
-    fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
+    async fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
     where
         Self: Sized,
     {
@@ -22,6 +23,7 @@ impl KeybindListener for NoopKeybindListener {
 }
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct NoopKeybindEmitter;
 
 impl KeybindEmitter for NoopKeybindEmitter {

@@ -11,10 +11,9 @@ use objc2_core_graphics::{
 };
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::mpsc;
-use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::oneshot;
 
 #[derive(Debug)]
 struct ShutdownSource {
@@ -35,14 +34,14 @@ pub struct MacOsKeybindListener {
 }
 
 impl KeybindListener for MacOsKeybindListener {
-    fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
+    async fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
     where
         Self: Sized,
     {
         log::debug!("Starting macos keybind listener");
         let (key_event_tx, key_event_rx) = unbounded_channel::<KeyEvent>();
         let (startup_res_tx, start_res_rx) =
-            mpsc::sync_channel::<Result<ShutdownSource, KeybindsError>>(1);
+            oneshot::channel::<Result<ShutdownSource, KeybindsError>>();
 
         let thread_handle = thread::Builder::new()
             .name("VACS_Tap_CFRunLoop".to_string())
@@ -62,15 +61,18 @@ impl KeybindListener for MacOsKeybindListener {
             })
             .map_err(|err| KeybindsError::Listener(format!("Failed to spawn thread: {err}")))?;
 
-        match start_res_rx.recv_timeout(Duration::from_secs(1)) {
-            Ok(Ok(shutdown_source)) => Ok((
+        match tokio::time::timeout(Duration::from_secs(1), start_res_rx).await {
+            Ok(Ok(Ok(shutdown_source))) => Ok((
                 Self {
                     shutdown_source,
                     thread_handle: Some(thread_handle),
                 },
                 key_event_rx,
             )),
-            Ok(Err(err)) => Err(err),
+            Ok(Ok(Err(err))) => Err(err),
+            Ok(Err(_)) => Err(KeybindsError::Listener(
+                "MacOsKeybindListener startup channel closed".to_string(),
+            )),
             Err(_) => Err(KeybindsError::Listener(
                 "MacOsKeybindListener startup timed out".to_string(),
             )),

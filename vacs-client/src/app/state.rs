@@ -16,7 +16,7 @@ use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
-use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
 use tokio_util::sync::CancellationToken;
 use vacs_signaling::client::SignalingClient;
 use vacs_signaling::transport::tokio::TokioTransport;
@@ -58,7 +58,7 @@ impl AppStateInner {
                 AudioManager::new(app.clone(), &config.audio)
                     .map_startup_err(StartupError::Audio)?,
             )),
-            keybind_engine: Arc::new(RwLock::new(KeybindEngine::new(
+            keybind_engine: Arc::new(TokioRwLock::new(KeybindEngine::new(
                 app.clone(),
                 &config.client.transmit_config,
                 &config.client.radio,

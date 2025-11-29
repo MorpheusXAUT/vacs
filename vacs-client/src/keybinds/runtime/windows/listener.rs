@@ -3,10 +3,10 @@ use crate::keybinds::runtime::windows::RawKey;
 use crate::keybinds::{KeyEvent, KeybindsError};
 use keyboard_types::{Code, KeyState};
 use std::mem::zeroed;
-use std::sync::mpsc;
 use std::time::Duration;
 use std::{ptr, thread};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::oneshot;
 use windows::Win32::Foundation::{GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
@@ -30,13 +30,13 @@ pub struct WindowsKeybindListener {
 }
 
 impl KeybindListener for WindowsKeybindListener {
-    fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
+    async fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
     where
         Self: Sized,
     {
         log::debug!("Starting windows keybind listener");
         let (key_event_tx, key_event_rx) = unbounded_channel::<KeyEvent>();
-        let (startup_res_tx, start_res_rx) = mpsc::sync_channel::<Result<u32, KeybindsError>>(1);
+        let (startup_res_tx, start_res_rx) = oneshot::channel::<Result<u32, KeybindsError>>();
 
         let thread_handle = thread::Builder::new().name("VACS_RawInput_MessageLoop".to_string())
             .spawn(move || {
@@ -55,15 +55,18 @@ impl KeybindListener for WindowsKeybindListener {
                 log::debug!("Message thread finished");
             }).map_err(|err| KeybindsError::Listener(format!("Failed to spawn thread: {err}")))?;
 
-        match start_res_rx.recv_timeout(Duration::from_secs(1)) {
-            Ok(Ok(thread_id)) => Ok((
+        match tokio::time::timeout(Duration::from_secs(1), start_res_rx).await {
+            Ok(Ok(Ok(thread_id))) => Ok((
                 Self {
                     thread_handle: Some(thread_handle),
                     thread_id,
                 },
                 key_event_rx,
             )),
-            Ok(Err(err)) => Err(err),
+            Ok(Ok(Err(err))) => Err(err),
+            Ok(Err(_)) => Err(KeybindsError::Listener(
+                "WindowsKeybindListener startup channel closed".to_string(),
+            )),
             Err(_) => Err(KeybindsError::Listener(
                 "WindowsKeybindListener startup timed out".to_string(),
             )),

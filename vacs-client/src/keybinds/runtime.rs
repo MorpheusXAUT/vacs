@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 pub trait KeybindListener: Send + Sync + Debug + 'static {
-    fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
+    async fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
     where
         Self: Sized;
 }
