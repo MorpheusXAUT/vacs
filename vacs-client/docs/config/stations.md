@@ -235,20 +235,21 @@ Allows you to override the display name of stations based on their frequency. Th
 "132.600" = "LOVV_CTR"
 ```
 
-**How aliases interact with other settings:**
-
--   **Filtering (`include`/`exclude`)**: Operates on the **aliased** VATSIM callsign, not the original
--   **Priority matching**: Uses the **aliased** VATSIM callsign for pattern matching
--   **Sorting**: Alphabetical sorting uses the **aliased** display name
--   **Display**: Shows the **aliased** name in the UI. The original callsign is displayed while hovering for DA key
-
-This means you will need to make sure your patterns match your aliased callsigns instead of the original ones (e.g., `Wien_Radar_*_APP` instead of `LOWW_*_APP`).
+> [!IMPORTANT]  
+> **How aliases interact with other settings:**
+>
+> -   **Filtering (`include`/`exclude`)**: Operates on the **original** VATSIM callsign, not the aliased one
+> -   **Priority matching**: Uses the **aliased** VATSIM callsign for pattern matching
+> -   **Sorting**: Alphabetical sorting uses the **aliased** display name
+> -   **Display**: Shows the **aliased** name in the UI. The original callsign is displayed while hovering for DA key
+>
+> This means you will need to make sure your filter patterns match your original callsigns instead of the aliased ones (e.g., `LOWW_*_APP` instead of `Wien_Radar_*_APP`).
 
 **Example with filtering:**
 
 ```toml
 [stations.profiles.FIC]
-include = ["FIC*_CTR", "LO*"]
+include = ["LO*"]
 exclude = ["LON*"]
 priority = ["*_CTR", "*_APP", "*_TWR", "*_GND"]
 
@@ -422,5 +423,5 @@ priority = ["LOVV*_CTR", "EDMM*_CTR", "*_CTR", "LOWW*_APP", "EDDM*_APP", "*_APP"
 -   Put your most important stations at the top of `priority`
 -   Leave `include` empty to see everything (filtered only by `exclude`)
 -   Remember that `exclude` always wins over `include`
--   Use `aliases` to customize display names, but keep in mind that your patterns must match the **aliased** callsigns
+-   Use `aliases` to customize display names, but keep in mind that your filter patterns must match the **original** callsigns
 -   You can switch between profiles in the UI without restarting the application
