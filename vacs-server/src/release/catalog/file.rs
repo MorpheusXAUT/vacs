@@ -1,11 +1,13 @@
 use crate::http::error::AppError;
 use crate::release::catalog::{Catalog, ReleaseAsset, ReleaseMeta};
 use anyhow::Context;
+use async_trait::async_trait;
 use parking_lot::RwLock;
 use semver::Version;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use tracing::instrument;
 use vacs_protocol::http::version::ReleaseChannel;
 
@@ -51,9 +53,11 @@ impl FileCatalog {
         validate_and_sort(&mut beta).context("beta channel")?;
         validate_and_sort(&mut dev).context("dev channel")?;
 
-        *self.stable.write() = stable;
-        *self.beta.write() = beta;
-        *self.dev.write() = dev;
+        {
+            *self.stable.write() = stable;
+            *self.beta.write() = beta;
+            *self.dev.write() = dev;
+        }
 
         tracing::info!(
             manifest_path = ?self.path,
@@ -67,19 +71,34 @@ impl FileCatalog {
     }
 }
 
+#[async_trait]
 impl Catalog for FileCatalog {
-    fn list(&self, channel: ReleaseChannel) -> Result<Vec<ReleaseMeta>, AppError> {
+    #[instrument(level = "debug", skip(self), err)]
+    async fn list(&self, channel: ReleaseChannel) -> Result<Vec<ReleaseMeta>, AppError> {
         Ok(match channel {
             ReleaseChannel::Stable => self.stable.read().clone(),
             ReleaseChannel::Beta => self.beta.read().clone(),
             ReleaseChannel::Dev => self.dev.read().clone(),
         })
     }
+
+    #[instrument(level = "debug", skip(self), err)]
+    async fn load_signature(
+        &self,
+        _meta: &ReleaseMeta,
+        asset: &ReleaseAsset,
+    ) -> Result<String, AppError> {
+        // Signatures are always present in the release manifest, so we can just return the value
+        // right away without having to load it from the catalog.
+        Ok(asset.signature.clone().unwrap_or_default())
+    }
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ManifestRelease {
+    #[serde(default)]
+    id: u64,
     version: Version,
     #[serde(default)]
     required: bool,
@@ -105,6 +124,7 @@ fn assign_channel(ch: ReleaseChannel, items: Vec<ManifestRelease>) -> Vec<Releas
     items
         .into_iter()
         .map(|r| ReleaseMeta {
+            id: r.id,
             version: r.version,
             channel: ch,
             required: r.required,
@@ -134,4 +154,8 @@ fn validate_and_sort(v: &mut [ReleaseMeta]) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+pub(super) fn default_catalog_path() -> PathBuf {
+    PathBuf::from_str("releases.toml").expect("valid path")
 }

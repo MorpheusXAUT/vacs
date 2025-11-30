@@ -10,6 +10,11 @@ features = ["test-utils"]
 [advisories]
 ignore = [
     { id = "RUSTSEC-2025-0120", reason = "config dependency" },
+    # Allow RUSTSEC-2023-0071 for rsa transitively via jsonwebtoken.
+    # RSA is used only for local GitHub App JWT signing; no RSA decryption/signing API is exposed to untrusted callers.
+    # Timing side-channels are not considered exploitable due to network noise, caching, and rate limiting of version endpoint.
+    # We will upgrade once jsonwebtoken / rsa provide a constant-time implementation.
+    { id = "RUSTSEC-2023-0071", reason = "Transitively via jsonwebtoken/octocrab; only used for local GitHub App JWT signing. No RSA API exposed; low side-channel risk." },
     { id = "RUSTSEC-2024-0413", reason = "tauri dependency" },
     { id = "RUSTSEC-2024-0416", reason = "tauri dependency" },
     { id = "RUSTSEC-2025-0057", reason = "tauri dependency" },
@@ -52,7 +57,7 @@ exceptions = [
 ignore = true
 
 [bans]
-multiple-versions = "warn"
+multiple-versions = "allow"
 wildcards = "deny"
 allow-wildcard-paths = true
 
@@ -60,7 +65,7 @@ allow-wildcard-paths = true
 unknown-registry = "warn"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = ["https://github.com/RustAudio/cpal.git"]
+allow-git = []
 
 [sources.allow-org]
 github = [

@@ -21,7 +21,7 @@ impl UpdateChecker {
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    pub fn check(
+    pub async fn check(
         &self,
         channel: ReleaseChannel,
         client_version: Version,
@@ -35,7 +35,7 @@ impl UpdateChecker {
 
         let mut newer: Vec<(ReleaseMeta, ReleaseAsset)> = Vec::new();
         for ch in &visible {
-            for m in self.catalog.list(*ch)? {
+            for m in self.catalog.list(*ch).await? {
                 if m.version > client_version
                     && let Some(a) = m.assets.iter().find(|a| {
                         a.bundle_type == bundle_type && a.target == target && a.arch == arch
@@ -58,7 +58,7 @@ impl UpdateChecker {
         let required = {
             let mut req = false;
             'outer: for ch in &visible {
-                for m in self.catalog.list(*ch)? {
+                for m in self.catalog.list(*ch).await? {
                     if m.version > client_version
                         && m.assets.iter().any(|a| {
                             a.bundle_type == bundle_type && a.target == target && a.arch == arch
@@ -75,10 +75,10 @@ impl UpdateChecker {
 
         let release = Release {
             version: meta.version.to_string(),
-            notes: meta.notes,
-            pub_date: meta.pub_date,
-            url: asset.url,
-            signature: asset.signature.unwrap_or_default(), // TODO ensure signature is present or retrieve it from catalog
+            notes: meta.notes.clone(),
+            pub_date: meta.pub_date.clone(),
+            url: asset.url.clone(),
+            signature: self.catalog.load_signature(&meta, &asset).await?,
             required,
         };
 

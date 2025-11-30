@@ -8,12 +8,13 @@ pub fn routes() -> Router<Arc<AppState>> {
 }
 
 mod get {
-    use crate::http::error::ProblemDetails;
+    use crate::http::error::{AppError, ProblemDetails};
     use crate::http::{ApiMaybe, MaybeJsonOrProblem};
     use crate::release::catalog::BundleType;
     use crate::state::AppState;
     use axum::extract::{Query, State};
     use axum::http::StatusCode;
+    use axum_client_ip::ClientIp;
     use semver::Version;
     use serde::Deserialize;
     use std::sync::Arc;
@@ -31,7 +32,17 @@ mod get {
     pub async fn update(
         Query(params): Query<VersionUpdateParams>,
         State(state): State<Arc<AppState>>,
+        ClientIp(client_ip): ClientIp,
     ) -> ApiMaybe<Release> {
+        if let Err(until) = state.rate_limiters().check_version_update(client_ip) {
+            tracing::debug!(
+                ?client_ip,
+                ?until,
+                "Rate limit exceeded, rejecting version update check"
+            );
+            return Err(AppError::TooManyRequests(until.as_secs()));
+        }
+
         let client_ver = match Version::parse(&params.version) {
             Ok(v) => v,
             Err(err) => {
@@ -46,13 +57,17 @@ mod get {
 
         let channel = params.channel.unwrap_or_default();
 
-        match state.updates.check(
-            channel,
-            client_ver,
-            params.target,
-            params.arch,
-            params.bundle_type,
-        ) {
+        match state
+            .updates
+            .check(
+                channel,
+                client_ver,
+                params.target,
+                params.arch,
+                params.bundle_type,
+            )
+            .await
+        {
             Ok(Some(rel)) => Ok(MaybeJsonOrProblem::ok(rel)),
             Ok(None) => Ok(MaybeJsonOrProblem::no_content()),
             Err(err) => Err(err),

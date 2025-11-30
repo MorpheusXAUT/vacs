@@ -1,4 +1,3 @@
-use crate::ratelimit::Key;
 use crate::state::AppState;
 use crate::ws::ClientSession;
 use crate::ws::message::send_message;
@@ -35,10 +34,7 @@ pub async fn handle_application_message(
             if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
                 return ControlFlow::Continue(());
             }
-            if let Err(until) = state
-                .rate_limiters()
-                .check_call_invite(&Key::from(client.id()))
-            {
+            if let Err(until) = state.rate_limiters().check_call_invite(client.id()) {
                 tracing::debug!(?until, "Rate limit exceeded, rejecting call invite");
                 if let Err(err) = send_message(
                     ws_outbound_tx,
