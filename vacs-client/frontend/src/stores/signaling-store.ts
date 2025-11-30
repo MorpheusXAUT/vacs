@@ -45,22 +45,6 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
     setClients: (clients) => {
         const aliases = get().getActiveStationsProfileConfig()?.aliases ?? {};
 
-        clients = [
-            ...clients,
-            {id: "", frequency: "132.600", displayName: "LOVV_CTR"},
-            {id: "", frequency: "124.400", displayName: "LOVV_I_CTR"},
-            {id: "", frequency: "134.675", displayName: "LOWW_PBSPECIALSNOWFLAKE_APP"},
-            {id: "", frequency: "119.400", displayName: "LOWW_TWR"},
-            {id: "", frequency: "132.600", displayName: "LOVV_CTR"},
-            {id: "", frequency: "124.400", displayName: "LOVV_I_CTR"},
-            {id: "", frequency: "134.675", displayName: "LOWW_PBSPECIALSNOWFLAKE_APP"},
-            {id: "", frequency: "119.400", displayName: "LOWW_TWR"},
-            {id: "", frequency: "132.600", displayName: "LOVV_CTR"},
-            {id: "", frequency: "124.400", displayName: "LOVV_I_CTR"},
-            {id: "", frequency: "134.675", displayName: "LOWW_PBSPECIALSNOWFLAKE_APP"},
-            {id: "", frequency: "119.400", displayName: "LOWW_TWR"}
-        ]
-
         const clientsWithAliases = clients.map<ClientInfoWithAlias>(client => ({
             ...client,
             alias: aliases[client.frequency]
