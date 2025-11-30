@@ -16,6 +16,7 @@ async-trait = { workspace = true }
 axum = { workspace = true, features = ["ws", "macros"] }
 axum-client-ip = { workspace = true }
 axum-login = { workspace = true }
+axum-prometheus = { workspace = true }
 bytes = { workspace = true }
 config = { workspace = true }
 dashmap = { workspace = true }
@@ -23,6 +24,8 @@ futures-util = { workspace = true }
 governor = { workspace = true }
 jsonwebtoken = { workspace = true }
 lru = { workspace = true }
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
 nonzero_ext = { workspace = true }
 oauth2 = { workspace = true }
 octocrab = { workspace = true }

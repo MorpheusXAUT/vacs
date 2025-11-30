@@ -1,10 +1,12 @@
 use crate::config;
+use crate::metrics::guards::ClientConnectionGuard;
 use crate::state::AppState;
 use crate::ws::application_message::handle_application_message;
 use crate::ws::message::{MessageResult, receive_message, send_message};
 use crate::ws::traits::{WebSocketSink, WebSocketStream};
 use axum::extract::ws;
 use futures_util::SinkExt;
+use parking_lot::Mutex;
 use std::fmt::{Debug, Formatter};
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -19,15 +21,21 @@ pub struct ClientSession {
     pub client_info: ClientInfo,
     tx: mpsc::Sender<SignalingMessage>,
     client_shutdown_tx: watch::Sender<Option<DisconnectReason>>,
+    client_connection_guard: Arc<Mutex<ClientConnectionGuard>>,
 }
 
 impl ClientSession {
-    pub fn new(client_info: ClientInfo, tx: mpsc::Sender<SignalingMessage>) -> Self {
+    pub fn new(
+        client_info: ClientInfo,
+        tx: mpsc::Sender<SignalingMessage>,
+        client_connection_guard: ClientConnectionGuard,
+    ) -> Self {
         let (client_shutdown_tx, _) = watch::channel(None);
         Self {
             client_info,
             tx,
             client_shutdown_tx,
+            client_connection_guard: Arc::new(Mutex::new(client_connection_guard)),
         }
     }
 
@@ -42,6 +50,11 @@ impl ClientSession {
     #[instrument(level = "debug", skip(self))]
     pub fn disconnect(&self, disconnect_reason: Option<DisconnectReason>) {
         tracing::trace!("Disconnecting client");
+        if let Some(reason) = &disconnect_reason {
+            self.client_connection_guard
+                .lock()
+                .set_disconnect_reason(reason.clone());
+        }
         let _ = self.client_shutdown_tx.send(disconnect_reason);
     }
 
@@ -396,7 +409,8 @@ mod tests {
     async fn new_client_session() {
         let client_info_1 = create_client_info(1);
         let (tx, _rx) = mpsc::channel(10);
-        let session = ClientSession::new(client_info_1.clone(), tx);
+        let session =
+            ClientSession::new(client_info_1.clone(), tx, ClientConnectionGuard::default());
 
         assert_eq!(session.id(), "client1");
         assert_eq!(session.get_client_info(), &client_info_1);
@@ -406,7 +420,7 @@ mod tests {
     async fn send_message() {
         let client_info_1 = create_client_info(1);
         let (tx, mut rx) = mpsc::channel(10);
-        let session = ClientSession::new(client_info_1, tx);
+        let session = ClientSession::new(client_info_1, tx, ClientConnectionGuard::default());
 
         let client_info_2 = create_client_info(2);
         let message = SignalingMessage::ClientList {
@@ -423,7 +437,8 @@ mod tests {
     async fn send_message_error() {
         let client_info_1 = create_client_info(1);
         let (tx, _) = mpsc::channel(10);
-        let session = ClientSession::new(client_info_1, tx.clone());
+        let session =
+            ClientSession::new(client_info_1, tx.clone(), ClientConnectionGuard::default());
         drop(tx); // Drop the sender to simulate the client disconnecting
 
         let client_info_2 = create_client_info(2);

@@ -23,11 +23,11 @@ impl UpdateChecker {
     #[instrument(level = "debug", skip(self), err)]
     pub async fn check(
         &self,
-        channel: ReleaseChannel,
-        client_version: Version,
-        target: String,
-        arch: String,
-        bundle_type: BundleType,
+        channel: &ReleaseChannel,
+        client_version: &Version,
+        target: &String,
+        arch: &String,
+        bundle_type: &BundleType,
     ) -> Result<Option<Release>, AppError> {
         tracing::debug!("Checking for update");
 
@@ -36,9 +36,9 @@ impl UpdateChecker {
         let mut newer: Vec<(ReleaseMeta, ReleaseAsset)> = Vec::new();
         for ch in &visible {
             for m in self.catalog.list(*ch).await? {
-                if m.version > client_version
+                if m.version > *client_version
                     && let Some(a) = m.assets.iter().find(|a| {
-                        a.bundle_type == bundle_type && a.target == target && a.arch == arch
+                        a.bundle_type == *bundle_type && a.target == *target && a.arch == *arch
                     })
                 {
                     newer.push((m.clone(), a.clone()));
@@ -59,11 +59,11 @@ impl UpdateChecker {
             let mut req = false;
             'outer: for ch in &visible {
                 for m in self.catalog.list(*ch).await? {
-                    if m.version > client_version
+                    if m.version > *client_version
                         && m.assets.iter().any(|a| {
-                            a.bundle_type == bundle_type && a.target == target && a.arch == arch
+                            a.bundle_type == *bundle_type && a.target == *target && a.arch == *arch
                         })
-                        && (m.required || self.policy.is_required(*ch, &m.version))
+                        && (m.required || self.policy.is_required(ch, &m.version))
                     {
                         req = true;
                         break 'outer;

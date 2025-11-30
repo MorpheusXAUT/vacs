@@ -24,7 +24,7 @@ pub enum ReleaseChannel {
 }
 
 impl ReleaseChannel {
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             ReleaseChannel::Stable => "stable",
             ReleaseChannel::Beta => "beta",

@@ -7,9 +7,12 @@ use crate::state::AppState;
 use axum::extract::FromRequestParts;
 use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
+use axum::routing::get;
 use axum::{Router, extract, middleware};
 use axum_client_ip::{ClientIp, ClientIpSource};
 use axum_login::{AuthManagerLayer, AuthnBackend};
+use axum_prometheus::PrometheusMetricLayer;
+use metrics_exporter_prometheus::PrometheusHandle;
 use std::sync::Arc;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
@@ -19,13 +22,14 @@ use tracing::{Span, debug_span};
 
 pub fn create_app<B, S>(
     auth_layer: AuthManagerLayer<B, S, SignedCookie>,
+    prom_layer: Option<PrometheusMetricLayer<'static>>,
     client_ip_source: ClientIpSource,
 ) -> Router<Arc<AppState>>
 where
     B: AuthnBackend + Send + Sync + 'static + Clone,
     S: SessionStore + Send + Sync + 'static + Clone,
 {
-    Router::new()
+    let app = Router::new()
         .nest("/auth", auth::routes())
         .nest("/ws", ws::routes().merge(crate::ws::routes()))
         .nest("/version", version::routes())
@@ -59,5 +63,15 @@ where
             crate::config::SERVER_SHUTDOWN_TIMEOUT,
         ))
         .layer(auth_layer)
-        .layer(client_ip_source.into_extension())
+        .layer(client_ip_source.into_extension());
+
+    if let Some(prom_layer) = prom_layer {
+        app.layer(prom_layer)
+    } else {
+        app
+    }
+}
+
+pub fn create_metrics_app(prom_handle: PrometheusHandle) -> Router {
+    Router::new().route("/metrics", get(|| async move { prom_handle.render() }))
 }

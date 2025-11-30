@@ -1,9 +1,12 @@
 use crate::config;
 use crate::config::AppConfig;
+use crate::metrics::ErrorMetrics;
+use crate::metrics::guards::ClientConnectionGuard;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
 use crate::store::{Store, StoreBackend};
 use crate::ws::ClientSession;
+use crate::ws::calls::CallStateManager;
 use anyhow::Context;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -21,6 +24,7 @@ use vacs_vatsim::{ControllerInfo, FacilityType};
 pub struct AppState {
     pub config: AppConfig,
     pub updates: UpdateChecker,
+    pub call_state: CallStateManager,
     store: Store,
     /// Key: CID
     clients: RwLock<HashMap<String, ClientSession>>,
@@ -47,6 +51,7 @@ impl AppState {
             updates,
             store,
             clients: RwLock::new(HashMap::new()),
+            call_state: CallStateManager::new(),
             broadcast_tx,
             slurper,
             data_feed,
@@ -61,10 +66,11 @@ impl AppState {
         (self.broadcast_tx.subscribe(), self.shutdown_rx.clone())
     }
 
-    #[instrument(level = "debug", skip(self), err)]
+    #[instrument(level = "debug", skip(self, client_connection_guard), err)]
     pub async fn register_client(
         &self,
         client_info: ClientInfo,
+        client_connection_guard: ClientConnectionGuard,
     ) -> anyhow::Result<(ClientSession, mpsc::Receiver<SignalingMessage>)> {
         tracing::trace!("Registering client");
 
@@ -75,7 +81,7 @@ impl AppState {
         }
 
         let (tx, rx) = mpsc::channel(config::CLIENT_CHANNEL_CAPACITY);
-        let client = ClientSession::new(client_info, tx);
+        let client = ClientSession::new(client_info, tx, client_connection_guard);
 
         self.clients
             .write()
@@ -113,6 +119,8 @@ impl AppState {
         };
 
         client.disconnect(disconnect_reason);
+
+        self.call_state.cleanup_client_calls(client_id);
 
         if self.broadcast_tx.receiver_count() > 1 {
             tracing::trace!("Broadcasting client disconnected message");
@@ -170,6 +178,7 @@ impl AppState {
                 tracing::trace!(?peer_id, "Sending message to peer");
                 if let Err(err) = peer.send_message(message).await {
                     tracing::warn!(?err, "Failed to send message to peer");
+                    ErrorMetrics::error(&ErrorReason::PeerConnection);
                     if let Err(e) = client
                         .send_message(SignalingMessage::Error {
                             reason: ErrorReason::PeerConnection,
@@ -183,6 +192,7 @@ impl AppState {
             }
             None => {
                 tracing::warn!(peer_id, "Peer not found");
+                ErrorMetrics::peer_not_found();
                 if let Err(err) = client
                     .send_message(SignalingMessage::PeerNotFound {
                         peer_id: peer_id.to_string(),

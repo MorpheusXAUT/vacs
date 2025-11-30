@@ -1,4 +1,5 @@
 use crate::config::{AppConfig, VatsimConfig};
+use crate::metrics::guards::ClientConnectionGuard;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
 use crate::state::AppState;
@@ -113,7 +114,7 @@ impl TestSetup {
             frequency: "100.000".to_string(),
         };
         let (tx, rx) = mpsc::channel(10);
-        let session = ClientSession::new(client_info, tx);
+        let session = ClientSession::new(client_info, tx, ClientConnectionGuard::default());
         let (websocket_tx, websocket_rx) = mpsc::channel(100);
         let mock_stream = MockStream::new(vec![]);
         let mock_sink = MockSink::new(websocket_tx.clone());
@@ -142,7 +143,7 @@ impl TestSetup {
         client_info: ClientInfo,
     ) -> (ClientSession, mpsc::Receiver<SignalingMessage>) {
         self.app_state
-            .register_client(client_info)
+            .register_client(client_info, ClientConnectionGuard::default())
             .await
             .expect("Failed to register client")
     }

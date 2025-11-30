@@ -1,3 +1,4 @@
+use crate::metrics::MessageMetrics;
 use crate::ws::traits::{WebSocketSink, WebSocketStream};
 use axum::extract::ws;
 use futures_util::{SinkExt, StreamExt};
@@ -37,6 +38,7 @@ pub async fn send_message(
 ) -> anyhow::Result<()> {
     let serialized_message = SignalingMessage::serialize(&message)
         .map_err(|e| anyhow::anyhow!(e).context("Failed to serialize message"))?;
+    MessageMetrics::sent(&message, serialized_message.len());
     ws_outbound_tx
         .send(ws::Message::from(serialized_message))
         .await
@@ -50,6 +52,7 @@ pub async fn send_message_raw<T: WebSocketSink>(
 ) -> anyhow::Result<()> {
     let serialized_message = SignalingMessage::serialize(&message)
         .map_err(|e| anyhow::anyhow!(e).context("Failed to serialize message"))?;
+    MessageMetrics::sent(&message, serialized_message.len());
     websocket_tx
         .send(ws::Message::from(serialized_message))
         .await
@@ -61,10 +64,16 @@ pub async fn receive_message<R: WebSocketStream>(websocket_rx: &mut R) -> Messag
     match websocket_rx.next().await {
         Some(Ok(ws::Message::Text(raw_message))) => {
             match SignalingMessage::deserialize(&raw_message) {
-                Ok(message) => MessageResult::ApplicationMessage(message),
-                Err(err) => MessageResult::Error(
-                    anyhow::anyhow!(err).context("Failed to deserialize message"),
-                ),
+                Ok(message) => {
+                    MessageMetrics::received(&message, raw_message.len());
+                    MessageResult::ApplicationMessage(message)
+                }
+                Err(err) => {
+                    MessageMetrics::malformed();
+                    MessageResult::Error(
+                        anyhow::anyhow!(err).context("Failed to deserialize message"),
+                    )
+                }
             }
         }
         Some(Ok(ws::Message::Ping(_))) => MessageResult::ControlMessage,

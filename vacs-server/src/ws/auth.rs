@@ -1,3 +1,4 @@
+use crate::metrics::{ClientMetrics, ErrorMetrics};
 use crate::state::AppState;
 use crate::ws::message::{MessageResult, receive_message, send_message_raw};
 use axum::extract::ws;
@@ -25,6 +26,8 @@ pub async fn handle_websocket_login(
                         .map(|version| state.updates.is_compatible_protocol(version)).unwrap_or(false);
                     if !is_compatible_protocol {
                         tracing::debug!("Websocket login flow failed, due to incompatible protocol version");
+                        ClientMetrics::login_attempt(false);
+                        ClientMetrics::login_failure(LoginFailureReason::IncompatibleProtocolVersion);
                         let login_failure_message = SignalingMessage::LoginFailure {
                             reason: LoginFailureReason::IncompatibleProtocolVersion,
                         };
@@ -47,6 +50,8 @@ pub async fn handle_websocket_login(
                             match state.get_vatsim_controller_info(&cid).await {
                                 Ok(None) | Ok(Some(ControllerInfo { facility_type: FacilityType::Unknown, ..})) => {
                                     tracing::trace!(?cid, "No active VATSIM connection found, rejecting login");
+                                    ClientMetrics::login_attempt(false);
+                                    ClientMetrics::login_failure(LoginFailureReason::NoActiveVatsimConnection);
                                     let login_failure_message = SignalingMessage::LoginFailure {
                                         reason: LoginFailureReason::NoActiveVatsimConnection,
                                     };
@@ -63,8 +68,11 @@ pub async fn handle_websocket_login(
                                 }
                                 Err(err) => {
                                     tracing::warn!(?cid, ?err, "Failed to retrieve VATSIM user info");
+                                    let reason = ErrorReason::Internal("Failed to retrieve VATSIM connection info".to_string());
+                                    ClientMetrics::login_attempt(false);
+                                    ErrorMetrics::error(&reason);
                                     let login_failure_message = SignalingMessage::Error {
-                                        reason: ErrorReason::Internal("Failed to retrieve VATSIM connection info".to_string()),
+                                        reason,
                                         peer_id: None,
                                     };
                                     if let Err(err) =
@@ -78,6 +86,8 @@ pub async fn handle_websocket_login(
                         }
                         Err(err) => {
                             tracing::debug!(?err, "Websocket login flow failed");
+                            ClientMetrics::login_attempt(false);
+                            ClientMetrics::login_failure(LoginFailureReason::InvalidCredentials);
                             let login_failure_message = SignalingMessage::LoginFailure {
                                 reason: LoginFailureReason::InvalidCredentials,
                             };
@@ -92,6 +102,8 @@ pub async fn handle_websocket_login(
                 }
                 MessageResult::ApplicationMessage(message) => {
                     tracing::debug!(msg = ?message, "Received unexpected message during websocket login flow");
+                    ClientMetrics::login_attempt(false);
+                    ClientMetrics::login_failure(LoginFailureReason::Unauthorized);
                     let login_failure_message = SignalingMessage::LoginFailure {
                         reason: LoginFailureReason::Unauthorized,
                     };
@@ -106,10 +118,12 @@ pub async fn handle_websocket_login(
                 }
                 MessageResult::Disconnected => {
                     tracing::debug!("Client disconnected during websocket login flow");
+                    ClientMetrics::login_attempt(false);
                     None
                 }
                 MessageResult::Error(err) => {
                     tracing::warn!(?err, "Received error while handling websocket login flow");
+                    ClientMetrics::login_attempt(false);
                     None
                 }
             };
@@ -119,6 +133,8 @@ pub async fn handle_websocket_login(
         Ok(None) => None,
         Err(_) => {
             tracing::debug!("Websocket login flow timed out");
+            ClientMetrics::login_attempt(false);
+            ClientMetrics::login_failure(LoginFailureReason::Timeout);
             let login_timeout_message = SignalingMessage::LoginFailure {
                 reason: LoginFailureReason::Timeout,
             };

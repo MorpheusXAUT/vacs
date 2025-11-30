@@ -51,7 +51,7 @@ impl TestApp {
         ));
 
         let auth_layer = setup_mock_auth_layer(&config).await.unwrap();
-        let app = create_app(auth_layer, config.server.client_ip_source.clone());
+        let app = create_app(auth_layer, None, config.server.client_ip_source.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 

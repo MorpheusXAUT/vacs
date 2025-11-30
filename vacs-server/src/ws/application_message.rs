@@ -1,3 +1,5 @@
+use crate::metrics::ErrorMetrics;
+use crate::metrics::guards::CallAttemptOutcome;
 use crate::state::AppState;
 use crate::ws::ClientSession;
 use crate::ws::message::send_message;
@@ -36,12 +38,15 @@ pub async fn handle_application_message(
             }
             if let Err(until) = state.rate_limiters().check_call_invite(client.id()) {
                 tracing::debug!(?until, "Rate limit exceeded, rejecting call invite");
+                let reason = ErrorReason::RateLimited {
+                    retry_after_secs: until.as_secs(),
+                };
+                ErrorMetrics::error(&reason);
+
                 if let Err(err) = send_message(
                     ws_outbound_tx,
                     SignalingMessage::Error {
-                        reason: ErrorReason::RateLimited {
-                            retry_after_secs: until.as_secs(),
-                        },
+                        reason,
                         peer_id: Some(peer_id.to_string()),
                     },
                 )
@@ -114,10 +119,12 @@ async fn check_self_message(
 ) -> bool {
     if peer_id == client.id() {
         tracing::debug!(?peer_id, "Rejecting message to self");
+        let reason = ErrorReason::UnexpectedMessage("Rejecting message to self".to_string());
+        ErrorMetrics::error(&reason);
         if let Err(err) = send_message(
             ws_outbound_tx,
             SignalingMessage::Error {
-                reason: ErrorReason::UnexpectedMessage("Rejecting message to self".to_string()),
+                reason,
                 peer_id: Some(peer_id.to_string()),
             },
         )
@@ -132,6 +139,8 @@ async fn check_self_message(
 
 async fn handle_call_invite(state: &AppState, client: &ClientSession, peer_id: &str) {
     tracing::trace!(?peer_id, "Handling call invite");
+    state.call_state.start_call_attempt(client.id(), peer_id);
+
     state
         .send_message_to_peer(
             client,
@@ -146,6 +155,10 @@ async fn handle_call_invite(state: &AppState, client: &ClientSession, peer_id: &
 async fn handle_call_accept(state: &AppState, client: &ClientSession, peer_id: &str) {
     tracing::trace!(?peer_id, "Handling call acceptance");
     state
+        .call_state
+        .complete_call_attempt(client.id(), peer_id, CallAttemptOutcome::Accepted);
+
+    state
         .send_message_to_peer(
             client,
             peer_id,
@@ -158,6 +171,10 @@ async fn handle_call_accept(state: &AppState, client: &ClientSession, peer_id: &
 
 async fn handle_call_reject(state: &AppState, client: &ClientSession, peer_id: &str) {
     tracing::trace!(?peer_id, "Handling call rejection");
+    state
+        .call_state
+        .complete_call_attempt(client.id(), peer_id, CallAttemptOutcome::Rejected);
+
     state
         .send_message_to_peer(
             client,
@@ -185,6 +202,8 @@ async fn handle_call_offer(state: &AppState, client: &ClientSession, peer_id: &s
 
 async fn handle_call_answer(state: &AppState, client: &ClientSession, peer_id: &str, sdp: &str) {
     tracing::trace!(?peer_id, "Handling call answer");
+    state.call_state.start_call(client.id(), peer_id);
+
     state
         .send_message_to_peer(
             client,
@@ -199,6 +218,11 @@ async fn handle_call_answer(state: &AppState, client: &ClientSession, peer_id: &
 
 async fn handle_call_end(state: &AppState, client: &ClientSession, peer_id: &str) {
     tracing::trace!(?peer_id, "Handling call end");
+    state
+        .call_state
+        .complete_call_attempt(client.id(), peer_id, CallAttemptOutcome::Cancelled);
+    state.call_state.end_call(client.id(), peer_id);
+
     state
         .send_message_to_peer(
             client,
@@ -217,6 +241,13 @@ async fn handle_call_error(
     reason: CallErrorReason,
 ) {
     tracing::trace!(?peer_id, "Handling call error");
+    state.call_state.complete_call_attempt(
+        client.id(),
+        peer_id,
+        CallAttemptOutcome::Error(reason.clone()),
+    );
+    state.call_state.end_call(client.id(), peer_id);
+
     state
         .send_message_to_peer(
             client,
