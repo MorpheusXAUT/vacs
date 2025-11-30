@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v1.0.0...vacs-client-v1.1.0) (2025-11-30)
+
+
+### Features
+
+* provide TURN servers for traversing restrictive networks ([#248](https://github.com/MorpheusXAUT/vacs/issues/248)) ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+* **vacs-client:** add profile select to mission page ([ad36dc5](https://github.com/MorpheusXAUT/vacs/commit/ad36dc55e2e42619eff9c0163e869f64910998bb))
+* **vacs-client:** add station filter and aliasing ([#233](https://github.com/MorpheusXAUT/vacs/issues/233)) ([ad36dc5](https://github.com/MorpheusXAUT/vacs/commit/ad36dc55e2e42619eff9c0163e869f64910998bb))
+* **vacs-client:** implement dial pad functionality ([#231](https://github.com/MorpheusXAUT/vacs/issues/231)) ([3e6b03d](https://github.com/MorpheusXAUT/vacs/commit/3e6b03d573ce8e2fb1816177da5ca750cc3a8fe1))
+* **vacs-client:** Implement Fullscreen functionality ([#223](https://github.com/MorpheusXAUT/vacs/issues/223)) ([288965e](https://github.com/MorpheusXAUT/vacs/commit/288965e95c683b46d4b9d15aeb74d8207416561f))
+* **vacs-client:** load ICE config after signaling connect ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+* **vacs-server:** implement GitHub release catalog ([#258](https://github.com/MorpheusXAUT/vacs/issues/258)) ([6dac184](https://github.com/MorpheusXAUT/vacs/commit/6dac18498899760e654fe7485bce4944a8a723ac))
+* **vacs-webrtc:** use shared IceConfig types ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+
+
+### Bug Fixes
+
+* **vacs-client:** remove spammy updater progress log ([6dac184](https://github.com/MorpheusXAUT/vacs/commit/6dac18498899760e654fe7485bce4944a8a723ac))
+
 ## [1.0.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v0.4.0...vacs-client-v1.0.0) (2025-11-14)
 
 
