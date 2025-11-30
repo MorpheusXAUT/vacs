@@ -247,7 +247,7 @@ impl TokioReceiver {
                 }
             }
             tracing::trace!("Heartbeat task finished");
-        }))
+        }));
     }
 }
 

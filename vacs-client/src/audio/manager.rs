@@ -231,18 +231,18 @@ impl AudioManager {
     pub fn start(&self, source_type: SourceType) {
         log::trace!("Starting audio source {source_type:?}");
         self.output
-            .start_audio_source(self.source_ids[&source_type])
+            .start_audio_source(self.source_ids[&source_type]);
     }
 
     pub fn restart(&self, source_type: SourceType) {
         log::trace!("Restarting audio source {source_type:?}");
         self.output
-            .restart_audio_source(self.source_ids[&source_type])
+            .restart_audio_source(self.source_ids[&source_type]);
     }
 
     pub fn stop(&self, source_type: SourceType) {
         log::trace!("Stopping audio source {source_type:?}");
-        self.output.stop_audio_source(self.source_ids[&source_type])
+        self.output.stop_audio_source(self.source_ids[&source_type]);
     }
 
     pub fn set_output_volume(&self, source_type: SourceType, volume: f32) {

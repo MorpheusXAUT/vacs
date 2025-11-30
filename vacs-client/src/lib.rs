@@ -89,7 +89,7 @@ pub fn run() {
                             log::debug!("Set main window to be always on top");
                         }
                     } else {
-                        log::warn!("Your platform ({}) does not support always on top windows, setting is ignored.", capabilities.platform)
+                        log::warn!("Your platform ({}) does not support always on top windows, setting is ignored.", capabilities.platform);
                     }
                 }
 

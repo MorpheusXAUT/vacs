@@ -104,4 +104,5 @@ windows = { version = "0.62.2", features = [
 ] }
 wiremock = "0.6.5"
 
-[workspace.lints]
+[workspace.lints.clippy]
+semicolon-if-nothing-returned = "warn"

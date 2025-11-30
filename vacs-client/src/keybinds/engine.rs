@@ -105,7 +105,7 @@ impl KeybindEngine {
         self.app.emit("radio:integration-available", false).ok();
 
         if let Some(stop_token) = self.stop_token.take() {
-            stop_token.cancel()
+            stop_token.cancel();
         }
 
         if let Some(rx_task) = self.rx_task.take() {

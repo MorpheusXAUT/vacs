@@ -94,27 +94,30 @@ impl Peer {
 
         {
             let events_tx = events_tx.clone();
-            peer_connection.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
-                tracing::trace!(?candidate, "ICE candidate received");
-                if let Some(candidate) = candidate {
-                    match candidate.to_json() {
-                        Ok(init) => match serde_json::to_string(&init) {
-                            Ok(init) => {
-                                if let Err(err) = events_tx.send(PeerEvent::IceCandidate(init)) {
-                                    tracing::warn!(?err, "Failed to send ICE candidate event");
+            peer_connection.on_ice_candidate(Box::new(
+                move |candidate: Option<RTCIceCandidate>| {
+                    tracing::trace!(?candidate, "ICE candidate received");
+                    if let Some(candidate) = candidate {
+                        match candidate.to_json() {
+                            Ok(init) => match serde_json::to_string(&init) {
+                                Ok(init) => {
+                                    if let Err(err) = events_tx.send(PeerEvent::IceCandidate(init))
+                                    {
+                                        tracing::warn!(?err, "Failed to send ICE candidate event");
+                                    }
                                 }
-                            }
+                                Err(err) => {
+                                    tracing::warn!(?err, "Failed to serialize ICE candidate");
+                                }
+                            },
                             Err(err) => {
                                 tracing::warn!(?err, "Failed to serialize ICE candidate");
                             }
-                        },
-                        Err(err) => {
-                            tracing::warn!(?err, "Failed to serialize ICE candidate");
                         }
                     }
-                }
-                Box::pin(async {})
-            }))
+                    Box::pin(async {})
+                },
+            ));
         }
 
         Ok((
@@ -175,7 +178,7 @@ impl Peer {
         }
         if let Some(receiver) = self.receiver.take() {
             tracing::trace!("Shutting down receiver");
-            receiver.shutdown()
+            receiver.shutdown();
         }
 
         tracing::trace!("Successfully stopped peer");

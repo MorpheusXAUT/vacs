@@ -16,5 +16,5 @@ fn main() {
             }
         }
     }
-    vacs_client_lib::run()
+    vacs_client_lib::run();
 }

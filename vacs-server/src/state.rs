@@ -344,7 +344,7 @@ impl AppState {
                             cid,
                             pending_disconnect,
                             &mut disconnected_clients,
-                        )
+                        );
                     }
                     Some(controller) => {
                         if pending_disconnect.remove(cid) {

@@ -25,7 +25,7 @@ impl RedisStore {
             .context("Failed to create redis pool config")?;
         let pool = Builder::from_config(pool_config)
             .with_performance_config(|config| {
-                config.default_command_timeout = Duration::from_secs(2)
+                config.default_command_timeout = Duration::from_secs(2);
             })
             .build_pool(5)
             .context("Failed to create redis pool")?;

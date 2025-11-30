@@ -99,7 +99,7 @@ impl PlaybackStream {
             .mixer_ops
             .lock()
             .try_push(Box::new(move |mixer: &mut Mixer| {
-                mixer.add_source(id, source)
+                mixer.add_source(id, source);
             }))
             .is_err()
         {

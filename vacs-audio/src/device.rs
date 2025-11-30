@@ -390,7 +390,7 @@ impl DeviceSelector {
                             Some((_, _, best_score)) => {
                                 if score < *best_score {
                                     *best_score = score;
-                                    best_fallback = Some((dev, config, score))
+                                    best_fallback = Some((dev, config, score));
                                 }
                             }
                         }
