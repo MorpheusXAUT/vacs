@@ -1,4 +1,5 @@
 use crate::config::{AppConfig, VatsimConfig};
+use crate::ice::provider::stun::StunOnlyProvider;
 use crate::metrics::guards::ClientConnectionGuard;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
@@ -107,6 +108,7 @@ impl TestSetup {
             mock_data_feed.clone(),
             RateLimiters::default(),
             shutdown_rx,
+            Arc::new(StunOnlyProvider::default()),
         ));
         let client_info = ClientInfo {
             id: "client1".to_string(),

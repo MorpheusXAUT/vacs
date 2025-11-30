@@ -1,5 +1,6 @@
 use crate::auth::layer::setup_mock_auth_layer;
 use crate::config::{AppConfig, AuthConfig, VatsimConfig};
+use crate::ice::provider::stun::StunOnlyProvider;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
 use crate::routes::create_app;
@@ -48,6 +49,7 @@ impl TestApp {
             Arc::new(mock_data_feed),
             RateLimiters::default(),
             shutdown_rx,
+            Arc::new(StunOnlyProvider::default()),
         ));
 
         let auth_layer = setup_mock_auth_layer(&config).await.unwrap();

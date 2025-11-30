@@ -20,7 +20,7 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 tokio-tungstenite = { workspace = true }
 tracing = { workspace = true }
-vacs-protocol = { workspace = true }
+vacs-protocol = { workspace = true, features = ["http", "ws"] }
 vacs-server = { workspace = true, features = ["test-utils"], optional = true }
 
 [dev-dependencies]

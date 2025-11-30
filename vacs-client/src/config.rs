@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{LogicalSize, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
-use vacs_webrtc::config::WebrtcConfig;
+use vacs_signaling::protocol::http::webrtc::IceConfig;
 
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -20,12 +20,14 @@ pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
 pub const AUDIO_SETTINGS_FILE_NAME: &str = "audio.toml";
 pub const CLIENT_SETTINGS_FILE_NAME: &str = "client.toml";
 pub const ENCODED_AUDIO_FRAME_BUFFER_SIZE: usize = 512;
+pub const ICE_CONFIG_EXPIRY_LEEWAY: Duration = Duration::from_mins(15);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     pub backend: BackendConfig,
     pub audio: AudioConfig,
-    pub webrtc: WebrtcConfig,
+    #[serde(alias = "webrtc")] // support for old naming scheme
+    pub ice: IceConfig,
     pub client: ClientConfig,
 }
 
@@ -109,6 +111,7 @@ impl BackendConfig {
             BackendEndpoint::WsToken => &self.endpoints.ws_token,
             BackendEndpoint::TerminateWsSession => &self.endpoints.terminate_ws_session,
             BackendEndpoint::VersionUpdateCheck => &self.endpoints.version_update_check,
+            BackendEndpoint::IceConfig => &self.endpoints.ice_config,
         };
         format!("{}{}", self.base_url, path)
     }
@@ -122,6 +125,7 @@ pub enum BackendEndpoint {
     WsToken,
     TerminateWsSession,
     VersionUpdateCheck,
+    IceConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,6 +137,7 @@ pub struct BackendEndpointsConfigs {
     pub ws_token: String,
     pub terminate_ws_session: String,
     pub version_update_check: String,
+    pub ice_config: String,
 }
 
 impl Default for BackendEndpointsConfigs {
@@ -145,6 +150,7 @@ impl Default for BackendEndpointsConfigs {
             ws_token: "/ws/token".to_string(),
             terminate_ws_session: "/ws".to_string(),
             version_update_check: "/version/update?version={{current_version}}&target={{target}}&arch={{arch}}&bundle_type={{bundle_type}}&channel={{channel}}".to_string(),
+            ice_config: "/webrtc/ice-config".to_string(),
         }
     }
 }

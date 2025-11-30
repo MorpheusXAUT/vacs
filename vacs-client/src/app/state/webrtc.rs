@@ -1,14 +1,16 @@
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::{AppState, AppStateInner, sealed};
-use crate::config::ENCODED_AUDIO_FRAME_BUFFER_SIZE;
+use crate::config::{ENCODED_AUDIO_FRAME_BUFFER_SIZE, ICE_CONFIG_EXPIRY_LEEWAY};
 use crate::error::{CallError, Error};
 use anyhow::Context;
 use std::fmt::{Debug, Formatter};
+use std::time::UNIX_EPOCH;
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
 use vacs_webrtc::error::WebrtcError;
 use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
@@ -51,6 +53,8 @@ pub trait AppStateWebrtcExt: sealed::Sealed {
         reason: CallErrorReason,
     );
     fn active_call_peer_id(&self) -> Option<&String>;
+    fn set_ice_config(&mut self, config: IceConfig);
+    fn is_ice_config_expired(&self) -> bool;
 }
 
 impl AppStateWebrtcExt for AppStateInner {
@@ -64,7 +68,7 @@ impl AppStateWebrtcExt for AppStateInner {
             return Err(WebrtcError::CallActive.into());
         }
 
-        let (peer, mut events_rx) = Peer::new(self.config.webrtc.clone())
+        let (peer, mut events_rx) = Peer::new(self.config.ice.clone())
             .await
             .context("Failed to create WebRTC peer")?;
 
@@ -270,6 +274,38 @@ impl AppStateWebrtcExt for AppStateInner {
 
     fn active_call_peer_id(&self) -> Option<&String> {
         self.active_call.as_ref().map(|call| &call.peer_id)
+    }
+
+    fn set_ice_config(&mut self, config: IceConfig) {
+        self.config.ice = config;
+    }
+
+    fn is_ice_config_expired(&self) -> bool {
+        if self.config.ice.is_default() {
+            return false;
+        }
+
+        let expires_at = match self.config.ice.expires_at {
+            Some(expires_at) => expires_at,
+            None => return false,
+        };
+
+        let now = UNIX_EPOCH.elapsed().unwrap_or_default().as_secs();
+        if now >= expires_at.saturating_sub(ICE_CONFIG_EXPIRY_LEEWAY.as_secs()) {
+            log::debug!(
+                "ICE config is expired, expiry {} is less than leeway of {:?}",
+                expires_at,
+                ICE_CONFIG_EXPIRY_LEEWAY
+            );
+            true
+        } else {
+            log::debug!(
+                "ICE config is still valid, expiry {} is greater than leeway of {:?}",
+                expires_at,
+                ICE_CONFIG_EXPIRY_LEEWAY
+            );
+            false
+        }
     }
 }
 

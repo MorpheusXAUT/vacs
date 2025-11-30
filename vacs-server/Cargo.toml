@@ -45,7 +45,7 @@ tower-sessions-redis-store = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
-vacs-protocol = { workspace = true }
+vacs-protocol = { workspace = true, features = ["http", "ws"] }
 vacs-vatsim = { workspace = true }
 
 [dev-dependencies]

@@ -1,6 +1,7 @@
 mod auth;
 mod root;
 mod version;
+mod webrtc;
 mod ws;
 
 use crate::state::AppState;
@@ -33,6 +34,7 @@ where
         .nest("/auth", auth::routes())
         .nest("/ws", ws::routes().merge(crate::ws::routes()))
         .nest("/version", version::routes())
+        .nest("/webrtc", webrtc::routes())
         .merge(root::routes())
         .layer(middleware::from_fn(
             async |request: extract::Request, next: Next| {

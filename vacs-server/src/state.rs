@@ -1,5 +1,6 @@
 use crate::config;
 use crate::config::AppConfig;
+use crate::ice::provider::IceConfigProvider;
 use crate::metrics::ErrorMetrics;
 use crate::metrics::guards::ClientConnectionGuard;
 use crate::ratelimit::RateLimiters;
@@ -25,6 +26,7 @@ pub struct AppState {
     pub config: AppConfig,
     pub updates: UpdateChecker,
     pub call_state: CallStateManager,
+    pub ice_config_provider: Arc<dyn IceConfigProvider>,
     store: Store,
     /// Key: CID
     clients: RwLock<HashMap<String, ClientSession>>,
@@ -36,6 +38,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: AppConfig,
         updates: UpdateChecker,
@@ -44,11 +47,13 @@ impl AppState {
         data_feed: Arc<dyn DataFeed>,
         rate_limiters: RateLimiters,
         shutdown_rx: watch::Receiver<()>,
+        ice_config_provider: Arc<dyn IceConfigProvider>,
     ) -> Self {
         let (broadcast_tx, _) = broadcast::channel(config::BROADCAST_CHANNEL_CAPACITY);
         Self {
             config,
             updates,
+            ice_config_provider,
             store,
             clients: RwLock::new(HashMap::new()),
             call_state: CallStateManager::new(),

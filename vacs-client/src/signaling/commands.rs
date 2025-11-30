@@ -1,21 +1,31 @@
-use crate::app::state::AppState;
 use crate::app::state::http::HttpState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
+use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::config::BackendEndpoint;
 use crate::error::{Error, HandleUnauthorizedExt};
 use tauri::{AppHandle, Manager, State};
+use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::ws::SignalingMessage;
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn signaling_connect(app: AppHandle) -> Result<(), Error> {
-    app.state::<AppState>()
-        .lock()
-        .await
-        .connect_signaling()
-        .await
+pub async fn signaling_connect(
+    app_state: State<'_, AppState>,
+    http_state: State<'_, HttpState>,
+) -> Result<(), Error> {
+    let mut app_state = app_state.lock().await;
+    app_state.connect_signaling().await?;
+
+    if !app_state.config.ice.is_default() {
+        log::info!("Modified ICE config detected, not fetching from server");
+        return Ok(());
+    }
+
+    refresh_ice_config(&http_state, &mut app_state).await;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -53,6 +63,7 @@ pub async fn signaling_terminate(
 pub async fn signaling_start_call(
     app: AppHandle,
     app_state: State<'_, AppState>,
+    http_state: State<'_, HttpState>,
     audio_manager: State<'_, AudioManagerHandle>,
     peer_id: String,
 ) -> Result<(), Error> {
@@ -65,6 +76,10 @@ pub async fn signaling_start_call(
             peer_id: peer_id.clone(),
         })
         .await?;
+
+    if state.is_ice_config_expired() {
+        refresh_ice_config(&http_state, &mut state).await;
+    }
 
     state.add_call_to_call_list(&app, &peer_id, false);
     state.start_unanswered_call_timer(&app, &peer_id);
@@ -79,12 +94,17 @@ pub async fn signaling_start_call(
 #[vacs_macros::log_err]
 pub async fn signaling_accept_call(
     app_state: State<'_, AppState>,
+    http_state: State<'_, HttpState>,
     audio_manager: State<'_, AudioManagerHandle>,
     peer_id: String,
 ) -> Result<(), Error> {
     log::debug!("Accepting call from {peer_id}");
 
     let mut state = app_state.lock().await;
+
+    if state.is_ice_config_expired() {
+        refresh_ice_config(&http_state, &mut state).await;
+    }
 
     state
         .send_signaling_message(SignalingMessage::CallAccept {
@@ -123,4 +143,23 @@ pub async fn signaling_end_call(
     audio_manager.read().stop(SourceType::Ringback);
 
     Ok(())
+}
+
+async fn refresh_ice_config(http_state: &HttpState, app_state: &mut AppStateInner) {
+    let config = match http_state
+        .http_get::<IceConfig>(BackendEndpoint::IceConfig, None)
+        .await
+    {
+        Ok(config) => config,
+        Err(err) => {
+            log::warn!("Failed to fetch ICE config, falling back to default: {err:?}");
+            return;
+        }
+    };
+
+    log::info!(
+        "Received ICE config from server, expires at {}",
+        config.expires_at.unwrap_or_default()
+    );
+    app_state.set_ice_config(config);
 }
