@@ -81,7 +81,7 @@ impl CallStateManager {
 
         self.active_calls
             .write()
-            .retain(|call, _| call.0 != peer_id && call.1 != peer_id)
+            .retain(|call, _| call.0 != peer_id && call.1 != peer_id);
     }
 }
 
