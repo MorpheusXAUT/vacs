@@ -20,6 +20,7 @@ pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CAR
 pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
 pub const AUDIO_SETTINGS_FILE_NAME: &str = "audio.toml";
 pub const CLIENT_SETTINGS_FILE_NAME: &str = "client.toml";
+pub const STATIONS_SETTINGS_FILE_NAME: &str = "stations.toml";
 pub const ENCODED_AUDIO_FRAME_BUFFER_SIZE: usize = 512;
 pub const ICE_CONFIG_EXPIRY_LEEWAY: Duration = Duration::from_mins(15);
 
@@ -50,33 +51,33 @@ impl AppConfig {
             .add_source(
                 File::with_name(
                     config_dir
-                        .join("audio.toml")
+                        .join(AUDIO_SETTINGS_FILE_NAME)
                         .to_str()
                         .expect("Failed to get local config path"),
                 )
                 .required(false),
             )
-            .add_source(File::with_name("audio.toml").required(false))
+            .add_source(File::with_name(AUDIO_SETTINGS_FILE_NAME).required(false))
             .add_source(
                 File::with_name(
                     config_dir
-                        .join("stations.toml")
+                        .join(STATIONS_SETTINGS_FILE_NAME)
                         .to_str()
                         .expect("Failed to get local config path"),
                 )
                 .required(false),
             )
-            .add_source(File::with_name("stations.toml").required(false))
+            .add_source(File::with_name(STATIONS_SETTINGS_FILE_NAME).required(false))
             .add_source(
                 File::with_name(
                     config_dir
-                        .join("client.toml")
+                        .join(CLIENT_SETTINGS_FILE_NAME)
                         .to_str()
                         .expect("Failed to get local config path"),
                 )
                 .required(false),
             )
-            .add_source(File::with_name("client.toml").required(false))
+            .add_source(File::with_name(CLIENT_SETTINGS_FILE_NAME).required(false))
             .add_source(Environment::with_prefix("vacs_client"))
             .build()
             .context("Failed to build config")?
@@ -580,6 +581,7 @@ impl From<ClientConfig> for PersistedClientConfig {
 /// Configuration for how stations are handled client-side.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StationsConfig {
+    pub selected_profile: String,
     /// Named profiles for different station filtering configurations.
     /// Users can switch between profiles in the UI.
     pub profiles: HashMap<String, StationsProfileConfig>,
@@ -589,7 +591,37 @@ impl Default for StationsConfig {
     fn default() -> Self {
         let mut profiles = HashMap::new();
         profiles.insert("Default".to_string(), StationsProfileConfig::default());
-        Self { profiles }
+        Self {
+            selected_profile: "Default".to_string(),
+            profiles,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendStationsConfig {
+    pub selected_profile: String,
+    pub profiles: HashMap<String, StationsProfileConfig>,
+}
+
+impl From<StationsConfig> for FrontendStationsConfig {
+    fn from(stations_config: StationsConfig) -> Self {
+        Self {
+            selected_profile: stations_config.selected_profile,
+            profiles: stations_config.profiles,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct PersistedStationsConfig {
+    pub stations: StationsConfig,
+}
+
+impl From<StationsConfig> for PersistedStationsConfig {
+    fn from(stations: StationsConfig) -> Self {
+        Self { stations }
     }
 }
 

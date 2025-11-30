@@ -164,6 +164,7 @@ pub fn run() {
             signaling::commands::signaling_disconnect,
             signaling::commands::signaling_end_call,
             signaling::commands::signaling_get_stations_config,
+            signaling::commands::signaling_set_selected_stations_config_profile,
             signaling::commands::signaling_start_call,
             signaling::commands::signaling_terminate,
         ])

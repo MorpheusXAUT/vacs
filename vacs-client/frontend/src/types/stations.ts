@@ -1,8 +1,11 @@
 import {ClientInfoWithAlias, splitDisplayName} from "./client-info.ts";
 
 export type StationsConfig = {
-    profiles: Record<string, StationsProfileConfig>;
+    selectedProfile: string;
+    profiles: StationsConfigProfiles;
 }
+
+export type StationsConfigProfiles = Record<string, StationsProfileConfig>;
 
 export type StationsProfileConfig = {
     include: string[];

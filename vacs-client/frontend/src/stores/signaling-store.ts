@@ -1,6 +1,6 @@
 import {ClientInfo, ClientInfoWithAlias} from "../types/client-info.ts";
 import {create} from "zustand/react";
-import {filterAndSortClients, StationsConfig, StationsProfileConfig} from "../types/stations.ts";
+import {filterAndSortClients, StationsConfigProfiles, StationsConfig, StationsProfileConfig} from "../types/stations.ts";
 import {invokeStrict} from "../error.ts";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
@@ -12,7 +12,7 @@ type SignalingState = {
     frequency: string;
     allClients: ClientInfoWithAlias[]; // all available clients, including those filtered out by stations config
     clients: ClientInfoWithAlias[]; // list of clients to be displayed in UI, pre-processed by stations config and priority/sorting
-    stationsConfig: StationsConfig | undefined;
+    stationsConfigProfiles: StationsConfigProfiles;
     activeStationsProfileConfig: string;
     setConnectionState: (state: ConnectionState) => void;
     setClientInfo: (info: Omit<ClientInfo, "id">) => void;
@@ -32,7 +32,7 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
     frequency: "",
     allClients: [],
     clients: [],
-    stationsConfig: undefined,
+    stationsConfigProfiles: {},
     activeStationsProfileConfig: "Default",
     setConnectionState: (connectionState) => set({connectionState}),
     setClientInfo: (info) => {
@@ -44,6 +44,22 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
     },
     setClients: (clients) => {
         const aliases = get().getActiveStationsProfileConfig()?.aliases ?? {};
+
+        clients = [
+            ...clients,
+            {id: "", frequency: "132.600", displayName: "LOVV_CTR"},
+            {id: "", frequency: "124.400", displayName: "LOVV_I_CTR"},
+            {id: "", frequency: "134.675", displayName: "LOWW_PBSPECIALSNOWFLAKE_APP"},
+            {id: "", frequency: "119.400", displayName: "LOWW_TWR"},
+            {id: "", frequency: "132.600", displayName: "LOVV_CTR"},
+            {id: "", frequency: "124.400", displayName: "LOVV_I_CTR"},
+            {id: "", frequency: "134.675", displayName: "LOWW_PBSPECIALSNOWFLAKE_APP"},
+            {id: "", frequency: "119.400", displayName: "LOWW_TWR"},
+            {id: "", frequency: "132.600", displayName: "LOVV_CTR"},
+            {id: "", frequency: "124.400", displayName: "LOVV_I_CTR"},
+            {id: "", frequency: "134.675", displayName: "LOWW_PBSPECIALSNOWFLAKE_APP"},
+            {id: "", frequency: "119.400", displayName: "LOWW_TWR"}
+        ]
 
         const clientsWithAliases = clients.map<ClientInfoWithAlias>(client => ({
             ...client,
@@ -82,7 +98,7 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
         });
     },
     setStationsConfig: (config) => {
-        set({stationsConfig: config});
+        set({activeStationsProfileConfig: config.selectedProfile, stationsConfigProfiles: config.profiles});
 
         const aliases = get().getActiveStationsProfileConfig()?.aliases ?? {};
         const clients = get().allClients.map<ClientInfoWithAlias>(client => ({
@@ -111,9 +127,9 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
         });
     },
     getActiveStationsProfileConfig: () => {
-        const config = get().stationsConfig;
-        if (config === undefined) return undefined;
-        return config.profiles[get().activeStationsProfileConfig] ?? config.profiles["Default"];
+        const profiles = get().stationsConfigProfiles;
+        if (profiles === undefined) return undefined;
+        return profiles[get().activeStationsProfileConfig] ?? profiles["Default"];
     }
 }));
 

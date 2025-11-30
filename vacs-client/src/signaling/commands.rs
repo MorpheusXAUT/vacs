@@ -3,7 +3,10 @@ use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::{AudioManagerHandle, SourceType};
-use crate::config::{BackendEndpoint, StationsConfig};
+use crate::config::{
+    BackendEndpoint, FrontendStationsConfig, Persistable, PersistedStationsConfig,
+    STATIONS_SETTINGS_FILE_NAME,
+};
 use crate::error::{Error, HandleUnauthorizedExt};
 use tauri::{AppHandle, Manager, State};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
@@ -149,8 +152,31 @@ pub async fn signaling_end_call(
 #[vacs_macros::log_err]
 pub async fn signaling_get_stations_config(
     app_state: State<'_, AppState>,
-) -> Result<StationsConfig, Error> {
-    Ok(app_state.lock().await.config.stations.clone())
+) -> Result<FrontendStationsConfig, Error> {
+    Ok(app_state.lock().await.config.stations.clone().into())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn signaling_set_selected_stations_config_profile(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    profile: String,
+) -> Result<(), Error> {
+    let persisted_stations_config: PersistedStationsConfig = {
+        let mut state = app_state.lock().await;
+        state.config.stations.selected_profile = profile;
+
+        state.config.stations.clone().into()
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_stations_config.persist(&config_dir, STATIONS_SETTINGS_FILE_NAME)?;
+
+    Ok(())
 }
 
 async fn refresh_ice_config(http_state: &HttpState, app_state: &mut AppStateInner) {
