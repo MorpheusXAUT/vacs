@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-server-v1.0.0...vacs-server-v1.1.0) (2025-11-30)
+
+
+### Features
+
+* provide TURN servers for traversing restrictive networks ([#248](https://github.com/MorpheusXAUT/vacs/issues/248)) ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+* **vacs-client:** add profile select to mission page ([ad36dc5](https://github.com/MorpheusXAUT/vacs/commit/ad36dc55e2e42619eff9c0163e869f64910998bb))
+* **vacs-client:** add station filter and aliasing ([#233](https://github.com/MorpheusXAUT/vacs/issues/233)) ([ad36dc5](https://github.com/MorpheusXAUT/vacs/commit/ad36dc55e2e42619eff9c0163e869f64910998bb))
+* **vacs-client:** load ICE config after signaling connect ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+* **vacs-server:** implement GitHub release catalog ([#258](https://github.com/MorpheusXAUT/vacs/issues/258)) ([6dac184](https://github.com/MorpheusXAUT/vacs/commit/6dac18498899760e654fe7485bce4944a8a723ac))
+* **vacs-server:** implement Prometheus metrics ([#251](https://github.com/MorpheusXAUT/vacs/issues/251)) ([b6d72fd](https://github.com/MorpheusXAUT/vacs/commit/b6d72fd6bfa719380efa966d55c02b85800978f6))
+* **vacs-webrtc:** use shared IceConfig types ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+
+
+### Bug Fixes
+
+* **vacs-client:** remove spammy updater progress log ([6dac184](https://github.com/MorpheusXAUT/vacs/commit/6dac18498899760e654fe7485bce4944a8a723ac))
+* **vacs-server:** prevent clients from sending signaling messages to own peer_id ([#244](https://github.com/MorpheusXAUT/vacs/issues/244)) ([098ec4c](https://github.com/MorpheusXAUT/vacs/commit/098ec4cd0d79225b8542710199f79f3e9e84dac0))
+
 ## [1.0.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-server-v0.2.0...vacs-server-v1.0.0) (2025-11-14)
 
 
