@@ -65,7 +65,7 @@ impl TestApp {
                     .into_make_service_with_connect_info::<SocketAddr>(),
             )
             .await
-            .unwrap()
+            .unwrap();
         });
 
         Self {

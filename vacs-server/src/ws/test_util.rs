@@ -184,7 +184,7 @@ impl TestSetup {
                     &mut self.shutdown_tx.subscribe(),
                     client_info,
                 )
-                .await
+                .await;
         })
     }
 }

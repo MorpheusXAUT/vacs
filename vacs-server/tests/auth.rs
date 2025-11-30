@@ -177,7 +177,7 @@ async fn login_timeout() {
         Some(Ok(tungstenite::Message::Text(response))) => {
             match SignalingMessage::deserialize(&response) {
                 Ok(SignalingMessage::LoginFailure { reason }) => {
-                    assert_eq!(reason, LoginFailureReason::Timeout)
+                    assert_eq!(reason, LoginFailureReason::Timeout);
                 }
                 _ => panic!("Unexpected response: {response:?}"),
             }
