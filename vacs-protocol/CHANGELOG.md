@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-protocol-v1.0.0...vacs-protocol-v1.1.0) (2025-11-30)
+
+
+### Features
+
+* provide TURN servers for traversing restrictive networks ([#248](https://github.com/MorpheusXAUT/vacs/issues/248)) ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+* **vacs-client:** load ICE config after signaling connect ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+* **vacs-server:** implement Prometheus metrics ([#251](https://github.com/MorpheusXAUT/vacs/issues/251)) ([b6d72fd](https://github.com/MorpheusXAUT/vacs/commit/b6d72fd6bfa719380efa966d55c02b85800978f6))
+* **vacs-webrtc:** use shared IceConfig types ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+
+
+### Bug Fixes
+
+* **vacs-server:** prevent clients from sending signaling messages to own peer_id ([#244](https://github.com/MorpheusXAUT/vacs/issues/244)) ([098ec4c](https://github.com/MorpheusXAUT/vacs/commit/098ec4cd0d79225b8542710199f79f3e9e84dac0))
+
 ## [1.0.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-protocol-v0.1.0...vacs-protocol-v1.0.0) (2025-11-09)
 
 
