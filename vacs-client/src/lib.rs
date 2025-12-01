@@ -81,6 +81,10 @@ pub fn run() {
                     .context("Failed to get main window")
                     .map_startup_err(StartupError::Other)?;
 
+                if let Err(err) = state.config.client.restore_window_state(app.handle()) {
+                    log::warn!("Failed to restore saved window state: {err}");
+                }
+
                 if state.config.client.always_on_top {
                     if capabilities.always_on_top {
                         if let Err(err) = main_window.set_always_on_top(true) {

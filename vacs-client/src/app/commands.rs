@@ -8,19 +8,8 @@ use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 #[tauri::command]
-pub async fn app_frontend_ready(
-    app: AppHandle,
-    app_state: State<'_, AppState>,
-    window: WebviewWindow,
-) -> Result<(), Error> {
+pub async fn app_frontend_ready(app: AppHandle, window: WebviewWindow) -> Result<(), Error> {
     log::info!("Frontend ready");
-
-    let state = app_state.lock().await;
-    if !state.config.client.fullscreen
-        && let Err(err) = state.config.client.restore_window_state(&app)
-    {
-        log::warn!("Failed to restore saved window state: {err}");
-    }
 
     if let Err(err) = window.show() {
         log::error!("Failed to show window: {err}");
