@@ -8,8 +8,41 @@ use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 #[tauri::command]
-pub async fn app_frontend_ready(app: AppHandle, window: WebviewWindow) -> Result<(), Error> {
+pub async fn app_frontend_ready(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    window: WebviewWindow,
+) -> Result<(), Error> {
     log::info!("Frontend ready");
+    let capabilities = Capabilities::default();
+
+    let state = app_state.lock().await;
+    if let Err(err) = state.config.client.restore_window_state(&app) {
+        log::warn!("Failed to restore saved window state: {err}");
+    }
+
+    if state.config.client.always_on_top {
+        if capabilities.always_on_top {
+            if let Err(err) = window.set_always_on_top(true) {
+                log::warn!("Failed to set main window to be always on top: {err}");
+            } else {
+                log::debug!("Set main window to be always on top");
+            }
+        } else {
+            log::warn!(
+                "Your platform ({}) does not support always on top windows, setting is ignored.",
+                capabilities.platform
+            );
+        }
+    }
+
+    if state.config.client.fullscreen {
+        if let Err(err) = window.set_fullscreen(true) {
+            log::warn!("Failed to set main window to be fullscreen: {err}");
+        } else {
+            log::debug!("Set main window to be fullscreen");
+        }
+    }
 
     if let Err(err) = window.show() {
         log::error!("Failed to show window: {err}");

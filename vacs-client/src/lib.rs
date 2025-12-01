@@ -76,35 +76,6 @@ pub fn run() {
 
                 let state = AppStateInner::new(app.handle())?;
 
-                let main_window = app
-                    .get_webview_window("main")
-                    .context("Failed to get main window")
-                    .map_startup_err(StartupError::Other)?;
-
-                if let Err(err) = state.config.client.restore_window_state(app.handle()) {
-                    log::warn!("Failed to restore saved window state: {err}");
-                }
-
-                if state.config.client.always_on_top {
-                    if capabilities.always_on_top {
-                        if let Err(err) = main_window.set_always_on_top(true) {
-                            log::warn!("Failed to set main window to be always on top: {err}");
-                        } else {
-                            log::debug!("Set main window to be always on top");
-                        }
-                    } else {
-                        log::warn!("Your platform ({}) does not support always on top windows, setting is ignored.", capabilities.platform);
-                    }
-                }
-
-                if state.config.client.fullscreen {
-                    if let Err(err) = main_window.set_fullscreen(true) {
-                        log::warn!("Failed to set main window to be fullscreen: {err}");
-                    } else {
-                        log::debug!("Set main window to be fullscreen");
-                    }
-                }
-
                 let transmit_config = state.config.client.transmit_config.clone();
                 let keybind_engine = state.keybind_engine_handle();
 
