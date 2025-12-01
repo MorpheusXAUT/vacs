@@ -13,7 +13,7 @@ use axum::{Router, extract, middleware};
 use axum_client_ip::{ClientIp, ClientIpSource};
 use axum_login::{AuthManagerLayer, AuthnBackend};
 use axum_prometheus::PrometheusMetricLayer;
-use metrics_exporter_prometheus::PrometheusHandle;
+use axum_prometheus::metrics_exporter_prometheus::PrometheusHandle;
 use std::sync::Arc;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;

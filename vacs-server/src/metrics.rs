@@ -3,12 +3,12 @@ mod labels;
 
 use crate::metrics::labels::AsMetricLabel;
 use crate::release::catalog::BundleType;
+use axum_prometheus::metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use axum_prometheus::utils::SECONDS_DURATION_BUCKETS;
 use axum_prometheus::{
     AXUM_HTTP_REQUESTS_DURATION_SECONDS, PrometheusMetricLayer, PrometheusMetricLayerBuilder,
 };
 use metrics::{Unit, counter, describe_counter, describe_gauge, describe_histogram, histogram};
-use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use semver::Version;
 use vacs_protocol::http::version::ReleaseChannel;
 use vacs_protocol::ws::LoginFailureReason;

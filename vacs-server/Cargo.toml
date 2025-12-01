@@ -25,7 +25,6 @@ governor = { workspace = true }
 jsonwebtoken = { workspace = true }
 lru = { workspace = true }
 metrics = { workspace = true }
-metrics-exporter-prometheus = { workspace = true }
 nonzero_ext = { workspace = true }
 oauth2 = { workspace = true }
 octocrab = { workspace = true }
