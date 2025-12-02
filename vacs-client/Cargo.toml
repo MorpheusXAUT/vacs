@@ -59,4 +59,6 @@ objc2-core-foundation = { workspace = true }
 tauri-plugin-prevent-default = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { workspace = true }
+futures-util = { workspace = true }
 tauri-plugin-prevent-default = { workspace = true }

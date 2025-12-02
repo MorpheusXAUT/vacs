@@ -35,6 +35,11 @@ cfg_if::cfg_if! {
         mod macos;
         pub use macos::MacOsKeybindListener as PlatformListener;
         pub use macos::MacOsKeybindEmitter as PlatformEmitter;
+    } else if #[cfg(target_os = "linux")] {
+        mod linux;
+        mod stub;
+        pub use linux::LinuxKeybindEmitter as PlatformEmitter;
+        pub use linux::LinuxKeybindListener as PlatformListener;
     } else {
         mod stub;
         pub use stub::NoopKeybindEmitter as PlatformEmitter;

@@ -339,6 +339,26 @@ impl KeybindEngine {
 
     #[inline]
     fn select_active_code(config: &TransmitConfig) -> Option<Code> {
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::detect(), Platform::LinuxWayland) {
+            // As shortcut binding is performed on OS level and can contain keys including multiple
+            // modifiers, so we can't reliably map them to a single Code. Instead, we emit a distinct
+            // code for each transmit mode that's highly unlikely to be used otherwise (as most
+            // keyboards don't even map the respective keys. This effectively disables/overrides the
+            // code defined in the vacs-config, even though webview-based capture might still work.
+            let code = match config.mode {
+                TransmitMode::VoiceActivation => None,
+                TransmitMode::PushToTalk => Some(Code::F33),
+                TransmitMode::PushToMute => Some(Code::F34),
+                TransmitMode::RadioIntegration => Some(Code::F35),
+            };
+            log::trace!(
+                "Using portal shortcut code {code:?} for transmit mode {:?}",
+                config.mode
+            );
+            return code;
+        }
+
         match config.mode {
             TransmitMode::VoiceActivation => None,
             TransmitMode::PushToTalk => config.push_to_talk,
