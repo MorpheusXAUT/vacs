@@ -32,7 +32,7 @@ pub async fn keybinds_set_transmit_config(
     transmit_config: FrontendTransmitConfig,
 ) -> Result<(), Error> {
     let capabilities = Capabilities::default();
-    if !capabilities.keybinds {
+    if !capabilities.keybind_listener {
         return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
     }
 
@@ -77,7 +77,7 @@ pub async fn keybinds_set_radio_config(
     radio_config: FrontendRadioConfig,
 ) -> Result<(), Error> {
     let capabilities = Capabilities::default();
-    if !capabilities.keybinds {
+    if !capabilities.keybind_listener {
         return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
     }
 
@@ -111,7 +111,7 @@ pub async fn keybinds_has_radio(
     keybind_engine: State<'_, KeybindEngineHandle>,
 ) -> Result<bool, Error> {
     let capabilities = Capabilities::default();
-    if !capabilities.keybinds {
+    if !capabilities.keybind_listener {
         return Ok(false);
     }
 
@@ -125,7 +125,7 @@ pub async fn keybinds_get_external_binding(
     mode: TransmitMode,
 ) -> Result<Option<String>, Error> {
     let capabilities = Capabilities::default();
-    if !capabilities.keybinds {
+    if !capabilities.keybind_listener {
         return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
     }
     Ok(keybind_engine.read().await.get_external_binding(mode))

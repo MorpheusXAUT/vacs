@@ -83,7 +83,7 @@ pub fn run() {
                 app.manage::<AudioManagerHandle>(state.audio_manager_handle());
                 app.manage::<AppState>(TokioMutex::new(state));
 
-                if capabilities.keybinds {
+                if capabilities.keybind_listener || capabilities.keybind_emitter {
                     keybind_engine
                         .write()
                         .await
@@ -91,7 +91,7 @@ pub fn run() {
                         .await
                         .map_startup_err(StartupError::Keybinds)?;
                 } else {
-                    log::warn!("Your platform ({}) does not support keybinds, skipping registration", capabilities.platform);
+                    log::warn!("Your platform ({}) does not support keybind listener and emitter, skipping registration", capabilities.platform);
                 }
 
                 app.manage::<KeybindEngineHandle>(keybind_engine);

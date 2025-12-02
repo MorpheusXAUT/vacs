@@ -4,14 +4,16 @@ import {invokeStrict} from "../error.ts";
 
 type CapabilitiesState = {
     alwaysOnTop: boolean,
-    keybinds: boolean,
+    keybindListener: boolean,
+    keybindEmitter: boolean,
     platform: Platform,
     setCapabilities: (capabilities: Capabilities) => void,
 }
 
 export const useCapabilitiesStore = create<CapabilitiesState>()((set) => ({
     alwaysOnTop: false,
-    keybinds: false,
+    keybindListener: false,
+    keybindEmitter: false,
     platform: "Unknown",
     setCapabilities: (capabilities) => {
         set({...capabilities});

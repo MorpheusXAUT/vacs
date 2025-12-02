@@ -11,7 +11,8 @@ import KeyCapture from "./ui/KeyCapture.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 
 function TransmitModeSettings() {
-    const capKeybinds = useCapabilitiesStore(state => state.keybinds);
+    const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
+    const capKeybindEmitter = useCapabilitiesStore(state => state.keybindEmitter);
     const capPlatform = useCapabilitiesStore(state => state.platform);
     const [transmitConfig, setTransmitConfig] = useState<TransmitConfigWithLabels | undefined>(undefined);
     const [radioConfig, setRadioConfig] = useState<RadioConfigWithLabels | undefined>(undefined);
@@ -27,10 +28,10 @@ function TransmitModeSettings() {
             setRadioConfig(await withRadioLabels(radioConfig));
         };
 
-        if (capKeybinds) {
+        if (capKeybindListener) {
             void fetchConfig();
         }
-    }, [capKeybinds]);
+    }, [capKeybindListener]);
 
     return (
         <div className="py-0.5 flex flex-col gap-2">
@@ -39,7 +40,7 @@ function TransmitModeSettings() {
                     Transmit Mode
                 </p>
                 <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
-                    {!capKeybinds ? (
+                    {!capKeybindListener ? (
                         <p className="text-sm text-gray-700 py-1.5 cursor-help"
                            title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}
                         >Not available.</p>
@@ -67,9 +68,9 @@ function TransmitModeSettings() {
                     </svg>
                 </div>
                 <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
-                    {!capKeybinds ? (
+                    {!capKeybindEmitter ? (
                         <p className="text-sm text-gray-700 py-1.5 cursor-help"
-                           title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}
+                            title={`Unfortunately, keybind emitters are not yet supported on ${capPlatform}`}
                         >Not available.</p>
                     ) : transmitConfig !== undefined && radioConfig !== undefined ? (
                         <RadioConfigSettings transmitConfig={transmitConfig} radioConfig={radioConfig}
@@ -86,7 +87,7 @@ type TransmitConfigSettingsProps = {
     setTransmitConfig: Dispatch<StateUpdater<TransmitConfigWithLabels | undefined>>;
 };
 
-function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitConfigSettingsProps) {
+function TransmitConfigSettings({ transmitConfig, setTransmitConfig }: TransmitConfigSettingsProps) {
     const capPlatform = useCapabilitiesStore(state => state.platform);
     const [waylandBinding, setWaylandBinding] = useState<string | undefined>(undefined);
 

@@ -6,7 +6,8 @@ use std::fmt::Display;
 #[allow(dead_code)]
 pub struct Capabilities {
     pub always_on_top: bool,
-    pub keybinds: bool,
+    pub keybind_listener: bool,
+    pub keybind_emitter: bool,
 
     pub platform: Platform,
 }
@@ -17,7 +18,11 @@ impl Default for Capabilities {
 
         Self {
             always_on_top: !matches!(platform, Platform::LinuxWayland),
-            keybinds: matches!(platform, Platform::Windows | Platform::MacOs),
+            keybind_listener: matches!(
+                platform,
+                Platform::Windows | Platform::MacOs | Platform::LinuxWayland
+            ),
+            keybind_emitter: matches!(platform, Platform::Windows | Platform::MacOs),
             platform,
         }
     }
