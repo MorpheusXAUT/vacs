@@ -87,6 +87,9 @@ type TransmitConfigSettingsProps = {
 };
 
 function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitConfigSettingsProps) {
+    const capPlatform = useCapabilitiesStore(state => state.platform);
+    const [waylandBinding, setWaylandBinding] = useState<string | undefined>(undefined);
+
     const handleOnTransmitCapture = async (code: string) => {
         if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") return;
 
@@ -148,6 +151,21 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
         }
     };
 
+    useEffect(() => {
+        const fetchExternalBinding = async () => {
+            const binding = await invokeSafe<string | null>("keybinds_get_external_binding", { mode: transmitConfig.mode });
+            setWaylandBinding(binding ?? undefined);
+        };
+
+        if (capPlatform === "LinuxWayland" && transmitConfig !== undefined) {
+            if (transmitConfig.mode === "VoiceActivation") {
+                setWaylandBinding(undefined);
+            } else {
+                void fetchExternalBinding();
+            }
+        }
+    }, [capPlatform, transmitConfig]);
+
     return (
         <>
             <Select
@@ -162,10 +180,19 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
                 selected={transmitConfig.mode}
                 onChange={handleOnTransmitModeChange}
             />
-            <KeyCapture
-                label={transmitConfig.mode === "PushToTalk" ? transmitConfig.pushToTalkLabel : transmitConfig.mode === "PushToMute" ? transmitConfig.pushToMuteLabel : transmitConfig.radioPushToTalkLabel}
-                onCapture={handleOnTransmitCapture} onRemove={handleOnTransmitRemoveClick}
-                disabled={transmitConfig.mode === "VoiceActivation"}/>
+            {capPlatform === "LinuxWayland" ? (
+                <div
+                    className="grow flex items-center justify-center px-3 py-1.5 bg-gray-50 border border-gray-300 rounded text-sm text-gray-500 cursor-help"
+                    title="On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings."
+                >
+                    {waylandBinding || "Not bound"}
+                </div>
+            ) : (
+                <KeyCapture
+                    label={transmitConfig.mode === "PushToTalk" ? transmitConfig.pushToTalkLabel : transmitConfig.mode === "PushToMute" ? transmitConfig.pushToMuteLabel : transmitConfig.radioPushToTalkLabel}
+                    onCapture={handleOnTransmitCapture} onRemove={handleOnTransmitRemoveClick}
+                    disabled={transmitConfig.mode === "VoiceActivation"}/>
+            )}
         </>
     );
 }
