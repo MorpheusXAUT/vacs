@@ -3,6 +3,7 @@ use crate::config::{RadioConfig, TransmitConfig, TransmitMode};
 use crate::error::Error;
 use crate::keybinds::KeyEvent;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
+use crate::platform::Platform;
 use crate::radio::{DynRadio, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
@@ -205,6 +206,19 @@ impl KeybindEngine {
 
     pub fn has_radio(&self) -> bool {
         self.radio.read().is_some()
+    }
+
+    pub fn get_external_binding(&self, mode: TransmitMode) -> Option<String> {
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::detect(), Platform::LinuxWayland) {
+            return self
+                .listener
+                .read()
+                .as_ref()
+                .and_then(|l| l.get_external_binding(mode));
+        }
+
+        None
     }
 
     fn reset_input_state(&self) {

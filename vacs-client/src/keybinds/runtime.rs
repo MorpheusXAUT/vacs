@@ -8,6 +8,10 @@ pub trait KeybindListener: Send + Sync + Debug + 'static {
     async fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
     where
         Self: Sized;
+
+    fn get_external_binding(&self, _mode: crate::config::TransmitMode) -> Option<String> {
+        None
+    }
 }
 
 pub type DynKeybindListener = Arc<dyn KeybindListener>;

@@ -132,6 +132,7 @@ pub fn run() {
             auth::commands::auth_check_session,
             auth::commands::auth_logout,
             auth::commands::auth_open_oauth_url,
+            keybinds::commands::keybinds_get_external_binding,
             keybinds::commands::keybinds_get_radio_config,
             keybinds::commands::keybinds_get_transmit_config,
             keybinds::commands::keybinds_has_radio,
