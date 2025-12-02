@@ -540,8 +540,9 @@ impl AppStateInner {
 
                         state.end_call(&peer_id).await;
                         state.remove_outgoing_call_peer_id(&peer_id);
+                        state.remove_incoming_call_peer_id(&peer_id);
 
-                        app.emit("signaling:call-end", peer_id).ok();
+                        app.emit("signaling:rate-limit", peer_id).ok();
                     }
                     app.emit::<FrontendError>(
                         "error",

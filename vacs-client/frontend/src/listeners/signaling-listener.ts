@@ -54,6 +54,9 @@ export function setupSignalingListeners() {
             listen<string>("signaling:call-end", (event) => {
                 removePeer(event.payload, true);
             }),
+            listen<string>("signaling:rate-limit", (event) => {
+                removePeer(event.payload);
+            }),
             listen<string>("signaling:call-reject", (event) => {
                 rejectPeer(event.payload);
             }),
