@@ -82,7 +82,7 @@ tower-sessions-redis-store = "0.16.0"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 tracing = { version = "0.1.43", features = ["log"] }
 url = "2.5.7"
-uuid = { version = "1.17.0", features = ["v4"] }
+uuid = { version = "1.19.0", features = ["v4"] }
 vacs-audio = { path = "vacs-audio" }
 vacs-macros = { path = "vacs-macros" }
 vacs-protocol = { path = "vacs-protocol", default-features = false }
