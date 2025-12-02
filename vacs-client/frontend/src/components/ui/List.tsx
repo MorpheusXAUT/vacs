@@ -17,13 +17,13 @@ type ListProps = {
 function List(props: ListProps) {
     const {listContainer, scrollOffset, setScrollOffset, visibleItemIndices, maxScrollOffset} = useList(props);
 
-    const gridCols = `grid-cols-[${props.columnWidths.join("_")}_4rem]`;
+    const gridCols = `${props.columnWidths.join(" ")} 4rem`;
 
     return (
         <div
             ref={listContainer}
-            className={clsx("h-full grid ${gridCols} box-border gap-[1px] [&>div]:outline-1 [&>div]:outline-gray-500", gridCols, props.className)}
-            style={{gridTemplateRows: `${HEADER_HEIGHT_REM}rem repeat(${visibleItemIndices.length},1fr)`}}
+            className={clsx("h-full grid box-border gap-[1px] [&>div]:outline-1 [&>div]:outline-gray-500", props.className)}
+            style={{gridTemplateRows: `${HEADER_HEIGHT_REM}rem repeat(${visibleItemIndices.length},1fr)`, gridTemplateColumns: gridCols}}
         >
             {/*HEADER*/}
             {props.header.map((headerItem, idx) => (
