@@ -1,3 +1,30 @@
+//! Linux keybind listener and emitter implementations with runtime platform detection.
+//!
+//! # Architecture
+//!
+//! Linux has multiple display server protocols (X11, Wayland) with different capabilities:
+//!
+//! - **Wayland**: Uses XDG Global Shortcuts portal for listening. Emitter is not supported
+//!   due to Wayland's security model (no global input injection).
+//! - **X11**: Currently uses stub implementations (to be implemented in the future).
+//! - **Unknown**: No display server detected, uses stub implementations.
+//!
+//! # Runtime Platform Detection
+//!
+//! Unlike Windows and macOS where the platform is known at compile time, Linux requires
+//! runtime detection to determine whether we're running on X11 or Wayland. This is done
+//! by checking environment variables (XDG_SESSION_TYPE, WAYLAND_DISPLAY, DISPLAY).
+//!
+//! The `LinuxKeybindListener` and `LinuxKeybindEmitter` enums wrap the platform-specific
+//! implementations and dispatch to the correct one based on runtime detection.
+//!
+//! # Emitter Limitation
+//!
+//! **Important**: The emitter is currently a no-op stub on all Linux platforms. This means
+//! radio integration (which requires emitting key presses to other applications) does not
+//! work on Linux. This is a fundamental limitation of Wayland's security model, and there's
+//! no standard cross-desktop solution for X11 either.
+
 mod wayland;
 
 use crate::keybinds::runtime::{KeybindEmitter, KeybindListener, stub};
@@ -28,7 +55,8 @@ impl KeybindListener for LinuxKeybindListener {
     where
         Self: Sized,
     {
-        match Platform::detect() {
+        // Runtime platform detection to select the appropriate listener implementation
+        match Platform::get() {
             Platform::LinuxWayland => {
                 let (listener, rx) = wayland::WaylandKeybindListener::start().await?;
                 Ok((Self::Wayland(listener), rx))
@@ -77,7 +105,13 @@ impl KeybindEmitter for LinuxKeybindEmitter {
     where
         Self: Sized,
     {
-        match Platform::detect() {
+        // Runtime platform detection to select the appropriate emitter implementation.
+        //
+        // NOTE: All variants currently use the stub implementation because:
+        // - Wayland: No standard API for global input injection (security model)
+        // - X11: Not yet implemented (would use XTest extension)
+        // - Unknown: No display server available
+        match Platform::get() {
             Platform::LinuxWayland => Ok(Self::Wayland(stub::NoopKeybindEmitter::start()?)),
             Platform::LinuxX11 => Ok(Self::X11(stub::NoopKeybindEmitter::start()?)),
             Platform::LinuxUnknown => Ok(Self::Stub(stub::NoopKeybindEmitter::start()?)),

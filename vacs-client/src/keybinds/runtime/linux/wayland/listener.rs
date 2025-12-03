@@ -1,3 +1,43 @@
+//! Wayland keybind listener implementation using XDG Global Shortcuts portal.
+//!
+//! # Architecture
+//!
+//! This listener connects to the XDG Desktop Portal's Global Shortcuts API to receive
+//! global keyboard events on Wayland. The implementation is split into several helper
+//! functions to keep the code maintainable:
+//!
+//! - `initialize_portal()`: Creates the D-Bus proxy and session
+//! - `check_existing_shortcuts()`: Checks if shortcuts are already configured
+//! - `bind_shortcuts()`: Registers new shortcuts with the portal
+//! - `ensure_configuration()`: Shows the configuration UI if needed
+//! - `run_shortcuts_listener()`: Main event loop listening for portal signals
+//!
+//! ## Startup Synchronization
+//!
+//! The listener uses a oneshot channel to signal when initialization is complete. This
+//! ensures the `KeybindEngine` doesn't proceed until the portal connection is established
+//! and shortcuts are registered. A 10-second timeout prevents hanging if the portal is
+//! unavailable.
+//!
+//! ## Cleanup Strategy
+//!
+//! The listener uses two cancellation tokens:
+//! - `cancellation_token`: Signals the background task to stop
+//! - `cleanup_token`: Signals when cleanup (closing the portal session) is complete
+//!
+//! The `Drop` implementation cancels the task and waits up to 2 seconds for graceful
+//! cleanup before aborting the task.
+//!
+//! ## Thread Safety & Locking
+//!
+//! The `shortcuts` map uses `parking_lot::RwLock` instead of `tokio::sync::RwLock` because:
+//! - Accesses are very short-lived (just reading/writing a HashMap)
+//! - No async operations are performed while holding the lock
+//! - `parking_lot::RwLock` is more efficient for this use case (no async overhead)
+//!
+//! The map is shared between the main struct and the background task to allow querying
+//! the current bindings via `get_external_binding()`.
+
 use crate::keybinds::runtime::KeybindListener;
 use crate::keybinds::runtime::linux::wayland::PortalShortcutId;
 use crate::keybinds::{KeyEvent, KeybindsError};
@@ -19,6 +59,8 @@ pub struct WaylandKeybindListener {
     cancellation_token: CancellationToken,
     cleanup_token: CancellationToken,
     task_handle: Option<JoinHandle<()>>,
+    /// Map of portal shortcut IDs to their current key bindings (e.g., "Ctrl+Alt+P").
+    /// Shared with the background task to allow querying current bindings.
     shortcuts: ShortcutMap,
 }
 

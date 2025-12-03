@@ -471,6 +471,18 @@ pub struct FrontendTrackAudioRadioConfig {
 }
 
 impl RadioConfig {
+    /// Create a radio integration instance based on the configured integration type.
+    ///
+    /// Returns `None` if the integration is not configured or if the emit key is not set.
+    ///
+    /// # Platform Limitation
+    ///
+    /// **Important**: Radio integration requires a functional `KeybindEmitter` to inject
+    /// key presses into external applications. This works on Windows and macOS, but NOT
+    /// on Linux where the emitter is a no-op stub due to Wayland's security model.
+    ///
+    /// On Linux, this method will successfully create a radio instance, but it will
+    /// silently do nothing when `transmit()` is called.
     pub fn radio(&self) -> Result<Option<DynRadio>, Error> {
         match self.integration {
             RadioIntegration::AudioForVatsim => {

@@ -208,9 +208,16 @@ impl KeybindEngine {
         self.radio.read().is_some()
     }
 
+    /// Get the external (OS-configured) keybind for a transmit mode, if available.
+    ///
+    /// On Wayland, keybinds are configured at the OS level via the XDG Global Shortcuts
+    /// portal. This method queries the listener to get the actual key combination the
+    /// user configured in their desktop environment.
+    ///
+    /// Returns `None` on all other platforms where keybinds are configured in-app.
     pub fn get_external_binding(&self, mode: TransmitMode) -> Option<String> {
         #[cfg(target_os = "linux")]
-        if matches!(Platform::detect(), Platform::LinuxWayland) {
+        if matches!(Platform::get(), Platform::LinuxWayland) {
             return self
                 .listener
                 .read()
@@ -340,12 +347,20 @@ impl KeybindEngine {
     #[inline]
     fn select_active_code(config: &TransmitConfig) -> Option<Code> {
         #[cfg(target_os = "linux")]
-        if matches!(Platform::detect(), Platform::LinuxWayland) {
-            // As shortcut binding is performed on OS level and can contain keys including multiple
-            // modifiers, so we can't reliably map them to a single Code. Instead, we emit a distinct
-            // code for each transmit mode that's highly unlikely to be used otherwise (as most
-            // keyboards don't even map the respective keys. This effectively disables/overrides the
-            // code defined in the vacs-config, even though webview-based capture might still work.
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            // Wayland Code Mapping Strategy:
+            //
+            // On Wayland, shortcuts are configured at the OS level via the XDG Global Shortcuts
+            // portal. The portal allows complex key combinations (e.g., Ctrl+Alt+Shift+P) that
+            // cannot be represented as a single keyboard_types::Code.
+            //
+            // To work around this, we map each transmit mode to a unique, unlikely-to-be-pressed
+            // function key (F33-F35). These keys don't exist on most keyboards, so there's no
+            // conflict with user input. When the portal activates a shortcut, we emit the
+            // corresponding F-key code, and the rest of the keybind engine works unchanged.
+            //
+            // This effectively overrides the user-configured codes in the config file on Wayland,
+            // since the actual key binding is managed by the desktop environment.
             let code = match config.mode {
                 TransmitMode::VoiceActivation => None,
                 TransmitMode::PushToTalk => Some(Code::F33),

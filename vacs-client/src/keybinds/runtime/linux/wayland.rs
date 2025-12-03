@@ -1,9 +1,57 @@
+//! Wayland keybind listener implementation using XDG Global Shortcuts portal.
+//!
+//! # Overview
+//!
+//! This module implements global keybind listening for Wayland compositors using the
+//! [XDG Desktop Portal](https://flatpak.github.io/xdg-desktop-portal/) Global Shortcuts API.
+//!
+//! ## Why XDG Portal?
+//!
+//! Unlike X11 where applications can directly listen to global keyboard events, Wayland's
+//! security model requires applications to request permission from the compositor. The
+//! XDG Desktop Portal provides a standardized D-Bus API for this purpose.
+//!
+//! ## Compositor Support
+//!
+//! This implementation works on compositors that support the Global Shortcuts portal:
+//! - KDE Plasma (via `xdg-desktop-portal-kde`)
+//! - GNOME (via `xdg-desktop-portal-gnome`)
+//! - Hyprland (via `xdg-desktop-portal-hyprland`)
+//!
+//! ## Code Mapping Strategy
+//!
+//! The portal allows complex key combinations (e.g., `Ctrl+Alt+Shift+P`) that cannot be
+//! represented as a single `keyboard_types::Code`. To work around this, we map each
+//! transmit mode to a unique function key:
+//!
+//! - `PushToTalk` → `Code::F33`
+//! - `PushToMute` → `Code::F34`
+//! - `RadioIntegration` → `Code::F35`
+//!
+//! These keys don't exist on most keyboards, avoiding conflicts with user input. When the
+//! portal activates a shortcut, we emit the corresponding F-key code, and the rest of the
+//! keybind engine works unchanged.
+//!
+//! ## User Experience
+//!
+//! 1. On first launch, the compositor shows a configuration dialog
+//! 2. User configures their preferred key combinations
+//! 3. Shortcuts are stored by the compositor and persist across app restarts
+//! 4. User can reconfigure shortcuts in their desktop environment settings
+
 mod listener;
 pub use listener::*;
 
 use ashpd::desktop::global_shortcuts::NewShortcut;
 use keyboard_types::Code;
 use std::str::FromStr;
+
+/// Identifiers for shortcuts registered with the XDG Global Shortcuts portal.
+///
+/// Each variant corresponds to a transmit mode in vacs. These IDs are used to:
+/// - Register shortcuts with the portal
+/// - Identify which shortcut was activated in portal signals
+/// - Query the current key binding from the portal
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PortalShortcutId {
