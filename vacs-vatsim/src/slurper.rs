@@ -140,9 +140,9 @@ impl SlurperClient {
     ///         .and(path("/users/info"))
     ///         .and(query_param("cid", "1234567"))
     ///         .respond_with(ResponseTemplate::new(200).set_body_string(
-    ///             "1459660,LOWW_D_ATIS,atc,121.730,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n\
+    ///             "1234567,LOWW_D_ATIS,atc,121.730,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n\
     ///              1234567,LOVV_CTR,atc,123.450,600,47.66667,14.33333,0,0,0,0,0,0,0,0,\n\
-    ///              1459660,LOWW_A_ATIS,atc,122.955,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n",
+    ///              1234567,LOWW_A_ATIS,atc,122.955,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n",
     ///         ))
     ///         .mount(&server)
     ///         .await;
@@ -288,6 +288,14 @@ impl SlurperClient {
         }
 
         let facility_type: FacilityType = callsign.into();
+        if matches!(facility_type, FacilityType::Unknown) {
+            tracing::warn!(
+                ?callsign,
+                ?frequency,
+                "Callsign is not a valid facility type, returning None"
+            );
+            return Ok(None);
+        }
 
         tracing::debug!(
             ?callsign,
@@ -355,9 +363,36 @@ mod tests {
             .and(path("/users/info"))
             .and(query_param("cid", "1234567"))
             .respond_with(ResponseTemplate::new(200).set_body_string(
-                "1459660,LOWW_D_ATIS,atc,121.730,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n\
+                "1234567,LOWW_D_ATIS,atc,121.730,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n\
                 1234567,LOVV_CTR,atc,123.450,600,47.66667,14.33333,0,0,0,0,0,0,0,0,\n\
-                1459660,LOWW_A_ATIS,atc,122.955,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n",
+                1234567,LOWW_A_ATIS,atc,122.955,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n",
+            ))
+            .mount(&server)
+            .await;
+
+        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+
+        let controller_info = client
+            .get_controller_info("1234567")
+            .await
+            .context("Failed to get controller info")?
+            .expect("No controller info found");
+
+        assert_eq!(controller_info.callsign, "LOVV_CTR".to_string());
+        assert_eq!(controller_info.frequency, "123.450".to_string());
+        Ok(())
+    }
+
+    #[test(tokio::test)]
+    async fn get_controller_info_atis_with_visibility_range() -> anyhow::Result<()> {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/users/info"))
+            .and(query_param("cid", "1234567"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "1234567,LOWW_D_ATIS,atc,121.730,50,48.11028,16.56972,0,0,0,0,0,0,0,0,\n\
+                1234567,LOVV_CTR,atc,123.450,600,47.66667,14.33333,0,0,0,0,0,0,0,0,\n\
+                1234567,LOWW_A_ATIS,atc,122.955,50,48.11028,16.56972,0,0,0,0,0,0,0,0,\n",
             ))
             .mount(&server)
             .await;
@@ -406,8 +441,32 @@ mod tests {
             .and(path("/users/info"))
             .and(query_param("cid", "1234567"))
             .respond_with(ResponseTemplate::new(200).set_body_string(
-                "1459660,LOWW_D_ATIS,atc,121.730,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n\
-                1459660,LOWW_A_ATIS,atc,122.955,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n",
+                "1234567,LOWW_D_ATIS,atc,121.730,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n\
+                1234567,LOWW_A_ATIS,atc,122.955,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n",
+            ))
+            .mount(&server)
+            .await;
+
+        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+
+        let controller_info = client
+            .get_controller_info("1234567")
+            .await
+            .context("Failed to get controller info")?;
+
+        assert_eq!(controller_info, None);
+        Ok(())
+    }
+
+    #[test(tokio::test)]
+    async fn get_controller_info_only_atis() -> anyhow::Result<()> {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/users/info"))
+            .and(query_param("cid", "1234567"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "1234567,LOWW_D_ATIS,atc,121.730,50,48.11028,16.56972,0,0,0,0,0,0,0,0,\n\
+                1234567,LOWW_A_ATIS,atc,122.955,0,48.11028,16.56972,0,0,0,0,0,0,0,0,\n",
             ))
             .mount(&server)
             .await;
