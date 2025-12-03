@@ -16,7 +16,7 @@ When you launch `vacs` for the first time, it will attempt to register its short
 2.  If prompted by your system, **allow** the application to register shortcuts.
 3.  A configuration window provided by your desktop environment should appear.
 4.  Bind the keys you wish to use for **Push-to-Talk**, **Push-to-Mute**, **Radio Integration** etc.
-5.  If you dismiss the dialog or want to change bindings later, you can usually find them in your system settings under "Global Shortcuts" or "Applications".
+5.  If you dismiss the dialog or want to change bindings later, you can usually find them in your system settings under "Global Shortcuts" or "Applications". You can also click the externally bound key in the `vacs` settings to try to open the appropriate settings page for your desktop environment.
 
 ### Limitations
 
@@ -39,5 +39,5 @@ Due to the security model of Wayland and the design of the Global Shortcuts port
 
 Wayland does not provide a standard, secure way for applications to inject input events (like key presses) into other applications. While there are some compositor-specific protocols (like `wlr-virtual-input`), there is no cross-desktop standard that `vacs` can rely on.
 
-As a result, the **Radio Integration** feature will not work for integrations relying on external key presses on Wayland. You will need to use a radio integration providing direct support (e.g., via an API) or configure your radio client and `vacs` separately, for instance using the "Push-to-,ute" transmit mode.  
+As a result, the **Radio Integration** feature will not work for integrations relying on external key presses on Wayland. You will need to use a radio integration providing direct support (e.g., via an API) or configure your radio client and `vacs` separately, for instance using the "Push-to-Mute" transmit mode.  
 Note that since `vacs` uses the Global Shortcuts portal, it can share the same physical key as another application if that application also listens globally (or if the compositor allows it). However, `vacs` cannot _trigger_ the other application's PTT.

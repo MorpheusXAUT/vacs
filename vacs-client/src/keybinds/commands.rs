@@ -130,3 +130,22 @@ pub async fn keybinds_get_external_binding(
     }
     Ok(keybind_engine.read().await.get_external_binding(mode))
 }
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub fn keybinds_open_system_shortcuts_settings() -> Result<(), Error> {
+    #[cfg(target_os = "linux")]
+    {
+        use crate::platform::DesktopEnvironment;
+        return DesktopEnvironment::get()
+            .open_keyboard_shortcuts_settings()
+            .map_err(|err| Error::Other(Box::new(anyhow::anyhow!(err))));
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        return Err(Error::Other(Box::new(anyhow::anyhow!(
+            "Opening keyboard shortcuts settings is only supported on Linux"
+        ))));
+    }
+}

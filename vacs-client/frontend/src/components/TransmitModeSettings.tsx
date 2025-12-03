@@ -188,7 +188,8 @@ function TransmitConfigSettings({ transmitConfig, setTransmitConfig }: TransmitC
                 <div
                     className={clsx("h-full w-full flex items-center justify-center px-3 py-1.5 bg-gray-50 border border-gray-300 rounded text-sm text-gray-500 cursor-help",
                         transmitConfig.mode === "VoiceActivation" && "brightness-90 cursor-not-allowed")}
-                    title={transmitConfig.mode !== "VoiceActivation" ? "On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings." : ""}
+                    title={transmitConfig.mode !== "VoiceActivation" ? "On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings. Click this field to try opening the appropriate system settings." : ""}
+                    onClick={() => invokeSafe("keybinds_open_system_shortcuts_settings")}
                 >
                     {transmitConfig.mode !== "VoiceActivation" ? (waylandBinding || "Not bound") : ""}
                 </div>

@@ -136,6 +136,7 @@ pub fn run() {
             keybinds::commands::keybinds_get_radio_config,
             keybinds::commands::keybinds_get_transmit_config,
             keybinds::commands::keybinds_has_radio,
+            keybinds::commands::keybinds_open_system_shortcuts_settings,
             keybinds::commands::keybinds_set_radio_config,
             keybinds::commands::keybinds_set_transmit_config,
             signaling::commands::signaling_accept_call,
