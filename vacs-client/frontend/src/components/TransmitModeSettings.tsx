@@ -74,7 +74,7 @@ function TransmitModeSettings() {
                             title={`Unfortunately, keybind emitters are not yet supported on ${capPlatform}`}
                         >Not available.</p>
                     ) : transmitConfig !== undefined && radioConfig !== undefined ? (
-                        <RadioConfigSettings transmitConfig={transmitConfig} radioConfig={radioConfig}
+                        <RadioIntegrationSettings transmitConfig={transmitConfig} radioConfig={radioConfig}
                                              setRadioConfig={setRadioConfig}/>
                     ) : <p className="w-full text-center">Loading...</p>}
                 </div>
@@ -177,7 +177,9 @@ function TransmitConfigSettings({ transmitConfig, setTransmitConfig }: TransmitC
                     {value: "VoiceActivation", text: "Voice activation"},
                     {value: "PushToTalk", text: "Push-to-talk"},
                     {value: "PushToMute", text: "Push-to-mute"},
-                    {value: "RadioIntegration", text: "Radio Integration"}
+                    ...(capPlatform === "Windows" || capPlatform === "MacOs"
+                        ? [{value: "RadioIntegration", text: "Radio Integration"}]
+                        : [])
                 ]}
                 selected={transmitConfig.mode}
                 onChange={handleOnTransmitModeChange}
@@ -200,14 +202,14 @@ function TransmitConfigSettings({ transmitConfig, setTransmitConfig }: TransmitC
     );
 }
 
-type RadioConfigSettingsProps = {
+type RadioIntegrationSettingsProps = {
     transmitConfig: TransmitConfigWithLabels;
     radioConfig: RadioConfigWithLabels;
     setRadioConfig: Dispatch<StateUpdater<RadioConfigWithLabels | undefined>>;
 };
 
-function RadioConfigSettings({transmitConfig, radioConfig, setRadioConfig}: RadioConfigSettingsProps) {
-    const handleOnRadioCapture = async (code: string) => {
+function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}: RadioIntegrationSettingsProps) {
+    const handleOnRadioIntegrationCapture = async (code: string) => {
         if (transmitConfig === undefined || transmitConfig.mode !== "RadioIntegration" || radioConfig === undefined) {
             return;
         }
@@ -252,7 +254,7 @@ function RadioConfigSettings({transmitConfig, radioConfig, setRadioConfig}: Radi
         }
     };
 
-    const handleOnRadioRemoveClick = async () => {
+    const handleOnRadioIntegrationRemoveClick = async () => {
         if (radioConfig === undefined) return;
 
         let newConfig: RadioConfig;
@@ -295,7 +297,7 @@ function RadioConfigSettings({transmitConfig, radioConfig, setRadioConfig}: Radi
             />
             <KeyCapture
                 label={radioConfig.integration === "AudioForVatsim" ? radioConfig.audioForVatsim && radioConfig.audioForVatsim.emitLabel : radioConfig.trackAudio && radioConfig.trackAudio.emitLabel}
-                onCapture={handleOnRadioCapture} onRemove={handleOnRadioRemoveClick}
+                onCapture={handleOnRadioIntegrationCapture} onRemove={handleOnRadioIntegrationRemoveClick}
                 disabled={transmitConfig.mode !== "RadioIntegration"}/>
         </>
     );
