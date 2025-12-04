@@ -57,8 +57,9 @@ impl PushToTalkRadio {
     }
 }
 
+#[async_trait::async_trait]
 impl Radio for PushToTalkRadio {
-    fn transmit(&self, state: TransmissionState) -> Result<(), RadioError> {
+    async fn transmit(&self, state: TransmissionState) -> Result<(), RadioError> {
         let key_state = match state {
             TransmissionState::Active if !self.active.swap(true, Ordering::Relaxed) => {
                 KeyState::Down
@@ -82,8 +83,10 @@ impl Radio for PushToTalkRadio {
 impl Drop for PushToTalkRadio {
     fn drop(&mut self) {
         log::trace!("Dropping PushToTalkRadio: code {:?}", self.code);
-        if let Err(err) = self.transmit(TransmissionState::Inactive) {
-            log::warn!("Failed to set transmission Inactive while dropping: {err}");
+        if self.active.load(Ordering::Relaxed)
+            && let Err(err) = self.emitter.emit(self.code, KeyState::Up)
+        {
+            log::warn!("Failed to release PTT key while dropping: {err}");
         }
     }
 }

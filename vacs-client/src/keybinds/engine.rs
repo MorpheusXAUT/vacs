@@ -300,7 +300,7 @@ impl KeybindEngine {
                                 let state = event.state.into();
                                 if let Some(radio) = radio.as_ref() {
                                     log::trace!("No call active, setting radio transmission {state:?}");
-                                    Self::set_radio_transmit(&app, radio, state);
+                                    Self::set_radio_transmit(&app, radio, state).await;
                                 } else {
                                     log::trace!("No call active, radio not initialized, cannot set transmission {state:?}");
                                 }
@@ -314,7 +314,7 @@ impl KeybindEngine {
                                 if let Some(radio) = radio.as_ref() {
                                     log::trace!("Call active, radio prio set, setting audio input muted and radio transmission {state:?}");
                                     Self::set_input_muted(&app, true);
-                                    Self::set_radio_transmit(&app, radio, state);
+                                    Self::set_radio_transmit(&app, radio, state).await;
                                 } else {
                                     log::trace!("Call active, radio prio set, radio not initialized, setting audio input muted, but cannot set transmission {state:?}");
                                     Self::set_input_muted(&app, true);
@@ -338,7 +338,7 @@ impl KeybindEngine {
                                 app.emit("audio:implicit-radio-prio", false).ok();
                             } else if let Some(radio) = radio.as_ref() {
                                 log::trace!("Implicit radio prio cleared on {mode:?} key release, but radio prio was not set. Setting transmission Inactive");
-                                Self::set_radio_transmit(&app, radio, TransmissionState::Inactive);
+                                Self::set_radio_transmit(&app, radio, TransmissionState::Inactive).await;
                             } else {
                                 log::trace!("Implicit radio prio cleared on {mode:?} key release, but radio not initialized, ignoring");
                             }
@@ -399,8 +399,8 @@ impl KeybindEngine {
     }
 
     #[inline]
-    fn set_radio_transmit(app: &AppHandle, radio: &DynRadio, state: TransmissionState) {
-        if let Err(err) = radio.transmit(state) {
+    async fn set_radio_transmit(app: &AppHandle, radio: &DynRadio, state: TransmissionState) {
+        if let Err(err) = radio.transmit(state).await {
             log::warn!("Failed to set radio transmission state {state:?}: {err}");
         } else {
             app.emit("radio:transmission-state", state).ok();
