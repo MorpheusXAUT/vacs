@@ -30,6 +30,7 @@ use crate::radio::{Radio, RadioError, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{AppHandle, Emitter};
 
 /// Radio integration that emits key presses to external applications.
 ///
@@ -37,23 +38,30 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// on Windows and macOS. On Linux, the emitter is a no-op stub, so this will
 /// silently do nothing.
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PushToTalkRadio {
+    app: AppHandle,
     code: Code,
     emitter: DynKeybindEmitter,
     active: Arc<AtomicBool>,
 }
 
 impl PushToTalkRadio {
-    pub fn new(code: Code) -> Result<Self, RadioError> {
+    pub fn new(app: AppHandle, code: Code) -> Result<Self, RadioError> {
         log::trace!("PushToTalkRadio starting: code {:?}", code);
-        Ok(Self {
+
+        let radio = Self {
+            app,
             code,
             emitter: Arc::new(
                 PlatformEmitter::start().map_err(|err| RadioError::Integration(err.to_string()))?,
             ),
             active: Arc::new(AtomicBool::new(false)),
-        })
+        };
+
+        radio.app.emit("radio:integration-available", true).ok();
+
+        Ok(radio)
     }
 }
 
@@ -74,9 +82,24 @@ impl Radio for PushToTalkRadio {
             "Setting transmission {state:?}, emitting {:?} {key_state:?}",
             self.code,
         );
+
         self.emitter
             .emit(self.code, key_state)
-            .map_err(|err| RadioError::Transmit(err.to_string()))
+            .map_err(|err| RadioError::Transmit(err.to_string()))?;
+
+        // Emit event to frontend after successful key emission
+        self.app.emit("radio:transmission-state", state).ok();
+
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for PushToTalkRadio {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PushToTalkRadio")
+            .field("code", &self.code)
+            .field("active", &self.active)
+            .finish()
     }
 }
 

@@ -11,7 +11,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{LogicalSize, PhysicalPosition, PhysicalSize};
+use tauri::{AppHandle, LogicalSize, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
 
@@ -483,7 +483,7 @@ impl RadioConfig {
     ///
     /// On Linux, this method will successfully create a radio instance, but it will
     /// silently do nothing when `transmit()` is called.
-    pub fn radio(&self) -> Result<Option<DynRadio>, Error> {
+    pub fn radio(&self, app: AppHandle) -> Result<Option<DynRadio>, Error> {
         match self.integration {
             RadioIntegration::AudioForVatsim => {
                 let Some(config) = self.audio_for_vatsim.as_ref() else {
@@ -493,7 +493,7 @@ impl RadioConfig {
                     return Ok(None);
                 };
                 log::debug!("Initializing AudioForVatsim radio integration");
-                let radio = PushToTalkRadio::new(emit).map_err(Error::from)?;
+                let radio = PushToTalkRadio::new(app, emit).map_err(Error::from)?;
                 Ok(Some(Arc::new(radio)))
             }
             RadioIntegration::TrackAudio => {
@@ -504,7 +504,7 @@ impl RadioConfig {
                     return Ok(None);
                 };
                 log::debug!("Initializing TrackAudio radio integration");
-                let radio = PushToTalkRadio::new(emit).map_err(Error::from)?;
+                let radio = PushToTalkRadio::new(app, emit).map_err(Error::from)?;
                 Ok(Some(Arc::new(radio)))
             }
         }
