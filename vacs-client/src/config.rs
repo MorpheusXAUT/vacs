@@ -7,7 +7,7 @@ use anyhow::Context;
 use config::{Config, Environment, File};
 use keyboard_types::Code;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -19,6 +19,7 @@ use vacs_signaling::protocol::http::webrtc::IceConfig;
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
+pub const DEFAULT_SETTINGS_FILE_NAME: &str = "config.toml";
 pub const AUDIO_SETTINGS_FILE_NAME: &str = "audio.toml";
 pub const CLIENT_SETTINGS_FILE_NAME: &str = "client.toml";
 pub const STATIONS_SETTINGS_FILE_NAME: &str = "stations.toml";
@@ -42,13 +43,13 @@ impl AppConfig {
             .add_source(
                 File::with_name(
                     config_dir
-                        .join("config.toml")
+                        .join(DEFAULT_SETTINGS_FILE_NAME)
                         .to_str()
                         .expect("Failed to get local config path"),
                 )
                 .required(false),
             )
-            .add_source(File::with_name("config.toml").required(false))
+            .add_source(File::with_name(DEFAULT_SETTINGS_FILE_NAME).required(false))
             .add_source(
                 File::with_name(
                     config_dir
@@ -592,6 +593,10 @@ pub struct StationsConfig {
     /// Named profiles for different station filtering configurations.
     /// Users can switch between profiles in the UI.
     pub profiles: HashMap<String, StationsProfileConfig>,
+    /// List of peer IDs (= CIDs) that should be ignored by the client. This will lead to incoming
+    /// calls being ignored as if they weren't received.
+    #[serde(default)]
+    pub ignored: HashSet<String>,
 }
 
 impl Default for StationsConfig {
@@ -601,6 +606,7 @@ impl Default for StationsConfig {
         Self {
             selected_profile: "Default".to_string(),
             profiles,
+            ignored: HashSet::new(),
         }
     }
 }
@@ -610,6 +616,7 @@ impl Default for StationsConfig {
 pub struct FrontendStationsConfig {
     pub selected_profile: String,
     pub profiles: HashMap<String, StationsProfileConfig>,
+    pub ignored: HashSet<String>,
 }
 
 impl From<StationsConfig> for FrontendStationsConfig {
@@ -617,6 +624,7 @@ impl From<StationsConfig> for FrontendStationsConfig {
         Self {
             selected_profile: stations_config.selected_profile,
             profiles: stations_config.profiles,
+            ignored: stations_config.ignored,
         }
     }
 }
