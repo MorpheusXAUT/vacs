@@ -26,7 +26,7 @@
 //! - Use "Push-to-Mute" transmit mode instead of "Radio Integration"
 
 use crate::keybinds::runtime::{DynKeybindEmitter, KeybindEmitter, PlatformEmitter};
-use crate::radio::{Radio, RadioError, TransmissionState};
+use crate::radio::{Radio, RadioError, RadioState, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -59,7 +59,7 @@ impl PushToTalkRadio {
             active: Arc::new(AtomicBool::new(false)),
         };
 
-        radio.app.emit("radio:integration-available", true).ok();
+        radio.app.emit("radio:state", RadioState::RxIdle).ok();
 
         Ok(radio)
     }
@@ -68,12 +68,12 @@ impl PushToTalkRadio {
 #[async_trait::async_trait]
 impl Radio for PushToTalkRadio {
     async fn transmit(&self, state: TransmissionState) -> Result<(), RadioError> {
-        let key_state = match state {
+        let (key_state, radio_state) = match state {
             TransmissionState::Active if !self.active.swap(true, Ordering::Relaxed) => {
-                KeyState::Down
+                (KeyState::Down, RadioState::TxActive)
             }
             TransmissionState::Inactive if self.active.swap(false, Ordering::Relaxed) => {
-                KeyState::Up
+                (KeyState::Up, RadioState::RxIdle)
             }
             _ => return Ok(()),
         };
@@ -87,8 +87,7 @@ impl Radio for PushToTalkRadio {
             .emit(self.code, key_state)
             .map_err(|err| RadioError::Transmit(err.to_string()))?;
 
-        // Emit event to frontend after successful key emission
-        self.app.emit("radio:transmission-state", state).ok();
+        self.app.emit("radio:state", radio_state).ok();
 
         Ok(())
     }
@@ -106,10 +105,13 @@ impl std::fmt::Debug for PushToTalkRadio {
 impl Drop for PushToTalkRadio {
     fn drop(&mut self) {
         log::trace!("Dropping PushToTalkRadio: code {:?}", self.code);
+
         if self.active.load(Ordering::Relaxed)
             && let Err(err) = self.emitter.emit(self.code, KeyState::Up)
         {
             log::warn!("Failed to release PTT key while dropping: {err}");
         }
+
+        self.app.emit("radio:state", RadioState::NotConfigured).ok();
     }
 }

@@ -4,6 +4,7 @@ use keyboard_types::KeyState;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
+use tauri::Emitter;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -42,6 +43,41 @@ impl From<KeyState> for TransmissionState {
             KeyState::Down => TransmissionState::Active,
             KeyState::Up => TransmissionState::Inactive,
         }
+    }
+}
+
+/// Radio state representing the current operational status of the chosen radio integration.
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq, Hash)]
+pub enum RadioState {
+    #[default]
+    /// No radio integration configured.
+    NotConfigured,
+
+    /// Radio configured but not connected to backend.
+    /// This includes initial connection attempts and reconnection attempts.
+    Disconnected,
+
+    /// Connected to a radio backend but not monitoring any frequencies.
+    Connected,
+
+    /// Connected to a radio backend and monitoring at least one frequency (RX ready).
+    RxIdle,
+
+    /// Connected and receiving transmission from others.
+    RxActive,
+
+    /// Connected and actively transmitting.
+    /// May or may not be receiving simultaneously (TX takes priority).
+    TxActive,
+
+    /// Fatal connection error or client error event.
+    Error,
+}
+
+impl RadioState {
+    pub fn emit(&self, app: &tauri::AppHandle) {
+        log::trace!("Emitting radio state: {self:?}");
+        app.emit("radio:state", self).ok();
     }
 }
 
