@@ -1,6 +1,7 @@
 use crate::app::window::WindowProvider;
 use crate::error::Error;
 use crate::radio::push_to_talk::PushToTalkRadio;
+use crate::radio::track_audio::TrackAudioRadio;
 use crate::radio::{DynRadio, RadioIntegration};
 use anyhow::Context;
 use config::{Config, Environment, File};
@@ -447,7 +448,7 @@ pub struct AudioForVatsimRadioConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TrackAudioRadioConfig {
-    pub emit: Option<Code>,
+    pub endpoint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -467,7 +468,7 @@ pub struct FrontendAudioForVatsimRadioConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FrontendTrackAudioRadioConfig {
-    pub emit: Option<String>,
+    pub endpoint: Option<String>,
 }
 
 impl RadioConfig {
@@ -500,11 +501,10 @@ impl RadioConfig {
                 let Some(config) = self.track_audio.as_ref() else {
                     return Ok(None);
                 };
-                let Some(emit) = config.emit else {
-                    return Ok(None);
-                };
                 log::debug!("Initializing TrackAudio radio integration");
-                let radio = PushToTalkRadio::new(app, emit).map_err(Error::from)?;
+                let radio = TrackAudioRadio::new(app, config.endpoint.as_ref())
+                    .await
+                    .map_err(Error::from)?;
                 Ok(Some(Arc::new(radio)))
             }
         }
@@ -532,7 +532,7 @@ impl From<AudioForVatsimRadioConfig> for FrontendAudioForVatsimRadioConfig {
 impl From<TrackAudioRadioConfig> for FrontendTrackAudioRadioConfig {
     fn from(value: TrackAudioRadioConfig) -> Self {
         Self {
-            emit: value.emit.map(|c| c.to_string()),
+            endpoint: value.endpoint,
         }
     }
 }
@@ -569,12 +569,7 @@ impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
 
     fn try_from(value: FrontendTrackAudioRadioConfig) -> Result<Self, Self::Error> {
         Ok(Self {
-            emit: value
-                .emit
-                .as_ref()
-                .map(|s| s.parse::<Code>())
-                .transpose()
-                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.emit.unwrap_or_default()))))?,
+            endpoint: value.endpoint,
         })
     }
 }

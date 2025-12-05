@@ -39,6 +39,7 @@ pub fn run() {
                 .level_for("vacs_signaling", log::LevelFilter::Trace)
                 .level_for("vacs_vatsim", log::LevelFilter::Trace)
                 .level_for("vacs_webrtc", log::LevelFilter::Trace)
+                .level_for("trackaudio", log::LevelFilter::Trace)
                 .build(),
         )
         .plugin(tauri_plugin_single_instance::init(|app, argv, _| {

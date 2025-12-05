@@ -1,4 +1,5 @@
 pub mod push_to_talk;
+pub mod track_audio;
 
 use keyboard_types::KeyState;
 use serde::{Deserialize, Serialize};
@@ -54,7 +55,7 @@ pub enum RadioState {
     NotConfigured,
 
     /// Radio configured but not connected to backend.
-    /// This includes initial connection attempts and reconnection attempts.
+    /// This includes initial connection attempts, reconnection attempts, and disconnected states.
     Disconnected,
 
     /// Connected to a radio backend but not monitoring any frequencies.
