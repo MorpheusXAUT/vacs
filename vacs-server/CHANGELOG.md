@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.1.1](https://github.com/MorpheusXAUT/vacs/compare/vacs-server-v1.1.0...vacs-server-v1.1.1) (2025-12-05)
+
 ## [1.1.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-server-v1.0.0...vacs-server-v1.1.0) (2025-11-30)
 
 
