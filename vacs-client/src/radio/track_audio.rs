@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
+use trackaudio::messages::events::StationState;
 use trackaudio::{ClientEvent, ConnectionState, TrackAudioClient};
 
 #[derive(Clone)]
@@ -80,127 +81,8 @@ impl TrackAudioRadio {
                     break;
                 }
                 result = events.recv() => {
-                    use trackaudio::Event;
-
                     match result {
-                        Ok(Event::TxBegin(_)) => {
-                            log::trace!("TrackAudio transmission started");
-                            state.transmitting.store(true, Ordering::Relaxed);
-                            state.emit(&app);
-                        }
-                        Ok(Event::TxEnd(_)) => {
-                            log::trace!("TrackAudio transmission ended");
-                            state.transmitting.store(false, Ordering::Relaxed);
-                            state.emit(&app);
-                        }
-                        Ok(Event::RxBegin(_)) => {
-                            log::trace!("TrackAudio reception started");
-                            state.receiving.store(true, Ordering::Relaxed);
-                            state.emit(&app);
-                        }
-                        Ok(Event::RxEnd(_)) => {
-                            log::trace!("TrackAudio reception ended");
-                            state.receiving.store(false, Ordering::Relaxed);
-                            state.emit(&app);
-                        }
-                        Ok(Event::VoiceConnectedState(payload)) => {
-                            log::trace!("TrackAudio voice connection state changed: {payload:?}");
-                            state.voice_connected.store(payload.connected, Ordering::Relaxed);
-                            state.emit(&app);
-                        }
-                        Ok(Event::Client(ClientEvent::ConnectionStateChanged(connection_state))) => {
-                            match connection_state {
-                                ConnectionState::Connected => {
-                                    log::trace!("Successfully connected to TrackAudio");
-                                    state.connected.store(true, Ordering::Relaxed);
-
-                                    let api = client.api();
-                                    let voice_connected = api
-                                        .get_voice_connected_state(Some(Self::VOICE_CONNECTED_STATE_TIMEOUT))
-                                        .await
-                                        .unwrap_or(false);
-                                    state
-                                        .voice_connected
-                                        .store(voice_connected, Ordering::Relaxed);
-
-                                    let station_states = api.get_station_states(Some(Self::STATION_STATES_TIMEOUT)).await.unwrap_or_default();
-                                    {
-                                        let mut stations = state.stations.write();
-                                        stations.clear();
-                                        for station_state in station_states {
-                                            if let Some(callsign) = station_state.callsign {
-                                                stations.insert(callsign, station_state.rx.unwrap_or(false));
-                                            }
-                                        }
-                                    }
-
-                                    state.emit(&app);
-                                }
-                                ConnectionState::Connecting { .. }
-                                | ConnectionState::Reconnecting { .. } => {
-                                    log::trace!("Connecting to TrackAudio");
-                                    state.clear();
-                                    state.emit(&app);
-                                }
-                                ConnectionState::Disconnected { .. } => {
-                                    log::trace!("Disconnected from TrackAudio");
-                                    state.clear();
-                                    state.emit(&app);
-                                }
-                                ConnectionState::ReconnectFailed { .. } => {
-                                    log::warn!("TrackAudio reconnect failed");
-                                    state.clear();
-                                    app.emit("radio:state", RadioState::Error).ok();
-                                }
-                            }
-                        }
-                        Ok(Event::Client(ClientEvent::CommandSendFailed { .. }))
-                        | Ok(Event::Client(ClientEvent::EventDeserializationFailed { .. })) => {
-                            log::warn!("TrackAudio client error event");
-                            state.clear();
-                            app.emit("radio:state", RadioState::Error).ok();
-                        }
-                        Ok(Event::StationAdded(payload)) => {
-                            log::trace!("TrackAudio station added: {}", payload.callsign);
-                            state
-                                .stations
-                                .write()
-                                .insert(payload.callsign, false);
-                            state.emit(&app);
-                        }
-                        Ok(Event::StationStateUpdate(payload)) => {
-                            log::trace!("TrackAudio station state update: {payload:?}");
-                            if let Some(callsign) = payload.callsign {
-                                let mut stations = state.stations.write();
-
-                                if !payload.is_available {
-                                    stations.remove(&callsign);
-                                } else if let Some(rx) = payload.rx {
-                                    stations.insert(callsign, rx);
-                                } else {
-                                    stations.entry(callsign).or_insert(false);
-                                }
-                            }
-                            state.emit(&app);
-                        }
-                        Ok(Event::StationStates(payload)) => {
-                            log::trace!(
-                                "Received full station states list for {} stations",
-                                payload.stations.len()
-                            );
-                            let mut stations = state.stations.write();
-                            stations.clear();
-                            for envelope in payload.stations {
-                                if envelope.value.is_available &&
-                                    let Some(callsign) = envelope.value.callsign {
-                                    stations.insert(callsign, envelope.value.rx.unwrap_or(false));
-                                }
-                            }
-                            state.emit(&app);
-                        }
-                        Ok(event) => {
-                            log::trace!("Received TrackAudio event: {event:?}");
-                        }
+                        Ok(event) => Self::handle_event(event, &state, &app, &client).await,
                         Err(err) => {
                             log::error!("Error receiving TrackAudio event: {err}");
                             state.clear();
@@ -213,6 +95,112 @@ impl TrackAudioRadio {
         }
 
         log::debug!("TrackAudio events task ended");
+    }
+
+    async fn handle_event(
+        event: trackaudio::Event,
+        state: &TrackAudioState,
+        app: &AppHandle,
+        client: &TrackAudioClient,
+    ) {
+        use trackaudio::Event;
+
+        match event {
+            Event::TxBegin(_) => {
+                log::trace!("TrackAudio transmission started");
+                state.set_transmitting(true, app);
+            }
+            Event::TxEnd(_) => {
+                log::trace!("TrackAudio transmission ended");
+                state.set_transmitting(false, app);
+            }
+            Event::RxBegin(_) => {
+                log::trace!("TrackAudio reception started");
+                state.set_receiving(true, app);
+            }
+            Event::RxEnd(_) => {
+                log::trace!("TrackAudio reception ended");
+                state.set_receiving(false, app);
+            }
+            Event::VoiceConnectedState(payload) => {
+                log::trace!("TrackAudio voice connection state changed: {payload:?}");
+                state.set_voice_connected(payload.connected, app);
+            }
+            Event::Client(ClientEvent::ConnectionStateChanged(connection_state)) => {
+                Self::handle_connection_state(connection_state, state, app, client).await;
+            }
+            Event::Client(ClientEvent::CommandSendFailed { .. })
+            | Event::Client(ClientEvent::EventDeserializationFailed { .. }) => {
+                log::warn!("TrackAudio client error event");
+                state.clear();
+                app.emit("radio:state", RadioState::Error).ok();
+            }
+            Event::StationAdded(payload) => {
+                log::trace!("TrackAudio station added: {}", payload.callsign);
+                state.add_station(payload.callsign, app);
+            }
+            Event::StationStateUpdate(payload) => {
+                log::trace!("TrackAudio station state update: {payload:?}");
+                if let Some(callsign) = payload.callsign {
+                    state.update_station(callsign, payload.rx, payload.is_available, app);
+                }
+            }
+            Event::StationStates(payload) => {
+                log::trace!(
+                    "Received full station states list for {} stations",
+                    payload.stations.len()
+                );
+                state.sync_stations(payload.stations.into_iter().map(|s| s.value).collect(), app);
+            }
+            _ => {
+                log::trace!("Received TrackAudio event: {event:?}");
+            }
+        }
+    }
+
+    async fn handle_connection_state(
+        connection_state: ConnectionState,
+        state: &TrackAudioState,
+        app: &AppHandle,
+        client: &TrackAudioClient,
+    ) {
+        match connection_state {
+            ConnectionState::Connected => {
+                log::trace!("Successfully connected to TrackAudio");
+                state.set_connected(true, app); // This will emit, but we do more specific emissions after fetch
+
+                let api = client.api();
+                let voice_connected = api
+                    .get_voice_connected_state(Some(Self::VOICE_CONNECTED_STATE_TIMEOUT))
+                    .await
+                    .unwrap_or(false);
+                state
+                    .voice_connected
+                    .store(voice_connected, Ordering::Relaxed);
+
+                let station_states = api
+                    .get_station_states(Some(Self::STATION_STATES_TIMEOUT))
+                    .await
+                    .unwrap_or_default();
+
+                state.sync_stations(station_states, app);
+            }
+            ConnectionState::Connecting { .. } | ConnectionState::Reconnecting { .. } => {
+                log::trace!("Connecting to TrackAudio");
+                state.clear();
+                state.emit(app);
+            }
+            ConnectionState::Disconnected { .. } => {
+                log::trace!("Disconnected from TrackAudio");
+                state.clear();
+                state.emit(app);
+            }
+            ConnectionState::ReconnectFailed { .. } => {
+                log::warn!("TrackAudio reconnect failed");
+                state.clear();
+                app.emit("radio:state", RadioState::Error).ok();
+            }
+        }
     }
 }
 
@@ -340,5 +328,63 @@ impl TrackAudioState {
         self.transmitting.store(false, Ordering::Relaxed);
         self.receiving.store(false, Ordering::Relaxed);
         self.stations.write().clear();
+    }
+
+    fn set_transmitting(&self, active: bool, app: &AppHandle) {
+        self.transmitting.store(active, Ordering::Relaxed);
+        self.emit(app);
+    }
+
+    fn set_receiving(&self, active: bool, app: &AppHandle) {
+        self.receiving.store(active, Ordering::Relaxed);
+        self.emit(app);
+    }
+
+    fn set_voice_connected(&self, connected: bool, app: &AppHandle) {
+        self.voice_connected.store(connected, Ordering::Relaxed);
+        self.emit(app);
+    }
+
+    fn set_connected(&self, connected: bool, app: &AppHandle) {
+        self.connected.store(connected, Ordering::Relaxed);
+        self.emit(app);
+    }
+
+    fn add_station(&self, callsign: String, app: &AppHandle) {
+        self.stations.write().insert(callsign, false);
+        self.emit(app);
+    }
+
+    fn update_station(
+        &self,
+        callsign: String,
+        rx: Option<bool>,
+        is_available: bool,
+        app: &AppHandle,
+    ) {
+        let mut stations = self.stations.write();
+        if !is_available {
+            stations.remove(&callsign);
+        } else if let Some(rx) = rx {
+            stations.insert(callsign, rx);
+        } else {
+            stations.entry(callsign).or_insert(false);
+        }
+        self.emit(app);
+    }
+
+    fn sync_stations(&self, station_states: Vec<StationState>, app: &AppHandle) {
+        let mut stations = self.stations.write();
+        stations.clear();
+
+        for station_state in station_states {
+            if station_state.is_available
+                && let Some(callsign) = station_state.callsign
+            {
+                stations.insert(callsign, station_state.rx.unwrap_or(false));
+            }
+        }
+
+        self.emit(app);
     }
 }
