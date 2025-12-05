@@ -33,7 +33,6 @@ export type RadioConfig = {
 
 export type RadioConfigWithLabels = RadioConfig & {
     audioForVatsim: AudioForVatsimRadioConfigLabels | null;
-    trackAudio: TrackAudioRadioConfigLabels | null;
 }
 
 export type AudioForVatsimRadioConfig = {
@@ -45,11 +44,7 @@ export type AudioForVatsimRadioConfigLabels = {
 }
 
 export type TrackAudioRadioConfig = {
-    emit: string | null;
-}
-
-export type TrackAudioRadioConfigLabels = {
-    emitLabel: string | null;
+    endpoint: string | null;
 }
 
 export async function withLabels(config: TransmitConfig): Promise<TransmitConfigWithLabels> {
@@ -67,10 +62,6 @@ export async function withRadioLabels(config: RadioConfig): Promise<RadioConfigW
         audioForVatsim: config.audioForVatsim && {
             ...config.audioForVatsim,
             emitLabel: config.audioForVatsim.emit && await codeToLabel(config.audioForVatsim.emit)
-        },
-        trackAudio: config.trackAudio && {
-            ...config.trackAudio,
-            emitLabel: config.trackAudio.emit && await codeToLabel(config.trackAudio.emit)
         },
     }
 }

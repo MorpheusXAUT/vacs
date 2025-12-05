@@ -11,6 +11,7 @@ import KeyCapture from "./ui/KeyCapture.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 import {clsx} from "clsx";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
+import {TargetedEvent} from "preact";
 
 function TransmitModeSettings() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
@@ -215,6 +216,7 @@ type RadioIntegrationSettingsProps = {
 
 function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}: RadioIntegrationSettingsProps) {
     const capKeybindEmitter = useCapabilitiesStore(state => state.keybindEmitter);
+    const [trackAudioEndpoint, setTrackAudioEndpoint] = useState<string>(radioConfig.trackAudio?.endpoint ?? "");
 
     const handleOnRadioIntegrationCapture = async (code: string) => {
         if (transmitConfig === undefined || transmitConfig.mode !== "RadioIntegration" || radioConfig === undefined) {
@@ -230,13 +232,8 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
                     }
                 };
                 break;
-            case "TrackAudio":
-                newConfig = {
-                    ...radioConfig, trackAudio: {
-                        emit: code,
-                    }
-                };
-                break;
+            default:
+                return;
         }
 
         try {
@@ -273,19 +270,43 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
                     }
                 };
                 break;
-            case "TrackAudio":
-                newConfig = {
-                    ...radioConfig, trackAudio: {
-                        emit: null
-                    }
-                };
-                break;
+            default:
+                return;
         }
 
         try {
             await invokeStrict("keybinds_set_radio_config", {radioConfig: newConfig});
             setRadioConfig(await withRadioLabels(newConfig));
         } catch {
+        }
+    };
+
+    const handleOnTrackAudioEndpointChange = (e: TargetedEvent<HTMLInputElement>) => {
+        if (!(e.target instanceof HTMLInputElement)) return;
+        setTrackAudioEndpoint(e.target.value);
+    };
+
+    const handleOnTrackAudioEndpointCommit = async () => {
+        if (transmitConfig === undefined || transmitConfig.mode !== "RadioIntegration" || radioConfig === undefined) {
+            return;
+        }
+
+        const endpoint = trackAudioEndpoint.trim() === "" ? null : trackAudioEndpoint.trim();
+        if (endpoint === radioConfig.trackAudio?.endpoint) return;
+
+        let newConfig: RadioConfig;
+        if (radioConfig.integration === "TrackAudio") {
+             newConfig = {
+                ...radioConfig, trackAudio: {
+                    endpoint: endpoint,
+                }
+            };
+            try {
+                await invokeStrict("keybinds_set_radio_config", {radioConfig: newConfig});
+                setRadioConfig(await withRadioLabels(newConfig));
+            } catch {
+                setTrackAudioEndpoint(radioConfig.trackAudio?.endpoint ?? "");
+            }
         }
     };
 
@@ -304,10 +325,24 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
                 onChange={handleOnRadioIntegrationChange}
                 disabled={transmitConfig.mode !== "RadioIntegration"}
             />
-            <KeyCapture
-                label={radioConfig.integration === "AudioForVatsim" ? radioConfig.audioForVatsim && radioConfig.audioForVatsim.emitLabel : radioConfig.trackAudio && radioConfig.trackAudio.emitLabel}
-                onCapture={handleOnRadioIntegrationCapture} onRemove={handleOnRadioIntegrationRemoveClick}
-                disabled={transmitConfig.mode !== "RadioIntegration"}/>
+            {radioConfig.integration === "TrackAudio" ? (
+                <input
+                    type="text"
+                    className="w-full h-full px-3 py-1.5 border border-gray-300 bg-gray-50 rounded text-sm text-center focus:border-blue-500 focus:outline-none placeholder:text-gray-400"
+                    placeholder="localhost:49080"
+                    title="The address where TrackAudio is running. Accepts a hostname or IP address, with an optional port (e.g., '192.168.1.69' or '192.168.1.69:49080'). If you're running TrackAudio on the same machine as vacs, you can leave this value empty as it will automatically attempt to connect to TrackAudio on its default listener at 'localhost:49080'."
+                    value={trackAudioEndpoint}
+                    onInput={handleOnTrackAudioEndpointChange}
+                    onBlur={handleOnTrackAudioEndpointCommit}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
+                    disabled={transmitConfig.mode !== "RadioIntegration"}
+                />
+            ) : (
+                <KeyCapture
+                    label={radioConfig.audioForVatsim?.emitLabel ?? null}
+                    onCapture={handleOnRadioIntegrationCapture} onRemove={handleOnRadioIntegrationRemoveClick}
+                    disabled={transmitConfig.mode !== "RadioIntegration"}/>
+            )}
         </>
     );
 }
