@@ -14,7 +14,6 @@ import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 
 function TransmitModeSettings() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
-    const capKeybindEmitter = useCapabilitiesStore(state => state.keybindEmitter);
     const capPlatform = useCapabilitiesStore(state => state.platform);
     const [transmitConfig, setTransmitConfig] = useState<TransmitConfigWithLabels | undefined>(undefined);
     const [radioConfig, setRadioConfig] = useState<RadioConfigWithLabels | undefined>(undefined);
@@ -70,7 +69,7 @@ function TransmitModeSettings() {
                     </svg>
                 </div>
                 <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
-                    {!capKeybindEmitter ? (
+                    {!capKeybindListener ? (
                         <p className="text-sm text-gray-700 py-1.5 cursor-help"
                             title={`Unfortunately, keybind emitters are not yet supported on ${capPlatform}`}
                         >Not available.</p>
@@ -182,7 +181,7 @@ function TransmitConfigSettings({ transmitConfig, setTransmitConfig }: TransmitC
                     {value: "VoiceActivation", text: "Voice activation"},
                     {value: "PushToTalk", text: "Push-to-talk"},
                     {value: "PushToMute", text: "Push-to-mute"},
-                    ...(capPlatform === "Windows" || capPlatform === "MacOs"
+                    ...(capPlatform === "Windows" || capPlatform === "MacOs" || capPlatform === "LinuxWayland"
                         ? [{value: "RadioIntegration", text: "Radio Integration"}]
                         : [])
                 ]}
@@ -215,6 +214,8 @@ type RadioIntegrationSettingsProps = {
 };
 
 function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}: RadioIntegrationSettingsProps) {
+    const capKeybindEmitter = useCapabilitiesStore(state => state.keybindEmitter);
+
     const handleOnRadioIntegrationCapture = async (code: string) => {
         if (transmitConfig === undefined || transmitConfig.mode !== "RadioIntegration" || radioConfig === undefined) {
             return;
@@ -294,7 +295,9 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
                 className="!w-[21ch] h-full"
                 name="radio-integration"
                 options={[
-                    {value: "AudioForVatsim", text: "Audio for Vatsim"},
+                    ...(capKeybindEmitter
+                        ? [{value: "AudioForVatsim", text: "Audio for Vatsim"}]
+                        : []),
                     {value: "TrackAudio", text: "TrackAudio"},
                 ]}
                 selected={radioConfig.integration}
