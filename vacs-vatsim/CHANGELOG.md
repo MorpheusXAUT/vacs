@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/MorpheusXAUT/vacs/compare/vacs-vatsim-v0.2.0...vacs-vatsim-v0.2.1) (2025-12-05)
+
+
+### Bug Fixes
+
+* **vacs-vatsim:** fix unknown station handling with visibility range set ([#284](https://github.com/MorpheusXAUT/vacs/issues/284)) ([ab44a8a](https://github.com/MorpheusXAUT/vacs/commit/ab44a8ad64a393afb431274e23819ca23cefbb90))
+
 ## [0.2.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-vatsim-v0.1.0...vacs-vatsim-v0.2.0) (2025-11-09)
 
 
