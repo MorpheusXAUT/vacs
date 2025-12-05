@@ -144,3 +144,6 @@ target/
 
 # Secrets and other local-only config
 /.envrc
+
+# VSCode and derivate workspaces
+*.code-workspace
