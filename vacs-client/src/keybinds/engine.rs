@@ -83,7 +83,7 @@ impl KeybindEngine {
         *self.listener.write() = Some(Arc::new(listener));
 
         if self.mode == TransmitMode::RadioIntegration {
-            let radio = self.radio_config.radio(self.app.clone())?;
+            let radio = self.radio_config.radio(self.app.clone()).await?;
             *self.radio.write() = radio;
         } else {
             self.app.emit("radio:integration-available", false).ok();

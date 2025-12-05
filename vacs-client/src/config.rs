@@ -483,7 +483,7 @@ impl RadioConfig {
     ///
     /// On Linux, this method will successfully create a radio instance, but it will
     /// silently do nothing when `transmit()` is called.
-    pub fn radio(&self, app: AppHandle) -> Result<Option<DynRadio>, Error> {
+    pub async fn radio(&self, app: AppHandle) -> Result<Option<DynRadio>, Error> {
         match self.integration {
             RadioIntegration::AudioForVatsim => {
                 let Some(config) = self.audio_for_vatsim.as_ref() else {
