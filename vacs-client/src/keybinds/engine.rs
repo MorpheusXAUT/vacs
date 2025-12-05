@@ -144,6 +144,18 @@ impl KeybindEngine {
         Ok(())
     }
 
+    pub async fn reconnect_radio(&self) -> Result<(), Error> {
+        let radio = self.radio.read().clone();
+        if let Some(radio) = radio {
+            log::info!("Reconnecting radio integration");
+            radio
+                .reconnect()
+                .await
+                .map_err(|err| Error::Radio(Box::new(err)))?;
+        }
+        Ok(())
+    }
+
     pub fn set_call_active(&self, active: bool) {
         self.call_active.store(active, Ordering::Relaxed);
 

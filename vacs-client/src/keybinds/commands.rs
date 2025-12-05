@@ -149,3 +149,11 @@ pub fn keybinds_open_system_shortcuts_settings() -> Result<(), Error> {
         ))));
     }
 }
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn keybinds_reconnect_radio(
+    keybind_engine: State<'_, KeybindEngineHandle>,
+) -> Result<(), Error> {
+    keybind_engine.read().await.reconnect_radio().await
+}

@@ -48,6 +48,9 @@ impl From<KeyState> for TransmissionState {
 #[async_trait::async_trait]
 pub trait Radio: Send + Sync + Debug + 'static {
     async fn transmit(&self, state: TransmissionState) -> Result<(), RadioError>;
+    async fn reconnect(&self) -> Result<(), RadioError> {
+        Ok(())
+    }
 }
 
 pub type DynRadio = Arc<dyn Radio>;
