@@ -313,7 +313,7 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
     return (
         <>
             <Select
-                className="!w-[21ch] h-full"
+                className="shrink-0 !w-[21ch] h-full"
                 name="radio-integration"
                 options={[
                     ...(capKeybindEmitter

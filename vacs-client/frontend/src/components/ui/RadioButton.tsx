@@ -4,6 +4,7 @@ import {clsx} from "clsx";
 import {listen} from "@tauri-apps/api/event";
 import {invokeStrict} from "../../error.ts";
 import type {RadioState} from "../../types/radio.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 
 function RadioButton() {
     const [state, setState] = useState<RadioState>("NotConfigured");
@@ -49,15 +50,15 @@ function RadioButton() {
         }
     };
 
-    const handleButtonClick = async () => {
+    const handleButtonClick = useAsyncDebounce(async () => {
         if (state === "Disconnected" || state === "Error") {
             await invokeStrict("keybinds_reconnect_radio");
         }
-    };
+    });
 
     return (
         <Button color={buttonColor()}
-                disabled={disabled}
+                softDisabled={disabled}
                 onClick={handleButtonClick}
                 className={clsx("text-xl w-46", textMuted && "text-gray-500")}>
             Radio

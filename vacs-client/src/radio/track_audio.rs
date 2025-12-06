@@ -29,11 +29,14 @@ impl TrackAudioRadio {
         app: AppHandle,
         endpoint: Option<impl AsRef<str>>,
     ) -> Result<Self, RadioError> {
+        app.emit("radio:state", RadioState::Disconnected).ok();
+
         let client = match endpoint {
             Some(endpoint) => TrackAudioClient::connect_url(endpoint).await,
             None => TrackAudioClient::connect_default().await,
         }
         .map_err(|err| {
+            app.emit("radio:state", RadioState::Error).ok();
             RadioError::Integration(format!("Failed to connect to TrackAudio: {err}"))
         })?;
 
