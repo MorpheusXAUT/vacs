@@ -226,6 +226,7 @@ impl KeybindEngine {
                 .as_ref()
                 .and_then(|l| l.get_external_binding(mode));
         }
+        None
     }
 
     /// Get the external (OS-configured) keybind for a transmit mode, if available.
