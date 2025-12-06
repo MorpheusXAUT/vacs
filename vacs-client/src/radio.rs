@@ -58,8 +58,11 @@ pub enum RadioState {
     /// This includes initial connection attempts, reconnection attempts, and disconnected states.
     Disconnected,
 
-    /// Connected to a radio backend but not monitoring any frequencies.
+    /// Connected to a radio backend, but the backend itself is not connected to VATSIM voice server.
     Connected,
+
+    /// Connected to a radio backend, which is connected to the VATSIM voice server.
+    VoiceConnected,
 
     /// Connected to a radio backend and monitoring at least one frequency (RX ready).
     RxIdle,

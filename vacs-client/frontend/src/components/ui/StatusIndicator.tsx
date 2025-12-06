@@ -2,9 +2,9 @@ import {clsx} from "clsx";
 import {useSignalingStore} from "../../stores/signaling-store.ts";
 import {useCallStore} from "../../stores/call-store.ts";
 
-type Status = "green" | "yellow" | "red" | "gray";
+export type Status = "green" | "yellow" | "red" | "gray";
 
-const StatusColors: Record<Status, string> = {
+export const StatusColors: Record<Status, string> = {
     green: "bg-green-600 border-green-700",
     yellow: "bg-yellow-500 border-yellow-600",
     red: "bg-red-400 border-red-700",

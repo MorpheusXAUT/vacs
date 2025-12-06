@@ -284,10 +284,12 @@ struct TrackAudioState {
 
 impl From<&TrackAudioState> for RadioState {
     fn from(value: &TrackAudioState) -> Self {
-        if !value.connected.load(Ordering::Relaxed)
-            || !value.voice_connected.load(Ordering::Relaxed)
-        {
+        if !value.connected.load(Ordering::Relaxed) {
             return RadioState::Disconnected;
+        }
+
+        if !value.voice_connected.load(Ordering::Relaxed) {
+            return RadioState::Connected;
         }
 
         // Priority: TX > RX > Idle
@@ -300,10 +302,10 @@ impl From<&TrackAudioState> for RadioState {
         }
 
         if value.stations.read().values().any(|&rx| rx) {
-            RadioState::RxIdle
-        } else {
-            RadioState::Connected
+            return RadioState::RxIdle;
         }
+
+        RadioState::VoiceConnected
     }
 }
 
