@@ -8,7 +8,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
 use trackaudio::messages::events::StationState;
-use trackaudio::{ClientEvent, ConnectionState, TrackAudioClient};
+use trackaudio::{ClientEvent, ConnectionState, TrackAudioClient, TrackAudioError};
 
 #[derive(Clone)]
 pub struct TrackAudioRadio {
@@ -223,7 +223,9 @@ impl Radio for TrackAudioRadio {
             .transmit(active, Some(Self::TRANSMIT_TIMEOUT))
             .await
             .map_err(|err| {
-                self.app.emit("radio:state", RadioState::Error).ok();
+                if !matches!(err, TrackAudioError::Timeout) {
+                    self.app.emit("radio:state", RadioState::Error).ok();
+                }
                 RadioError::Transmit(format!("Failed to transmit via TrackAudio: {err}"))
             })?;
 

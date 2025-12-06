@@ -28,8 +28,6 @@ function RadioButton() {
         }
     };
 
-    // TODO: Error state
-
     return (
         <Button color={buttonColor()}
                 disabled={state === "NotConfigured"}
