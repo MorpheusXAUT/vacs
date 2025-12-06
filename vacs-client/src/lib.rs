@@ -39,6 +39,7 @@ pub fn run() {
                 .level_for("vacs_signaling", log::LevelFilter::Trace)
                 .level_for("vacs_vatsim", log::LevelFilter::Trace)
                 .level_for("vacs_webrtc", log::LevelFilter::Trace)
+                .level_for("trackaudio", log::LevelFilter::Trace)
                 .build(),
         )
         .plugin(tauri_plugin_single_instance::init(|app, argv, _| {
@@ -134,9 +135,10 @@ pub fn run() {
             auth::commands::auth_open_oauth_url,
             keybinds::commands::keybinds_get_external_binding,
             keybinds::commands::keybinds_get_radio_config,
+            keybinds::commands::keybinds_get_radio_state,
             keybinds::commands::keybinds_get_transmit_config,
-            keybinds::commands::keybinds_has_radio,
             keybinds::commands::keybinds_open_system_shortcuts_settings,
+            keybinds::commands::keybinds_reconnect_radio,
             keybinds::commands::keybinds_set_radio_config,
             keybinds::commands::keybinds_set_transmit_config,
             signaling::commands::signaling_accept_call,

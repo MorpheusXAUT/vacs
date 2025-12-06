@@ -3,40 +3,66 @@ import {useEffect, useState} from "preact/hooks";
 import {clsx} from "clsx";
 import {listen} from "@tauri-apps/api/event";
 import {invokeStrict} from "../../error.ts";
-
-type RadioButtonState = "disabled" | "enabled" | "pressed";
+import type {RadioState} from "../../types/radio.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 
 function RadioButton() {
-    const [state, setState] = useState<RadioButtonState>("disabled");
+    const [state, setState] = useState<RadioState>("NotConfigured");
+    const disabled = state === "NotConfigured" || state === "Disconnected";
+    const textMuted = state === "NotConfigured";
 
     useEffect(() => {
         const fetchState = async () => {
             try {
-                const hasRadio = await invokeStrict<boolean>("keybinds_has_radio");
-                setState(hasRadio ? "enabled" : "disabled");
+                const state = await invokeStrict<RadioState>("keybinds_get_radio_state");
+                setState(state);
             } catch { }
         };
 
         void fetchState();
 
-        const unlisten1 = listen<boolean>("radio:integration-available", (event) => {
-            setState(state => event.payload ? (state !== "pressed" ? "enabled" : "pressed") : "disabled");
-        });
-
-        const unlisten2 = listen<"Active" | "Inactive">("radio:transmission-state", (event) => {
-            setState(event.payload === "Active" ? "pressed" : "enabled");
+        const unlisten = listen<RadioState>("radio:state", (event) => {
+            setState(event.payload);
         });
 
         return () => {
-            unlisten1.then(fn => fn());
-            unlisten2.then(fn => fn());
+            unlisten.then(fn => fn());
         };
     }, []);
 
+    const buttonColor = () => {
+        switch (state) {
+            case "NotConfigured":
+            case "Disconnected":
+                return "gray";
+            case "Connected":
+                return "gray";
+            case "RxIdle":
+                return "emerald";
+            case "RxActive":
+                return "cornflower";
+            case "TxActive":
+                return "cornflower";
+            case "Error":
+                return "red";
+            default:
+                return "gray";
+        }
+    };
+
+    const handleButtonClick = useAsyncDebounce(async () => {
+        if (state === "Disconnected" || state === "Error") {
+            await invokeStrict("keybinds_reconnect_radio");
+        }
+    });
+
     return (
-        <Button color={state === "disabled" ? "gray" : state === "enabled" ? "emerald" : "cornflower"}
-                disabled={state === "disabled"}
-                className={clsx("text-xl w-46", state === "disabled" && "text-gray-500")}>Radio</Button>
+        <Button color={buttonColor()}
+                softDisabled={disabled}
+                onClick={handleButtonClick}
+                className={clsx("text-xl w-46", textMuted && "text-gray-500")}>
+            Radio
+        </Button>
     );
 }
 
