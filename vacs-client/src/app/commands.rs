@@ -16,6 +16,9 @@ pub async fn app_frontend_ready(
     log::info!("Frontend ready");
     let capabilities = Capabilities::default();
 
+    #[cfg(target_os = "linux")]
+    window.eval("document.body.classList.add('linux')").ok();
+
     let state = app_state.lock().await;
     if let Err(err) = state.config.client.restore_window_state(&app) {
         log::warn!("Failed to restore saved window state: {err}");
