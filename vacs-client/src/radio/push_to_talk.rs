@@ -91,6 +91,14 @@ impl Radio for PushToTalkRadio {
 
         Ok(())
     }
+
+    fn state(&self) -> RadioState {
+        if self.active.load(Ordering::Relaxed) {
+            RadioState::TxActive
+        } else {
+            RadioState::RxIdle
+        }
+    }
 }
 
 impl std::fmt::Debug for PushToTalkRadio {

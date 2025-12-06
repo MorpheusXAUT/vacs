@@ -88,6 +88,8 @@ pub trait Radio: Send + Sync + Debug + 'static {
     async fn reconnect(&self) -> Result<(), RadioError> {
         Ok(())
     }
+
+    fn state(&self) -> RadioState;
 }
 
 pub type DynRadio = Arc<dyn Radio>;

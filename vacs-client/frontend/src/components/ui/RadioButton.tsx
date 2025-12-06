@@ -7,13 +7,14 @@ import type {RadioState} from "../../types/radio.ts";
 
 function RadioButton() {
     const [state, setState] = useState<RadioState>("NotConfigured");
-    const disabled = state === "NotConfigured";
+    const disabled = state === "NotConfigured" || state === "Disconnected";
+    const textMuted = state === "NotConfigured";
 
     useEffect(() => {
         const fetchState = async () => {
             try {
-                const hasRadio = await invokeStrict<boolean>("keybinds_has_radio");
-                setState(hasRadio ? "Disconnected" : "NotConfigured");
+                const state = await invokeStrict<RadioState>("keybinds_get_radio_state");
+                setState(state);
             } catch { }
         };
 
@@ -34,11 +35,11 @@ function RadioButton() {
             case "Disconnected":
                 return "gray";
             case "Connected":
-                return "emerald";
+                return "gray";
             case "RxIdle":
                 return "emerald";
             case "RxActive":
-                return "green";
+                return "cornflower";
             case "TxActive":
                 return "cornflower";
             case "Error":
@@ -58,7 +59,7 @@ function RadioButton() {
         <Button color={buttonColor()}
                 disabled={disabled}
                 onClick={handleButtonClick}
-                className={clsx("text-xl w-46", disabled && "text-gray-500")}>
+                className={clsx("text-xl w-46", textMuted && "text-gray-500")}>
             Radio
         </Button>
     );

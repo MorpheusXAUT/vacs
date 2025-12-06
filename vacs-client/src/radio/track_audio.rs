@@ -235,6 +235,10 @@ impl Radio for TrackAudioRadio {
         })?;
         Ok(())
     }
+
+    fn state(&self) -> RadioState {
+        self.state.as_ref().into()
+    }
 }
 
 impl Debug for TrackAudioRadio {

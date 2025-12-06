@@ -3,7 +3,7 @@ use crate::config::{RadioConfig, TransmitConfig, TransmitMode};
 use crate::error::Error;
 use crate::keybinds::KeyEvent;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
-use crate::radio::{DynRadio, TransmissionState};
+use crate::radio::{DynRadio, RadioState, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -215,8 +215,12 @@ impl KeybindEngine {
         }
     }
 
-    pub fn has_radio(&self) -> bool {
-        self.radio.read().is_some()
+    pub fn radio_state(&self) -> RadioState {
+        if let Some(radio) = self.radio.read().as_ref() {
+            radio.state()
+        } else {
+            RadioState::NotConfigured
+        }
     }
 
     /// Get the external (OS-configured) keybind for a transmit mode, if available.

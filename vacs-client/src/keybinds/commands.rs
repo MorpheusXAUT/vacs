@@ -6,6 +6,7 @@ use crate::config::{
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
+use crate::radio::RadioState;
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
@@ -107,15 +108,15 @@ pub async fn keybinds_set_radio_config(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn keybinds_has_radio(
+pub async fn keybinds_get_radio_state(
     keybind_engine: State<'_, KeybindEngineHandle>,
-) -> Result<bool, Error> {
+) -> Result<RadioState, Error> {
     let capabilities = Capabilities::default();
     if !capabilities.keybind_listener {
-        return Ok(false);
+        return Ok(RadioState::NotConfigured);
     }
 
-    Ok(keybind_engine.read().await.has_radio())
+    Ok(keybind_engine.read().await.radio_state())
 }
 
 #[tauri::command]
