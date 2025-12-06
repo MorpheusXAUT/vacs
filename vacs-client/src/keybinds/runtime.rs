@@ -58,6 +58,7 @@ pub trait KeybindListener: Send + Sync + Debug + 'static {
     /// (e.g., Wayland via XDG Global Shortcuts portal) rather than in the application.
     ///
     /// Returns `None` by default for platforms where keybinds are app-configured.
+    #[allow(dead_code)]
     fn get_external_binding(&self, _mode: crate::config::TransmitMode) -> Option<String> {
         None
     }

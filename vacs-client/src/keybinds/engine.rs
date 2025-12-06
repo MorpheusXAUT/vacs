@@ -3,7 +3,6 @@ use crate::config::{RadioConfig, TransmitConfig, TransmitMode};
 use crate::error::Error;
 use crate::keybinds::KeyEvent;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
-use crate::platform::Platform;
 use crate::radio::{DynRadio, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
@@ -14,6 +13,9 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::RwLock as TokioRwLock;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::sync::CancellationToken;
+
+#[cfg(target_os = "linux")]
+use crate::platform::Platform;
 
 #[derive(Debug)]
 pub struct KeybindEngine {
@@ -215,8 +217,8 @@ impl KeybindEngine {
     /// user configured in their desktop environment.
     ///
     /// Returns `None` on all other platforms where keybinds are configured in-app.
+    #[cfg(target_os = "linux")]
     pub fn get_external_binding(&self, mode: TransmitMode) -> Option<String> {
-        #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
             return self
                 .listener
@@ -224,7 +226,13 @@ impl KeybindEngine {
                 .as_ref()
                 .and_then(|l| l.get_external_binding(mode));
         }
+    }
 
+    /// Get the external (OS-configured) keybind for a transmit mode, if available.
+    ///
+    /// Returns `None` on all other platforms where keybinds are configured in-app.
+    #[cfg(not(target_os = "linux"))]
+    pub fn get_external_binding(&self, _mode: TransmitMode) -> Option<String> {
         None
     }
 
