@@ -7,7 +7,6 @@ type KeyCaptureProps = {
     onCapture: (code: string) => Promise<void>;
     onRemove: () => Promise<void>;
     disabled?: boolean;
-    hideRemove?: boolean;
 };
 
 function KeyCapture(props: KeyCaptureProps) {
@@ -93,7 +92,7 @@ function KeyCapture(props: KeyCaptureProps) {
                     props.disabled ? "brightness-90 cursor-not-allowed" : "cursor-pointer")}>
                 <p>{capturing ? "Press your key" : !props.disabled ? props.label : ""}</p>
             </div>
-            {!props.hideRemove && <svg onClick={handleOnRemoveClick}
+            <svg onClick={handleOnRemoveClick}
                   xmlns="http://www.w3.org/2000/svg" width="27" height="27"
                   viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"
                   strokeLinejoin="round"
@@ -104,7 +103,7 @@ function KeyCapture(props: KeyCaptureProps) {
                   )}>
                 <path d="M18 6 6 18"/>
                 <path d="m6 6 12 12"/>
-            </svg>}
+            </svg>
         </div>
     );
 }
