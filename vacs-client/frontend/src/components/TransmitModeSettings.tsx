@@ -10,6 +10,7 @@ import {invokeSafe, invokeStrict} from "../error.ts";
 import KeyCapture from "./ui/KeyCapture.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 import {clsx} from "clsx";
+import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 
 function TransmitModeSettings() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
@@ -153,6 +154,10 @@ function TransmitConfigSettings({ transmitConfig, setTransmitConfig }: TransmitC
         }
     };
 
+    const handleOpenSystemShortcutsOnClick = useAsyncDebounce(async () => {
+        await invokeSafe("keybinds_open_system_shortcuts_settings");
+    });
+
     useEffect(() => {
         const fetchExternalBinding = async () => {
             const binding = await invokeSafe<string | null>("keybinds_get_external_binding", { mode: transmitConfig.mode });
@@ -186,12 +191,12 @@ function TransmitConfigSettings({ transmitConfig, setTransmitConfig }: TransmitC
             />
             {capPlatform === "LinuxWayland" ? (
                 <div
-                    className={clsx("h-full w-full flex items-center justify-center px-3 py-1.5 bg-gray-50 border border-gray-300 rounded text-sm text-gray-500 cursor-help",
-                        transmitConfig.mode === "VoiceActivation" && "brightness-90 cursor-not-allowed")}
+                    onClick={handleOpenSystemShortcutsOnClick}
                     title={transmitConfig.mode !== "VoiceActivation" ? "On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings. Click this field to try opening the appropriate system settings." : ""}
-                    onClick={() => invokeSafe("keybinds_open_system_shortcuts_settings")}
-                >
-                    {transmitConfig.mode !== "VoiceActivation" ? (waylandBinding || "Not bound") : ""}
+                    className={clsx("w-full h-full min-h-8 grow truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
+                        "bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
+                        "brightness-90 cursor-help", transmitConfig.mode === "VoiceActivation" && "brightness-90 cursor-not-allowed")}>
+                    <p>{transmitConfig.mode !== "VoiceActivation" ? (waylandBinding || "Not bound") : ""}</p>
                 </div>
             ) : (
                 <KeyCapture
