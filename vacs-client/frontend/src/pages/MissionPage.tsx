@@ -41,10 +41,12 @@ function MissionPage() {
                                 <p>Exclude:</p><p>[{selectedProfile?.exclude.join(", ")}]</p>
                                 <p>Priority:</p><p>[{selectedProfile?.priority.join(", ")}]</p>
                                 <p>Alias:</p>
-                                <div className="grid grid-flow-row grid-cols-2 overflow-y-auto min-h-0">
-                                    {Object.entries(selectedProfile?.aliases ?? {}).sort().map(([key, value]) =>
-                                        <p className="h-min" key={key}>{`${key} => ${value}`}</p>
-                                    )}
+                                <div className="overflow-y-auto">
+                                    <div className="grid grid-flow-row grid-cols-2">
+                                        {Object.entries(selectedProfile?.aliases ?? {}).sort().map(([key, value]) =>
+                                            <p className="h-min" key={key}>{`${key} => ${value}`}</p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
