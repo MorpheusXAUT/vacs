@@ -29,7 +29,6 @@ function RadioButton() {
     };
 
     // TODO: Error state
-    // TODO: mission page
 
     return (
         <Button color={buttonColor()}

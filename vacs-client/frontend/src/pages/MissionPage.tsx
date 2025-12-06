@@ -2,6 +2,7 @@ import {clsx} from "clsx";
 import {useSignalingStore} from "../stores/signaling-store.ts";
 import {useShallow} from "zustand/react/shallow";
 import List from "../components/ui/List.tsx";
+import {invokeStrict} from "../error.ts";
 
 function MissionPage() {
     const profiles = useSignalingStore(useShallow(state => Object.keys(state.stationsConfigProfiles).sort()));
@@ -22,10 +23,13 @@ function MissionPage() {
                             className="w-80"
                             itemsCount={profiles.length}
                             selectedItem={selectedProfileIndex}
-                            setSelectedItem={(index) => {
+                            setSelectedItem={async (index) => {
                                 const profile = profiles[index];
                                 if (profile === undefined) return;
-                                setSelectedProfile(profile);
+                                try {
+                                    await invokeStrict("signaling_set_selected_stations_config_profile", {profile});
+                                    setSelectedProfile(profile);
+                                } catch {}
                             }}
                             defaultColumns={6}
                             row={(index, isSelected, onClick) => ProfileRow(profiles[index], isSelected, onClick)}
