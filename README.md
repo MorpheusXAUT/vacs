@@ -56,6 +56,10 @@ As we're making changes to our service, we may occasionally introduce breaking/n
 -   Required system dependencies are automatically selected by the package manager during client installation
 -   ALSA audio backend required (automatically provided by Pipewire and PulseAudio plugins installed as dependencies)
 
+> [!IMPORTANT]  
+> If you're running a Wayland-based display server, please see our [Wayland support doc](vacs-client/docs/wayland.md) for details on limitations and supported features.  
+> At the moment, no X11 support is available, although plans are to add it in the future.
+
 ### macOS
 
 -   macOS High Sierra 10.13+ (Intel or Apple Silicon)

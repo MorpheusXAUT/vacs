@@ -570,7 +570,7 @@ impl AppStateInner {
             audio_manager.detach_input_device();
         }
 
-        self.keybind_engine.read().set_call_active(false);
+        self.keybind_engine.read().await.set_call_active(false);
 
         if let Some(peer_id) = self.active_call_peer_id().cloned() {
             self.end_call(&peer_id).await;

@@ -6,7 +6,7 @@ mod platform;
 fn main() {
     #[cfg(unix)]
     {
-        let platform = platform::Platform::detect();
+        let platform = platform::Platform::get();
         if matches!(platform, platform::Platform::LinuxWayland) {
             unsafe {
                 // Workaround required until Wayland issues have been fixed.

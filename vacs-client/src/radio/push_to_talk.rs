@@ -1,8 +1,41 @@
+//! Push-to-talk radio integration for external radio clients.
+//!
+//! This module implements radio integration by emitting key presses to external applications
+//! like Audio For VATSIM or TrackAudio when the user transmits in vacs.
+//!
+//! # How It Works
+//!
+//! When the user presses their PTT key in vacs, the `PushToTalkRadio` emits a corresponding
+//! key press to the configured external radio client. This allows using a single PTT key
+//! for both vacs and the radar client's radio.
+//!
+//! # Platform Limitations
+//!
+//! **This feature does NOT work on Linux/Wayland** because:
+//! - Wayland's security model prevents applications from injecting input events
+//! - There's no standard cross-desktop API for global input injection
+//! - The `KeybindEmitter` on Linux is a no-op stub
+//!
+//! On Windows and macOS, this works correctly using platform-specific APIs.
+//!
+//! # Alternative on Linux
+//!
+//! Users on Linux should either:
+//! - Use a radio integration that provides direct API support (not key-based)
+//! - Configure vacs and their radio client separately with different PTT keys
+//! - Use "Push-to-Mute" transmit mode instead of "Radio Integration"
+
 use crate::keybinds::runtime::{DynKeybindEmitter, KeybindEmitter, PlatformEmitter};
 use crate::radio::{Radio, RadioError, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Radio integration that emits key presses to external applications.
+///
+/// **Note**: This requires a functional `KeybindEmitter`, which is only available
+/// on Windows and macOS. On Linux, the emitter is a no-op stub, so this will
+/// silently do nothing.
 
 #[derive(Debug, Clone)]
 pub struct PushToTalkRadio {

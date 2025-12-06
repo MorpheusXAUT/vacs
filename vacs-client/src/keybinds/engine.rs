@@ -10,8 +10,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::RwLock as TokioRwLock;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::sync::CancellationToken;
+
+#[cfg(target_os = "linux")]
+use crate::platform::Platform;
 
 #[derive(Debug)]
 pub struct KeybindEngine {
@@ -30,7 +34,7 @@ pub struct KeybindEngine {
     implicit_radio_prio: Arc<AtomicBool>,
 }
 
-pub type KeybindEngineHandle = Arc<RwLock<KeybindEngine>>;
+pub type KeybindEngineHandle = Arc<TokioRwLock<KeybindEngine>>;
 
 impl KeybindEngine {
     pub fn new(
@@ -56,7 +60,7 @@ impl KeybindEngine {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub async fn start(&mut self) -> Result<(), Error> {
         if self.rx_task.is_some() {
             debug_assert!(self.listener.read().is_some());
             debug_assert!(self.code.is_some());
@@ -75,7 +79,7 @@ impl KeybindEngine {
 
         self.stop_token = Some(self.shutdown_token.child_token());
 
-        let (listener, rx) = PlatformListener::start()?;
+        let (listener, rx) = PlatformListener::start().await?;
         *self.listener.write() = Some(Arc::new(listener));
 
         if self.mode == TransmitMode::RadioIntegration {
@@ -118,7 +122,7 @@ impl KeybindEngine {
         self.stop();
     }
 
-    pub fn set_config(&mut self, config: &TransmitConfig) -> Result<(), Error> {
+    pub async fn set_config(&mut self, config: &TransmitConfig) -> Result<(), Error> {
         self.stop();
 
         self.code = Self::select_active_code(config);
@@ -126,19 +130,19 @@ impl KeybindEngine {
 
         self.reset_input_state();
 
-        self.start()?;
+        self.start().await?;
 
         Ok(())
     }
 
-    pub fn set_radio_config(&mut self, config: &RadioConfig) -> Result<(), Error> {
+    pub async fn set_radio_config(&mut self, config: &RadioConfig) -> Result<(), Error> {
         self.stop();
 
         self.radio_config = config.clone();
 
         self.reset_input_state();
 
-        self.start()?;
+        self.start().await?;
 
         Ok(())
     }
@@ -204,6 +208,33 @@ impl KeybindEngine {
 
     pub fn has_radio(&self) -> bool {
         self.radio.read().is_some()
+    }
+
+    /// Get the external (OS-configured) keybind for a transmit mode, if available.
+    ///
+    /// On Wayland, keybinds are configured at the OS level via the XDG Global Shortcuts
+    /// portal. This method queries the listener to get the actual key combination the
+    /// user configured in their desktop environment.
+    ///
+    /// Returns `None` on all other platforms where keybinds are configured in-app.
+    #[cfg(target_os = "linux")]
+    pub fn get_external_binding(&self, mode: TransmitMode) -> Option<String> {
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            return self
+                .listener
+                .read()
+                .as_ref()
+                .and_then(|l| l.get_external_binding(mode));
+        }
+        None
+    }
+
+    /// Get the external (OS-configured) keybind for a transmit mode, if available.
+    ///
+    /// Returns `None` on all other platforms where keybinds are configured in-app.
+    #[cfg(not(target_os = "linux"))]
+    pub fn get_external_binding(&self, _mode: TransmitMode) -> Option<String> {
+        None
     }
 
     fn reset_input_state(&self) {
@@ -324,6 +355,34 @@ impl KeybindEngine {
 
     #[inline]
     fn select_active_code(config: &TransmitConfig) -> Option<Code> {
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            // Wayland Code Mapping Strategy:
+            //
+            // On Wayland, shortcuts are configured at the OS level via the XDG Global Shortcuts
+            // portal. The portal allows complex key combinations (e.g., Ctrl+Alt+Shift+P) that
+            // cannot be represented as a single keyboard_types::Code.
+            //
+            // To work around this, we map each transmit mode to a unique, unlikely-to-be-pressed
+            // function key (F33-F35). These keys don't exist on most keyboards, so there's no
+            // conflict with user input. When the portal activates a shortcut, we emit the
+            // corresponding F-key code, and the rest of the keybind engine works unchanged.
+            //
+            // This effectively overrides the user-configured codes in the config file on Wayland,
+            // since the actual key binding is managed by the desktop environment.
+            let code = match config.mode {
+                TransmitMode::VoiceActivation => None,
+                TransmitMode::PushToTalk => Some(Code::F33),
+                TransmitMode::PushToMute => Some(Code::F34),
+                TransmitMode::RadioIntegration => Some(Code::F35),
+            };
+            log::trace!(
+                "Using portal shortcut code {code:?} for transmit mode {:?}",
+                config.mode
+            );
+            return code;
+        }
+
         match config.mode {
             TransmitMode::VoiceActivation => None,
             TransmitMode::PushToTalk => config.push_to_talk,

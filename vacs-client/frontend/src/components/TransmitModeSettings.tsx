@@ -9,9 +9,12 @@ import {
 import {invokeSafe, invokeStrict} from "../error.ts";
 import KeyCapture from "./ui/KeyCapture.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
+import {clsx} from "clsx";
+import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 
 function TransmitModeSettings() {
-    const capKeybinds = useCapabilitiesStore(state => state.keybinds);
+    const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
+    const capKeybindEmitter = useCapabilitiesStore(state => state.keybindEmitter);
     const capPlatform = useCapabilitiesStore(state => state.platform);
     const [transmitConfig, setTransmitConfig] = useState<TransmitConfigWithLabels | undefined>(undefined);
     const [radioConfig, setRadioConfig] = useState<RadioConfigWithLabels | undefined>(undefined);
@@ -27,10 +30,10 @@ function TransmitModeSettings() {
             setRadioConfig(await withRadioLabels(radioConfig));
         };
 
-        if (capKeybinds) {
+        if (capKeybindListener) {
             void fetchConfig();
         }
-    }, [capKeybinds]);
+    }, [capKeybindListener]);
 
     return (
         <div className="py-0.5 flex flex-col gap-2">
@@ -39,7 +42,7 @@ function TransmitModeSettings() {
                     Transmit Mode
                 </p>
                 <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
-                    {!capKeybinds ? (
+                    {!capKeybindListener ? (
                         <p className="text-sm text-gray-700 py-1.5 cursor-help"
                            title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}
                         >Not available.</p>
@@ -67,12 +70,12 @@ function TransmitModeSettings() {
                     </svg>
                 </div>
                 <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
-                    {!capKeybinds ? (
+                    {!capKeybindEmitter ? (
                         <p className="text-sm text-gray-700 py-1.5 cursor-help"
-                           title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}
+                            title={`Unfortunately, keybind emitters are not yet supported on ${capPlatform}`}
                         >Not available.</p>
                     ) : transmitConfig !== undefined && radioConfig !== undefined ? (
-                        <RadioConfigSettings transmitConfig={transmitConfig} radioConfig={radioConfig}
+                        <RadioIntegrationSettings transmitConfig={transmitConfig} radioConfig={radioConfig}
                                              setRadioConfig={setRadioConfig}/>
                     ) : <p className="w-full text-center">Loading...</p>}
                 </div>
@@ -86,7 +89,10 @@ type TransmitConfigSettingsProps = {
     setTransmitConfig: Dispatch<StateUpdater<TransmitConfigWithLabels | undefined>>;
 };
 
-function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitConfigSettingsProps) {
+function TransmitConfigSettings({ transmitConfig, setTransmitConfig }: TransmitConfigSettingsProps) {
+    const capPlatform = useCapabilitiesStore(state => state.platform);
+    const [waylandBinding, setWaylandBinding] = useState<string | undefined>(undefined);
+
     const handleOnTransmitCapture = async (code: string) => {
         if (transmitConfig === undefined || transmitConfig.mode === "VoiceActivation") return;
 
@@ -148,6 +154,25 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
         }
     };
 
+    const handleOpenSystemShortcutsOnClick = useAsyncDebounce(async () => {
+        await invokeSafe("keybinds_open_system_shortcuts_settings");
+    });
+
+    useEffect(() => {
+        const fetchExternalBinding = async () => {
+            const binding = await invokeSafe<string | null>("keybinds_get_external_binding", { mode: transmitConfig.mode });
+            setWaylandBinding(binding ?? undefined);
+        };
+
+        if (capPlatform === "LinuxWayland" && transmitConfig !== undefined) {
+            if (transmitConfig.mode === "VoiceActivation") {
+                setWaylandBinding(undefined);
+            } else {
+                void fetchExternalBinding();
+            }
+        }
+    }, [capPlatform, transmitConfig]);
+
     return (
         <>
             <Select
@@ -157,27 +182,40 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
                     {value: "VoiceActivation", text: "Voice activation"},
                     {value: "PushToTalk", text: "Push-to-talk"},
                     {value: "PushToMute", text: "Push-to-mute"},
-                    {value: "RadioIntegration", text: "Radio Integration"}
+                    ...(capPlatform === "Windows" || capPlatform === "MacOs"
+                        ? [{value: "RadioIntegration", text: "Radio Integration"}]
+                        : [])
                 ]}
                 selected={transmitConfig.mode}
                 onChange={handleOnTransmitModeChange}
             />
-            <KeyCapture
-                label={transmitConfig.mode === "PushToTalk" ? transmitConfig.pushToTalkLabel : transmitConfig.mode === "PushToMute" ? transmitConfig.pushToMuteLabel : transmitConfig.radioPushToTalkLabel}
-                onCapture={handleOnTransmitCapture} onRemove={handleOnTransmitRemoveClick}
-                disabled={transmitConfig.mode === "VoiceActivation"}/>
+            {capPlatform === "LinuxWayland" ? (
+                <div
+                    onClick={handleOpenSystemShortcutsOnClick}
+                    title={transmitConfig.mode !== "VoiceActivation" ? "On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings. Click this field to try opening the appropriate system settings." : ""}
+                    className={clsx("w-full h-full min-h-8 grow truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
+                        "bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
+                        "brightness-90 cursor-help", transmitConfig.mode === "VoiceActivation" && "brightness-90 cursor-not-allowed")}>
+                    <p>{transmitConfig.mode !== "VoiceActivation" ? (waylandBinding || "Not bound") : ""}</p>
+                </div>
+            ) : (
+                <KeyCapture
+                    label={transmitConfig.mode === "PushToTalk" ? transmitConfig.pushToTalkLabel : transmitConfig.mode === "PushToMute" ? transmitConfig.pushToMuteLabel : transmitConfig.radioPushToTalkLabel}
+                    onCapture={handleOnTransmitCapture} onRemove={handleOnTransmitRemoveClick}
+                    disabled={transmitConfig.mode === "VoiceActivation"}/>
+            )}
         </>
     );
 }
 
-type RadioConfigSettingsProps = {
+type RadioIntegrationSettingsProps = {
     transmitConfig: TransmitConfigWithLabels;
     radioConfig: RadioConfigWithLabels;
     setRadioConfig: Dispatch<StateUpdater<RadioConfigWithLabels | undefined>>;
 };
 
-function RadioConfigSettings({transmitConfig, radioConfig, setRadioConfig}: RadioConfigSettingsProps) {
-    const handleOnRadioCapture = async (code: string) => {
+function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}: RadioIntegrationSettingsProps) {
+    const handleOnRadioIntegrationCapture = async (code: string) => {
         if (transmitConfig === undefined || transmitConfig.mode !== "RadioIntegration" || radioConfig === undefined) {
             return;
         }
@@ -222,7 +260,7 @@ function RadioConfigSettings({transmitConfig, radioConfig, setRadioConfig}: Radi
         }
     };
 
-    const handleOnRadioRemoveClick = async () => {
+    const handleOnRadioIntegrationRemoveClick = async () => {
         if (radioConfig === undefined) return;
 
         let newConfig: RadioConfig;
@@ -265,7 +303,7 @@ function RadioConfigSettings({transmitConfig, radioConfig, setRadioConfig}: Radi
             />
             <KeyCapture
                 label={radioConfig.integration === "AudioForVatsim" ? radioConfig.audioForVatsim && radioConfig.audioForVatsim.emitLabel : radioConfig.trackAudio && radioConfig.trackAudio.emitLabel}
-                onCapture={handleOnRadioCapture} onRemove={handleOnRadioRemoveClick}
+                onCapture={handleOnRadioIntegrationCapture} onRemove={handleOnRadioIntegrationRemoveClick}
                 disabled={transmitConfig.mode !== "RadioIntegration"}/>
         </>
     );

@@ -1,7 +1,7 @@
 use crate::app::state::AppState;
 use crate::config::{
     CLIENT_SETTINGS_FILE_NAME, FrontendRadioConfig, FrontendTransmitConfig, Persistable,
-    PersistedClientConfig, RadioConfig, TransmitConfig,
+    PersistedClientConfig, RadioConfig, TransmitConfig, TransmitMode,
 };
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
@@ -32,7 +32,7 @@ pub async fn keybinds_set_transmit_config(
     transmit_config: FrontendTransmitConfig,
 ) -> Result<(), Error> {
     let capabilities = Capabilities::default();
-    if !capabilities.keybinds {
+    if !capabilities.keybind_listener {
         return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
     }
 
@@ -41,7 +41,11 @@ pub async fn keybinds_set_transmit_config(
 
         let transmit_config: TransmitConfig = transmit_config.try_into()?;
 
-        keybind_engine.write().set_config(&transmit_config)?;
+        keybind_engine
+            .write()
+            .await
+            .set_config(&transmit_config)
+            .await?;
 
         state.config.client.transmit_config = transmit_config;
         state.config.client.clone().into()
@@ -73,7 +77,7 @@ pub async fn keybinds_set_radio_config(
     radio_config: FrontendRadioConfig,
 ) -> Result<(), Error> {
     let capabilities = Capabilities::default();
-    if !capabilities.keybinds {
+    if !capabilities.keybind_listener {
         return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
     }
 
@@ -82,7 +86,11 @@ pub async fn keybinds_set_radio_config(
 
         let radio_config: RadioConfig = radio_config.try_into()?;
 
-        keybind_engine.write().set_radio_config(&radio_config)?;
+        keybind_engine
+            .write()
+            .await
+            .set_radio_config(&radio_config)
+            .await?;
 
         state.config.client.radio = radio_config;
         state.config.client.clone().into()
@@ -103,9 +111,41 @@ pub async fn keybinds_has_radio(
     keybind_engine: State<'_, KeybindEngineHandle>,
 ) -> Result<bool, Error> {
     let capabilities = Capabilities::default();
-    if !capabilities.keybinds {
+    if !capabilities.keybind_listener {
         return Ok(false);
     }
 
-    Ok(keybind_engine.read().has_radio())
+    Ok(keybind_engine.read().await.has_radio())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn keybinds_get_external_binding(
+    keybind_engine: State<'_, KeybindEngineHandle>,
+    mode: TransmitMode,
+) -> Result<Option<String>, Error> {
+    let capabilities = Capabilities::default();
+    if !capabilities.keybind_listener {
+        return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
+    }
+    Ok(keybind_engine.read().await.get_external_binding(mode))
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub fn keybinds_open_system_shortcuts_settings() -> Result<(), Error> {
+    #[cfg(target_os = "linux")]
+    {
+        use crate::platform::DesktopEnvironment;
+        return DesktopEnvironment::get()
+            .open_keyboard_shortcuts_settings()
+            .map_err(|err| Error::Other(Box::new(anyhow::anyhow!(err))));
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        return Err(Error::Other(Box::new(anyhow::anyhow!(
+            "Opening keyboard shortcuts settings is only supported on Linux"
+        ))));
+    }
 }

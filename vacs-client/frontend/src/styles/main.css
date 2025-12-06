@@ -20,6 +20,11 @@ body {
     }
 }
 
+.linux select {
+    @apply h-8;
+    padding: 0 0.375rem;
+}
+
 .text-initial {
     color: initial;
 }

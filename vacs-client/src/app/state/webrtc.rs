@@ -84,7 +84,7 @@ impl AppStateWebrtcExt for AppStateInner {
 
         let peer_id_clone = peer_id.clone();
 
-        tokio::runtime::Handle::current().spawn(async move {
+        tauri::async_runtime::spawn(async move {
             loop {
                 match events_rx.recv().await {
                     Ok(peer_event) => match peer_event {
@@ -239,7 +239,7 @@ impl AppStateWebrtcExt for AppStateInner {
                 audio_manager.detach_input_device();
             }
 
-            self.keybind_engine.read().set_call_active(false);
+            self.keybind_engine.read().await.set_call_active(false);
 
             let result = call.peer.close().await;
             self.active_call = None;
@@ -323,6 +323,12 @@ impl AppStateInner {
                 return Err(err.into());
             }
 
+            let attach_muted = {
+                let keybind_engine = self.keybind_engine.read().await;
+                keybind_engine.set_call_active(true);
+                keybind_engine.should_attach_input_muted()
+            };
+
             let audio_config = self.config.audio.clone();
             let mut audio_manager = self.audio_manager.write();
             log::debug!("Attaching call to audio manager");
@@ -335,14 +341,12 @@ impl AppStateInner {
                 return Err(err);
             }
 
-            self.keybind_engine.read().set_call_active(true);
-
             log::debug!("Attaching input device to audio manager");
             if let Err(err) = audio_manager.attach_input_device(
                 app.clone(),
                 &audio_config,
                 input_tx,
-                self.keybind_engine.read().should_attach_input_muted(),
+                attach_muted,
             ) {
                 log::warn!("Failed to attach input device to audio manager: {err:?}");
                 return Err(err);

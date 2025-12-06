@@ -304,6 +304,6 @@ pub async fn audio_set_radio_prio(
     keybind_engine: State<'_, KeybindEngineHandle>,
     prio: bool,
 ) -> Result<(), Error> {
-    keybind_engine.read().set_radio_prio(prio);
+    keybind_engine.read().await.set_radio_prio(prio);
     Ok(())
 }
