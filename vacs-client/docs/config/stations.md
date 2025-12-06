@@ -31,6 +31,8 @@ The `stations` configuration allows you to customize how stations are displayed 
 ```toml
 # Default configuration
 [stations]
+selected_profile = "Default"
+ignored = []
 
 # Profiles for filtering and prioritizing stations
 [stations.profiles.Default]
@@ -410,6 +412,31 @@ priority = ["LOWW*_APP", "LOWW*_TWR", "LOWW*_GND", "LOWW*_DEL"]
 include = ["*_CTR", "*_APP"]
 exclude = []
 priority = ["LOVV*_CTR", "EDMM*_CTR", "*_CTR", "LOWW*_APP", "EDDM*_APP", "*_APP"]
+```
+
+---
+
+## Ignore list
+
+The `ignored` list allows you to completely ignore specific users client-side (identified by their VATSIM CID).
+
+**Type:** Array of strings (CIDs)  
+**Default:** `[]` (empty list)  
+**Optional:** Yes
+
+Any incoming messages or calls initiated by a CID in this list will be silently ignored by the client, effectively blocking them. This suppression happens at a lower level than the station profiles logic, effectively removing users in this list from ever showing up in your client or being able to call you. Their call attempts will also not show up in your call history, however to an ignored user, it will still look like you are online and simply not answering their calls.
+
+> [!NOTE]  
+> This is a global setting and applies regardless of which profile is currently selected.
+
+You can change this list manually in the configuration file before startup, or by going to the `Mission` page in the client and modifying the list of ignored users there. Note that all changes made to the config file only apply after `vacs` has been restarted and might be overwritten if you change any other station settings (such as the selected profile) via the UI.
+
+**Example:**
+
+```toml
+[stations]
+# Ignore calls from these CIDs
+ignored = ["10000003", "1234567"]
 ```
 
 ---
