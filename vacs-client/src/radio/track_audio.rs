@@ -299,6 +299,12 @@ impl From<&TrackAudioState> for RadioState {
     }
 }
 
+impl From<TrackAudioState> for RadioState {
+    fn from(value: TrackAudioState) -> Self {
+        Self::from(&value)
+    }
+}
+
 impl Debug for TrackAudioState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TrackAudioState")
@@ -308,12 +314,6 @@ impl Debug for TrackAudioState {
             .field("receiving", &self.receiving)
             .field("stations", &self.stations.read().len())
             .finish()
-    }
-}
-
-impl From<TrackAudioState> for RadioState {
-    fn from(value: TrackAudioState) -> Self {
-        Self::from(&value)
     }
 }
 
@@ -351,7 +351,10 @@ impl TrackAudioState {
     }
 
     fn add_station(&self, callsign: String, app: &AppHandle) {
-        self.stations.write().insert(callsign, false);
+        {
+            self.stations.write().insert(callsign, false);
+        }
+
         self.emit(app);
     }
 
@@ -362,26 +365,31 @@ impl TrackAudioState {
         is_available: bool,
         app: &AppHandle,
     ) {
-        let mut stations = self.stations.write();
-        if !is_available {
-            stations.remove(&callsign);
-        } else if let Some(rx) = rx {
-            stations.insert(callsign, rx);
-        } else {
-            stations.entry(callsign).or_insert(false);
+        {
+            let mut stations = self.stations.write();
+            if !is_available {
+                stations.remove(&callsign);
+            } else if let Some(rx) = rx {
+                stations.insert(callsign, rx);
+            } else {
+                stations.entry(callsign).or_insert(false);
+            }
         }
+
         self.emit(app);
     }
 
     fn sync_stations(&self, station_states: Vec<StationState>, app: &AppHandle) {
-        let mut stations = self.stations.write();
-        stations.clear();
+        {
+            let mut stations = self.stations.write();
+            stations.clear();
 
-        for station_state in station_states {
-            if station_state.is_available
-                && let Some(callsign) = station_state.callsign
-            {
-                stations.insert(callsign, station_state.rx.unwrap_or(false));
+            for station_state in station_states {
+                if station_state.is_available
+                    && let Some(callsign) = station_state.callsign
+                {
+                    stations.insert(callsign, station_state.rx.unwrap_or(false));
+                }
             }
         }
 
