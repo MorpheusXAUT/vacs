@@ -233,7 +233,8 @@ impl Radio for TrackAudioRadio {
     async fn reconnect(&self) -> Result<(), RadioError> {
         self.state.clear();
         self.state.emit(&self.app);
-        self.client.reconnect().await.map_err(|err| {
+        self.client.reconnect().map_err(|err| {
+            self.app.emit("radio:state", RadioState::Error).ok();
             RadioError::Integration(format!("Failed to reconnect to TrackAudio: {err}"))
         })?;
         Ok(())

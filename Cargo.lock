@@ -7786,9 +7786,9 @@ dependencies = [
 
 [[package]]
 name = "trackaudio"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "326b88afa9c58e1db68e38cb117b84dd68746aada54a26ba5417b946b7b622fa"
+checksum = "c2ece2a2716283d1d932bc6154ea17e8044d920b29714ab28ed288b2c0e04212"
 dependencies = [
  "futures-util",
  "rand 0.9.2",
