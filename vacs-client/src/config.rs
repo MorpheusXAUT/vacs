@@ -645,6 +645,14 @@ impl From<StationsConfig> for PersistedStationsConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub enum FrequencyDisplayMode {
+    #[default]
+    ShowAll,
+    HideAliased,
+    HideAll,
+}
+
 /// Config profile for how stations are filtered, prioritized and displayed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StationsProfileConfig {
@@ -710,10 +718,7 @@ pub struct StationsProfileConfig {
     pub aliases: HashMap<String, String>,
 
     #[serde(default)]
-    pub hide_frequencies: bool,
-
-    #[serde(default)]
-    pub hide_frequencies_for_aliased: bool,
+    pub frequencies: FrequencyDisplayMode,
 }
 
 impl Default for StationsProfileConfig {
@@ -729,8 +734,7 @@ impl Default for StationsProfileConfig {
                 "*_GND".to_string(),
             ],
             aliases: HashMap::new(),
-            hide_frequencies: false,
-            hide_frequencies_for_aliased: false,
+            frequencies: FrequencyDisplayMode::default(),
         }
     }
 }
@@ -742,8 +746,7 @@ pub struct FrontendStationsProfileConfig {
     pub exclude: Vec<String>,
     pub priority: Vec<String>,
     pub aliases: HashMap<String, String>,
-    pub hide_frequencies: bool,
-    pub hide_frequencies_for_aliased: bool,
+    pub frequencies: FrequencyDisplayMode,
 }
 
 impl From<StationsProfileConfig> for FrontendStationsProfileConfig {
@@ -753,8 +756,7 @@ impl From<StationsProfileConfig> for FrontendStationsProfileConfig {
             exclude: stations_profile_config.exclude,
             priority: stations_profile_config.priority,
             aliases: stations_profile_config.aliases,
-            hide_frequencies: stations_profile_config.hide_frequencies,
-            hide_frequencies_for_aliased: stations_profile_config.hide_frequencies_for_aliased,
+            frequencies: stations_profile_config.frequencies,
         }
     }
 }

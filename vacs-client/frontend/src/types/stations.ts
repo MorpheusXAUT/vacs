@@ -12,9 +12,10 @@ export type StationsProfileConfig = {
     exclude: string[];
     priority: string[];
     aliases: Record<string, string>;
-    hideFrequencies: boolean;
-    hideFrequenciesForAliased: boolean;
+    frequencies: FrequencyDisplayMode;
 }
+
+export type FrequencyDisplayMode = "ShowAll" | "HideAliased" | "HideAll";
 
 function globToRegex(pattern: string): RegExp {
     const escaped = pattern

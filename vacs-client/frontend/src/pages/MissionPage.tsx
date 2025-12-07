@@ -44,7 +44,7 @@ function MissionPage() {
                                 <p>Include:</p><p>[{selectedProfile?.include.join(", ")}]</p>
                                 <p>Exclude:</p><p>[{selectedProfile?.exclude.join(", ")}]</p>
                                 <p>Priority:</p><p>[{selectedProfile?.priority.join(", ")}]</p>
-                                <p>Hide freq.:</p><p>{selectedProfile?.hideFrequencies ? "All" : selectedProfile?.hideFrequenciesForAliased ? "Only aliased" : "None"}</p>
+                                <p>Frequencies:</p><p>{selectedProfile?.frequencies ?? "ShowAll"}</p>
                                 <p>Alias:</p>
                                 <div className="overflow-y-auto">
                                     <div className="grid grid-flow-row grid-cols-2">

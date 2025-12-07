@@ -50,9 +50,9 @@ function DAKey({client}: DAKeyProps) {
     });
 
     const [stationName, stationType] = splitDisplayName(client);
-    const showFrequency = client.frequency !== "" &&
-        selectedProfile?.hideFrequencies === false &&
-        (selectedProfile?.hideFrequenciesForAliased === false || client.alias === undefined);
+    const showFrequency = client.frequency !== "" && (
+        selectedProfile?.frequencies === "ShowAll" ||
+        (selectedProfile?.frequencies === "HideAliased" && client.alias === undefined));
 
     return (
         <Button
