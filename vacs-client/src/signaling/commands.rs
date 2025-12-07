@@ -179,6 +179,50 @@ pub async fn signaling_set_selected_stations_config_profile(
     Ok(())
 }
 
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn signaling_add_ignored_client(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    client_id: String,
+) -> Result<bool, Error> {
+    let (persisted_stations_config, added): (PersistedStationsConfig, bool) = {
+        let mut state = app_state.lock().await;
+        let added = state.config.stations.ignored.insert(client_id);
+        (state.config.stations.clone().into(), added)
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_stations_config.persist(&config_dir, STATIONS_SETTINGS_FILE_NAME)?;
+
+    Ok(added)
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn signaling_remove_ignored_client(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    client_id: String,
+) -> Result<bool, Error> {
+    let (persisted_stations_config, removed): (PersistedStationsConfig, bool) = {
+        let mut state = app_state.lock().await;
+        let removed = state.config.stations.ignored.remove(&client_id);
+        (state.config.stations.clone().into(), removed)
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_stations_config.persist(&config_dir, STATIONS_SETTINGS_FILE_NAME)?;
+
+    Ok(removed)
+}
+
 async fn refresh_ice_config(http_state: &HttpState, app_state: &mut AppStateInner) {
     let config = match http_state
         .http_get::<IceConfig>(BackendEndpoint::IceConfig, None)
