@@ -222,8 +222,11 @@ pub struct ClientConfig {
     pub transmit_config: TransmitConfig,
     pub radio: RadioConfig,
     pub auto_hangup_seconds: u64,
-    /// List of peer IDs (= CIDs) that should be ignored by the client. This will lead to incoming
-    /// calls being ignored as if they weren't received.
+    /// List of peer IDs (CIDs) that should be ignored by the client.
+    ///
+    /// Any incoming calls initiated by a CID in this list will be silently ignored
+    /// by the client. This does **not** completely block communications with ignored
+    /// parties as the (local) user can still actively initiate calls to them.
     #[serde(default, skip_serializing_if = "HashSet::is_empty")]
     pub ignored: HashSet<String>,
 }

@@ -1,20 +1,8 @@
 # Stations configuration reference
 
-This reference explains how to configure station filtering, prioritization, and display using the `StationsConfig` settings.
+This reference explains how to configure station filtering, prioritization, and display using the `StationsConfig` settings, read from the (optional) `stations.toml` config file.
 
-As with all other configuration for `vacs`, the stations config is stored as a [TOML](https://toml.io/en/) file.  
-Various tools exist helping you create and edit TOML files, such as [Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) for [Visual Studio Code](https://code.visualstudio.com/).
-If your tool of choice supports [JSON Schema](https://json-schema.org/), you can find the schema for the `vacs` configuration in this directory ([config.schema.json](config.schema.json)) or as a [GitHub URL](https://raw.githubusercontent.com/MorpheusXAUT/vacs/refs/heads/main/vacs-client/docs/config/config.schema.json).
-
-Whilst in theory, you can add it to the basic `config.toml` or any of the other config files read by `vacs` (they're all merged upon startup), it is recommended to create a separate `stations.toml` file for easier separation and maintenance.
-
-You can place the `stations.toml` either in the default config directory or the installation location of `vacs` (where you launch the client from).
-
-The config directory is dependent on the operating system:
-
--   Linux: `$XDG_CONFIG_HOME/app.vacs.vacs-client/` or `$HOME/.config/app.vacs.vacs-client/`
--   macOS: `$HOME/Library/Application Support/app.vacs.vacs-client/`
--   Windows: `%APPDATA%\app.vacs.vacs-client\`
+For general information on the configuration file format, file locations, and recommended editors, please refer to the [main configuration reference](README.md).
 
 ## Overview
 
@@ -413,33 +401,6 @@ include = ["*_CTR", "*_APP"]
 exclude = []
 priority = ["LOVV*_CTR", "EDMM*_CTR", "*_CTR", "LOWW*_APP", "EDDM*_APP", "*_APP"]
 ```
-
----
-
-## Ignore list
-
-The `ignored` list allows you to completely ignore specific users client-side (identified by their VATSIM CID).
-
-**Type:** Array of strings (CIDs)  
-**Default:** `[]` (empty list)  
-**Optional:** Yes
-
-Any incoming messages or calls initiated by a CID in this list will be silently ignored by the client, effectively blocking them. This suppression happens at a lower level than the station profiles logic, effectively removing users in this list from ever showing up in your client or being able to call you. Their call attempts will also not show up in your call history, however to an ignored user, it will still look like you are online and simply not answering their calls.
-
-> [!NOTE]  
-> This is a global setting and applies regardless of which profile is currently selected.
-
-You can change this list manually in the configuration file before startup, or by going to the `Mission` page in the client and modifying the list of ignored users there. Note that all changes made to the config file only apply after `vacs` has been restarted and might be overwritten if you change any other station settings (such as the selected profile) via the UI.
-
-**Example:**
-
-```toml
-[stations]
-# Ignore calls from these CIDs
-ignored = ["10000003", "1234567"]
-```
-
----
 
 ### Tips
 
