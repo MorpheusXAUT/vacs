@@ -69,7 +69,7 @@ export function setupSignalingListeners() {
                 const clientInfo = getClientInfo(event.payload.peerId);
                 addCallToCallList({
                     type: event.payload.incoming ? "IN" : "OUT",
-                    time: new Date().toLocaleString('de-AT', {hour: "2-digit", minute: "2-digit"}),
+                    time: new Date().toLocaleString('de-AT', {hour: "2-digit", minute: "2-digit", timeZone: "UTC"}),
                     name: clientInfo.displayName,
                     number: event.payload.peerId
                 });
