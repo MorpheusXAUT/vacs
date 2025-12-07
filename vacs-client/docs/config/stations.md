@@ -27,6 +27,7 @@ ignored = []
 include = []
 exclude = []
 priority = ["*_FMP", "*_CTR", "*_APP", "*_TWR", "*_GND"]
+frequencies = "ShowAll"
 
 [stations.profiles.Default.aliases]
 # Aliases for stations, mapping frequencies to callsigns, e.g.:
@@ -51,16 +52,19 @@ Profiles allow you to define multiple filtering configurations and switch betwee
 include = []
 exclude = []
 priority = ["*_FMP", "*_CTR", "*_APP", "*_TWR", "*_GND"]
+frequencies = "ShowAll"
 
 [stations.profiles.CentersOnly]
 include = ["*_CTR"]
 exclude = []
 priority = ["LOVV_CTR", "EDMM_CTR"]
+frequencies = "HideAliased"
 
 [stations.profiles.LOVVOnly]
 include = ["LO*"]
 exclude = ["LON*"]
 priority = ["*_FMP", "*_CTR", "*_APP", "*_TWR", "*_GND"]
+frequencies = "HideAll"
 ```
 
 ### Profile names
@@ -249,6 +253,34 @@ priority = ["*_CTR", "*_APP", "*_TWR", "*_GND"]
 
 ---
 
+#### `frequencies`: controlling frequency display
+
+**Type:** String (Enum)  
+**Default:** `"ShowAll"`  
+**Optional:** Yes
+
+Controls how frequencies are displayed on the DA keys in the UI.
+
+**Valid values:**
+
+-   `"ShowAll"` (default): Always show frequencies for all stations.
+-   `"HideAliased"`: Hide frequencies only for stations that have an alias defined in the [`aliases`](#aliases-customizing-station-display-names) section.
+-   `"HideAll"`: Never show frequencies for any station.
+
+**Example:**
+
+```toml
+[stations.profiles.Clean]
+# Hide frequencies for aliased stations to reduce clutter
+frequencies = "HideAliased"
+
+[stations.profiles.Compact]
+# Hide all frequencies to save space
+frequencies = "HideAll"
+```
+
+---
+
 ### Glob pattern matching
 
 All patterns use glob-like syntax, which provides flexible matching with wildcards:
@@ -412,4 +444,5 @@ priority = ["LOVV*_CTR", "EDMM*_CTR", "*_CTR", "LOWW*_APP", "EDDM*_APP", "*_APP"
 -   Leave `include` empty to see everything (filtered only by `exclude`)
 -   Remember that `exclude` always wins over `include`
 -   Use `aliases` to customize display names, but keep in mind that your filter patterns must match the **original** callsigns
+-   Use the `frequencies` option to toggle display of frequencies on your DA keys
 -   You can switch between profiles in the UI without restarting the application

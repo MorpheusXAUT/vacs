@@ -645,11 +645,15 @@ impl From<StationsConfig> for PersistedStationsConfig {
     }
 }
 
+/// Mode for controlling how frequencies are displayed on DA keys.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub enum FrequencyDisplayMode {
+    /// Always show frequencies for all stations.
     #[default]
     ShowAll,
+    /// Hide frequencies only for stations that have an alias defined.
     HideAliased,
+    /// Hide frequencies for all stations.
     HideAll,
 }
 
@@ -717,6 +721,11 @@ pub struct StationsProfileConfig {
     #[serde(default)]
     pub aliases: HashMap<String, String>,
 
+    /// Control how frequencies are displayed on the DA keys.
+    ///
+    /// - `ShowAll`: Show frequency for all stations (default).
+    /// - `HideAliased`: Hide frequency if the station has an alias mapping.
+    /// - `HideAll`: Never show frequencies.
     #[serde(default)]
     pub frequencies: FrequencyDisplayMode,
 }

@@ -27,11 +27,12 @@ Releases are provided for:
 -   macOS Apple Silicon (`*aarch64.dmg`)
 -   macOS Intel (`*x64.dmg`)
 
-Note that our macOS releases are currently not code signed and are thus automatically flagged as "corrupted". In order to run the application, you have to manually remove it from quarantine by running:
-
-```bash
-sudo xattr -rd com.apple.quarantine /Applications/vacs.app
-```
+> [!NOTE]  
+> Our macOS releases are currently not code signed and are thus automatically flagged as "corrupted". In order to run the application, you have to manually remove it from quarantine by running:
+>
+> ```bash
+> sudo xattr -rd com.apple.quarantine /Applications/vacs.app
+> ```
 
 The client is self-contained and does not require any additional prerequisites or manual dependency installation.
 
