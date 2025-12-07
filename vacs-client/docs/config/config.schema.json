@@ -65,6 +65,16 @@
                   },
                   "default": {},
                   "description": "Optional mapping of frequencies to custom display names. If a station's frequency matches a key, the corresponding display name replaces the VATSIM callsign. Display names must follow underscore-separated format (e.g., 'Station_Name_TYPE'). Frequency matching is exact. Example: {'124.400': 'FIC_CTR', '134.675': 'VB_APP'}"
+                },
+                "frequencies": {
+                  "type": "string",
+                  "enum": [
+                    "ShowAll",
+                    "HideAliased",
+                    "HideAll"
+                  ],
+                  "default": "ShowAll",
+                  "description": "Control how frequencies are displayed on the DA keys."
                 }
               },
               "additionalProperties": false
@@ -74,7 +84,9 @@
           "minProperties": 1
         }
       },
-      "required": ["profiles"],
+      "required": [
+        "profiles"
+      ],
       "additionalProperties": true
     },
     "client": {
