@@ -380,47 +380,19 @@ async fn bind_shortcuts(
 
     update_shortcuts_map(shortcuts_map, bound_shortcuts);
 
-    ensure_configuration(proxy, session, startup_tx, bound_shortcuts).await
-}
-
-async fn ensure_configuration(
-    proxy: &GlobalShortcuts<'static>,
-    session: &ashpd::desktop::Session<'static, GlobalShortcuts<'static>>,
-    startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,
-    bound_shortcuts: &[Shortcut],
-) -> ashpd::Result<()> {
     let configured_shortcuts = bound_shortcuts
         .iter()
         .filter(|s| !s.trigger_description().is_empty())
         .collect::<Vec<_>>();
-
     if configured_shortcuts.is_empty() {
-        log::warn!(
-            "No shortcuts configured, signaling startup completion and attempting to show configuration UI"
-        );
-
         // We still want to start the listener even if no shortcuts are configured
         // so that the user can configure them later without restarting the app
-        let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
-
-        match proxy.configure_shortcuts(session, None, None).await {
-            Ok(()) => {
-                log::debug!(
-                    "Shortcut configuration UI shown, please configure at least one shortcut"
-                );
-            }
-            Err(ashpd::Error::RequiresVersion(required, actual)) => {
-                log::warn!(
-                    "Portal version {actual} does not support configure_shortcuts (requires v{required}), please configure shortcuts manually in your desktop environment settings"
-                );
-            }
-            Err(err) => {
-                log::warn!("Failed to show shortcut configuration UI: {err}");
-            }
-        }
+        log::warn!("No shortcuts configured, make sure to bind at least one before use");
     } else {
         log::trace!("Shortcuts configured: {:?}", configured_shortcuts);
     }
+
+    let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
 
     Ok(())
 }
