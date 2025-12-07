@@ -5,17 +5,19 @@ import "../styles/telephone-page.css";
 import DialPad from "../components/DialPad.tsx";
 import CallList from "../components/CallList.tsx";
 import {invokeSafe} from "../error.ts";
+import IgnoreList from "../components/IgnoreList.tsx";
 
-type Page = "dir" | "call-list" | "dial-pad";
+type Page = "dir" | "call-list" | "dial-pad" | "ign";
 
 const PageTitle: Record<Page, string> = {
     "dir": "Telephone Directory",
     "call-list": "Call List",
     "dial-pad": "Dial Pad",
+    "ign": "Ignore List"
 };
 
 function TelephonePage() {
-    const [page, setPage] = useState<"dir" | "call-list" | "dial-pad">("call-list");
+    const [page, setPage] = useState<Page>("call-list");
 
     return (
         <div className="w-full h-full relative">
@@ -35,8 +37,10 @@ function TelephonePage() {
                             </div>
                         ) : page === "call-list" ? (
                             <CallList/>
-                        ) : (
+                        ) : page === "dial-pad" ? (
                             <DialPad/>
+                        ) : (
+                            <IgnoreList/>
                         )}
                     </div>
                     <div className="w-19 h-full shrink-0 pt-12 flex flex-col gap-[2px]">
@@ -48,6 +52,9 @@ function TelephonePage() {
                         </TelephonePageButton>
                         <TelephonePageButton page="dial-pad" activePage={page} setPage={setPage}>
                             <p>Dial<br/>Pad</p>
+                        </TelephonePageButton>
+                        <TelephonePageButton page="ign" activePage={page} setPage={setPage}>
+                            <p>Ign.</p>
                         </TelephonePageButton>
                     </div>
                 </div>

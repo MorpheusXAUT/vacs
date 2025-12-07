@@ -222,6 +222,10 @@ pub struct ClientConfig {
     pub transmit_config: TransmitConfig,
     pub radio: RadioConfig,
     pub auto_hangup_seconds: u64,
+    /// List of peer IDs (= CIDs) that should be ignored by the client. This will lead to incoming
+    /// calls being ignored as if they weren't received.
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    pub ignored: HashSet<String>,
 }
 
 impl Default for ClientConfig {
@@ -236,6 +240,7 @@ impl Default for ClientConfig {
             transmit_config: TransmitConfig::default(),
             radio: RadioConfig::default(),
             auto_hangup_seconds: 60,
+            ignored: HashSet::new(),
         }
     }
 }
@@ -593,10 +598,6 @@ pub struct StationsConfig {
     /// Named profiles for different station filtering configurations.
     /// Users can switch between profiles in the UI.
     pub profiles: HashMap<String, StationsProfileConfig>,
-    /// List of peer IDs (= CIDs) that should be ignored by the client. This will lead to incoming
-    /// calls being ignored as if they weren't received.
-    #[serde(default)]
-    pub ignored: HashSet<String>,
 }
 
 impl Default for StationsConfig {
@@ -606,7 +607,6 @@ impl Default for StationsConfig {
         Self {
             selected_profile: "Default".to_string(),
             profiles,
-            ignored: HashSet::new(),
         }
     }
 }
@@ -616,7 +616,6 @@ impl Default for StationsConfig {
 pub struct FrontendStationsConfig {
     pub selected_profile: String,
     pub profiles: HashMap<String, StationsProfileConfig>,
-    pub ignored: HashSet<String>,
 }
 
 impl From<StationsConfig> for FrontendStationsConfig {
@@ -624,7 +623,6 @@ impl From<StationsConfig> for FrontendStationsConfig {
         Self {
             selected_profile: stations_config.selected_profile,
             profiles: stations_config.profiles,
-            ignored: stations_config.ignored,
         }
     }
 }

@@ -254,7 +254,7 @@ impl AppStateInner {
             .lock()
             .await
             .config
-            .stations
+            .client
             .ignored
             .clone();
 

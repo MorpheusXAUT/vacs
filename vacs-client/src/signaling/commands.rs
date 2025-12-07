@@ -4,10 +4,11 @@ use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::config::{
-    BackendEndpoint, FrontendStationsConfig, Persistable, PersistedStationsConfig,
-    STATIONS_SETTINGS_FILE_NAME,
+    BackendEndpoint, CLIENT_SETTINGS_FILE_NAME, FrontendStationsConfig, Persistable,
+    PersistedClientConfig, PersistedStationsConfig, STATIONS_SETTINGS_FILE_NAME,
 };
 use crate::error::{Error, HandleUnauthorizedExt};
+use std::collections::HashSet;
 use tauri::{AppHandle, Manager, State};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::ws::SignalingMessage;
@@ -181,22 +182,32 @@ pub async fn signaling_set_selected_stations_config_profile(
 
 #[tauri::command]
 #[vacs_macros::log_err]
+pub async fn signaling_get_ignored_clients(
+    app_state: State<'_, AppState>,
+) -> Result<HashSet<String>, Error> {
+    let state = app_state.lock().await;
+
+    Ok(state.config.client.ignored.clone())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
 pub async fn signaling_add_ignored_client(
     app: AppHandle,
     app_state: State<'_, AppState>,
     client_id: String,
 ) -> Result<bool, Error> {
-    let (persisted_stations_config, added): (PersistedStationsConfig, bool) = {
+    let (persisted_stations_config, added): (PersistedClientConfig, bool) = {
         let mut state = app_state.lock().await;
-        let added = state.config.stations.ignored.insert(client_id);
-        (state.config.stations.clone().into(), added)
+        let added = state.config.client.ignored.insert(client_id);
+        (state.config.client.clone().into(), added)
     };
 
     let config_dir = app
         .path()
         .app_config_dir()
         .expect("Cannot get config directory");
-    persisted_stations_config.persist(&config_dir, STATIONS_SETTINGS_FILE_NAME)?;
+    persisted_stations_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
 
     Ok(added)
 }
@@ -208,17 +219,17 @@ pub async fn signaling_remove_ignored_client(
     app_state: State<'_, AppState>,
     client_id: String,
 ) -> Result<bool, Error> {
-    let (persisted_stations_config, removed): (PersistedStationsConfig, bool) = {
+    let (persisted_stations_config, removed): (PersistedClientConfig, bool) = {
         let mut state = app_state.lock().await;
-        let removed = state.config.stations.ignored.remove(&client_id);
-        (state.config.stations.clone().into(), removed)
+        let removed = state.config.client.ignored.remove(&client_id);
+        (state.config.client.clone().into(), removed)
     };
 
     let config_dir = app
         .path()
         .app_config_dir()
         .expect("Cannot get config directory");
-    persisted_stations_config.persist(&config_dir, STATIONS_SETTINGS_FILE_NAME)?;
+    persisted_stations_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
 
     Ok(removed)
 }
