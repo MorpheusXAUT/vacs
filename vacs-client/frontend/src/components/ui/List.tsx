@@ -6,7 +6,7 @@ type ListProps = {
     itemsCount: number;
     selectedItem: number;
     setSelectedItem: (item: number) => void;
-    defaultColumns: number;
+    defaultRows: number;
     row: (item: number, isSelected: boolean, onClick: () => void) => JSX.Element;
     header: { title: string, className?: string}[];
     columnWidths: string[];

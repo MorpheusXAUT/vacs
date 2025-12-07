@@ -31,7 +31,7 @@ function MissionPage() {
                                     setSelectedProfile(profile);
                                 } catch {}
                             }}
-                            defaultColumns={6}
+                            defaultRows={6}
                             row={(index, isSelected, onClick) => ProfileRow(profiles[index], isSelected, onClick)}
                             header={[{title: "Profiles"}]}
                             columnWidths={["1fr"]}

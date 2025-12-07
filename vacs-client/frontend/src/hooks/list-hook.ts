@@ -8,11 +8,11 @@ type UseListOptions = {
     itemsCount: number;
     selectedItem: number;
     setSelectedItem: (item: number) => void;
-    defaultColumns: number;
+    defaultRows: number;
     enableKeyboardNavigation?: boolean;
 }
 
-export function useList({itemsCount, selectedItem, setSelectedItem, defaultColumns, enableKeyboardNavigation}: UseListOptions) {
+export function useList({itemsCount, selectedItem, setSelectedItem, defaultRows, enableKeyboardNavigation}: UseListOptions) {
     const listContainer = useRef<HTMLDivElement>(null);
     const [listContainerHeight, setListContainerHeight] = useState<number>(0);
     const [scrollOffset, setScrollOffset] = useState<number>(0);
@@ -30,7 +30,7 @@ export function useList({itemsCount, selectedItem, setSelectedItem, defaultColum
 
             itemCount = Math.floor((listContainerHeight - headerHeight) / itemHeight);
         } else {
-            itemCount = defaultColumns;
+            itemCount = defaultRows;
         }
 
         return {
@@ -39,7 +39,7 @@ export function useList({itemsCount, selectedItem, setSelectedItem, defaultColum
             ),
             maxScrollOffset: itemsCount - itemCount
         };
-    }, [listContainerHeight, itemsCount, scrollOffset, defaultColumns]);
+    }, [listContainerHeight, itemsCount, scrollOffset, defaultRows]);
 
     const onKeyDown = useEventCallback((event: KeyboardEvent) => {
         if (itemsCount === 0) return;

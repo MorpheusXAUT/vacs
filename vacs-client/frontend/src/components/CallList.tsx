@@ -26,7 +26,7 @@ function CallList() {
                 itemsCount={calls.length}
                 selectedItem={selectedCall}
                 setSelectedItem={setSelectedCall}
-                defaultColumns={11}
+                defaultRows={11}
                 row={callRow}
                 header={[{title: "Name", className: "col-span-2"}, {title: "Number"}]}
                 columnWidths={["minmax(3.5rem,auto)", "1fr", "1fr"]}
