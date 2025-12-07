@@ -3,6 +3,7 @@ import Button from "./Button.tsx";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeStrict} from "../../error.ts";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
+import {useSignalingStore} from "../../stores/signaling-store.ts";
 
 type DAKeyProps = {
     client: ClientInfoWithAlias
@@ -18,6 +19,7 @@ function DAKey({client}: DAKeyProps) {
         dismissRejectedPeer,
         dismissErrorPeer
     } = useCallStore(state => state.actions);
+    const selectedProfile = useSignalingStore(state => state.getActiveStationsProfileConfig());
 
     const isCalling = incomingCalls.some(peer => peer.id === client.id);
     const beingCalled = callDisplay?.type === "outgoing" && callDisplay.peer.id === client.id;
@@ -48,6 +50,9 @@ function DAKey({client}: DAKeyProps) {
     });
 
     const [stationName, stationType] = splitDisplayName(client);
+    const showFrequency = client.frequency !== "" &&
+        selectedProfile?.hideFrequencies === false &&
+        (selectedProfile?.hideFrequenciesForAliased === false || client.alias === undefined);
 
     return (
         <Button
@@ -58,7 +63,7 @@ function DAKey({client}: DAKeyProps) {
         >
             <p className="w-full truncate" title={client.displayName}>{stationName}</p>
             {stationType !== "" && <p>{stationType}</p>}
-            {client.frequency !== "" && <p title={client.frequency}>{client.frequency}</p>}
+            {showFrequency && <p title={client.frequency}>{client.frequency}</p>}
         </Button>
     );
     // 320-340<br/>E2<br/>EC

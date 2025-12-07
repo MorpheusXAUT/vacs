@@ -12,6 +12,8 @@ export type StationsProfileConfig = {
     exclude: string[];
     priority: string[];
     aliases: Record<string, string>;
+    hideFrequencies: boolean;
+    hideFrequenciesForAliased: boolean;
 }
 
 function globToRegex(pattern: string): RegExp {

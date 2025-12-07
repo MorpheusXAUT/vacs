@@ -618,14 +618,18 @@ impl Default for StationsConfig {
 #[serde(rename_all = "camelCase")]
 pub struct FrontendStationsConfig {
     pub selected_profile: String,
-    pub profiles: HashMap<String, StationsProfileConfig>,
+    pub profiles: HashMap<String, FrontendStationsProfileConfig>,
 }
 
 impl From<StationsConfig> for FrontendStationsConfig {
     fn from(stations_config: StationsConfig) -> Self {
         Self {
             selected_profile: stations_config.selected_profile,
-            profiles: stations_config.profiles,
+            profiles: stations_config
+                .profiles
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
         }
     }
 }
@@ -704,6 +708,12 @@ pub struct StationsProfileConfig {
     /// ```
     #[serde(default)]
     pub aliases: HashMap<String, String>,
+
+    #[serde(default)]
+    pub hide_frequencies: bool,
+
+    #[serde(default)]
+    pub hide_frequencies_for_aliased: bool,
 }
 
 impl Default for StationsProfileConfig {
@@ -719,6 +729,32 @@ impl Default for StationsProfileConfig {
                 "*_GND".to_string(),
             ],
             aliases: HashMap::new(),
+            hide_frequencies: false,
+            hide_frequencies_for_aliased: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendStationsProfileConfig {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+    pub priority: Vec<String>,
+    pub aliases: HashMap<String, String>,
+    pub hide_frequencies: bool,
+    pub hide_frequencies_for_aliased: bool,
+}
+
+impl From<StationsProfileConfig> for FrontendStationsProfileConfig {
+    fn from(stations_profile_config: StationsProfileConfig) -> Self {
+        Self {
+            include: stations_profile_config.include,
+            exclude: stations_profile_config.exclude,
+            priority: stations_profile_config.priority,
+            aliases: stations_profile_config.aliases,
+            hide_frequencies: stations_profile_config.hide_frequencies,
+            hide_frequencies_for_aliased: stations_profile_config.hide_frequencies_for_aliased,
         }
     }
 }

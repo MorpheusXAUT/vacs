@@ -40,10 +40,11 @@ function MissionPage() {
                             <p className="font-semibold truncate">Selected Profile
                                 - {selectedProfileName ?? "Default"}</p>
                             <div
-                                className="flex-1 min-h-0 grid grid-cols-[auto_1fr] grid-rows-[auto_auto_auto_1fr] gap-x-2 [&_p]:truncate">
+                                className="flex-1 min-h-0 grid grid-cols-[auto_1fr] grid-rows-[auto_auto_auto_auto_1fr] gap-x-2 [&_p]:truncate">
                                 <p>Include:</p><p>[{selectedProfile?.include.join(", ")}]</p>
                                 <p>Exclude:</p><p>[{selectedProfile?.exclude.join(", ")}]</p>
                                 <p>Priority:</p><p>[{selectedProfile?.priority.join(", ")}]</p>
+                                <p>Hide freq.:</p><p>{selectedProfile?.hideFrequencies ? "All" : selectedProfile?.hideFrequenciesForAliased ? "Only aliased" : "None"}</p>
                                 <p>Alias:</p>
                                 <div className="overflow-y-auto">
                                     <div className="grid grid-flow-row grid-cols-2">
