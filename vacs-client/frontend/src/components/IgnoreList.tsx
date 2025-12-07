@@ -70,7 +70,7 @@ function IgnoreList() {
                 itemsCount={ignored.length}
                 selectedItem={selected}
                 setSelectedItem={setSelected}
-                defaultColumns={6}
+                defaultRows={10}
                 row={ignoredRow}
                 header={[{title: "Ignored CIDs"}]}
                 columnWidths={["1fr"]}
