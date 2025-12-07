@@ -132,11 +132,16 @@ impl TrackAudioRadio {
             Event::Client(ClientEvent::ConnectionStateChanged(connection_state)) => {
                 Self::handle_connection_state(connection_state, state, app, client).await;
             }
-            Event::Client(ClientEvent::CommandSendFailed { .. })
-            | Event::Client(ClientEvent::EventDeserializationFailed { .. }) => {
-                log::warn!("TrackAudio client error event");
-                state.clear();
+            Event::Client(ClientEvent::CommandSendFailed { error, command }) => {
+                log::warn!(
+                    "TrackAudio client command send failed. Command: {command:?}. Err: {error}"
+                );
                 app.emit("radio:state", RadioState::Error).ok();
+            }
+            Event::Client(ClientEvent::EventDeserializationFailed { error, raw }) => {
+                log::warn!(
+                    "TrackAudio client event deserialization failed. Raw Message: {raw}. Err: {error}"
+                );
             }
             Event::StationAdded(payload) => {
                 log::trace!("TrackAudio station added: {}", payload.callsign);
