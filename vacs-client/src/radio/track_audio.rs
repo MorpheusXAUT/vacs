@@ -8,7 +8,9 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
 use trackaudio::messages::events::StationState;
-use trackaudio::{ClientEvent, ConnectionState, TrackAudioClient, TrackAudioError};
+use trackaudio::{
+    ClientEvent, ConnectionState, TrackAudioClient, TrackAudioConfig, TrackAudioError,
+};
 
 #[derive(Clone)]
 pub struct TrackAudioRadio {
@@ -31,11 +33,17 @@ impl TrackAudioRadio {
     ) -> Result<Self, RadioError> {
         app.emit("radio:state", RadioState::Disconnected).ok();
 
-        let client = match endpoint {
-            Some(endpoint) => TrackAudioClient::connect_url(endpoint).await,
-            None => TrackAudioClient::connect_default().await,
+        let config = match endpoint {
+            Some(endpoint) => TrackAudioConfig::new(endpoint),
+            None => Ok(TrackAudioConfig::default()),
         }
         .map_err(|err| {
+            app.emit("radio:state", RadioState::Error).ok();
+            RadioError::Integration(format!("Failed to build TrackAudioConfig: {err}"))
+        })?
+        .with_backoff_config(Duration::from_secs(1), Duration::from_secs(30), 2.0);
+
+        let client = TrackAudioClient::connect(config).await.map_err(|err| {
             app.emit("radio:state", RadioState::Error).ok();
             RadioError::Integration(format!("Failed to connect to TrackAudio: {err}"))
         })?;
