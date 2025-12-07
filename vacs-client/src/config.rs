@@ -7,7 +7,7 @@ use anyhow::Context;
 use config::{Config, Environment, File};
 use keyboard_types::Code;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -19,6 +19,7 @@ use vacs_signaling::protocol::http::webrtc::IceConfig;
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
+pub const DEFAULT_SETTINGS_FILE_NAME: &str = "config.toml";
 pub const AUDIO_SETTINGS_FILE_NAME: &str = "audio.toml";
 pub const CLIENT_SETTINGS_FILE_NAME: &str = "client.toml";
 pub const STATIONS_SETTINGS_FILE_NAME: &str = "stations.toml";
@@ -42,13 +43,13 @@ impl AppConfig {
             .add_source(
                 File::with_name(
                     config_dir
-                        .join("config.toml")
+                        .join(DEFAULT_SETTINGS_FILE_NAME)
                         .to_str()
                         .expect("Failed to get local config path"),
                 )
                 .required(false),
             )
-            .add_source(File::with_name("config.toml").required(false))
+            .add_source(File::with_name(DEFAULT_SETTINGS_FILE_NAME).required(false))
             .add_source(
                 File::with_name(
                     config_dir
@@ -221,6 +222,13 @@ pub struct ClientConfig {
     pub transmit_config: TransmitConfig,
     pub radio: RadioConfig,
     pub auto_hangup_seconds: u64,
+    /// List of peer IDs (CIDs) that should be ignored by the client.
+    ///
+    /// Any incoming calls initiated by a CID in this list will be silently ignored
+    /// by the client. This does **not** completely block communications with ignored
+    /// parties as the (local) user can still actively initiate calls to them.
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    pub ignored: HashSet<String>,
 }
 
 impl Default for ClientConfig {
@@ -235,6 +243,7 @@ impl Default for ClientConfig {
             transmit_config: TransmitConfig::default(),
             radio: RadioConfig::default(),
             auto_hangup_seconds: 60,
+            ignored: HashSet::new(),
         }
     }
 }

@@ -6,6 +6,8 @@ import {startCall, useCallStore} from "../stores/call-store.ts";
 import {useState} from "preact/hooks";
 import List from "./ui/List.tsx";
 import {useSignalingStore} from "../stores/signaling-store.ts";
+import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
+import {invokeSafe} from "../error.ts";
 
 function CallList() {
     const calls = useCallListStore(state => state.callList);
@@ -14,6 +16,18 @@ function CallList() {
     const [selectedCall, setSelectedCall] = useState<number>(0);
 
     const connected = useSignalingStore(state => state.connectionState === "connected");
+
+    const handleIgnoreClick = useAsyncDebounce(async () => {
+        const peerId: string | undefined = calls[selectedCall]?.number;
+        if (peerId === undefined || callDisplay !== undefined) return;
+        await invokeSafe<boolean>("signaling_add_ignored_client", {clientId: peerId});
+    });
+
+    const handleCallClick = useAsyncDebounce(async () => {
+        const peerId: string | undefined = calls[selectedCall]?.number;
+        if (peerId === undefined || callDisplay !== undefined) return;
+        await startCall(peerId);
+    });
 
     function callRow(index: number, isSelected: boolean, onClick: () => void) {
         return <CallRow call={calls[index]} isSelected={isSelected} onClick={onClick}/>;
@@ -36,16 +50,18 @@ function CallList() {
                 <Button color="gray" onClick={clearCallList}>
                     <p>Delete<br/>List</p>
                 </Button>
-                <Button color="gray" className="w-56 text-xl"
-                        disabled={!connected || calls[selectedCall]?.number === undefined}
-                        onClick={async () => {
-                            const peerId: string | undefined = calls[selectedCall]?.number;
-                            if (peerId === undefined || callDisplay !== undefined) return;
-                            await startCall(peerId);
-                        }}
-                >
-                    Call
-                </Button>
+                <div className="flex gap-2">
+                    <Button color="gray" disabled={calls[selectedCall]?.number === undefined}
+                            onClick={handleIgnoreClick}>
+                        <p>Ignore<br/>CID</p>
+                    </Button>
+                    <Button color="gray" className="w-56 text-xl"
+                            disabled={!connected || calls[selectedCall]?.number === undefined}
+                            onClick={handleCallClick}
+                    >
+                        Call
+                    </Button>
+                </div>
             </div>
         </div>
     );

@@ -1,20 +1,8 @@
 # Stations configuration reference
 
-This reference explains how to configure station filtering, prioritization, and display using the `StationsConfig` settings.
+This reference explains how to configure station filtering, prioritization, and display using the `StationsConfig` settings, read from the (optional) `stations.toml` config file.
 
-As with all other configuration for `vacs`, the stations config is stored as a [TOML](https://toml.io/en/) file.  
-Various tools exist helping you create and edit TOML files, such as [Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) for [Visual Studio Code](https://code.visualstudio.com/).
-If your tool of choice supports [JSON Schema](https://json-schema.org/), you can find the schema for the `vacs` configuration in this directory ([config.schema.json](config.schema.json)) or as a [GitHub URL](https://raw.githubusercontent.com/MorpheusXAUT/vacs/refs/heads/main/vacs-client/docs/config/config.schema.json).
-
-Whilst in theory, you can add it to the basic `config.toml` or any of the other config files read by `vacs` (they're all merged upon startup), it is recommended to create a separate `stations.toml` file for easier separation and maintenance.
-
-You can place the `stations.toml` either in the default config directory or the installation location of `vacs` (where you launch the client from).
-
-The config directory is dependent on the operating system:
-
--   Linux: `$XDG_CONFIG_HOME/app.vacs.vacs-client/` or `$HOME/.config/app.vacs.vacs-client/`
--   macOS: `$HOME/Library/Application Support/app.vacs.vacs-client/`
--   Windows: `%APPDATA%\app.vacs.vacs-client\`
+For general information on the configuration file format, file locations, and recommended editors, please refer to the [main configuration reference](README.md).
 
 ## Overview
 
@@ -31,6 +19,8 @@ The `stations` configuration allows you to customize how stations are displayed 
 ```toml
 # Default configuration
 [stations]
+selected_profile = "Default"
+ignored = []
 
 # Profiles for filtering and prioritizing stations
 [stations.profiles.Default]
@@ -411,8 +401,6 @@ include = ["*_CTR", "*_APP"]
 exclude = []
 priority = ["LOVV*_CTR", "EDMM*_CTR", "*_CTR", "LOWW*_APP", "EDDM*_APP", "*_APP"]
 ```
-
----
 
 ### Tips
 

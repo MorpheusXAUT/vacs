@@ -250,6 +250,20 @@ impl AppStateInner {
     async fn handle_signaling_message(msg: SignalingMessage, app: &AppHandle) {
         match msg {
             SignalingMessage::CallInvite { peer_id } => {
+                {
+                    if app
+                        .state::<AppState>()
+                        .lock()
+                        .await
+                        .config
+                        .client
+                        .ignored
+                        .contains(&peer_id)
+                    {
+                        log::trace!("Ignoring call invite from {peer_id}");
+                        return;
+                    }
+                }
                 log::trace!("Call invite received from {peer_id}");
 
                 let state = app.state::<AppState>();
