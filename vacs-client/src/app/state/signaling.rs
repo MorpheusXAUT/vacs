@@ -6,7 +6,6 @@ use crate::error::{Error, FrontendError};
 use crate::signaling::auth::TauriTokenProvider;
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::HashSet;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
@@ -249,20 +248,21 @@ impl AppStateInner {
     }
 
     async fn handle_signaling_message(msg: SignalingMessage, app: &AppHandle) {
-        let ignored: HashSet<String> = app
-            .state::<AppState>()
-            .lock()
-            .await
-            .config
-            .client
-            .ignored
-            .clone();
-
         match msg {
             SignalingMessage::CallInvite { peer_id } => {
-                if ignored.contains(&peer_id) {
-                    log::trace!("Ignoring call invite from {peer_id}");
-                    return;
+                {
+                    if app
+                        .state::<AppState>()
+                        .lock()
+                        .await
+                        .config
+                        .client
+                        .ignored
+                        .contains(&peer_id)
+                    {
+                        log::trace!("Ignoring call invite from {peer_id}");
+                        return;
+                    }
                 }
                 log::trace!("Call invite received from {peer_id}");
 
@@ -289,10 +289,6 @@ impl AppStateInner {
                 state.audio_manager.read().restart(SourceType::Ring);
             }
             SignalingMessage::CallAccept { peer_id } => {
-                if ignored.contains(&peer_id) {
-                    log::trace!("Ignoring call accept from {peer_id}");
-                    return;
-                }
                 log::trace!("Call accept received from {peer_id}");
 
                 let state = app.state::<AppState>();
@@ -339,10 +335,6 @@ impl AppStateInner {
                 }
             }
             SignalingMessage::CallOffer { peer_id, sdp } => {
-                if ignored.contains(&peer_id) {
-                    log::trace!("Ignoring call offer from {peer_id}");
-                    return;
-                }
                 log::trace!("Call offer received from {peer_id}");
 
                 let state = app.state::<AppState>();
@@ -372,10 +364,6 @@ impl AppStateInner {
                 }
             }
             SignalingMessage::CallAnswer { peer_id, sdp } => {
-                if ignored.contains(&peer_id) {
-                    log::trace!("Ignoring call answer from {peer_id}");
-                    return;
-                }
                 log::trace!("Call answer received from {peer_id}");
 
                 let state = app.state::<AppState>();
@@ -395,10 +383,6 @@ impl AppStateInner {
                 };
             }
             SignalingMessage::CallEnd { peer_id } => {
-                if ignored.contains(&peer_id) {
-                    log::trace!("Ignoring call end from {peer_id}");
-                    return;
-                }
                 log::trace!("Call end received from {peer_id}");
 
                 let state = app.state::<AppState>();
@@ -413,10 +397,6 @@ impl AppStateInner {
                 app.emit("signaling:call-end", &peer_id).ok();
             }
             SignalingMessage::CallError { peer_id, reason } => {
-                if ignored.contains(&peer_id) {
-                    log::trace!("Ignoring call error from {peer_id}: {reason:?}");
-                    return;
-                }
                 log::trace!("Call error received from {peer_id}. Reason: {reason:?}");
 
                 let state = app.state::<AppState>();
@@ -432,10 +412,6 @@ impl AppStateInner {
                 state.emit_call_error(app, peer_id, false, reason);
             }
             SignalingMessage::CallReject { peer_id } => {
-                if ignored.contains(&peer_id) {
-                    log::trace!("Ignoring call reject from {peer_id}");
-                    return;
-                }
                 log::trace!("Call reject received from {peer_id}");
 
                 let state = app.state::<AppState>();
@@ -449,10 +425,6 @@ impl AppStateInner {
                 }
             }
             SignalingMessage::CallIceCandidate { peer_id, candidate } => {
-                if ignored.contains(&peer_id) {
-                    log::trace!("Ignoring ICE candidate from {peer_id}");
-                    return;
-                }
                 log::trace!("ICE candidate received from {peer_id}");
 
                 let state = app.state::<AppState>();
@@ -478,19 +450,11 @@ impl AppStateInner {
                 app.emit("signaling:peer-not-found", peer_id).ok();
             }
             SignalingMessage::ClientConnected { client } => {
-                if ignored.contains(&client.id) {
-                    log::trace!("Ignoring client connected for {client:?}");
-                    return;
-                }
                 log::trace!("Client connected: {client:?}");
 
                 app.emit("signaling:client-connected", client).ok();
             }
             SignalingMessage::ClientDisconnected { id } => {
-                if ignored.contains(&id) {
-                    log::trace!("Ignoring client disconnect for {id}");
-                    return;
-                }
                 log::trace!("Client disconnected: {id:?}");
 
                 let state = app.state::<AppState>();
@@ -508,29 +472,11 @@ impl AppStateInner {
                 app.emit("signaling:client-disconnected", id).ok();
             }
             SignalingMessage::ClientList { clients } => {
-                if ignored.is_empty() {
-                    log::trace!("Received client list: {} clients connected", clients.len());
-                    app.emit("signaling:client-list", clients).ok();
-                } else {
-                    let filtered = clients
-                        .iter()
-                        .filter(|c| !ignored.contains(&c.id))
-                        .collect::<Vec<_>>();
+                log::trace!("Received client list: {} clients connected", clients.len());
 
-                    log::trace!(
-                        "Received client list: {} clients connected ({} unfiltered)",
-                        filtered.len(),
-                        clients.len()
-                    );
-
-                    app.emit("signaling:client-list", filtered).ok();
-                }
+                app.emit("signaling:client-list", clients).ok();
             }
             SignalingMessage::ClientInfo { own, info } => {
-                if ignored.contains(&info.id) {
-                    log::trace!("Ignoring client info for {info:?}");
-                    return;
-                }
                 log::trace!("Received client info. Own: {own}, info: {info:?}");
 
                 let event = if own {
@@ -540,101 +486,87 @@ impl AppStateInner {
                 };
                 app.emit(event, info).ok();
             }
-            SignalingMessage::Error { reason, peer_id } => {
-                if peer_id.as_ref().is_some_and(|id| ignored.contains(id)) {
-                    log::trace!("Ignoring error message from {peer_id:?}: {reason:?}");
-                    return;
+            SignalingMessage::Error { reason, peer_id } => match reason {
+                ErrorReason::MalformedMessage => {
+                    log::warn!("Received malformed error message from signaling server");
+
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
+                            reason,
+                        )))
+                        .timeout(5000),
+                    )
+                    .ok();
                 }
+                ErrorReason::Internal(ref msg) => {
+                    log::warn!("Received internal error message from signaling server: {msg}");
 
-                match reason {
-                    ErrorReason::MalformedMessage => {
-                        log::warn!("Received malformed error message from signaling server");
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
+                            reason,
+                        ))),
+                    )
+                    .ok();
+                }
+                ErrorReason::PeerConnection => {
+                    let peer_id = peer_id.unwrap_or_default();
+                    log::warn!(
+                        "Received peer connection error from signaling server with peer {peer_id}"
+                    );
 
-                        app.emit::<FrontendError>(
-                            "error",
-                            FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
-                                reason,
-                            )))
-                            .timeout(5000),
-                        )
-                        .ok();
-                    }
-                    ErrorReason::Internal(ref msg) => {
-                        log::warn!("Received internal error message from signaling server: {msg}");
+                    let state = app.state::<AppState>();
+                    let mut state = state.lock().await;
 
-                        app.emit::<FrontendError>(
-                            "error",
-                            FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
-                                reason,
-                            ))),
-                        )
-                        .ok();
-                    }
-                    ErrorReason::PeerConnection => {
-                        let peer_id = peer_id.unwrap_or_default();
-                        log::warn!(
-                            "Received peer connection error from signaling server with peer {peer_id}"
+                    if !state.end_call(&peer_id).await {
+                        log::debug!(
+                            "Received peer connection error message for peer that is not active"
                         );
+                    }
 
+                    state.remove_outgoing_call_peer_id(&peer_id);
+                    state.remove_incoming_call_peer_id(&peer_id);
+
+                    state.cancel_unanswered_call_timer(&peer_id);
+
+                    state.emit_call_error(app, peer_id, false, CallErrorReason::SignalingFailure);
+                }
+                ErrorReason::UnexpectedMessage(ref msg) => {
+                    log::warn!("Received unexpected message error from signaling server: {msg}");
+
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
+                            reason,
+                        ))),
+                    )
+                    .ok();
+                }
+                ErrorReason::RateLimited { retry_after_secs } => {
+                    log::warn!(
+                        "Received rate limited error from signaling server, rate limited for {retry_after_secs}"
+                    );
+
+                    if let Some(peer_id) = peer_id {
                         let state = app.state::<AppState>();
                         let mut state = state.lock().await;
 
-                        if !state.end_call(&peer_id).await {
-                            log::debug!(
-                                "Received peer connection error message for peer that is not active"
-                            );
-                        }
-
+                        state.end_call(&peer_id).await;
                         state.remove_outgoing_call_peer_id(&peer_id);
                         state.remove_incoming_call_peer_id(&peer_id);
 
-                        state.cancel_unanswered_call_timer(&peer_id);
-
-                        state.emit_call_error(
-                            app,
-                            peer_id,
-                            false,
-                            CallErrorReason::SignalingFailure,
-                        );
+                        app.emit("signaling:rate-limit", peer_id).ok();
                     }
-                    ErrorReason::UnexpectedMessage(ref msg) => {
-                        log::warn!(
-                            "Received unexpected message error from signaling server: {msg}"
-                        );
-
-                        app.emit::<FrontendError>(
-                            "error",
-                            FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
-                                reason,
-                            ))),
-                        )
-                        .ok();
-                    }
-                    ErrorReason::RateLimited { retry_after_secs } => {
-                        log::warn!(
-                            "Received rate limited error from signaling server, rate limited for {retry_after_secs}"
-                        );
-
-                        if let Some(peer_id) = peer_id {
-                            let state = app.state::<AppState>();
-                            let mut state = state.lock().await;
-
-                            state.end_call(&peer_id).await;
-                            state.remove_outgoing_call_peer_id(&peer_id);
-                            state.remove_incoming_call_peer_id(&peer_id);
-
-                            app.emit("signaling:rate-limit", peer_id).ok();
-                        }
-                        app.emit::<FrontendError>(
-                            "error",
-                            FrontendError::from(Error::from(SignalingRuntimeError::RateLimited(
-                                retry_after_secs.into(),
-                            ))),
-                        )
-                        .ok();
-                    }
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::from(Error::from(SignalingRuntimeError::RateLimited(
+                            retry_after_secs.into(),
+                        ))),
+                    )
+                    .ok();
                 }
-            }
+            },
             _ => {}
         }
     }
