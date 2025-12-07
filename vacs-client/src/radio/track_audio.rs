@@ -128,6 +128,18 @@ impl TrackAudioRadio {
             Event::VoiceConnectedState(payload) => {
                 log::trace!("TrackAudio voice connection state changed: {payload:?}");
                 state.set_voice_connected(payload.connected, app);
+
+                let station_states = if payload.connected {
+                    client
+                        .api()
+                        .get_station_states(Some(Self::STATION_STATES_TIMEOUT))
+                        .await
+                        .unwrap_or_default()
+                } else {
+                    vec![]
+                };
+
+                state.sync_stations(station_states, app);
             }
             Event::Client(ClientEvent::ConnectionStateChanged(connection_state)) => {
                 Self::handle_connection_state(connection_state, state, app, client).await;
