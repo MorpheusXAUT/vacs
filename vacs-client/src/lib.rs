@@ -21,7 +21,6 @@ use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfi
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
-use anyhow::Context;
 use tauri::{App, Manager, RunEvent, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tokio::sync::Mutex as TokioMutex;
@@ -67,6 +66,8 @@ pub fn run() {
             async fn setup(app: &mut App) -> Result<(), StartupError> {
                 #[cfg(not(target_os = "macos"))]
                 {
+                    use anyhow::Context;
+
                     app.deep_link()
                         .register_all()
                         .context("Failed to register deep link")
