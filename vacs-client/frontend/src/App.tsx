@@ -67,20 +67,27 @@ function App() {
                     <div
                         className="h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l-1 border-t-1 border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
                         <Switch>
-                            <Route path="/">
+                            <Route path="/settings" component={SettingsPage}/>
+                            <Route path="/mission" component={MissionPage}/>
+                            <Route path="/telephone" component={TelephonePage}/>
+                            <Route path="/" nest>
                                 {authStatus === "loading" ? (
                                     <></>
                                 ) : authStatus === "unauthenticated" ? (
                                     <LoginPage/>
                                 ) : connected ? (
-                                    <DAKeyArea/>
+                                    <>
+                                        <Route path="/:filter">
+                                            {(params: { filter: string; }) => <DAKeyArea filter={params.filter}/>}
+                                        </Route>
+                                        <Route path="/">
+                                            <DAKeyArea filter={""}/>
+                                        </Route>
+                                    </>
                                 ) : (
                                     <ConnectPage/>
                                 )}
                             </Route>
-                            <Route path="/settings" component={SettingsPage}/>
-                            <Route path="/mission" component={MissionPage}/>
-                            <Route path="/telephone" component={TelephonePage}/>
                         </Switch>
                     </div>
                     {/* Right Button Row */}

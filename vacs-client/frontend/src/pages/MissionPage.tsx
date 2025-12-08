@@ -3,6 +3,7 @@ import {useSignalingStore} from "../stores/signaling-store.ts";
 import {useShallow} from "zustand/react/shallow";
 import List from "../components/ui/List.tsx";
 import {invokeStrict} from "../error.ts";
+import {StationsGroupMode} from "../types/stations.ts";
 
 function MissionPage() {
     const profiles = useSignalingStore(useShallow(state => Object.keys(state.stationsConfigProfiles).sort()));
@@ -40,11 +41,12 @@ function MissionPage() {
                             <p className="font-semibold truncate">Selected Profile
                                 - {selectedProfileName ?? "Default"}</p>
                             <div
-                                className="flex-1 min-h-0 grid grid-cols-[auto_1fr] grid-rows-[auto_auto_auto_auto_1fr] gap-x-2 [&_p]:truncate">
+                                className="flex-1 min-h-0 grid grid-cols-[auto_1fr] grid-rows-[auto_auto_auto_auto_auto_1fr] gap-x-2 [&_p]:truncate">
                                 <p>Include:</p><p>[{selectedProfile?.include.join(", ")}]</p>
                                 <p>Exclude:</p><p>[{selectedProfile?.exclude.join(", ")}]</p>
                                 <p>Priority:</p><p>[{selectedProfile?.priority.join(", ")}]</p>
                                 <p>Frequencies:</p><p>{selectedProfile?.frequencies === "HideAll" ? "Hide all" : selectedProfile?.frequencies === "HideAliased" ? "Hide aliased" : "Show all"}</p>
+                                <p>Grouping:</p><p>{GroupingLabels[selectedProfile?.grouping ?? "None"]}</p>
                                 <p>Alias:</p>
                                 <div className="overflow-y-auto">
                                     <div className="grid grid-flow-row grid-cols-2">
@@ -66,6 +68,13 @@ function MissionPage() {
         </div>
     );
 }
+
+const GroupingLabels: {[key in StationsGroupMode]: string} = {
+    None: "None",
+    Fir: "FIR",
+    Airport: "Airport",
+    FirAndAirport: "FIR and Airport",
+};
 
 function ProfileRow(name: string | undefined, isSelected: boolean, onClick: () => void) {
     const color = isSelected ? "bg-blue-700 text-white" : "bg-yellow-50";

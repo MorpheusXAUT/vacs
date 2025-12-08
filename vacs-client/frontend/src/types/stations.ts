@@ -13,9 +13,11 @@ export type StationsProfileConfig = {
     priority: string[];
     aliases: Record<string, string>;
     frequencies: FrequencyDisplayMode;
+    grouping: StationsGroupMode;
 }
 
 export type FrequencyDisplayMode = "ShowAll" | "HideAliased" | "HideAll";
+export type StationsGroupMode = "None" | "Fir" | "FirAndAirport" | "Airport";
 
 function globToRegex(pattern: string): RegExp {
     const escaped = pattern
