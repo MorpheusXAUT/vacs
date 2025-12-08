@@ -6,7 +6,6 @@ use anyhow::Context;
 use rfd::{MessageButtons, MessageDialogResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::mpsc::sync_channel;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
@@ -119,7 +118,10 @@ trait BlockingMessageDialog {
 }
 
 impl BlockingMessageDialog for rfd::MessageDialog {
+    #[cfg(not(target_os = "macos"))]
     fn show_blocking(self) -> MessageDialogResult {
+        use std::sync::mpsc::sync_channel;
+
         let (tx, rx) = sync_channel(0);
 
         std::thread::spawn(move || {
@@ -128,5 +130,10 @@ impl BlockingMessageDialog for rfd::MessageDialog {
         });
 
         rx.recv().unwrap()
+    }
+
+    #[cfg(target_os = "macos")]
+    fn show_blocking(self) -> MessageDialogResult {
+        self.show()
     }
 }

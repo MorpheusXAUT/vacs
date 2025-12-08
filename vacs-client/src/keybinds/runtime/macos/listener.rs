@@ -11,6 +11,7 @@ use objc2_core_graphics::{
 };
 use std::ffi::c_void;
 use std::ptr::NonNull;
+use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
