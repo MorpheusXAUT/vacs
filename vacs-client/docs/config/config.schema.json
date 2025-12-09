@@ -75,6 +75,17 @@
                   ],
                   "default": "ShowAll",
                   "description": "Control how frequencies are displayed on the DA keys."
+                },
+                "grouping": {
+                  "type": "string",
+                  "enum": [
+                    "None",
+                    "Fir",
+                    "FirAndIcao",
+                    "Icao"
+                  ],
+                  "default": "None",
+                  "description": "Control how DA keys are grouped."
                 }
               },
               "additionalProperties": false
@@ -99,7 +110,7 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 7,
+            "maxLength": 8,
             "pattern": "^[0-9]+$"
           },
           "default": [],
