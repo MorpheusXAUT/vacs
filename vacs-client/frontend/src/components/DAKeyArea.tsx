@@ -48,7 +48,7 @@ function DAKeyArea({filter}: DAKeyAreaProps) {
 
         switch (grouping) {
             case "Fir":
-            case "Airport": {
+            case "Icao": {
                 if (filter !== "") {
                     return renderClients(clients.filter(client => client.displayName.startsWith(filter)));
                 }
@@ -56,7 +56,7 @@ function DAKeyArea({filter}: DAKeyAreaProps) {
                 const slice = grouping === "Fir" ? 2 : 4;
                 return renderGroups(getGroups(clients, slice));
             }
-            case "FirAndAirport": {
+            case "FirAndIcao": {
                 if (filter === "") {
                     return renderGroups(getGroups(clients, 2));
                 } else if (filter.length === 2) {

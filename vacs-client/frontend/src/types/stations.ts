@@ -17,7 +17,7 @@ export type StationsProfileConfig = {
 }
 
 export type FrequencyDisplayMode = "ShowAll" | "HideAliased" | "HideAll";
-export type StationsGroupMode = "None" | "Fir" | "FirAndAirport" | "Airport";
+export type StationsGroupMode = "None" | "Fir" | "FirAndIcao" | "Icao";
 
 function globToRegex(pattern: string): RegExp {
     const escaped = pattern

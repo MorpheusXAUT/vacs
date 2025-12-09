@@ -72,8 +72,8 @@ function MissionPage() {
 const GroupingLabels: {[key in StationsGroupMode]: string} = {
     None: "None",
     Fir: "FIR",
-    Airport: "Airport",
-    FirAndAirport: "FIR and Airport",
+    Icao: "ICAO",
+    FirAndIcao: "FIR and ICAO",
 };
 
 function ProfileRow(name: string | undefined, isSelected: boolean, onClick: () => void) {
