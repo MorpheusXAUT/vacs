@@ -487,12 +487,15 @@ impl RadioConfig {
     ///
     /// # Platform Limitation
     ///
-    /// **Important**: Radio integration requires a functional `KeybindEmitter` to inject
-    /// key presses into external applications. This works on Windows and macOS, but NOT
+    /// **Important**: AudioForVatsim Radio integration requires a functional `KeybindEmitter` to
+    /// inject key presses into external applications. This works on Windows and macOS, but NOT
     /// on Linux where the emitter is a no-op stub due to Wayland's security model.
     ///
     /// On Linux, this method will successfully create a radio instance, but it will
     /// silently do nothing when `transmit()` is called.
+    ///
+    /// The TrackAudio integration is not affected by this platform limitation and is thus the
+    /// default radio implementation for Linux.
     pub async fn radio(&self, app: AppHandle) -> Result<Option<DynRadio>, Error> {
         match self.integration {
             RadioIntegration::AudioForVatsim => {
@@ -507,11 +510,9 @@ impl RadioConfig {
                 Ok(Some(Arc::new(radio)))
             }
             RadioIntegration::TrackAudio => {
-                let Some(config) = self.track_audio.as_ref() else {
-                    return Ok(None);
-                };
-                log::debug!("Initializing TrackAudio radio integration");
-                let radio = TrackAudioRadio::new(app, config.endpoint.as_ref())
+                let endpoint = self.track_audio.as_ref().and_then(|c| c.endpoint.as_ref());
+                log::debug!("Initializing TrackAudio radio integration (endpoint: {endpoint:?})");
+                let radio = TrackAudioRadio::new(app, endpoint)
                     .await
                     .map_err(Error::from)?;
                 Ok(Some(Arc::new(radio)))
