@@ -1,6 +1,7 @@
 pub mod push_to_talk;
 pub mod track_audio;
 
+use crate::platform::Capabilities;
 use keyboard_types::KeyState;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -16,11 +17,20 @@ pub enum RadioError {
     Transmit(String),
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum RadioIntegration {
-    #[default]
     AudioForVatsim,
     TrackAudio,
+}
+
+impl Default for RadioIntegration {
+    fn default() -> Self {
+        if Capabilities::default().keybind_emitter {
+            RadioIntegration::AudioForVatsim
+        } else {
+            RadioIntegration::TrackAudio
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
