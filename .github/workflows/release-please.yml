@@ -11,26 +11,32 @@ on:
         default: ''
         type: string
 
+permissions: {}
+
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read # action uses separate PAT to trigger other workflows, set minimal permissions for the rest
     outputs:
       prs: ${{ steps.release.outputs.prs }}
 
     steps:
+      - name: Generate GitHub token
+        uses: actions/create-github-app-token@v2
+        id: generate-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+          permission-contents: write
       - uses: googleapis/release-please-action@v4.4.0
         id: release
         with:
           target-branch: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref != '' && github.event.inputs.ref || github.ref_name }}
-          token: ${{ secrets.RELEASE_PLEASE_PAT }}
+          token: ${{ steps.generate-token.outputs.token }}
 
   update-lockfiles:
     needs: release-please
     if: ${{ needs.release-please.outputs.prs }}
-    permissions:
-      contents: read # action uses separate PAT to trigger other workflows, set minimal permissions for the rest
     strategy:
       fail-fast: false
       matrix:
@@ -38,12 +44,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Generate GitHub token
+        uses: actions/create-github-app-token@v2
+        id: generate-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ matrix.pr.headBranchName }}
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLEASE_PAT }}
+          token: ${{ steps.generate-token.outputs.token }}
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -70,13 +83,12 @@ jobs:
         run: npm install --package-lock-only
 
       - name: Commit updated lockfiles
-        run: |
-          if [ -n "$(git status --porcelain -- Cargo.lock vacs-client/package-lock.json)" ]; then
-            git config user.name  "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add Cargo.lock vacs-client/package-lock.json 2>/dev/null || true
-            git commit -m "chore(lockfile): refresh cargo & npm lockfiles after version bumps"
-            git push
-          else
-            echo "No lockfile changes detected."
-          fi
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          branch: ${{ matrix.pr.headBranchName }}
+          commit-message: 'chore(lockfile): refresh cargo & npm lockfiles after version bumps'
+          sign-commits: 'true'
+          add-paths: |
+            Cargo.lock
+            vacs-client/package-lock.json
