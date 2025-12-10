@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.5.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-signaling-v0.4.0...vacs-signaling-v0.5.0) (2025-12-10)
+
+
+### Features
+
+* add protocol version to websocket login ([e778af9](https://github.com/MorpheusXAUT/vacs/commit/e778af94f3c50f807713a41b4c2553a79f82e8d6))
+* implement automatic reconnecting in SignalingClient ([0e71616](https://github.com/MorpheusXAUT/vacs/commit/0e716163e766064e43069474f6024550d564c3b5)), closes [#3](https://github.com/MorpheusXAUT/vacs/issues/3)
+* implement basic rate limiting ([e814366](https://github.com/MorpheusXAUT/vacs/commit/e814366e4aeb96b7ea7f825f661bc2b8d03e3c64))
+* implement new login flow returning client info ([7b6ad3e](https://github.com/MorpheusXAUT/vacs/commit/7b6ad3e7a4c14a70cdde9df3aab9a206eb95925e))
+* make signaling disconnect idempotent ([11f1fad](https://github.com/MorpheusXAUT/vacs/commit/11f1fadde25678f56cc21656286fd72f12380fe2))
+* provide TURN servers for traversing restrictive networks ([#248](https://github.com/MorpheusXAUT/vacs/issues/248)) ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+* **vacs-client:** add profile select to mission page ([ad36dc5](https://github.com/MorpheusXAUT/vacs/commit/ad36dc55e2e42619eff9c0163e869f64910998bb))
+* **vacs-client:** add station filter and aliasing ([#233](https://github.com/MorpheusXAUT/vacs/issues/233)) ([ad36dc5](https://github.com/MorpheusXAUT/vacs/commit/ad36dc55e2e42619eff9c0163e869f64910998bb))
+* **vacs-client:** load ICE config after signaling connect ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+* **vacs-signaling:** add additional check for sleep detection ([6c59959](https://github.com/MorpheusXAUT/vacs/commit/6c599598cdb9a189446135f28dce331ee077e444))
+* **vacs-signaling:** add automatic client-side ping to detect disconnects ([769bc26](https://github.com/MorpheusXAUT/vacs/commit/769bc2649742e8f32e3d01ddb50393d4563451e5)), closes [#15](https://github.com/MorpheusXAUT/vacs/issues/15)
+* **vacs-signaling:** add circuit breaker preventing reconnect loop ([c59be9e](https://github.com/MorpheusXAUT/vacs/commit/c59be9e7666673ff1601efedcdf1abc755096cd8)), closes [#65](https://github.com/MorpheusXAUT/vacs/issues/65)
+* **vacs-signaling:** add disconnect reason ([fa04e66](https://github.com/MorpheusXAUT/vacs/commit/fa04e66207c6dfa3f58551c67645453a163aaeb5))
+* **vacs-webrtc:** use shared IceConfig types ([e4b8b91](https://github.com/MorpheusXAUT/vacs/commit/e4b8b91320fd6d072ef4ba1c98de56ad14c8dcfe))
+* wip: add auto reconnect to client signaling connection ([7c24819](https://github.com/MorpheusXAUT/vacs/commit/7c24819032a02d03893d518b732fb74aa1b6a964))
+
+
+### Bug Fixes
+
+* add mock data feed to fix tests ([d6bb75b](https://github.com/MorpheusXAUT/vacs/commit/d6bb75bed19fb52a27b6f5b883c8d6b159affddd))
+* continue fixing client tests ([8bf41b9](https://github.com/MorpheusXAUT/vacs/commit/8bf41b9b5c93b95f064315e4b4511b2e169ad632))
+* fix tests after login refactor ([8d2c2d6](https://github.com/MorpheusXAUT/vacs/commit/8d2c2d626c75acf15dd6dc771315b3816cf209fe))
+* fix tests after signaling client refactor ([9e30d90](https://github.com/MorpheusXAUT/vacs/commit/9e30d900fca9e671147ba74a4a59add74e3bf0b6))
+* **vacs-client:** fix async runtime handling ([21ad7bd](https://github.com/MorpheusXAUT/vacs/commit/21ad7bd70ef1cdf4541876a4252443ab09ae3cd5))
+* **vacs-client:** pretty print signaling disconnected frontend error ([cc36d54](https://github.com/MorpheusXAUT/vacs/commit/cc36d54d88d8aaa2078fabdc4bba5db91bba8a3f))
+* **vacs-signaling:** fix client tests ([e506ace](https://github.com/MorpheusXAUT/vacs/commit/e506ace5abff66b650a3f515d1a57e9339bec6b8))
+
 ## [0.4.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-signaling-v0.3.0...vacs-signaling-v0.4.0) (2025-11-30)
 
 
