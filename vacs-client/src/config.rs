@@ -273,8 +273,21 @@ impl ClientConfig {
         P: WindowProvider + ?Sized,
     {
         let window = provider.window()?;
-        self.position = Some(window.position()?);
-        self.size = Some(window.size()?);
+        if window.is_minimized().unwrap_or(false) || window.is_maximized().unwrap_or(false) {
+            log::debug!("Window is minimized or maximized, skipping window state update");
+            return Ok(());
+        }
+
+        let size = window.size()?;
+        if size.width == 0 || size.height == 0 {
+            log::debug!("Window size is 0, skipping window state update");
+            return Ok(());
+        }
+
+        let position = window.position()?;
+
+        self.position = Some(position);
+        self.size = Some(size);
 
         log::debug!(
             "Updating window position to {:?} and size to {:?}",
@@ -332,7 +345,12 @@ impl ClientConfig {
             }
         }
 
-        if let Some(size) = self.size {
+        if let Some(mut size) = self.size {
+            if size.width == 0 || size.height == 0 {
+                log::warn!("Window size {size:?} is 0, restoring default size");
+                size = Self::default_window_size(&window)?;
+            }
+
             window
                 .set_size(size)
                 .context("Failed to set main window size")?;
