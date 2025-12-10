@@ -8,7 +8,7 @@ For general information on the configuration file format, file locations, and re
 
 The `stations` configuration allows you to customize how stations are displayed and filtered in the client. It consists of the following sections:
 
--   **[Profiles](#profiles)** - Define (multiple) filtering configurations that you can switch between in the UI
+- **[Profiles](#profiles)** - Define (multiple) filtering configurations that you can switch between in the UI
 
 > [!IMPORTANT]  
 > These settings are purely client-side and do not prevent a different user from calling you, even if your filters do not match their callsign and you thus cannot see them.  
@@ -28,6 +28,7 @@ include = []
 exclude = []
 priority = ["*_FMP", "*_CTR", "*_APP", "*_TWR", "*_GND"]
 frequencies = "ShowAll"
+grouping = "None"
 
 [stations.profiles.Default.aliases]
 # Aliases for stations, mapping frequencies to callsigns, e.g.:
@@ -40,9 +41,9 @@ frequencies = "ShowAll"
 
 Profiles allow you to define multiple filtering configurations and switch between them in the UI. Each profile controls which stations are shown and how they're ordered using three main settings:
 
--   **`include`** – Allowlist patterns for stations to show
--   **`exclude`** – Blocklist patterns for stations to hide
--   **`priority`** – Ordered patterns that determine display order
+- **`include`** – Allowlist patterns for stations to show
+- **`exclude`** – Blocklist patterns for stations to hide
+- **`priority`** – Ordered patterns that determine display order
 
 ### Profile structure
 
@@ -53,28 +54,31 @@ include = []
 exclude = []
 priority = ["*_FMP", "*_CTR", "*_APP", "*_TWR", "*_GND"]
 frequencies = "ShowAll"
+grouping = "None"
 
 [stations.profiles.CentersOnly]
 include = ["*_CTR"]
 exclude = []
 priority = ["LOVV_CTR", "EDMM_CTR"]
 frequencies = "HideAliased"
+grouping = "FirAndIcao"
 
 [stations.profiles.LOVVOnly]
 include = ["LO*"]
 exclude = ["LON*"]
 priority = ["*_FMP", "*_CTR", "*_APP", "*_TWR", "*_GND"]
 frequencies = "HideAll"
+grouping = "Icao"
 ```
 
 ### Profile names
 
 Profile names (the part after `stations.profiles.`) can contain:
 
--   Letters (a-z, A-Z)
--   Numbers (0-9)
--   Underscores (`_`)
--   Hyphens (`-`)
+- Letters (a-z, A-Z)
+- Numbers (0-9)
+- Underscores (`_`)
+- Hyphens (`-`)
 
 These names will be displayed in the UI for profile selection.
 
@@ -90,8 +94,8 @@ Each profile supports the following settings:
 
 Controls which stations are eligible to be displayed.
 
--   **If empty** (default): All stations are eligible, subject to `exclude` rules
--   **If not empty**: Only stations matching at least one pattern are eligible, all other connected clients are hidden.
+- **If empty** (default): All stations are eligible, subject to `exclude` rules
+- **If not empty**: Only stations matching at least one pattern are eligible, all other connected clients are hidden.
 
 **Examples:**
 
@@ -199,15 +203,15 @@ Allows you to override the display name of stations based on their frequency. Th
 
 **When to use aliases:**
 
--   Customizing station names when VATSIM callsigns don't match sector naming conventions
--   Using local language or abbreviations (e.g., "VN_APP" instead of "LOWW_N_APP")
--   Providing consistent naming when controllers use personalized or relief callsigns
+- Customizing station names when VATSIM callsigns don't match sector naming conventions
+- Using local language or abbreviations (e.g., "VN_APP" instead of "LOWW_N_APP")
+- Providing consistent naming when controllers use personalized or relief callsigns
 
 **Frequency matching:**
 
--   Matching is **exact** (no wildcard support)
--   Frequencies must match the format received from VATSIM (`1xx.xxx`, decimal point)
--   If a station's frequency matches a key in the aliases table, the mapped display name replaces the original
+- Matching is **exact** (no wildcard support)
+- Frequencies must match the format received from VATSIM (`1xx.xxx`, decimal point)
+- If a station's frequency matches a key in the aliases table, the mapped display name replaces the original
 
 **Examples:**
 
@@ -232,10 +236,10 @@ Allows you to override the display name of stations based on their frequency. Th
 > [!IMPORTANT]  
 > **How aliases interact with other settings:**
 >
-> -   **Filtering (`include`/`exclude`)**: Operates on the **original** VATSIM callsign, not the aliased one
-> -   **Priority matching**: Uses the **aliased** VATSIM callsign for pattern matching
-> -   **Sorting**: Alphabetical sorting uses the **aliased** display name
-> -   **Display**: Shows the **aliased** name in the UI. The original callsign is displayed while hovering for DA key
+> - **Filtering (`include`/`exclude`)**: Operates on the **original** VATSIM callsign, not the aliased one
+> - **Priority matching**: Uses the **aliased** VATSIM callsign for pattern matching
+> - **Sorting**: Alphabetical sorting uses the **aliased** display name
+> - **Display**: Shows the **aliased** name in the UI. The original callsign is displayed while hovering for DA key
 >
 > This means you will need to make sure your filter patterns match your original callsigns instead of the aliased ones (e.g., `LOWW_*_APP` instead of `Wien_Radar_*_APP`).
 
@@ -263,9 +267,9 @@ Controls how frequencies are displayed on the DA keys in the UI.
 
 **Valid values:**
 
--   `"ShowAll"` (default): Always show frequencies for all stations.
--   `"HideAliased"`: Hide frequencies only for stations that have an alias defined in the [`aliases`](#aliases-customizing-station-display-names) section.
--   `"HideAll"`: Never show frequencies for any station.
+- `"ShowAll"` (default): Always show frequencies for all stations.
+- `"HideAliased"`: Hide frequencies only for stations that have an alias defined in the [`aliases`](#aliases-customizing-station-display-names) section.
+- `"HideAll"`: Never show frequencies for any station.
 
 **Example:**
 
@@ -281,24 +285,99 @@ frequencies = "HideAll"
 
 ---
 
+#### `grouping`: controlling station grouping
+
+**Type:** String (Enum)  
+**Default:** `"None"`  
+**Optional:** Yes
+
+Controls how DA keys are grouped.
+
+**Valid values:**
+
+- `"None"` (default): Don't group.
+- `"Fir"`: Group by the first two letters (FIR) of the display name.
+- `"FirAndIcao"`: First, group by the first two letters (FIR), then by the first four letters (ICAO code) of the display name.
+- `"Icao"`: Group by the first four letters (ICAO code) of the display name.
+
+**Example:**
+
+```toml
+[stations.profiles.GroupByFir]
+# Group stations by FIR (e.g. LO, ED, ...)
+grouping = "Fir"
+```
+
+##### Grouping Logic Examples
+
+The following examples assume these stations are online:
+`LOVV_CTR`, `LOWW_APP`, `LOWW_TWR`, `LOWW_GND`, `EDMM_CTR`, `EDDM_TWR`
+
+**`grouping = "Fir"` or `"Icao"` (Single Layer)**
+
+These modes create a simple one-level grouping structure.
+
+**`Fir`**: Groups by the first two letters.
+
+- **LO**
+  - LOVV_CTR
+  - LOWW_APP
+  - LOWW_TWR
+  - LOWW_GND
+- **ED**
+  - EDMM_CTR
+  - EDDM_TWR
+
+**`Icao`**: Groups by the first four letters.
+
+- **LOVV**
+  - LOVV_CTR
+- **LOWW**
+  - LOWW_APP
+  - LOWW_TWR
+  - LOWW_GND
+- **EDMM**
+  - EDMM_CTR
+- **EDDM**
+  - EDDM_TWR
+
+**`grouping = "FirAndIcao"` (Two Layers)**
+
+This mode creates a hierarchical structure, first grouping by FIR, then by ICAO code within that FIR.
+
+- **LO**
+  - **LOVV**
+    - LOVV_CTR
+  - **LOWW**
+    - LOWW_APP
+    - LOWW_TWR
+    - LOWW_GND
+- **ED**
+  - **EDMM**
+    - EDMM_CTR
+  - **EDDM**
+    - EDDM_TWR
+
+---
+
 ### Glob pattern matching
 
 All patterns use glob-like syntax, which provides flexible matching with wildcards:
 
 #### Wildcards
 
--   **`*`** – Matches zero or more characters
--   **`?`** – Matches exactly one character
+- **`*`** – Matches zero or more characters
+- **`?`** – Matches exactly one character
 
 #### Matching rules
 
--   Matching is **case-insensitive** (`loww` matches `LOWW`)
--   Patterns must match the **entire callsign** (anchored at start and end)
-    -   If you want to match a substring in the middle, surround it with wildcards (e.g., `*WW*`)
--   The pattern is converted to a regular expression where:
-    -   `*` becomes `.*` (any characters)
-    -   `?` becomes `.` (single character)
-    -   Other regex special characters are escaped
+- Matching is **case-insensitive** (`loww` matches `LOWW`)
+- Patterns must match the **entire callsign** (anchored at start and end)
+  - If you want to match a substring in the middle, surround it with wildcards (e.g., `*WW*`)
+- The pattern is converted to a regular expression where:
+  - `*` becomes `.*` (any characters)
+  - `?` becomes `.` (single character)
+  - Other regex special characters are escaped
 
 #### Pattern examples
 
@@ -436,13 +515,13 @@ priority = ["LOVV*_CTR", "EDMM*_CTR", "*_CTR", "LOWW*_APP", "EDDM*_APP", "*_APP"
 
 ### Tips
 
--   Create multiple profiles for different workflows (e.g., "Default", "CTR", "APP")
--   Use descriptive profile names that indicate their purpose
--   Start with simple patterns and add complexity as needed
--   Use `exclude` to refine broad `include` patterns
--   Put your most important stations at the top of `priority`
--   Leave `include` empty to see everything (filtered only by `exclude`)
--   Remember that `exclude` always wins over `include`
--   Use `aliases` to customize display names, but keep in mind that your filter patterns must match the **original** callsigns
--   Use the `frequencies` option to toggle display of frequencies on your DA keys
--   You can switch between profiles in the UI without restarting the application
+- Create multiple profiles for different workflows (e.g., "Default", "CTR", "APP")
+- Use descriptive profile names that indicate their purpose
+- Start with simple patterns and add complexity as needed
+- Use `exclude` to refine broad `include` patterns
+- Put your most important stations at the top of `priority`
+- Leave `include` empty to see everything (filtered only by `exclude`)
+- Remember that `exclude` always wins over `include`
+- Use `aliases` to customize display names, but keep in mind that your filter patterns must match the **original** callsigns
+- Use the `frequencies` option to toggle display of frequencies on your DA keys
+- You can switch between profiles in the UI without restarting the application

@@ -657,6 +657,20 @@ pub enum FrequencyDisplayMode {
     HideAll,
 }
 
+/// Mode for controlling how DA keys are grouped.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub enum StationsGroupMode {
+    /// Don't group.
+    #[default]
+    None,
+    /// Group by the first two letters (FIR) of the display name.
+    Fir,
+    /// First, group by the first two letters (FIR), then by the first four letters (ICAO code) of the display name.
+    FirAndIcao,
+    /// Group by the first four letters (ICAO code) of the display name.
+    Icao,
+}
+
 /// Config profile for how stations are filtered, prioritized and displayed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StationsProfileConfig {
@@ -728,6 +742,16 @@ pub struct StationsProfileConfig {
     /// - `HideAll`: Never show frequencies.
     #[serde(default)]
     pub frequencies: FrequencyDisplayMode,
+
+    /// Control how DA keys are grouped.
+    ///
+    /// - `None`: Don't group.
+    /// - `Fir`: Group by the first two letters (FIR) of the display name.
+    /// - `FirAndIcao`: First, group by the first two letters (FIR), then by the first four letters
+    ///   (ICAO code) of the display name.
+    /// - `Icao`: Group by the first four letters (ICAO code) of the display name.
+    #[serde(default)]
+    pub grouping: StationsGroupMode,
 }
 
 impl Default for StationsProfileConfig {
@@ -744,6 +768,7 @@ impl Default for StationsProfileConfig {
             ],
             aliases: HashMap::new(),
             frequencies: FrequencyDisplayMode::default(),
+            grouping: StationsGroupMode::default(),
         }
     }
 }
@@ -756,6 +781,7 @@ pub struct FrontendStationsProfileConfig {
     pub priority: Vec<String>,
     pub aliases: HashMap<String, String>,
     pub frequencies: FrequencyDisplayMode,
+    pub grouping: StationsGroupMode,
 }
 
 impl From<StationsProfileConfig> for FrontendStationsProfileConfig {
@@ -766,6 +792,7 @@ impl From<StationsProfileConfig> for FrontendStationsProfileConfig {
             priority: stations_profile_config.priority,
             aliases: stations_profile_config.aliases,
             frequencies: stations_profile_config.frequencies,
+            grouping: stations_profile_config.grouping,
         }
     }
 }
