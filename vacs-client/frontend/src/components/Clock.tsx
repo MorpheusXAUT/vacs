@@ -5,7 +5,7 @@ type TimeState = {
     hours: string;
     minutes: string;
     day: string;
-}
+};
 
 function Clock() {
     const [time, setTime] = useState<TimeState>({
@@ -17,15 +17,15 @@ function Clock() {
     useEffect(() => {
         const updateClock = () => {
             const now = new Date();
-            const hours = now.getUTCHours().toString().padStart(2, '0');
-            const minutes = now.getUTCMinutes().toString().padStart(2, '0');
-            const day = now.getUTCDate().toString().padStart(2, '0');
+            const hours = now.getUTCHours().toString().padStart(2, "0");
+            const minutes = now.getUTCMinutes().toString().padStart(2, "0");
+            const day = now.getUTCDate().toString().padStart(2, "0");
 
             setTime(prev => {
                 if (prev.hours === hours && prev.minutes === minutes && prev.day === day) {
                     return prev;
                 }
-                return { hours, minutes, day };
+                return {hours, minutes, day};
             });
         };
 
@@ -38,13 +38,17 @@ function Clock() {
     return (
         <div className="h-full px-1 border-r bg-[#c3c8ce] w-min whitespace-nowrap">
             <div className="h-1/2 flex items-center">
-                <p className="font-bold leading-3 tracking-wider text-xl">{time.hours}:{time.minutes}</p>
+                <p className="font-bold leading-3 tracking-wider text-xl">
+                    {time.hours}:{time.minutes}
+                </p>
             </div>
             <div className="h-1/2 flex items-center justify-between">
                 <div className="h-full py-1.5 pl-0.5">
-                    <StatusIndicator/>
+                    <StatusIndicator />
                 </div>
-                <p className="font-bold leading-3 tracking-wider text-xl text-gray-500">{time.day}</p>
+                <p className="font-bold leading-3 tracking-wider text-xl text-gray-500">
+                    {time.day}
+                </p>
             </div>
         </div>
     );

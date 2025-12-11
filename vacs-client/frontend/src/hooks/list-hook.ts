@@ -10,16 +10,22 @@ type UseListOptions = {
     setSelectedItem: (item: number) => void;
     defaultRows: number;
     enableKeyboardNavigation?: boolean;
-}
+};
 
-export function useList({itemsCount, selectedItem, setSelectedItem, defaultRows, enableKeyboardNavigation}: UseListOptions) {
+export function useList({
+    itemsCount,
+    selectedItem,
+    setSelectedItem,
+    defaultRows,
+    enableKeyboardNavigation,
+}: UseListOptions) {
     const listContainer = useRef<HTMLDivElement>(null);
     const [listContainerHeight, setListContainerHeight] = useState<number>(0);
     const [scrollOffset, setScrollOffset] = useState<number>(0);
 
     const {visibleItemIndices, maxScrollOffset} = useMemo((): {
-        visibleItemIndices: number[],
-        maxScrollOffset: number
+        visibleItemIndices: number[];
+        maxScrollOffset: number;
     } => {
         let itemCount: number;
 
@@ -34,10 +40,8 @@ export function useList({itemsCount, selectedItem, setSelectedItem, defaultRows,
         }
 
         return {
-            visibleItemIndices: Array.from({length: itemCount}, (_, i) =>
-                scrollOffset + i
-            ),
-            maxScrollOffset: itemsCount - itemCount
+            visibleItemIndices: Array.from({length: itemCount}, (_, i) => scrollOffset + i),
+            maxScrollOffset: itemsCount - itemCount,
         };
     }, [listContainerHeight, itemsCount, scrollOffset, defaultRows]);
 

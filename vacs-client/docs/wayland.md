@@ -22,14 +22,14 @@ When you launch `vacs` for the first time, it will attempt to register its short
 
 Due to the security model of Wayland and the design of the Global Shortcuts portal, there are significant limitations compared to X11, Windows, or macOS:
 
--   **No Modifiers**: You cannot bind standalone modifier keys (e.g., just `Ctrl`, `Alt`, or `Shift`) as a shortcut. You must use a non-modifier key, or a combination of modifier keys and a non-modifier key (e.g., `Ctrl+Alt+P`).
--   **No Regular Keys**: You generally cannot use regular alphanumeric keys (like `A`, `1`, `Space`) as global shortcuts, as these are reserved for typing in the focused application.
--   **Compositor Dependent**: The user interface for configuring shortcuts is entirely provided by your desktop environment. `vacs` has no control over how this looks or behaves. Additionally, we cannot reliably re-trigger the shortcut configuration UI if it was dismissed as compositors might only show it once per session. If you dismiss the dialog, you will need to reconfigure your shortcuts manually in your system settings.
+- **No Modifiers**: You cannot bind standalone modifier keys (e.g., just `Ctrl`, `Alt`, or `Shift`) as a shortcut. You must use a non-modifier key, or a combination of modifier keys and a non-modifier key (e.g., `Ctrl+Alt+P`).
+- **No Regular Keys**: You generally cannot use regular alphanumeric keys (like `A`, `1`, `Space`) as global shortcuts, as these are reserved for typing in the focused application.
+- **Compositor Dependent**: The user interface for configuring shortcuts is entirely provided by your desktop environment. `vacs` has no control over how this looks or behaves. Additionally, we cannot reliably re-trigger the shortcut configuration UI if it was dismissed as compositors might only show it once per session. If you dismiss the dialog, you will need to reconfigure your shortcuts manually in your system settings.
 
 ### Troubleshooting
 
--   **"Portal unavailable"**: Ensure you have `xdg-desktop-portal` and a backend implementation for your desktop environment installed (e.g., `xdg-desktop-portal-kde`, `xdg-desktop-portal-gnome`, `xdg-desktop-portal-hyprland`).
--   **Shortcuts not working**: Check your system settings to ensure the shortcuts are still granted to `vacs`. Some compositors may revoke permissions if the application is updated or changed.
+- **"Portal unavailable"**: Ensure you have `xdg-desktop-portal` and a backend implementation for your desktop environment installed (e.g., `xdg-desktop-portal-kde`, `xdg-desktop-portal-gnome`, `xdg-desktop-portal-hyprland`).
+- **Shortcuts not working**: Check your system settings to ensure the shortcuts are still granted to `vacs`. Some compositors may revoke permissions if the application is updated or changed.
 
 ## Radio Integration (Key Emulation)
 

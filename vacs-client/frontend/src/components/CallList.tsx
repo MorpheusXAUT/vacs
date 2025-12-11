@@ -30,7 +30,7 @@ function CallList() {
     });
 
     function callRow(index: number, isSelected: boolean, onClick: () => void) {
-        return <CallRow call={calls[index]} isSelected={isSelected} onClick={onClick}/>;
+        return <CallRow call={calls[index]} isSelected={isSelected} onClick={onClick} />;
     }
 
     return (
@@ -48,16 +48,29 @@ function CallList() {
             />
             <div className="w-full shrink-0 flex flex-row justify-between pr-16 [&_button]:h-15 [&_button]:rounded">
                 <Button color="gray" onClick={clearCallList}>
-                    <p>Delete<br/>List</p>
+                    <p>
+                        Delete
+                        <br />
+                        List
+                    </p>
                 </Button>
                 <div className="flex gap-2">
-                    <Button color="gray" disabled={calls[selectedCall]?.number === undefined}
-                            onClick={handleIgnoreClick}>
-                        <p>Ignore<br/>CID</p>
+                    <Button
+                        color="gray"
+                        disabled={calls[selectedCall]?.number === undefined}
+                        onClick={handleIgnoreClick}
+                    >
+                        <p>
+                            Ignore
+                            <br />
+                            CID
+                        </p>
                     </Button>
-                    <Button color="gray" className="w-56 text-xl"
-                            disabled={!connected || calls[selectedCall]?.number === undefined}
-                            onClick={handleCallClick}
+                    <Button
+                        color="gray"
+                        className="w-56 text-xl"
+                        disabled={!connected || calls[selectedCall]?.number === undefined}
+                        onClick={handleCallClick}
                     >
                         Call
                     </Button>

@@ -21,7 +21,7 @@ function RadioPrioButton() {
             setPrio(false);
         }
 
-        const unlisten = listen<boolean>("audio:implicit-radio-prio", (event) => {
+        const unlisten = listen<boolean>("audio:implicit-radio-prio", event => {
             setImplicitRadioPrio(event.payload);
         });
 
@@ -30,10 +30,16 @@ function RadioPrioButton() {
 
     return (
         <Button
-            color={implicitRadioPrio || prio ? "blue" : "cyan"} className="text-lg w-46" disabled={callDisplayType !== "accepted"}
+            color={implicitRadioPrio || prio ? "blue" : "cyan"}
+            className="text-lg w-46"
+            disabled={callDisplayType !== "accepted"}
             onClick={handleOnClick}
         >
-            <p>RADIO<br/>PRIO</p>
+            <p>
+                RADIO
+                <br />
+                PRIO
+            </p>
         </Button>
     );
 }

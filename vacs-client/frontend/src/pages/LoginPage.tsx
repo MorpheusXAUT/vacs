@@ -38,7 +38,10 @@ function LoginPage() {
                     "active:enabled:border-b-[#98C9EC] active:enabled:border-r-[#98C9EC] active:enabled:border-l-[#15603D] active:enabled:border-t-[#15603D]",
                     "disabled:brightness-90",
                 )}
-                style={{background: "linear-gradient(to bottom right, #2483C5 0%, #29B473 100%) border-box"}}
+                style={{
+                    background:
+                        "linear-gradient(to bottom right, #2483C5 0%, #29B473 100%) border-box",
+                }}
                 onClick={handleLoginClick}
                 disabled={loading}
             >

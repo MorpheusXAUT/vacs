@@ -5,7 +5,7 @@ export type ClientInfo = {
 };
 
 export type ClientInfoWithAlias = ClientInfo & {
-    alias: string | undefined
+    alias: string | undefined;
 };
 
 export function splitDisplayName(client: ClientInfoWithAlias): [string, string] {

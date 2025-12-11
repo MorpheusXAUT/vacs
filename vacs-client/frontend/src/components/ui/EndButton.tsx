@@ -28,7 +28,9 @@ function EndButton() {
     };
 
     return (
-        <Button color="cyan" className="text-xl w-44 px-10" onClick={handleOnClick}>END</Button>
+        <Button color="cyan" className="text-xl w-44 px-10" onClick={handleOnClick}>
+            END
+        </Button>
     );
 }
 

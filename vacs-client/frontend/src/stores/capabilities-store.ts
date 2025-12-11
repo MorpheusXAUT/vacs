@@ -3,21 +3,21 @@ import {Capabilities, Platform} from "../types/capabilities.ts";
 import {invokeStrict} from "../error.ts";
 
 type CapabilitiesState = {
-    alwaysOnTop: boolean,
-    keybindListener: boolean,
-    keybindEmitter: boolean,
-    platform: Platform,
-    setCapabilities: (capabilities: Capabilities) => void,
-}
+    alwaysOnTop: boolean;
+    keybindListener: boolean;
+    keybindEmitter: boolean;
+    platform: Platform;
+    setCapabilities: (capabilities: Capabilities) => void;
+};
 
-export const useCapabilitiesStore = create<CapabilitiesState>()((set) => ({
+export const useCapabilitiesStore = create<CapabilitiesState>()(set => ({
     alwaysOnTop: false,
     keybindListener: false,
     keybindEmitter: false,
     platform: "Unknown",
-    setCapabilities: (capabilities) => {
+    setCapabilities: capabilities => {
         set({...capabilities});
-    }
+    },
 }));
 
 export const fetchCapabilities = async () => {
@@ -25,6 +25,5 @@ export const fetchCapabilities = async () => {
         const capabilities = await invokeStrict<Capabilities>("app_platform_capabilities");
 
         useCapabilitiesStore.getState().setCapabilities(capabilities);
-    } catch {
-    }
+    } catch {}
 };

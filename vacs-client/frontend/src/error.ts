@@ -12,7 +12,7 @@ export type Error = {
 export type CallError = {
     peerId: string;
     reason: string;
-}
+};
 
 export async function invokeSafe<T>(cmd: string, args?: InvokeArgs): Promise<T | undefined> {
     try {
@@ -50,8 +50,8 @@ export function isError(err: unknown): err is Error {
     const maybeError = err as Record<string, unknown>;
 
     return (
-        typeof maybeError.title === 'string' &&
-        typeof maybeError.message === 'string' &&
-        (maybeError.timeout_ms === undefined || typeof maybeError.timeout_ms === 'number')
+        typeof maybeError.title === "string" &&
+        typeof maybeError.message === "string" &&
+        (maybeError.timeout_ms === undefined || typeof maybeError.timeout_ms === "number")
     );
 }

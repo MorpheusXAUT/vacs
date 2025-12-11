@@ -8,7 +8,7 @@ For general information on the configuration file format, file locations, and re
 
 The `client` configuration allows you to control the client's behavior and local logic. It consists of the following sections:
 
--   **[Ignore list](#ignore-list)** - Manage ignored users
+- **[Ignore list](#ignore-list)** - Manage ignored users
 
 ## Configuration structure
 

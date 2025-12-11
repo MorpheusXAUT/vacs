@@ -1,6 +1,6 @@
 import {create} from "zustand/react";
 
-export type CallListItem = { type: "IN" | "OUT"; time: string; name: string; number: string; };
+export type CallListItem = {type: "IN" | "OUT"; time: string; name: string; number: string};
 
 type CallListState = {
     callList: CallListItem[];
@@ -19,5 +19,5 @@ export const useCallListStore = create<CallListState>()((set, get) => ({
         clearCallList: () => {
             set({callList: []});
         },
-    }
+    },
 }));

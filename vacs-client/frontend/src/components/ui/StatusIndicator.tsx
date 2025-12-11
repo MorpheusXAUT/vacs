@@ -8,7 +8,7 @@ export const StatusColors: Record<Status, string> = {
     green: "bg-green-600 border-green-700",
     yellow: "bg-yellow-500 border-yellow-600",
     red: "bg-red-400 border-red-700",
-    gray: "bg-gray-400 border-gray-600"
+    gray: "bg-gray-400 border-gray-600",
 };
 
 function StatusIndicator() {
@@ -26,9 +26,7 @@ function StatusIndicator() {
         return "gray";
     })();
 
-    return (
-        <div className={clsx("h-3 w-3 rounded-full border", StatusColors[status])}></div>
-    );
+    return <div className={clsx("h-3 w-3 rounded-full border", StatusColors[status])}></div>;
 }
 
 export default StatusIndicator;

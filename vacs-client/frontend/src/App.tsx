@@ -49,43 +49,44 @@ function App() {
         void fetchStationsConfig();
 
         return () => {
-            cleanups.forEach((cleanup) => cleanup());
-        }
+            cleanups.forEach(cleanup => cleanup());
+        };
     }, []);
 
     return (
         <div className="h-screen flex flex-col">
             <div className="w-full h-12 bg-gray-300 flex flex-row border-gray-700 border-b">
-                <Clock/>
-                <InfoGrid/>
+                <Clock />
+                <InfoGrid />
             </div>
             <div className="w-full h-[calc(100%-3rem)] flex flex-col">
                 {/* Top Button Row */}
-                <FunctionKeys/>
+                <FunctionKeys />
                 <div className="flex flex-row w-full h-[calc(100%-10rem)] pl-1">
                     {/* Main Area */}
-                    <div
-                        className="h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l-1 border-t-1 border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
+                    <div className="h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l-1 border-t-1 border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
                         <Switch>
-                            <Route path="/settings" component={SettingsPage}/>
-                            <Route path="/mission" component={MissionPage}/>
-                            <Route path="/telephone" component={TelephonePage}/>
+                            <Route path="/settings" component={SettingsPage} />
+                            <Route path="/mission" component={MissionPage} />
+                            <Route path="/telephone" component={TelephonePage} />
                             <Route path="/" nest>
                                 {authStatus === "loading" ? (
                                     <></>
                                 ) : authStatus === "unauthenticated" ? (
-                                    <LoginPage/>
+                                    <LoginPage />
                                 ) : connected ? (
                                     <>
                                         <Route path="/:filter">
-                                            {(params: { filter: string; }) => <DAKeyArea filter={params.filter}/>}
+                                            {(params: {filter: string}) => (
+                                                <DAKeyArea filter={params.filter} />
+                                            )}
                                         </Route>
                                         <Route path="/">
-                                            <DAKeyArea filter={""}/>
+                                            <DAKeyArea filter={""} />
                                         </Route>
                                     </>
                                 ) : (
-                                    <ConnectPage/>
+                                    <ConnectPage />
                                 )}
                             </Route>
                         </Switch>
@@ -93,24 +94,31 @@ function App() {
                     {/* Right Button Row */}
                     <div className="w-24 h-full px-2 pb-6 flex flex-col justify-between">
                         <LinkButton path="/telephone" className="h-16 shrink-0">
-                            <img src={telephone} alt="Telephone" className="h-18 w-18" draggable={false}/>
+                            <img
+                                src={telephone}
+                                alt="Telephone"
+                                className="h-18 w-18"
+                                draggable={false}
+                            />
                         </LinkButton>
-                        <CallQueue/>
+                        <CallQueue />
                     </div>
                 </div>
                 {/* Bottom Button Row */}
                 <div className="h-20 w-full p-2 pl-4 flex flex-row justify-between gap-20">
                     <div className="h-full flex flex-row gap-3">
-                        <RadioButton/>
-                        <Button color="cyan" className="text-xl text-slate-400" disabled={true}>CPL</Button>
-                        <RadioPrioButton/>
-                        <PhoneButton/>
+                        <RadioButton />
+                        <Button color="cyan" className="text-xl text-slate-400" disabled={true}>
+                            CPL
+                        </Button>
+                        <RadioPrioButton />
+                        <PhoneButton />
                     </div>
-                    <EndButton/>
+                    <EndButton />
                 </div>
             </div>
-            <ErrorOverlay/>
-            <UpdateOverlay/>
+            <ErrorOverlay />
+            <UpdateOverlay />
         </div>
     );
 }
