@@ -53,6 +53,7 @@ pub trait AppStateWebrtcExt: sealed::Sealed {
         reason: CallErrorReason,
     );
     fn active_call_peer_id(&self) -> Option<&String>;
+    fn outgoing_call_peer_id(&self) -> Option<&String>;
     fn set_ice_config(&mut self, config: IceConfig);
     fn is_ice_config_expired(&self) -> bool;
 }
@@ -274,6 +275,10 @@ impl AppStateWebrtcExt for AppStateInner {
 
     fn active_call_peer_id(&self) -> Option<&String> {
         self.active_call.as_ref().map(|call| &call.peer_id)
+    }
+
+    fn outgoing_call_peer_id(&self) -> Option<&String> {
+        self.outgoing_call_peer_id.as_ref()
     }
 
     fn set_ice_config(&mut self, config: IceConfig) {
