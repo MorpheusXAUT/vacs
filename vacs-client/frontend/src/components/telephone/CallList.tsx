@@ -1,13 +1,12 @@
-import Button from "./ui/Button.tsx";
-import "../styles/call-list.css";
-import {CallListItem, useCallListStore} from "../stores/call-list-store.ts";
+import Button from "../ui/Button.tsx";
+import {CallListItem, useCallListStore} from "../../stores/call-list-store.ts";
 import {clsx} from "clsx";
-import {startCall, useCallStore} from "../stores/call-store.ts";
+import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useState} from "preact/hooks";
-import List from "./ui/List.tsx";
-import {useSignalingStore} from "../stores/signaling-store.ts";
-import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
-import {invokeSafe} from "../error.ts";
+import List from "../ui/List.tsx";
+import {useSignalingStore} from "../../stores/signaling-store.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {invokeSafe} from "../../error.ts";
 
 function CallList() {
     const calls = useCallListStore(state => state.callList);

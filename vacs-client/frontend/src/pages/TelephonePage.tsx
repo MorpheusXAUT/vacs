@@ -2,10 +2,10 @@ import {useState} from "preact/hooks";
 import {clsx} from "clsx";
 import {ComponentChildren} from "preact";
 import "../styles/telephone-page.css";
-import DialPad from "../components/DialPad.tsx";
-import CallList from "../components/CallList.tsx";
+import DialPad from "../components/telephone/DialPad.tsx";
+import CallList from "../components/telephone/CallList.tsx";
 import {invokeSafe} from "../error.ts";
-import IgnoreList from "../components/IgnoreList.tsx";
+import IgnoreList from "../components/telephone/IgnoreList.tsx";
 
 type Page = "dir" | "call-list" | "dial-pad" | "ign";
 

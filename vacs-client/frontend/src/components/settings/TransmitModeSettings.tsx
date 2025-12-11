@@ -1,4 +1,4 @@
-import Select from "./ui/Select.tsx";
+import Select from "../ui/Select.tsx";
 import {Dispatch, StateUpdater, useEffect, useState} from "preact/hooks";
 import {
     withLabels,
@@ -9,16 +9,16 @@ import {
     withRadioLabels,
     RadioConfigWithLabels,
     isRadioIntegration,
-} from "../types/transmit.ts";
-import {invokeSafe, invokeStrict} from "../error.ts";
-import KeyCapture from "./ui/KeyCapture.tsx";
-import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
+} from "../../types/transmit.ts";
+import {invokeSafe, invokeStrict} from "../../error.ts";
+import KeyCapture from "./KeyCapture.tsx";
+import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
 import {clsx} from "clsx";
-import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {TargetedEvent} from "preact";
-import {RadioState} from "../types/radio.ts";
-import {StatusColors} from "./ui/StatusIndicator.tsx";
-import {useRadioState} from "../hooks/radio-state-hook.ts";
+import {RadioState} from "../../types/radio.ts";
+import {StatusColors} from "../ui/StatusIndicator.tsx";
+import {useRadioState} from "../../hooks/radio-state-hook.ts";
 
 function TransmitModeSettings() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);

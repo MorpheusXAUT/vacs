@@ -4,13 +4,13 @@ import {useAuthStore} from "../stores/auth-store.ts";
 import {invokeSafe, invokeStrict} from "../error.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {useSignalingStore} from "../stores/signaling-store.ts";
-import DeviceSelector from "../components/DeviceSelector.tsx";
-import VolumeSettings from "../components/VolumeSettings.tsx";
-import AudioHostSelector from "../components/AudioHostSelector.tsx";
+import DeviceSelector from "../components/settings/DeviceSelector.tsx";
+import VolumeSettings from "../components/settings/VolumeSettings.tsx";
+import AudioHostSelector from "../components/settings/AudioHostSelector.tsx";
 import {useEffect, useState} from "preact/hooks";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {useUpdateStore} from "../stores/update-store.ts";
-import TransmitModeSettings from "../components/TransmitModeSettings.tsx";
+import TransmitModeSettings from "../components/settings/TransmitModeSettings.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 
 function SettingsPage() {

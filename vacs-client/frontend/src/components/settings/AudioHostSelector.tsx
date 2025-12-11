@@ -1,9 +1,9 @@
-import Select, {SelectOption} from "./ui/Select.tsx";
+import Select, {SelectOption} from "../ui/Select.tsx";
 import {useState, useEffect} from "preact/hooks";
-import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
-import {invokeStrict} from "../error.ts";
-import {AudioHosts} from "../types/audio.ts";
-import {useCallStore} from "../stores/call-store.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {invokeStrict} from "../../error.ts";
+import {AudioHosts} from "../../types/audio.ts";
+import {useCallStore} from "../../stores/call-store.ts";
 
 function AudioHostSelector() {
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
