@@ -70,14 +70,16 @@ impl KeybindEngine {
 
     pub async fn start(&mut self) -> Result<(), Error> {
         if self.rx_task.is_some() {
-            debug_assert!(self.listener.read().is_some());
-            debug_assert!(self.transmit_code.is_some());
             return Ok(());
         }
-        if self.mode == TransmitMode::VoiceActivation {
-            log::trace!("TransmitMode set to voice activation, no keybind engine required");
+        let has_call_controls = self.accept_call_code.is_some() || self.end_call_code.is_some();
+
+        if self.mode == TransmitMode::VoiceActivation && !has_call_controls {
+            log::trace!(
+                "TransmitMode set to voice activation and no call controls defined, no keybind engine required"
+            );
             return Ok(());
-        } else if self.transmit_code.is_none() {
+        } else if self.mode != TransmitMode::VoiceActivation && self.transmit_code.is_none() {
             log::trace!(
                 "No keybind set for TransmitMode {:?}, keybind engine not starting",
                 self.mode
