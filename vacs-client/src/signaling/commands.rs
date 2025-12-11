@@ -133,13 +133,13 @@ pub async fn signaling_end_call(
 
     let mut state = app_state.lock().await;
 
-    state.end_call(&peer_id).await;
-
     state
         .send_signaling_message(SignalingMessage::CallEnd {
             peer_id: peer_id.clone(),
         })
         .await?;
+
+    state.end_call(&peer_id).await;
 
     state.cancel_unanswered_call_timer(&peer_id);
     state.set_outgoing_call_peer_id(None);
