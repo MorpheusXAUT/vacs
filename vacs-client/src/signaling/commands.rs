@@ -97,27 +97,14 @@ pub async fn signaling_start_call(
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn signaling_accept_call(
+    app: AppHandle,
     app_state: State<'_, AppState>,
-    http_state: State<'_, HttpState>,
-    audio_manager: State<'_, AudioManagerHandle>,
     peer_id: String,
 ) -> Result<(), Error> {
     log::debug!("Accepting call from {peer_id}");
 
     let mut state = app_state.lock().await;
-
-    if state.is_ice_config_expired() {
-        refresh_ice_config(&http_state, &mut state).await;
-    }
-
-    state
-        .send_signaling_message(SignalingMessage::CallAccept {
-            peer_id: peer_id.clone(),
-        })
-        .await?;
-    state.remove_incoming_call_peer_id(&peer_id);
-
-    audio_manager.read().stop(SourceType::Ring);
+    state.accept_call(&app, Some(peer_id)).await?;
 
     Ok(())
 }
@@ -125,26 +112,14 @@ pub async fn signaling_accept_call(
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn signaling_end_call(
+    app: AppHandle,
     app_state: State<'_, AppState>,
-    audio_manager: State<'_, AudioManagerHandle>,
     peer_id: String,
 ) -> Result<(), Error> {
     log::debug!("Ending call with {peer_id}");
 
     let mut state = app_state.lock().await;
-
-    state
-        .send_signaling_message(SignalingMessage::CallEnd {
-            peer_id: peer_id.clone(),
-        })
-        .await?;
-
-    state.end_call(&peer_id).await;
-
-    state.cancel_unanswered_call_timer(&peer_id);
-    state.set_outgoing_call_peer_id(None);
-
-    audio_manager.read().stop(SourceType::Ringback);
+    state.end_call(&app, Some(peer_id)).await?;
 
     Ok(())
 }
