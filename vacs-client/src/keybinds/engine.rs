@@ -284,12 +284,65 @@ impl KeybindEngine {
             .set_input_muted(muted);
     }
 
+    async fn handle_call_control_event(
+        app: &AppHandle,
+        code: Code,
+        accept_call: Option<Code>,
+        end_call: Option<Code>,
+    ) {
+        let shared_call_controls = accept_call == end_call;
+
+        if shared_call_controls
+            && (accept_call.is_some_and(|c| c == code) || end_call.is_some_and(|c| c == code))
+        {
+            log::trace!("Shared call control key pressed");
+
+            let state = app.state::<AppState>();
+            let mut state = state.lock().await;
+
+            if state.active_call_peer_id().is_some() || state.outgoing_call_peer_id().is_some() {
+                match state.end_call(app, None).await {
+                    Ok(found) if !found => log::trace!("No active call to end via keybind"),
+                    Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
+                    _ => {}
+                }
+            } else {
+                match state.accept_call(app, None).await {
+                    Ok(found) if !found => log::trace!("No incoming call to accept via keybind"),
+                    Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
+                    _ => {}
+                }
+            }
+        } else if accept_call.is_some_and(|c| c == code) {
+            log::trace!("Accept call key pressed");
+
+            let state = app.state::<AppState>();
+            let mut state = state.lock().await;
+
+            match state.accept_call(app, None).await {
+                Ok(found) if !found => log::trace!("No incoming call to accept via keybind"),
+                Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
+                _ => {}
+            }
+        } else if end_call.is_some_and(|c| c == code) {
+            log::trace!("End call key pressed");
+
+            let state = app.state::<AppState>();
+            let mut state = state.lock().await;
+
+            match state.end_call(app, None).await {
+                Ok(found) if !found => log::trace!("No active call to end via keybind"),
+                Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
+                _ => {}
+            }
+        }
+    }
+
     fn spawn_rx_loop(&mut self, mut rx: UnboundedReceiver<KeyEvent>) {
         let app = self.app.clone();
         let transmit = self.transmit_code;
         let accept_call = self.accept_call_code;
         let end_call = self.end_call_code;
-        let shared_call_controls = accept_call == end_call;
 
         if transmit.is_none() && accept_call.is_none() && end_call.is_none() {
             return;
@@ -319,48 +372,7 @@ impl KeybindEngine {
                         let Some(event) = res else { break; };
 
                         if event.state == KeyState::Down {
-                            if shared_call_controls && (accept_call.is_some_and(|c| c == event.code) || end_call.is_some_and(|c| c == event.code)) {
-                                log::trace!("Shared call control key pressed");
-
-                                let state = app.state::<AppState>();
-                                let mut state = state.lock().await;
-
-                                if state.active_call_peer_id().is_some() || state.outgoing_call_peer_id().is_some() {
-                                    match state.end_call(&app, None).await {
-                                        Ok(found) if !found => log::trace!("No active call to end via keybind"),
-                                        Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
-                                        _ => {}
-                                    }
-                                } else {
-                                    match state.accept_call(&app, None).await {
-                                        Ok(found) if !found => log::trace!("No incoming call to accept via keybind"),
-                                        Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
-                                        _ => {}
-                                    }
-                                }
-                            } else if accept_call.is_some_and(|c| c == event.code) {
-                                log::trace!("Accept call key pressed");
-
-                                let state = app.state::<AppState>();
-                                let mut state = state.lock().await;
-
-                                match state.accept_call(&app, None).await {
-                                    Ok(found) if !found => log::trace!("No incoming call to accept via keybind"),
-                                    Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
-                                    _ => {}
-                                }
-                            } else if end_call.is_some_and(|c| c == event.code) {
-                                log::trace!("End call key pressed");
-
-                                let state = app.state::<AppState>();
-                                let mut state = state.lock().await;
-
-                                match state.end_call(&app, None).await {
-                                    Ok(found) if !found => log::trace!("No active call to end via keybind"),
-                                    Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
-                                    _ => {}
-                                }
-                            }
+                            Self::handle_call_control_event(&app, event.code, accept_call, end_call).await;
                         }
 
                         if transmit.is_none_or(|c| c != event.code) {
@@ -475,6 +487,10 @@ impl KeybindEngine {
     fn select_accept_call_code(config: &CallControlConfig) -> Option<Code> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
+            // Wayland Code Mapping Strategy:
+            // Same as with the transmit code, we define our global shortcuts on OS level.
+            // As we cannot bind the same key to multiple actions, we'll always use F32
+            // as both accept and end call key.
             return Some(Code::F32);
         }
 
@@ -485,6 +501,10 @@ impl KeybindEngine {
     fn select_end_call_code(config: &CallControlConfig) -> Option<Code> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
+            // Wayland Code Mapping Strategy:
+            // Same as with the transmit code, we define our global shortcuts on OS level.
+            // As we cannot bind the same key to multiple actions, we'll always use F32
+            // as both accept and end call key.
             return Some(Code::F32);
         }
 
