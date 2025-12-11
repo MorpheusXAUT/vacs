@@ -20,53 +20,51 @@ function TelephonePage() {
     const [page, setPage] = useState<Page>("call-list");
 
     return (
-        <div className="w-full h-full relative">
-            <div
-                className={clsx(
-                    "z-10 absolute h-[calc(100%+5rem+3px-0.5rem+0.25rem)] top-[-1px] right-[-2px]",
-                    "bg-blue-700 px-2 pb-2 flex flex-col overflow-auto rounded-md",
-                    page === "dir" && "w-[calc(100%+3px)]",
-                )}
-            >
-                <p className="w-full text-white bg-blue-700 font-semibold text-center">
-                    {PageTitle[page]}
-                </p>
-                <div className="w-full grow rounded-b-sm bg-gray-500 flex flex-row">
-                    <div className="grow h-full bg-[#B5BBC6] rounded-lg border-3 border-gray-600">
-                        {page === "dir" ? (
-                            <div className="w-full h-full flex justify-center items-center">
-                                <p className="text-slate-600">Not implemented</p>
-                            </div>
-                        ) : page === "call-list" ? (
-                            <CallList />
-                        ) : page === "dial-pad" ? (
-                            <DialPad />
-                        ) : (
-                            <IgnoreList />
-                        )}
-                    </div>
-                    <div className="w-19 h-full shrink-0 pt-12 flex flex-col gap-[2px]">
-                        <TelephonePageButton page="dir" activePage={page} setPage={setPage}>
-                            <p>Dir.</p>
-                        </TelephonePageButton>
-                        <TelephonePageButton page="call-list" activePage={page} setPage={setPage}>
-                            <p>
-                                Call
-                                <br />
-                                List
-                            </p>
-                        </TelephonePageButton>
-                        <TelephonePageButton page="dial-pad" activePage={page} setPage={setPage}>
-                            <p>
-                                Dial
-                                <br />
-                                Pad
-                            </p>
-                        </TelephonePageButton>
-                        <TelephonePageButton page="ign" activePage={page} setPage={setPage}>
-                            <p>Ign.</p>
-                        </TelephonePageButton>
-                    </div>
+        <div
+            className={clsx(
+                "z-10 absolute h-[calc(100%+5rem+3px-0.5rem+0.25rem)] top-[-1px] right-[-2px]",
+                "bg-blue-700 px-2 pb-2 flex flex-col overflow-auto rounded-md",
+                page === "dir" && "w-[calc(100%+3px)]",
+            )}
+        >
+            <p className="w-full text-white bg-blue-700 font-semibold text-center">
+                {PageTitle[page]}
+            </p>
+            <div className="w-full grow rounded-b-sm bg-gray-500 flex flex-row">
+                <div className="grow h-full bg-[#B5BBC6] rounded-lg border-3 border-gray-600">
+                    {page === "dir" ? (
+                        <div className="w-full h-full flex justify-center items-center">
+                            <p className="text-slate-600">Not implemented</p>
+                        </div>
+                    ) : page === "call-list" ? (
+                        <CallList />
+                    ) : page === "dial-pad" ? (
+                        <DialPad />
+                    ) : (
+                        <IgnoreList />
+                    )}
+                </div>
+                <div className="w-19 h-full shrink-0 pt-12 flex flex-col gap-[2px]">
+                    <TelephonePageButton page="dir" activePage={page} setPage={setPage}>
+                        <p>Dir.</p>
+                    </TelephonePageButton>
+                    <TelephonePageButton page="call-list" activePage={page} setPage={setPage}>
+                        <p>
+                            Call
+                            <br />
+                            List
+                        </p>
+                    </TelephonePageButton>
+                    <TelephonePageButton page="dial-pad" activePage={page} setPage={setPage}>
+                        <p>
+                            Dial
+                            <br />
+                            Pad
+                        </p>
+                    </TelephonePageButton>
+                    <TelephonePageButton page="ign" activePage={page} setPage={setPage}>
+                        <p>Ign.</p>
+                    </TelephonePageButton>
                 </div>
             </div>
         </div>

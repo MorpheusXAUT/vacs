@@ -64,11 +64,10 @@ function App() {
                 <FunctionKeys />
                 <div className="flex flex-row w-full h-[calc(100%-10rem)] pl-1">
                     {/* Main Area */}
-                    <div className="h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l-1 border-t-1 border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
+                    <div className="relative h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l-1 border-t-1 border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
                         <Switch>
                             <Route path="/settings" component={SettingsPage} />
                             <Route path="/mission" component={MissionPage} />
-                            <Route path="/telephone" component={TelephonePage} />
                             <Route path="/" nest>
                                 {authStatus === "loading" ? (
                                     <></>
@@ -79,6 +78,7 @@ function App() {
                                 ) : (
                                     <ConnectPage />
                                 )}
+                                <Route path="/telephone" component={TelephonePage} />
                             </Route>
                         </Switch>
                     </div>
