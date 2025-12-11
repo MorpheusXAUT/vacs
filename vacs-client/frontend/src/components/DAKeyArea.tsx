@@ -1,17 +1,14 @@
 import {useSignalingStore} from "../stores/signaling-store.ts";
 import DAKey from "./ui/DAKey.tsx";
 import Button from "./ui/Button.tsx";
-import {navigate} from "wouter/use-browser-location";
 import {ClientInfoWithAlias} from "../types/client-info.ts";
 import {useCallStore} from "../stores/call-store.ts";
+import {useFilterStore} from "../stores/filter-store.ts";
 
-type DAKeyAreaProps = {
-    filter: string;
-};
-
-function DAKeyArea({filter}: DAKeyAreaProps) {
+function DAKeyArea() {
     const clients = useSignalingStore(state => state.clients);
     const grouping = useSignalingStore(state => state.getActiveStationsProfileConfig()?.grouping);
+    const {filter, setFilter} = useFilterStore(state => state);
 
     const getGroups = (clients: ClientInfoWithAlias[], slice: number, prefix = "") => {
         const groups = [
@@ -40,7 +37,9 @@ function DAKeyArea({filter}: DAKeyAreaProps) {
     };
 
     const renderGroups = (groups: string[]) => {
-        return groups.map((group, idx) => <DANavKey key={idx} group={group} />);
+        return groups.map((group, idx) => (
+            <DANavKey key={idx} group={group} setFilter={setFilter} />
+        ));
     };
 
     const renderKeys = () => {
@@ -84,7 +83,7 @@ function DAKeyArea({filter}: DAKeyAreaProps) {
     );
 }
 
-function DANavKey({group}: {group: string}) {
+function DANavKey({group, setFilter}: {group: string; setFilter: (filter: string) => void}) {
     const blink = useCallStore(state => state.blink);
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
@@ -115,7 +114,7 @@ function DANavKey({group}: {group: string}) {
             }
             highlight={beingCalled || isRejected ? "green" : undefined}
             className="w-25 h-full rounded !leading-4.5 p-1.5"
-            onClick={() => navigate(group)}
+            onClick={() => setFilter(group)}
         >
             <p className="w-full truncate leading-3.5" title={group}>
                 {group}

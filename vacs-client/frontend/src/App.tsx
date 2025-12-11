@@ -75,16 +75,7 @@ function App() {
                                 ) : authStatus === "unauthenticated" ? (
                                     <LoginPage />
                                 ) : connected ? (
-                                    <>
-                                        <Route path="/:filter">
-                                            {(params: {filter: string}) => (
-                                                <DAKeyArea filter={params.filter} />
-                                            )}
-                                        </Route>
-                                        <Route path="/">
-                                            <DAKeyArea filter={""} />
-                                        </Route>
-                                    </>
+                                    <DAKeyArea />
                                 ) : (
                                     <ConnectPage />
                                 )}

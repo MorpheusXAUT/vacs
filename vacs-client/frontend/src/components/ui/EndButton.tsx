@@ -3,10 +3,12 @@ import {navigate} from "wouter/use-browser-location";
 import {invokeStrict} from "../../error.ts";
 import {useCallStore} from "../../stores/call-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {useFilterStore} from "../../stores/filter-store.ts";
 
 function EndButton() {
     const callDisplay = useCallStore(state => state.callDisplay);
     const {endCall, dismissRejectedPeer, dismissErrorPeer} = useCallStore(state => state.actions);
+    const setFilter = useFilterStore(state => state.setFilter);
 
     const endAnyCall = useAsyncDebounce(async () => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {
@@ -22,6 +24,7 @@ function EndButton() {
     });
 
     const handleOnClick = async () => {
+        setFilter("");
         navigate("/");
 
         void endAnyCall();

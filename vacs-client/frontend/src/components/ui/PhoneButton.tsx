@@ -1,10 +1,12 @@
 import Button from "./Button.tsx";
 import {useCallStore} from "../../stores/call-store.ts";
 import {navigate} from "wouter/use-browser-location";
+import {useFilterStore} from "../../stores/filter-store.ts";
 
 function PhoneButton() {
     const blink = useCallStore(state => state.blink);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
+    const setFilter = useFilterStore(state => state.setFilter);
 
     return (
         <Button
@@ -25,7 +27,10 @@ function PhoneButton() {
                     : undefined
             }
             className="w-46 min-h-16 text-xl"
-            onClick={() => navigate("/")}
+            onClick={() => {
+                setFilter("");
+                navigate("/");
+            }}
         >
             Phone
         </Button>
