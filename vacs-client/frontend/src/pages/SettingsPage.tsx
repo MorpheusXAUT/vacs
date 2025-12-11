@@ -10,54 +10,84 @@ import AudioHostSelector from "../components/settings/AudioHostSelector.tsx";
 import {useEffect, useState} from "preact/hooks";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {useUpdateStore} from "../stores/update-store.ts";
-import TransmitModeSettings from "../components/settings/TransmitModeSettings.tsx";
+import {Route, Switch} from "wouter";
+import TransmitModePage from "../components/settings/TransmitModePage.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 
 function SettingsPage() {
     return (
-        <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col overflow-auto">
-            <p className="w-full text-white bg-blue-700 font-semibold text-center">Settings</p>
-            <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col">
-                <div className="w-full grow border-b-2 border-zinc-200 flex flex-row">
-                    <VolumeSettings />
-                    <div className="h-full grow flex flex-col">
-                        <p className="w-full text-center border-b-2 border-zinc-200 uppercase font-semibold">
-                            Devices
-                        </p>
-                        <div className="w-full px-3 py-1.5 flex flex-col">
-                            <AudioHostSelector />
-                            <DeviceSelector deviceType="Output" />
-                            <DeviceSelector deviceType="Input" />
+        <div className="h-full w-full relative">
+            <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col overflow-auto">
+                <p className="w-full text-white bg-blue-700 font-semibold text-center">Settings</p>
+                <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col">
+                    <div className="w-full grow border-b-2 border-zinc-200 flex flex-row">
+                        <VolumeSettings />
+                        <div className="h-full grow flex flex-col">
+                            <p className="w-full text-center border-b-2 border-zinc-200 uppercase font-semibold">
+                                Devices
+                            </p>
+                            <div className="w-full px-3 py-1.5 flex flex-col">
+                                <AudioHostSelector />
+                                <DeviceSelector deviceType="Output" />
+                                <DeviceSelector deviceType="Input" />
+                            </div>
+                            <div className="py-0.5 flex flex-col gap-2">
+                                <p className="pt-1 text-center font-semibold uppercase border-t-2 border-zinc-200">
+                                    Miscellaneous
+                                </p>
+                                <div className="px-3 grid grid-cols-[repeat(3,auto)] justify-center grid-rows-2 gap-4 [&>button]:h-16">
+                                    <UpdateButton />
+                                    <Button
+                                        color="gray"
+                                        className="h-full text-sm"
+                                        onClick={() =>
+                                            invokeSafe("app_open_folder", {folder: "Config"})
+                                        }
+                                    >
+                                        Open
+                                        <br />
+                                        Config
+                                    </Button>
+                                    <Button
+                                        color="gray"
+                                        className="h-full text-sm"
+                                        onClick={() =>
+                                            invokeSafe("app_open_folder", {folder: "Logs"})
+                                        }
+                                    >
+                                        Open
+                                        <br />
+                                        Logs
+                                    </Button>
+
+                                    <WindowStateButtons />
+                                </div>
+                            </div>
                         </div>
-                        <TransmitModeSettings />
                     </div>
-                </div>
-                <div className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:px-1 [&>button]:shrink-0">
-                    <div className="h-full flex flex-row gap-2 items-center">
-                        <WindowStateButtons />
-                        <UpdateButton />
-                        <Button
-                            color="gray"
-                            className="h-full rounded text-sm"
-                            onClick={() => invokeSafe("app_open_folder", {folder: "Config"})}
-                        >
-                            Open
-                            <br />
-                            Config
-                        </Button>
-                        <Button
-                            color="gray"
-                            className="h-full rounded text-sm"
-                            onClick={() => invokeSafe("app_open_folder", {folder: "Logs"})}
-                        >
-                            Open
-                            <br />
-                            Logs
-                        </Button>
+                    <div className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:px-1 [&>button]:shrink-0">
+                        <div className="h-full flex flex-row gap-2 items-center">
+                            <Button
+                                color="gray"
+                                className="w-22 h-full text-sm"
+                                onClick={() => navigate("/settings/transmit")}
+                            >
+                                Transmit
+                            </Button>
+                            <Button color="gray" className="w-20 h-full text-sm">
+                                Hotkeys
+                            </Button>
+                            <Button color="gray" className="w-20 h-full text-sm">
+                                Sounds
+                            </Button>
+                        </div>
+                        <AppControlButtons />
                     </div>
-                    <AppControlButtons />
                 </div>
             </div>
+            <Switch>
+                <Route path="/transmit" component={TransmitModePage} />
+            </Switch>
         </div>
     );
 }
@@ -88,7 +118,7 @@ function AppControlButtons() {
         <div className="h-full flex flex-row gap-2">
             <Button
                 color="salmon"
-                className="w-auto px-3 text-sm rounded"
+                className="w-auto px-3 text-sm"
                 disabled={!connected}
                 onClick={handleDisconnectClick}
             >
@@ -96,18 +126,13 @@ function AppControlButtons() {
             </Button>
             <Button
                 color="salmon"
-                className="text-sm rounded"
+                className="text-sm"
                 disabled={!isAuthenticated}
                 onClick={handleLogoutClick}
             >
                 Logout
             </Button>
-            <Button
-                color="salmon"
-                muted={true}
-                className="text-sm rounded ml-3"
-                onClick={handleQuitClick}
-            >
+            <Button color="salmon" muted={true} className="text-sm ml-3" onClick={handleQuitClick}>
                 Quit
             </Button>
         </div>
@@ -227,10 +252,10 @@ function WindowStateButtons() {
     }, []);
 
     return (
-        <div className="h-full flex flex-row gap-2">
+        <>
             <Button
                 color={alwaysOnTop ? "blue" : "cyan"}
-                className="h-full rounded text-sm"
+                className="h-full w-24 rounded text-sm"
                 onClick={toggleAlwaysOnTop}
                 disabled={!capAlwaysOnTop}
                 title={
@@ -263,7 +288,38 @@ function WindowStateButtons() {
             >
                 <p>Reset Size</p>
             </Button>
-        </div>
+        </>
+    );
+}
+
+export function CloseButton() {
+    return (
+        <Button color="gray" className="!w-18" onClick={() => navigate("/settings")}>
+            <svg
+                width="26"
+                height="26"
+                viewBox="0 0 128 128"
+                fill="none"
+                className="w-full"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <g clipPath="url(#clip0_0_1)">
+                    <rect x="4" y="4" width="120" height="120" stroke="black" strokeWidth="14" />
+                    <path d="M98 30L30 98" stroke="black" strokeWidth="12" />
+                    <path d="M30 30L98 98" stroke="black" strokeWidth="12" />
+                </g>
+                <defs>
+                    <clipPath id="clip0_0_1">
+                        <rect
+                            width="128"
+                            height="128"
+                            fill="white"
+                            transform="matrix(-1 0 0 1 128 0)"
+                        />
+                    </clipPath>
+                </defs>
+            </svg>
+        </Button>
     );
 }
 

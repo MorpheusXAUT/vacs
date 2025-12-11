@@ -13,11 +13,13 @@ type LinkButtonProps = {
 function LinkButton(props: LinkButtonProps) {
     const [location] = useLocation();
 
+    const isActive = location.startsWith(props.path);
+
     return (
         <Button
-            color={location === props.path ? "blue" : "cyan"}
+            color={isActive ? "blue" : "cyan"}
             className={clsx("flex justify-center items-center", props.className)}
-            onClick={() => navigate(location === props.path ? "/" : props.path)}
+            onClick={() => navigate(isActive ? "/" : props.path)}
         >
             {props.children}
         </Button>

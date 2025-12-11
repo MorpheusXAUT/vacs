@@ -28,3 +28,7 @@ body {
 .text-initial {
     color: initial;
 }
+
+.scrollbar-hide {
+    @apply [scrollbar-width:none] [&::-webkit-scrollbar]:hidden;
+}

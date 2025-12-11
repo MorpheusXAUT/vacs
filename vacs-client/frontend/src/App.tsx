@@ -66,7 +66,7 @@ function App() {
                     {/* Main Area */}
                     <div className="relative h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l-1 border-t-1 border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
                         <Switch>
-                            <Route path="/settings" component={SettingsPage} />
+                            <Route path="/settings" component={SettingsPage} nest />
                             <Route path="/mission" component={MissionPage} />
                             <Route path="/" nest>
                                 {authStatus === "loading" ? (

@@ -45,12 +45,12 @@ function TransmitModeSettings() {
     }, [capKeybindListener]);
 
     return (
-        <div className="py-0.5 flex flex-col gap-2">
-            <div className="grow pt-1 flex flex-col gap-0.5">
-                <p className="text-center font-semibold uppercase border-t-2 border-zinc-200">
-                    Transmit Mode
+        <div className="h-full flex min-h-0 flex-col">
+            <div className="flex flex-col gap-0.5">
+                <p className="w-full mb-2 text-center border-b-2 border-zinc-200 uppercase font-semibold">
+                    Mode
                 </p>
-                <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
+                <div className="w-full px-3 flex flex-row gap-3 items-center justify-center">
                     {!capKeybindListener ? (
                         <p
                             className="text-sm text-gray-700 py-1.5 cursor-help"
@@ -67,35 +67,15 @@ function TransmitModeSettings() {
                         <p className="w-full text-center">Loading...</p>
                     )}
                 </div>
+                <p className="py-2 px-3 text-sm text-gray-800">
+                    {/* TODO: Write some explanation */}
+                </p>
             </div>
-            <div className="grow flex flex-col gap-0.5">
-                <div className="w-full pt-1 flex flex-row gap-2 items-center justify-center border-t-2 border-zinc-200">
+            <div className="grow min-h-0 flex flex-col gap-0.5">
+                <div className="w-full pt-1 mb-1 flex flex-row gap-2 items-center justify-center border-t-2 border-zinc-200">
                     <p className="font-semibold uppercase">Radio Integration</p>
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="stroke-gray-600 cursor-help"
-                    >
-                        <title>
-                            Use one key for all transmissions. Configure the radio integration’s PTT
-                            key and let vacs press it automatically: when not in a call, pressing
-                            the vacs PTT keys your radio; in a call, it transmits on vacs; with
-                            RADIO PRIO enabled, you can (temporarily) key the radio without
-                            interrupting your coordination.
-                        </title>
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                        <path d="M12 17h.01" />
-                    </svg>
                 </div>
-                <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
+                <div className="w-full px-3 flex flex-row gap-3 items-center justify-center">
                     {!capKeybindListener ? (
                         <p
                             className="text-sm text-gray-700 py-1.5 cursor-help"
@@ -113,6 +93,15 @@ function TransmitModeSettings() {
                         <p className="w-full text-center">Loading...</p>
                     )}
                 </div>
+                {radioConfig?.integration === "AudioForVatsim" ? (
+                    <p className="py-2 px-3 text-sm text-gray-800 leading-4.5 overflow-y-auto">
+                        {/* TODO: Write some AfV explanation */}
+                    </p>
+                ) : (
+                    <p className="py-2 px-3 text-sm text-gray-800 leading-4.5 overflow-y-auto">
+                        {/* TODO: Write some TrackAudio explanation */}
+                    </p>
+                )}
             </div>
         </div>
     );
