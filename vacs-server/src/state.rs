@@ -152,7 +152,6 @@ impl AppState {
             .read()
             .await
             .values()
-            .cloned()
             .map(|c| c.client_info.clone())
             .collect();
 
