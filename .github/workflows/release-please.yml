@@ -63,6 +63,8 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: 'ubuntu-22.04-x86_64'
 
       - name: Update cargo workspace lockfile
         run: cargo update -w

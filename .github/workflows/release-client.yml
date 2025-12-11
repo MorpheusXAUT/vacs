@@ -84,10 +84,10 @@ jobs:
         include:
           - platform: 'ubuntu-22.04'
             arch: 'x86_64'
-            target: ''
+            target: 'x86_64-unknown-linux-gnu'
           - platform: 'windows-latest'
             arch: 'x86_64'
-            target: ''
+            target: 'x86_64-pc-windows-msvc'
           - platform: 'macos-latest'
             arch: 'aarch64'
             target: 'aarch64-apple-darwin' # for Arm based macs (M1 and above).
@@ -164,6 +164,8 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Install frontend dependencies
         working-directory: vacs-client
