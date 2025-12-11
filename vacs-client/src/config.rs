@@ -447,11 +447,19 @@ pub enum TransmitMode {
     RadioIntegration,
 }
 
+/// Configuration for the transmission mode and associated keybinds.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TransmitConfig {
+    /// The transmit mode to use.
     pub mode: TransmitMode,
+    /// Key code for Push-to-Talk mode.
+    /// Required if mode is `PushToTalk`.
     pub push_to_talk: Option<Code>,
+    /// Key code for Push-to-Mute mode.
+    /// Required if mode is `PushToMute`.
     pub push_to_mute: Option<Code>,
+    /// Key code for Radio Integration PTT.
+    /// Required if mode is `RadioIntegration`.
     pub radio_push_to_talk: Option<Code>,
 }
 
@@ -644,9 +652,15 @@ impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
     }
 }
 
+/// Configuration for generic call control keybinds.
+///
+/// These keybinds allow accepting and ending calls without needing to use the UI
+/// and can be used independently of the transmit mode.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CallControlConfig {
+    /// Key code to accept an incoming call.
     pub accept_call: Option<Code>,
+    /// Key code to end an active call.
     pub end_call: Option<Code>,
 }
 

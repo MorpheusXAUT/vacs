@@ -102,6 +102,44 @@
           },
           "default": [],
           "description": "List of peer IDs (CIDs) that should be ignored by the client."
+        },
+        "transmit_config": {
+          "type": "object",
+          "description": "Configuration for the transmission mode and associated keybinds.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["VoiceActivation", "PushToTalk", "PushToMute", "RadioIntegration"],
+              "default": "VoiceActivation",
+              "description": "The transmit mode to use."
+            },
+            "push_to_talk": {
+              "type": ["string", "null"],
+              "description": "Key code for Push-to-Talk mode. Required if mode is PushToTalk."
+            },
+            "push_to_mute": {
+              "type": ["string", "null"],
+              "description": "Key code for Push-to-Mute mode. Required if mode is PushToMute."
+            },
+            "radio_push_to_talk": {
+              "type": ["string", "null"],
+              "description": "Key code for Radio Integration PTT. Required if mode is RadioIntegration."
+            }
+          }
+        },
+        "call_control": {
+          "type": "object",
+          "description": "Configuration for generic call control keybinds.",
+          "properties": {
+            "accept_call": {
+              "type": ["string", "null"],
+              "description": "Key code to accept an incoming call."
+            },
+            "end_call": {
+              "type": ["string", "null"],
+              "description": "Key code to end an active call. Can be the same as accept_call for context-aware behavior."
+            }
+          }
         }
       },
       "additionalProperties": true

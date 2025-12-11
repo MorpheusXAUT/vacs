@@ -11,6 +11,8 @@ The `client` configuration allows you to control the client's behavior and local
 - **[Ignore list](#ignore-list)** - Manage ignored users
 - **[Extra stations config](#extra-stations-config)** - Load an additional stations config file
 - **[Selected stations profile](#selected-stations-profile)** - Currently active stations profile
+- **[Transmit configuration](#transmit-configuration)** - Configure transmission mode and PTT keys
+- **[Call control](#call-control)** - Configure call control keybinds
 
 ## Configuration structure
 
@@ -19,6 +21,17 @@ The `client` configuration allows you to control the client's behavior and local
 ignored = []
 selected_stations_profile = "Default"
 # extra_stations_config = "/path/to/extra_stations.toml"
+
+[client.transmit_config]
+mode = "VoiceActivation" # or "PushToTalk", "PushToMute", "RadioIntegration"
+# push_to_talk = "ShiftRight"
+# push_to_mute = "AltRight"
+# radio_push_to_talk = "ControlRight"
+
+[client.call_control]
+# accept_call = "ControlRight"
+# end_call = "ControlRight"
+
 ```
 
 ---
@@ -86,3 +99,129 @@ The `selected_stations_profile` setting determines which [stations profile](stat
 **Optional:** Yes
 
 This value is updated automatically when you switch profiles in the client UI.
+
+---
+
+## Transmit configuration
+
+The `transmit_config` section controls how your voice is transmitted during calls.
+
+#### `mode`: transmission mode
+
+**Type:** String (Enum)  
+**Default:** `"VoiceActivation"`  
+**Possible values:**
+
+- `"VoiceActivation"`: Microphone is open when you speak.
+- `"PushToTalk"`: Microphone is open only when the PTT key is held.
+- `"PushToMute"`: Microphone is open unless the PTM key is held.
+- `"RadioIntegration"`: Microphone is managed by the radio integration (requires `radio_push_to_talk` key).
+
+---
+
+#### `push_to_talk`: Push-to-talk key
+
+**Type:** String (Key Code)  
+**Optional:** Yes (Required if `mode` is `"PushToTalk"`)
+
+Key code for Push-to-Talk mode.
+
+---
+
+#### `push_to_mute`: Push-to-mute key
+
+**Type:** String (Key Code)  
+**Optional:** Yes (Required if `mode` is `"PushToMute"`)
+
+Key code for Push-to-Mute mode.
+
+---
+
+#### `radio_push_to_talk`: Radio Integration Push-to-talk key
+
+**Type:** String (Key Code)  
+**Optional:** Yes (Required if `mode` is `"RadioIntegration"`)
+
+Key code for Radio Integration Push-to-talk.
+
+---
+
+## Call control
+
+The `call_control` section allows you to configure global keybinds for accepting and ending calls. These keybinds work independently of the application focus.
+
+#### `accept_call`: accept call key
+
+**Type:** String (Key Code)  
+**Optional:** Yes
+
+Key code to accept an incoming call.
+
+---
+
+#### `end_call`: end call key
+
+**Type:** String (Key Code)  
+**Optional:** Yes
+
+Key code to end an active call.
+
+---
+
+### Tips
+
+> [!NOTE]  
+> Even if you use `VoiceActivation` transmit mode (which normally requires no keybinds), you can still define `accept_call` and `end_call` keybinds to control calls via keyboard.
+
+> [!TIP]
+> **Contextual Call Control**
+>
+> By assigning the same key to both `accept_call` and `end_call`, you enable contextual behavior based on the current call state:
+>
+> - **Incoming call:** Accepts the call.
+> - **Active call:** Ends the current call.
+> - **Active call + new incoming call:** First press ends the current call, second press accepts the incoming one.
+
+### Complete Examples
+
+#### Example 1: Standard Push-to-Talk
+
+Simple setup with separate keys for PTT and call control.
+
+```toml
+[client.transmit_config]
+mode = "PushToTalk"
+push_to_talk = "ShiftRight"
+
+[client.call_control]
+accept_call = "ControlRight"
+end_call = "AltRight"
+```
+
+#### Example 2: Voice Activation with Call Control
+
+Use voice activation for transmission but keep call controls on keys.
+
+```toml
+[client.transmit_config]
+mode = "VoiceActivation"
+
+[client.call_control]
+accept_call = "ControlRight"
+end_call = "AltRight"
+```
+
+#### Example 3: Contextual Call Control (Single Key)
+
+Combine accept and end call into a single context-aware key (`ControlRight`).
+
+```toml
+[client.transmit_config]
+mode = "PushToTalk"
+push_to_talk = "ShiftRight"
+
+[client.call_control]
+# Use ControlRight for both actions
+accept_call = "ControlRight"
+end_call = "ControlRight"
+```
