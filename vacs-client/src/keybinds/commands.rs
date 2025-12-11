@@ -1,7 +1,8 @@
 use crate::app::state::AppState;
 use crate::config::{
-    CLIENT_SETTINGS_FILE_NAME, FrontendRadioConfig, FrontendTransmitConfig, Persistable,
-    PersistedClientConfig, RadioConfig, TransmitConfig, TransmitMode,
+    CLIENT_SETTINGS_FILE_NAME, CallControlConfig, FrontendCallControlConfig, FrontendRadioConfig,
+    FrontendTransmitConfig, Persistable, PersistedClientConfig, RadioConfig, TransmitConfig,
+    TransmitMode,
 };
 use crate::error::Error;
 use crate::keybinds::KeybindsError;
@@ -48,10 +49,62 @@ pub async fn keybinds_set_transmit_config(
         keybind_engine
             .write()
             .await
-            .set_config(&transmit_config)
+            .set_config(&transmit_config, &state.config.client.call_control)
             .await?;
 
         state.config.client.transmit_config = transmit_config;
+        state.config.client.clone().into()
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn keybinds_get_call_control_config(
+    app_state: State<'_, AppState>,
+) -> Result<FrontendCallControlConfig, Error> {
+    Ok(app_state
+        .lock()
+        .await
+        .config
+        .client
+        .call_control
+        .clone()
+        .into())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn keybinds_set_call_control_config(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    keybind_engine: State<'_, KeybindEngineHandle>,
+    config: FrontendCallControlConfig,
+) -> Result<(), Error> {
+    let capabilities = Capabilities::default();
+    if !capabilities.keybind_listener {
+        return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
+    }
+
+    let persisted_client_config: PersistedClientConfig = {
+        let mut state = app_state.lock().await;
+
+        let call_control_config: CallControlConfig = config.try_into()?;
+
+        keybind_engine
+            .write()
+            .await
+            .set_config(&state.config.client.transmit_config, &call_control_config)
+            .await?;
+
+        state.config.client.call_control = call_control_config;
         state.config.client.clone().into()
     };
 

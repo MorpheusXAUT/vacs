@@ -1,7 +1,8 @@
+use crate::app::state::http::HttpState;
 use crate::app::state::webrtc::{AppStateWebrtcExt, UnansweredCallGuard};
 use crate::app::state::{AppState, AppStateInner, sealed};
 use crate::audio::manager::{AudioManagerHandle, SourceType};
-use crate::config::WS_LOGIN_TIMEOUT;
+use crate::config::{BackendEndpoint, WS_LOGIN_TIMEOUT};
 use crate::error::{Error, FrontendError};
 use crate::signaling::auth::TauriTokenProvider;
 use serde::Serialize;
@@ -11,6 +12,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
+use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
 use vacs_signaling::transport::tokio::TokioTransport;
 
@@ -35,6 +37,8 @@ pub trait AppStateSignalingExt: sealed::Sealed {
     ) -> SignalingClient<TokioTransport, TauriTokenProvider>;
     fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &str);
     fn cancel_unanswered_call_timer(&mut self, peer_id: &str);
+    async fn accept_first_incoming_call(&mut self, app: &AppHandle) -> Result<bool, Error>;
+    async fn end_active_call(&mut self, app: &AppHandle) -> Result<bool, Error>;
 }
 
 impl AppStateSignalingExt for AppStateInner {
@@ -214,6 +218,70 @@ impl AppStateSignalingExt for AppStateInner {
             guard.cancel.cancel();
             guard.handle.abort();
         }
+    }
+
+    async fn accept_first_incoming_call(&mut self, app: &AppHandle) -> Result<bool, Error> {
+        let peer_id = match self.incoming_call_peer_ids.iter().next() {
+            Some(id) => id.clone(),
+            None => return Ok(false),
+        };
+
+        log::debug!("Accepting first incoming call from {peer_id}");
+
+        if self.is_ice_config_expired() {
+            match app
+                .state::<HttpState>()
+                .http_get::<IceConfig>(BackendEndpoint::IceConfig, None)
+                .await
+            {
+                Ok(config) => {
+                    self.config.ice = config;
+                }
+                Err(err) => {
+                    log::warn!("Failed to refresh ICE config, using cached one: {err:?}");
+                }
+            };
+        }
+
+        self.send_signaling_message(SignalingMessage::CallAccept {
+            peer_id: peer_id.clone(),
+        })
+        .await?;
+        self.remove_incoming_call_peer_id(&peer_id);
+
+        self.audio_manager.read().stop(SourceType::Ring);
+
+        app.emit("signaling:call-accept", peer_id).ok();
+
+        Ok(true)
+    }
+
+    async fn end_active_call(&mut self, app: &AppHandle) -> Result<bool, Error> {
+        let Some(peer_id) = self
+            .active_call_peer_id()
+            .or(self.outgoing_call_peer_id.as_ref())
+            .cloned()
+        else {
+            return Ok(false);
+        };
+
+        log::debug!("Ending active call with {peer_id}");
+
+        self.send_signaling_message(SignalingMessage::CallEnd {
+            peer_id: peer_id.clone(),
+        })
+        .await?;
+
+        self.end_call(&peer_id).await;
+
+        self.cancel_unanswered_call_timer(&peer_id);
+        self.set_outgoing_call_peer_id(None);
+
+        self.audio_manager.read().stop(SourceType::Ringback);
+
+        app.emit("signaling:force-call-end", peer_id).ok();
+
+        Ok(true)
     }
 }
 
@@ -556,7 +624,7 @@ impl AppStateInner {
                         state.remove_outgoing_call_peer_id(&peer_id);
                         state.remove_incoming_call_peer_id(&peer_id);
 
-                        app.emit("signaling:rate-limit", peer_id).ok();
+                        app.emit("signaling:force-call-end", peer_id).ok();
                     }
                     app.emit::<FrontendError>(
                         "error",

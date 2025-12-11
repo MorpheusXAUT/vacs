@@ -266,6 +266,8 @@ pub struct ClientConfig {
     pub ignored: HashSet<String>,
     pub extra_stations_config: Option<String>,
     pub selected_stations_profile: String,
+    #[serde(default)]
+    pub call_control: CallControlConfig,
 }
 
 impl Default for ClientConfig {
@@ -283,6 +285,7 @@ impl Default for ClientConfig {
             ignored: HashSet::new(),
             extra_stations_config: None,
             selected_stations_profile: "Default".to_string(),
+            call_control: CallControlConfig::default(),
         }
     }
 }
@@ -637,6 +640,49 @@ impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
     fn try_from(value: FrontendTrackAudioRadioConfig) -> Result<Self, Self::Error> {
         Ok(Self {
             endpoint: value.endpoint,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CallControlConfig {
+    pub accept_call: Option<Code>,
+    pub end_call: Option<Code>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendCallControlConfig {
+    pub accept_call: Option<String>,
+    pub end_call: Option<String>,
+}
+
+impl From<CallControlConfig> for FrontendCallControlConfig {
+    fn from(config: CallControlConfig) -> Self {
+        Self {
+            accept_call: config.accept_call.map(|c| c.to_string()),
+            end_call: config.end_call.map(|c| c.to_string()),
+        }
+    }
+}
+
+impl TryFrom<FrontendCallControlConfig> for CallControlConfig {
+    type Error = Error;
+
+    fn try_from(value: FrontendCallControlConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            accept_call: value
+                .accept_call
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.accept_call.unwrap_or_default()))))?,
+            end_call: value
+                .end_call
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.end_call.unwrap_or_default()))))?,
         })
     }
 }

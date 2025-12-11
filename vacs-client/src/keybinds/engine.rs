@@ -1,5 +1,8 @@
+use crate::app::state::AppState;
+use crate::app::state::signaling::AppStateSignalingExt;
+use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::AudioManagerHandle;
-use crate::config::{RadioConfig, TransmitConfig, TransmitMode};
+use crate::config::{CallControlConfig, RadioConfig, TransmitConfig, TransmitMode};
 use crate::error::Error;
 use crate::keybinds::KeyEvent;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
@@ -20,7 +23,9 @@ use crate::platform::Platform;
 #[derive(Debug)]
 pub struct KeybindEngine {
     mode: TransmitMode,
-    code: Option<Code>,
+    transmit_code: Option<Code>,
+    accept_call_code: Option<Code>,
+    end_call_code: Option<Code>,
     radio_config: RadioConfig,
     app: AppHandle,
     listener: RwLock<Option<DynKeybindListener>>,
@@ -40,12 +45,15 @@ impl KeybindEngine {
     pub fn new(
         app: AppHandle,
         transmit_config: &TransmitConfig,
+        call_control_config: &CallControlConfig,
         radio_config: &RadioConfig,
         shutdown_token: CancellationToken,
     ) -> Self {
         Self {
             mode: transmit_config.mode,
-            code: Self::select_active_code(transmit_config),
+            transmit_code: Self::select_active_transmit_code(transmit_config),
+            accept_call_code: Self::select_accept_call_code(call_control_config),
+            end_call_code: Self::select_end_call_code(call_control_config),
             radio_config: radio_config.clone(),
             app,
             listener: RwLock::new(None),
@@ -63,13 +71,13 @@ impl KeybindEngine {
     pub async fn start(&mut self) -> Result<(), Error> {
         if self.rx_task.is_some() {
             debug_assert!(self.listener.read().is_some());
-            debug_assert!(self.code.is_some());
+            debug_assert!(self.transmit_code.is_some());
             return Ok(());
         }
         if self.mode == TransmitMode::VoiceActivation {
             log::trace!("TransmitMode set to voice activation, no keybind engine required");
             return Ok(());
-        } else if self.code.is_none() {
+        } else if self.transmit_code.is_none() {
             log::trace!(
                 "No keybind set for TransmitMode {:?}, keybind engine not starting",
                 self.mode
@@ -119,11 +127,18 @@ impl KeybindEngine {
         self.stop();
     }
 
-    pub async fn set_config(&mut self, config: &TransmitConfig) -> Result<(), Error> {
+    pub async fn set_config(
+        &mut self,
+        transmit_config: &TransmitConfig,
+        call_control_config: &CallControlConfig,
+    ) -> Result<(), Error> {
         self.stop();
 
-        self.code = Self::select_active_code(config);
-        self.mode = config.mode;
+        self.transmit_code = Self::select_active_transmit_code(transmit_config);
+        self.mode = transmit_config.mode;
+
+        self.accept_call_code = Self::select_accept_call_code(call_control_config);
+        self.end_call_code = Self::select_end_call_code(call_control_config);
 
         self.reset_input_state();
 
@@ -271,9 +286,15 @@ impl KeybindEngine {
 
     fn spawn_rx_loop(&mut self, mut rx: UnboundedReceiver<KeyEvent>) {
         let app = self.app.clone();
-        let Some(active) = self.code else {
+        let transmit = self.transmit_code;
+        let accept_call = self.accept_call_code;
+        let end_call = self.end_call_code;
+        let shared_call_controls = accept_call == end_call;
+
+        if transmit.is_none() && accept_call.is_none() && end_call.is_none() {
             return;
-        };
+        }
+
         let mode = self.mode;
         let stop_token = self
             .stop_token
@@ -287,9 +308,7 @@ impl KeybindEngine {
 
         let handle = tauri::async_runtime::spawn(async move {
             log::debug!(
-                "Keybind engine starting: mode={:?}, code={:?}",
-                mode,
-                active
+                "Keybind engine starting: mode={mode:?}, transmit={transmit:?}, accept_call={accept_call:?}, end_call={end_call:?}",
             );
 
             loop {
@@ -298,7 +317,55 @@ impl KeybindEngine {
                     _ = stop_token.cancelled() => break,
                     res = rx.recv() => {
                         let Some(event) = res else { break; };
-                        if event.code != active { continue; }
+
+                        if event.state == KeyState::Down {
+                            if shared_call_controls && (accept_call.is_some_and(|c| c == event.code) || end_call.is_some_and(|c| c == event.code)) {
+                                log::trace!("Shared call control key pressed");
+
+                                let state = app.state::<AppState>();
+                                let mut state = state.lock().await;
+
+                                if state.active_call_peer_id().is_some() || state.outgoing_call_peer_id().is_some() {
+                                    match state.end_active_call(&app).await {
+                                        Ok(found) if !found => log::trace!("No active call to end via keybind"),
+                                        Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
+                                        _ => {}
+                                    }
+                                } else {
+                                    match state.accept_first_incoming_call(&app).await {
+                                        Ok(found) if !found => log::trace!("No incoming call to accept via keybind"),
+                                        Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
+                                        _ => {}
+                                    }
+                                }
+                            } else if accept_call.is_some_and(|c| c == event.code) {
+                                log::trace!("Accept call key pressed");
+
+                                let state = app.state::<AppState>();
+                                let mut state = state.lock().await;
+
+                                match state.accept_first_incoming_call(&app).await {
+                                    Ok(found) if !found => log::trace!("No incoming call to accept via keybind"),
+                                    Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
+                                    _ => {}
+                                }
+                            } else if end_call.is_some_and(|c| c == event.code) {
+                                log::trace!("End call key pressed");
+
+                                let state = app.state::<AppState>();
+                                let mut state = state.lock().await;
+
+                                match state.end_active_call(&app).await {
+                                    Ok(found) if !found => log::trace!("No active call to end via keybind"),
+                                    Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        if transmit.is_none_or(|c| c != event.code) {
+                            continue;
+                        }
 
                         let muted = match (&mode, &event.state) {
                             (TransmitMode::PushToTalk | TransmitMode::RadioIntegration, KeyState::Down) if !pressed.swap(true, Ordering::Relaxed) => false,
@@ -367,7 +434,7 @@ impl KeybindEngine {
     }
 
     #[inline]
-    fn select_active_code(config: &TransmitConfig) -> Option<Code> {
+    fn select_active_transmit_code(config: &TransmitConfig) -> Option<Code> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
             // Wayland Code Mapping Strategy:
@@ -402,6 +469,26 @@ impl KeybindEngine {
             TransmitMode::PushToMute => config.push_to_mute,
             TransmitMode::RadioIntegration => config.radio_push_to_talk,
         }
+    }
+
+    #[inline]
+    fn select_accept_call_code(config: &CallControlConfig) -> Option<Code> {
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            return Some(Code::F32);
+        }
+
+        config.accept_call
+    }
+
+    #[inline]
+    fn select_end_call_code(config: &CallControlConfig) -> Option<Code> {
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            return Some(Code::F32);
+        }
+
+        config.end_call
     }
 
     #[inline]

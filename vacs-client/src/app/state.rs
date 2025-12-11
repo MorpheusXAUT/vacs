@@ -61,6 +61,7 @@ impl AppStateInner {
             keybind_engine: Arc::new(TokioRwLock::new(KeybindEngine::new(
                 app.clone(),
                 &config.client.transmit_config,
+                &config.client.call_control,
                 &config.client.radio,
                 shutdown_token.child_token(),
             ))),
