@@ -83,11 +83,15 @@ function DANavKey({group}: { group: string }) {
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
 
-    const isCalling = incomingCalls.some(peer => peer.displayName.startsWith(group));
-    const beingCalled = callDisplay?.type === "outgoing" && callDisplay.peer.displayName.startsWith(group);
-    const inCall = callDisplay?.type === "accepted" && callDisplay.peer.displayName.startsWith(group);
-    const isRejected = callDisplay?.type === "rejected" && callDisplay.peer.displayName.startsWith(group);
-    const isError = callDisplay?.type === "error" && callDisplay.peer.displayName.startsWith(group);
+    const isClientInGroup = (client: string) => {
+        return client.startsWith(group) || (group === "OTHER" && !client.includes("_"));
+    }
+
+    const isCalling = incomingCalls.some(peer => isClientInGroup(peer.displayName));
+    const beingCalled = callDisplay?.type === "outgoing" && isClientInGroup(callDisplay.peer.displayName);
+    const inCall = callDisplay?.type === "accepted" && isClientInGroup(callDisplay.peer.displayName);
+    const isRejected = callDisplay?.type === "rejected" && isClientInGroup(callDisplay.peer.displayName);
+    const isError = callDisplay?.type === "error" && isClientInGroup(callDisplay.peer.displayName);
 
     return (
         <Button
