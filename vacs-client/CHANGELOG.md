@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.2.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v1.1.0...vacs-client-v1.2.0) (2025-12-11)
+
+
+### Features
+
+* **vacs-client:** add client ignore list ([#295](https://github.com/MorpheusXAUT/vacs/issues/295)) ([4af900d](https://github.com/MorpheusXAUT/vacs/commit/4af900dafd38baa0845bb834ea05a0515713800b))
+* **vacs-client:** add option for hiding frequencies on DA keys ([#298](https://github.com/MorpheusXAUT/vacs/issues/298)) ([fd6c5af](https://github.com/MorpheusXAUT/vacs/commit/fd6c5af951abb85c1e5960b44217942d1df36a4c))
+* **vacs-client:** add station grouping ([#308](https://github.com/MorpheusXAUT/vacs/issues/308)) ([cc0dc44](https://github.com/MorpheusXAUT/vacs/commit/cc0dc44db1004bddff0866ac60f27d1de01e7189))
+* **vacs-client:** add TrackAudio radio integration ([#294](https://github.com/MorpheusXAUT/vacs/issues/294)) ([40399ed](https://github.com/MorpheusXAUT/vacs/commit/40399ed64398e05deb9dbc3fe7edb9dffd218a1b))
+* **vacs-client:** add Wayland keybind listener support ([#282](https://github.com/MorpheusXAUT/vacs/issues/282)) ([b1590d2](https://github.com/MorpheusXAUT/vacs/commit/b1590d22d008c18450fcc9a0528e7aa0fdb6fbe5))
+
+
+### Bug Fixes
+
+* **vacs-client:** change time in call list to show UTC ([#299](https://github.com/MorpheusXAUT/vacs/issues/299)) ([1d31e66](https://github.com/MorpheusXAUT/vacs/commit/1d31e662fec61d68162b72844dcfafe1fa6021b3))
+* **vacs-client:** cleanup frontent state when call invite is rate limited ([e211361](https://github.com/MorpheusXAUT/vacs/commit/e211361371fe040c1da914b1393d5e09c814e14c)), closes [#234](https://github.com/MorpheusXAUT/vacs/issues/234)
+* **vacs-client:** fix blocking message dialog on macos ([8ee4ead](https://github.com/MorpheusXAUT/vacs/commit/8ee4ead1f84d737fc741a2768c0551b9f538b991))
+* **vacs-client:** fix mission page overflow ([#276](https://github.com/MorpheusXAUT/vacs/issues/276)) ([ac8d63b](https://github.com/MorpheusXAUT/vacs/commit/ac8d63bd5459925a8e57df74793e94253440407d))
+* **vacs-client:** fix restored position in fullscreen upon startup ([c04a7cd](https://github.com/MorpheusXAUT/vacs/commit/c04a7cded84b9575e06e3b6e7943a78555861354)), closes [#270](https://github.com/MorpheusXAUT/vacs/issues/270)
+* **vacs-client:** fix TrackAudio radio integration failing to init without endpoint ([#313](https://github.com/MorpheusXAUT/vacs/issues/313)) ([77d6c14](https://github.com/MorpheusXAUT/vacs/commit/77d6c14ac021db9c83fec875b17b0b8173a44b7e))
+* **vacs-client:** fix window state update storing incorrect window size and position ([#326](https://github.com/MorpheusXAUT/vacs/issues/326)) ([bd45bcb](https://github.com/MorpheusXAUT/vacs/commit/bd45bcb9051433cefef7abb30304b99d0aa7aa50))
+* **vacs-client:** move window state restore back to frontend ready command ([6d752e9](https://github.com/MorpheusXAUT/vacs/commit/6d752e9b87c39e3603a4f7cffdd1e730163a246c))
+
 ## [1.1.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v1.0.0...vacs-client-v1.1.0) (2025-11-30)
 
 
