@@ -136,11 +136,18 @@ pub async fn audio_set_device(
     let mut state = app_state.lock().await;
     let mut audio_manager = audio_manager.write();
 
+    let should_reattach_input_level_meter =
+        audio_manager.is_input_level_meter_attached() && matches!(device_type, DeviceType::Input);
+
     if audio_manager.is_input_device_attached() {
-        return Err(AudioError::Other(anyhow::anyhow!(
-            "Cannot set audio device while call is active"
-        ))
-        .into());
+        if should_reattach_input_level_meter {
+            audio_manager.detach_input_device();
+        } else {
+            return Err(AudioError::Other(anyhow::anyhow!(
+                "Cannot set audio device while call is active"
+            ))
+            .into());
+        }
     }
 
     log::info!(
@@ -161,6 +168,17 @@ pub async fn audio_set_device(
 
                 state.config.audio = audio_config;
             }
+        }
+
+        if should_reattach_input_level_meter {
+            let app = app.clone();
+            audio_manager.attach_input_level_meter(
+                app.clone(),
+                &state.config.audio,
+                Box::new(move |level| {
+                    app.emit("audio:input-level", level).ok();
+                }),
+            )?;
         }
 
         state.config.audio.clone().into()
@@ -269,10 +287,16 @@ pub async fn audio_start_input_level_meter(
     let mut audio_manager = audio_manager.write();
 
     if audio_manager.is_input_device_attached() {
-        return Err(AudioError::Other(anyhow::anyhow!(
-            "Cannot start input level meter while call is active"
-        ))
-        .into());
+        if audio_manager.is_input_level_meter_attached() {
+            return Err(AudioError::Other(anyhow::anyhow!(
+                "Cannot start input level meter while already active"
+            ))
+            .into());
+        }
+
+        // As this command is called when the user opens the settings page,
+        // we don't want to show an error message if the user is in a call.
+        return Ok(());
     }
 
     audio_manager.attach_input_level_meter(
@@ -293,7 +317,9 @@ pub async fn audio_stop_input_level_meter(
 ) -> Result<(), Error> {
     log::trace!("Stopping input level meter");
 
-    audio_manager.write().detach_input_device();
+    if audio_manager.read().is_input_level_meter_attached() {
+        audio_manager.write().detach_input_device();
+    }
 
     Ok(())
 }

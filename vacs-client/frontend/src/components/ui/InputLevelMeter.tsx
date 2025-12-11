@@ -1,9 +1,11 @@
-import {useRef, useState} from "preact/hooks";
+import {useEffect, useRef, useState} from "preact/hooks";
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {InputLevel} from "../../types/audio.ts";
 import {clsx} from "clsx";
-import {invokeSafe} from "../../error.ts";
+import {invokeSafe, invokeStrict} from "../../error.ts";
 import {useCallStore} from "../../stores/call-store.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {useEventCallback} from "../../hooks/event-callback-hook.ts";
 
 function InputLevelMeter() {
     const isCallActive = useCallStore(state => state.callDisplay?.type === "accepted");
@@ -11,7 +13,45 @@ function InputLevelMeter() {
     const [level, setLevel] = useState<InputLevel | undefined>();
     const unlistenStopFnRef = useRef<Promise<UnlistenFn> | undefined>();
 
-    const handleOnClick = async () => {
+    const startLevelMeter = useEventCallback(async () => {
+        if (isCallActive) return; // Cannot start input level meter while call is active
+
+        const unlisten = listen<InputLevel>("audio:input-level", (event) => {
+            setLevel(event.payload);
+        });
+
+        const unlistenStop = listen("audio:stop-input-level-meter", async () => {
+            (await unlisten)();
+            setUnlistenFn(undefined);
+            setLevel(undefined);
+        });
+
+        setUnlistenFn(unlisten);
+        unlistenStopFnRef.current = unlistenStop;
+        try {
+            await invokeStrict("audio_start_input_level_meter");
+        } catch {
+            (await unlisten)();
+            (await unlistenStop)();
+            setUnlistenFn(undefined);
+            setLevel(undefined);
+        }
+    });
+
+    const stopLevelMeter = useEventCallback(async () => {
+        if (unlistenFn === undefined) return;
+
+        await invokeSafe("audio_stop_input_level_meter");
+
+        (await unlistenFn)();
+        if (unlistenStopFnRef.current) {
+            (await unlistenStopFnRef.current)();
+        }
+        setUnlistenFn(undefined);
+        setLevel(undefined);
+    });
+
+    const handleOnClick = useAsyncDebounce(async () => {
         if (isCallActive) return; // Cannot start input level meter while call is active
 
         void invokeSafe("audio_play_ui_click");
@@ -21,28 +61,19 @@ function InputLevelMeter() {
         }
 
         if (unlistenFn !== undefined) {
-            await invokeSafe("audio_stop_input_level_meter");
-
-            (await unlistenFn)();
-            setUnlistenFn(undefined);
-            setLevel(undefined);
+            await stopLevelMeter();
         } else {
-            const unlisten = listen<InputLevel>("audio:input-level", (event) => {
-                setLevel(event.payload);
-            })
-
-            const unlistenStop = listen("audio:stop-input-level-meter", async () => {
-                (await unlisten)();
-                setUnlistenFn(undefined);
-                setLevel(undefined);
-            });
-
-            setUnlistenFn(unlisten);
-            unlistenStopFnRef.current = unlistenStop;
-            void invokeSafe("audio_start_input_level_meter");
+            await startLevelMeter();
         }
-    };
+    });
 
+    useEffect(() => {
+        void startLevelMeter();
+
+        return () => {
+            void stopLevelMeter();
+        }
+    }, [startLevelMeter, stopLevelMeter]);
 
     return (
         <div className="w-4 h-full shrink-0 pb-2 pt-24">

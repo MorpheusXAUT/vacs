@@ -137,6 +137,7 @@ impl AudioManager {
 
         let (error_tx, mut error_rx) = mpsc::channel(AUDIO_STREAM_ERROR_CHANNEL_SIZE);
 
+        let app_clone = app.clone();
         tauri::async_runtime::spawn(async move {
             while let Some(err) = error_rx.recv().await {
                 let state = app.state::<AppState>();
@@ -171,14 +172,20 @@ impl AudioManager {
             log::debug!("Playback capture error receiver closed");
         });
 
-        self.input = Some(CaptureStream::start(
+        let capture = CaptureStream::start(
             device,
             tx,
             audio_config.input_device_volume,
             audio_config.input_device_volume_amp,
             error_tx,
             muted,
-        )?);
+        )?;
+
+        app_clone
+            .emit("audio:stop-input-level-meter", Value::Null)
+            .ok();
+
+        self.input = Some(capture);
         Ok(())
     }
 
@@ -221,6 +228,13 @@ impl AudioManager {
 
     pub fn is_input_device_attached(&self) -> bool {
         self.input.is_some()
+    }
+
+    pub fn is_input_level_meter_attached(&self) -> bool {
+        self.input
+            .as_ref()
+            .map(CaptureStream::is_level_meter)
+            .unwrap_or(false)
     }
 
     pub fn detach_input_device(&mut self) {
