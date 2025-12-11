@@ -44,7 +44,7 @@ pub trait AppStateWebrtcExt: sealed::Sealed {
     ) -> Result<String, Error>;
     async fn accept_call_answer(&self, peer_id: &str, answer_sdp: String) -> Result<(), Error>;
     async fn set_remote_ice_candidate(&self, peer_id: &str, candidate: String);
-    async fn end_call(&mut self, peer_id: &str) -> bool;
+    async fn cleanup_call(&mut self, peer_id: &str) -> bool;
     fn emit_call_error(
         &self,
         app: &AppHandle,
@@ -99,7 +99,7 @@ impl AppStateWebrtcExt for AppStateInner {
                                     state.on_peer_connected(&app, &peer_id_clone).await
                                 {
                                     let reason: CallErrorReason = err.into();
-                                    state.end_call(&peer_id_clone).await;
+                                    state.cleanup_call(&peer_id_clone).await;
                                     if let Err(err) = state
                                         .send_signaling_message(SignalingMessage::CallError {
                                             peer_id: peer_id_clone.clone(),
@@ -139,7 +139,7 @@ impl AppStateWebrtcExt for AppStateInner {
 
                                 let app_state = app.state::<AppState>();
                                 let mut state = app_state.lock().await;
-                                state.end_call(&peer_id_clone).await;
+                                state.cleanup_call(&peer_id_clone).await;
 
                                 state.emit_call_error(
                                     &app,
@@ -154,7 +154,7 @@ impl AppStateWebrtcExt for AppStateInner {
 
                                 let app_state = app.state::<AppState>();
                                 let mut state = app_state.lock().await;
-                                state.end_call(&peer_id_clone).await;
+                                state.cleanup_call(&peer_id_clone).await;
                                 app.emit("signaling:call-end", &peer_id_clone).ok();
                             }
                             state => {
@@ -226,9 +226,9 @@ impl AppStateWebrtcExt for AppStateInner {
         }
     }
 
-    async fn end_call(&mut self, peer_id: &str) -> bool {
+    async fn cleanup_call(&mut self, peer_id: &str) -> bool {
         log::debug!(
-            "Ending call with peer {peer_id} (active: {:?})",
+            "Cleaning up call with peer {peer_id} (active: {:?})",
             self.active_call.as_ref()
         );
         let res = if let Some(call) = &mut self.active_call
@@ -252,7 +252,7 @@ impl AppStateWebrtcExt for AppStateInner {
         };
 
         if let Err(err) = &res {
-            log::warn!("Failed to end call: {err:?}");
+            log::warn!("Failed to cleanup call: {err:?}");
             return false;
         }
 

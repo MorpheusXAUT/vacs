@@ -148,7 +148,7 @@ impl AudioManager {
                         "Ending active call with peer {peer_id} due to capture stream error"
                     );
 
-                    state.end_call(&peer_id).await;
+                    state.cleanup_call(&peer_id).await;
                     if let Err(err) = state
                         .send_signaling_message(SignalingMessage::CallError {
                             peer_id: peer_id.clone(),
@@ -372,7 +372,7 @@ impl AudioManager {
                             "Ending active call with peer {peer_id} due to playback stream error"
                         );
 
-                        state.end_call(&peer_id).await;
+                        state.cleanup_call(&peer_id).await;
                         if let Err(err) = state
                             .send_signaling_message(SignalingMessage::CallError {
                                 peer_id: peer_id.clone(),

@@ -326,13 +326,13 @@ impl KeybindEngine {
                                 let mut state = state.lock().await;
 
                                 if state.active_call_peer_id().is_some() || state.outgoing_call_peer_id().is_some() {
-                                    match state.end_active_call(&app).await {
+                                    match state.end_call(&app, None).await {
                                         Ok(found) if !found => log::trace!("No active call to end via keybind"),
                                         Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
                                         _ => {}
                                     }
                                 } else {
-                                    match state.accept_first_incoming_call(&app).await {
+                                    match state.accept_call(&app, None).await {
                                         Ok(found) if !found => log::trace!("No incoming call to accept via keybind"),
                                         Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
                                         _ => {}
@@ -344,7 +344,7 @@ impl KeybindEngine {
                                 let state = app.state::<AppState>();
                                 let mut state = state.lock().await;
 
-                                match state.accept_first_incoming_call(&app).await {
+                                match state.accept_call(&app, None).await {
                                     Ok(found) if !found => log::trace!("No incoming call to accept via keybind"),
                                     Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
                                     _ => {}
@@ -355,7 +355,7 @@ impl KeybindEngine {
                                 let state = app.state::<AppState>();
                                 let mut state = state.lock().await;
 
-                                match state.end_active_call(&app).await {
+                                match state.end_call(&app, None).await {
                                     Ok(found) if !found => log::trace!("No active call to end via keybind"),
                                     Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
                                     _ => {}

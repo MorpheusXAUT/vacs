@@ -37,8 +37,12 @@ pub trait AppStateSignalingExt: sealed::Sealed {
     ) -> SignalingClient<TokioTransport, TauriTokenProvider>;
     fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &str);
     fn cancel_unanswered_call_timer(&mut self, peer_id: &str);
-    async fn accept_first_incoming_call(&mut self, app: &AppHandle) -> Result<bool, Error>;
-    async fn end_active_call(&mut self, app: &AppHandle) -> Result<bool, Error>;
+    async fn accept_call(
+        &mut self,
+        app: &AppHandle,
+        peer_id: Option<String>,
+    ) -> Result<bool, Error>;
+    async fn end_call(&mut self, app: &AppHandle, peer_id: Option<String>) -> Result<bool, Error>;
 }
 
 impl AppStateSignalingExt for AppStateInner {
@@ -190,7 +194,7 @@ impl AppStateSignalingExt for AppStateInner {
                             log::warn!("Failed to send call end message after call timer expired: {err:?}");
                         }
 
-                        state.end_call(&peer_id).await;
+                        state.cleanup_call(&peer_id).await;
                         state.set_outgoing_call_peer_id(None);
 
                         let audio_manager = app.state::<AudioManagerHandle>();
@@ -220,15 +224,18 @@ impl AppStateSignalingExt for AppStateInner {
         }
     }
 
-    async fn accept_first_incoming_call(&mut self, app: &AppHandle) -> Result<bool, Error> {
-        let peer_id = match self.incoming_call_peer_ids.iter().next() {
-            Some(id) => id.clone(),
+    async fn accept_call(
+        &mut self,
+        app: &AppHandle,
+        peer_id: Option<String>,
+    ) -> Result<bool, Error> {
+        let peer_id = match peer_id.or_else(|| self.incoming_call_peer_ids.iter().next().cloned()) {
+            Some(id) => id,
             None => return Ok(false),
         };
+        log::debug!("Accepting call from {peer_id}");
 
-        log::debug!("Accepting first incoming call from {peer_id}");
-
-        if self.is_ice_config_expired() {
+        if !self.config.ice.is_default() && self.is_ice_config_expired() {
             match app
                 .state::<HttpState>()
                 .http_get::<IceConfig>(BackendEndpoint::IceConfig, None)
@@ -256,23 +263,22 @@ impl AppStateSignalingExt for AppStateInner {
         Ok(true)
     }
 
-    async fn end_active_call(&mut self, app: &AppHandle) -> Result<bool, Error> {
-        let Some(peer_id) = self
-            .active_call_peer_id()
-            .or(self.outgoing_call_peer_id.as_ref())
-            .cloned()
-        else {
+    async fn end_call(&mut self, app: &AppHandle, peer_id: Option<String>) -> Result<bool, Error> {
+        let Some(peer_id) = peer_id.or_else(|| {
+            self.active_call_peer_id()
+                .or(self.outgoing_call_peer_id.as_ref())
+                .cloned()
+        }) else {
             return Ok(false);
         };
-
-        log::debug!("Ending active call with {peer_id}");
+        log::debug!("Ending call with {peer_id}");
 
         self.send_signaling_message(SignalingMessage::CallEnd {
             peer_id: peer_id.clone(),
         })
         .await?;
 
-        self.end_call(&peer_id).await;
+        self.cleanup_call(&peer_id).await;
 
         self.cancel_unanswered_call_timer(&peer_id);
         self.set_outgoing_call_peer_id(None);
@@ -456,7 +462,7 @@ impl AppStateInner {
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                if !state.end_call(&peer_id).await {
+                if !state.cleanup_call(&peer_id).await {
                     log::debug!("Received call end message for peer that is not active");
                 }
 
@@ -470,7 +476,7 @@ impl AppStateInner {
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                if !state.end_call(&peer_id).await {
+                if !state.cleanup_call(&peer_id).await {
                     log::debug!("Received call end message for peer that is not active");
                 }
 
@@ -507,7 +513,7 @@ impl AppStateInner {
                 let mut state = state.lock().await;
 
                 // Stop any active webrtc call
-                state.end_call(&peer_id).await;
+                state.cleanup_call(&peer_id).await;
 
                 // Remove from outgoing and incoming states
                 state.remove_outgoing_call_peer_id(&peer_id);
@@ -529,7 +535,7 @@ impl AppStateInner {
                 let mut state = state.lock().await;
 
                 // Stop any active webrtc call
-                state.end_call(&id).await;
+                state.cleanup_call(&id).await;
 
                 // Remove from outgoing and incoming states
                 state.remove_outgoing_call_peer_id(&id);
@@ -587,7 +593,7 @@ impl AppStateInner {
                     let state = app.state::<AppState>();
                     let mut state = state.lock().await;
 
-                    if !state.end_call(&peer_id).await {
+                    if !state.cleanup_call(&peer_id).await {
                         log::debug!(
                             "Received peer connection error message for peer that is not active"
                         );
@@ -620,7 +626,7 @@ impl AppStateInner {
                         let state = app.state::<AppState>();
                         let mut state = state.lock().await;
 
-                        state.end_call(&peer_id).await;
+                        state.cleanup_call(&peer_id).await;
                         state.remove_outgoing_call_peer_id(&peer_id);
                         state.remove_incoming_call_peer_id(&peer_id);
 
@@ -655,11 +661,11 @@ impl AppStateInner {
         self.keybind_engine.read().await.set_call_active(false);
 
         if let Some(peer_id) = self.active_call_peer_id().cloned() {
-            self.end_call(&peer_id).await;
+            self.cleanup_call(&peer_id).await;
         };
         let peer_ids = self.held_calls.keys().cloned().collect::<Vec<_>>();
         for peer_id in peer_ids {
-            self.end_call(&peer_id).await;
+            self.cleanup_call(&peer_id).await;
             app.emit("signaling:call-end", &peer_id).ok();
         }
 
