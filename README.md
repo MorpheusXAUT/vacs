@@ -108,7 +108,8 @@ If you encounter any issues or have questions about `vacs`, please use one of th
 
 Please search existing issues and discussions before creating a new one to avoid duplicates.
 
-> [!TIP] > **Need help or just want to hang out?**  
+> [!TIP]  
+> **Need help or just want to hang out?**  
 > If you have questions, need support, or simply feel like chatting, check out our [Discord server](https://discord.gg/yu2nyCKU3R)!
 
 ### Known issues
