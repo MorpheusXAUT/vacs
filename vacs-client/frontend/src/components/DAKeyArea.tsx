@@ -16,13 +16,19 @@ function DAKeyArea({filter}: DAKeyAreaProps) {
     const getGroups = (clients: ClientInfoWithAlias[], slice: number, prefix = "") => {
         const groups = [
             ...clients
-                .filter(client => client.displayName.startsWith(prefix) && client.displayName.includes("_"))
-                .reduce<Set<string>>((acc, val) =>
-                    acc.add(val.displayName.split("_")[0].slice(0, slice)
-                    ), new Set([]))
+                .filter(
+                    client =>
+                        client.displayName.startsWith(prefix) && client.displayName.includes("_"),
+                )
+                .reduce<
+                    Set<string>
+                >((acc, val) => acc.add(val.displayName.split("_")[0].slice(0, slice)), new Set([])),
         ];
 
-        if (clients.find(client => !client.displayName.includes("_")) !== undefined && prefix === "") {
+        if (
+            clients.find(client => !client.displayName.includes("_")) !== undefined &&
+            prefix === ""
+        ) {
             groups.push("OTHER");
         }
 
@@ -30,15 +36,11 @@ function DAKeyArea({filter}: DAKeyAreaProps) {
     };
 
     const renderClients = (clients: ClientInfoWithAlias[]) => {
-        return clients.map((client, idx) =>
-            <DAKey key={idx} client={client}/>
-        );
+        return clients.map((client, idx) => <DAKey key={idx} client={client} />);
     };
 
     const renderGroups = (groups: string[]) => {
-        return groups.map((group, idx) =>
-            <DANavKey key={idx} group={group}/>
-        );
+        return groups.map((group, idx) => <DANavKey key={idx} group={group} />);
     };
 
     const renderKeys = () => {
@@ -50,7 +52,9 @@ function DAKeyArea({filter}: DAKeyAreaProps) {
             case "Fir":
             case "Icao": {
                 if (filter !== "") {
-                    return renderClients(clients.filter(client => client.displayName.startsWith(filter)));
+                    return renderClients(
+                        clients.filter(client => client.displayName.startsWith(filter)),
+                    );
                 }
 
                 const slice = grouping === "Fir" ? 2 : 4;
@@ -62,7 +66,9 @@ function DAKeyArea({filter}: DAKeyAreaProps) {
                 } else if (filter.length === 2) {
                     return renderGroups(getGroups(clients, 4, filter));
                 }
-                return renderClients(clients.filter(client => client.displayName.startsWith(filter)));
+                return renderClients(
+                    clients.filter(client => client.displayName.startsWith(filter)),
+                );
             }
             case undefined:
             case "None":
@@ -78,29 +84,44 @@ function DAKeyArea({filter}: DAKeyAreaProps) {
     );
 }
 
-function DANavKey({group}: { group: string }) {
+function DANavKey({group}: {group: string}) {
     const blink = useCallStore(state => state.blink);
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
 
     const isClientInGroup = (client: string) => {
         return client.startsWith(group) || (group === "OTHER" && !client.includes("_"));
-    }
+    };
 
     const isCalling = incomingCalls.some(peer => isClientInGroup(peer.displayName));
-    const beingCalled = callDisplay?.type === "outgoing" && isClientInGroup(callDisplay.peer.displayName);
-    const inCall = callDisplay?.type === "accepted" && isClientInGroup(callDisplay.peer.displayName);
-    const isRejected = callDisplay?.type === "rejected" && isClientInGroup(callDisplay.peer.displayName);
+    const beingCalled =
+        callDisplay?.type === "outgoing" && isClientInGroup(callDisplay.peer.displayName);
+    const inCall =
+        callDisplay?.type === "accepted" && isClientInGroup(callDisplay.peer.displayName);
+    const isRejected =
+        callDisplay?.type === "rejected" && isClientInGroup(callDisplay.peer.displayName);
     const isError = callDisplay?.type === "error" && isClientInGroup(callDisplay.peer.displayName);
 
     return (
         <Button
-            color={inCall ? "green" : (isCalling || isRejected) && blink ? "green" : isError && blink ? "red" : "gray"}
+            color={
+                inCall
+                    ? "green"
+                    : (isCalling || isRejected) && blink
+                      ? "green"
+                      : isError && blink
+                        ? "red"
+                        : "gray"
+            }
             highlight={beingCalled || isRejected ? "green" : undefined}
             className="w-25 h-full rounded !leading-4.5 p-1.5"
             onClick={() => navigate(group)}
         >
-            <p className="w-full truncate leading-3.5" title={group}>{group}<br/>...</p>
+            <p className="w-full truncate leading-3.5" title={group}>
+                {group}
+                <br />
+                ...
+            </p>
         </Button>
     );
 }

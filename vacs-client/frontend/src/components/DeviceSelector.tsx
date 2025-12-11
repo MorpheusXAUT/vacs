@@ -8,7 +8,7 @@ import {clsx} from "clsx";
 
 type DeviceSelectorProps = {
     deviceType: "Input" | "Output";
-}
+};
 
 function DeviceSelector(props: DeviceSelectorProps) {
     const [device, setDevice] = useState<string>("");
@@ -20,16 +20,25 @@ function DeviceSelector(props: DeviceSelectorProps) {
     const fetchDevices = useCallback(async () => {
         try {
             const audioDevices = await invokeStrict<AudioDevices>("audio_get_devices", {
-                deviceType: props.deviceType
+                deviceType: props.deviceType,
             });
 
-            const isFallback = audioDevices.preferred.length !== 0 && audioDevices.preferred !== audioDevices.picked;
-            const defaultDevice = {value: "", text: `Default (${audioDevices.default})`, className: "text-initial"};
+            const isFallback =
+                audioDevices.preferred.length !== 0 &&
+                audioDevices.preferred !== audioDevices.picked;
+            const defaultDevice = {
+                value: "",
+                text: `Default (${audioDevices.default})`,
+                className: "text-initial",
+            };
 
-            let deviceList: SelectOption[] = audioDevices.all.map((deviceName) => ({
+            let deviceList: SelectOption[] = audioDevices.all.map(deviceName => ({
                 value: deviceName,
                 text: deviceName,
-                className: isFallback && deviceName === audioDevices.picked ? "text-green-700" : "text-initial"
+                className:
+                    isFallback && deviceName === audioDevices.picked
+                        ? "text-green-700"
+                        : "text-initial",
             }));
 
             deviceList = [defaultDevice, ...deviceList];
@@ -38,15 +47,14 @@ function DeviceSelector(props: DeviceSelectorProps) {
                     value: audioDevices.preferred,
                     text: audioDevices.preferred,
                     hidden: true,
-                    disabled: true
+                    disabled: true,
                 });
             }
 
             setIsFallback(isFallback);
             setDevice(audioDevices.preferred);
             setDevices(deviceList);
-        } catch {
-        }
+        } catch {}
     }, [props.deviceType]);
 
     const handleOnChange = useAsyncDebounce(async (new_device: string) => {
@@ -55,7 +63,10 @@ function DeviceSelector(props: DeviceSelectorProps) {
         setDevice(new_device);
 
         try {
-            await invokeStrict("audio_set_device", {deviceType: props.deviceType, deviceName: new_device});
+            await invokeStrict("audio_set_device", {
+                deviceType: props.deviceType,
+                deviceName: new_device,
+            });
             await fetchDevices();
         } catch {
             setDevice(previousDeviceName);
@@ -68,14 +79,21 @@ function DeviceSelector(props: DeviceSelectorProps) {
 
     return (
         <>
-            <p className="w-full text-center font-semibold">{props.deviceType === "Output" ? "Headset" : "Microphone"}</p>
+            <p className="w-full text-center font-semibold">
+                {props.deviceType === "Output" ? "Headset" : "Microphone"}
+            </p>
             <Select
                 name={props.deviceType}
                 className={clsx("mb-1", isFallback && "text-red-500 disabled:!text-[#B34F5C]")}
                 options={devices}
                 selected={device}
                 onChange={handleOnChange}
-                disabled={devices === undefined || devices.length === 0 || callDisplayType === "accepted" || callDisplayType === "outgoing"}
+                disabled={
+                    devices === undefined ||
+                    devices.length === 0 ||
+                    callDisplayType === "accepted" ||
+                    callDisplayType === "outgoing"
+                }
             />
         </>
     );

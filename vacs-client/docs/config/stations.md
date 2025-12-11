@@ -320,43 +320,43 @@ These modes create a simple one-level grouping structure.
 **`Fir`**: Groups by the first two letters.
 
 - **LO**
-  - LOVV_CTR
-  - LOWW_APP
-  - LOWW_TWR
-  - LOWW_GND
+    - LOVV_CTR
+    - LOWW_APP
+    - LOWW_TWR
+    - LOWW_GND
 - **ED**
-  - EDMM_CTR
-  - EDDM_TWR
+    - EDMM_CTR
+    - EDDM_TWR
 
 **`Icao`**: Groups by the first four letters.
 
 - **LOVV**
-  - LOVV_CTR
+    - LOVV_CTR
 - **LOWW**
-  - LOWW_APP
-  - LOWW_TWR
-  - LOWW_GND
+    - LOWW_APP
+    - LOWW_TWR
+    - LOWW_GND
 - **EDMM**
-  - EDMM_CTR
+    - EDMM_CTR
 - **EDDM**
-  - EDDM_TWR
+    - EDDM_TWR
 
 **`grouping = "FirAndIcao"` (Two Layers)**
 
 This mode creates a hierarchical structure, first grouping by FIR, then by ICAO code within that FIR.
 
 - **LO**
-  - **LOVV**
-    - LOVV_CTR
-  - **LOWW**
-    - LOWW_APP
-    - LOWW_TWR
-    - LOWW_GND
+    - **LOVV**
+        - LOVV_CTR
+    - **LOWW**
+        - LOWW_APP
+        - LOWW_TWR
+        - LOWW_GND
 - **ED**
-  - **EDMM**
-    - EDMM_CTR
-  - **EDDM**
-    - EDDM_TWR
+    - **EDMM**
+        - EDMM_CTR
+    - **EDDM**
+        - EDDM_TWR
 
 ---
 
@@ -373,11 +373,11 @@ All patterns use glob-like syntax, which provides flexible matching with wildcar
 
 - Matching is **case-insensitive** (`loww` matches `LOWW`)
 - Patterns must match the **entire callsign** (anchored at start and end)
-  - If you want to match a substring in the middle, surround it with wildcards (e.g., `*WW*`)
+    - If you want to match a substring in the middle, surround it with wildcards (e.g., `*WW*`)
 - The pattern is converted to a regular expression where:
-  - `*` becomes `.*` (any characters)
-  - `?` becomes `.` (single character)
-  - Other regex special characters are escaped
+    - `*` becomes `.*` (any characters)
+    - `?` becomes `.` (single character)
+    - Other regex special characters are escaped
 
 #### Pattern examples
 

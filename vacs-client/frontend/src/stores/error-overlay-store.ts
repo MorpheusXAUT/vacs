@@ -8,9 +8,15 @@ type ErrorOverlayState = {
     timeoutId?: number;
     open: (title: string, message: string, isNonCritical: boolean, timeout?: number) => void;
     close: () => void;
-}
+};
 
-const CLOSED_OVERLAY: Omit<ErrorOverlayState, "open" | "close"> = {visible: false, title: "", message: "", isNonCritical: false, timeoutId: undefined};
+const CLOSED_OVERLAY: Omit<ErrorOverlayState, "open" | "close"> = {
+    visible: false,
+    title: "",
+    message: "",
+    isNonCritical: false,
+    timeoutId: undefined,
+};
 
 export const useErrorOverlayStore = create<ErrorOverlayState>()((set, get) => ({
     visible: false,
@@ -24,9 +30,8 @@ export const useErrorOverlayStore = create<ErrorOverlayState>()((set, get) => ({
             clearTimeout(previous_timeout_id);
         }
 
-        const timeout_id = timeoutMs !== undefined
-            ? setTimeout(() => set(CLOSED_OVERLAY), timeoutMs)
-            : undefined;
+        const timeout_id =
+            timeoutMs !== undefined ? setTimeout(() => set(CLOSED_OVERLAY), timeoutMs) : undefined;
 
         set({visible: true, title, message, isNonCritical, timeoutId: timeout_id});
     },
@@ -37,5 +42,5 @@ export const useErrorOverlayStore = create<ErrorOverlayState>()((set, get) => ({
         }
 
         set(CLOSED_OVERLAY);
-    }
+    },
 }));

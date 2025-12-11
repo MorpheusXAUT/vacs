@@ -36,3 +36,10 @@ repos:
         language: system
         files: '^vacs-client/frontend/.*\.(ts|tsx)$'
         pass_filenames: false
+      - id: npm-format
+        name: prettier
+        entry: npm
+        args: [ 'run', 'format', '--prefix', 'vacs-client' ]
+        language: system
+        files: '^vacs-client/.*\.(ts|tsx|js|jsx|json|css|md)$'
+        pass_filenames: false

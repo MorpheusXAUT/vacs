@@ -19,9 +19,9 @@ The `vacs` client reads configuration from:
 
 The config directory is dependent on the operating system:
 
--   Linux: `$XDG_CONFIG_HOME/app.vacs.vacs-client/` or `$HOME/.config/app.vacs.vacs-client/`
--   macOS: `$HOME/Library/Application Support/app.vacs.vacs-client/`
--   Windows: `%APPDATA%\app.vacs.vacs-client\`
+- Linux: `$XDG_CONFIG_HOME/app.vacs.vacs-client/` or `$HOME/.config/app.vacs.vacs-client/`
+- macOS: `$HOME/Library/Application Support/app.vacs.vacs-client/`
+- Windows: `%APPDATA%\app.vacs.vacs-client\`
 
 Later sources override earlier ones. Whilst all config files _can_ contain any kind of configuration value,
 vacs only persists a certain subset of configuration depending on the file read/written.

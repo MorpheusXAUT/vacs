@@ -12,13 +12,12 @@ export function useRadioState() {
             try {
                 const state = await invokeStrict<RadioState>("keybinds_get_radio_state");
                 setState(state);
-            } catch {
-            }
+            } catch {}
         };
 
         void fetchState();
 
-        const unlisten = listen<RadioState>("radio:state", (event) => {
+        const unlisten = listen<RadioState>("radio:state", event => {
             setState(event.payload);
         });
 
@@ -27,7 +26,8 @@ export function useRadioState() {
         };
     }, []);
 
-    const canReconnect = state !== "NotConfigured" && (state === "Disconnected" || state === "Error");
+    const canReconnect =
+        state !== "NotConfigured" && (state === "Disconnected" || state === "Error");
 
     const handleButtonClick = useAsyncDebounce(async () => {
         if (canReconnect) {

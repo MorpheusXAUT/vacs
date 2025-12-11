@@ -37,7 +37,10 @@ export function useDialPadInput() {
             // No button within 1 second
             setDialInput(dialInput => dialInput + digit);
         }
-        multipleTapTimeoutRef.current = setTimeout(() => multipleTapTimeoutRef.current = undefined, 1000);
+        multipleTapTimeoutRef.current = setTimeout(
+            () => (multipleTapTimeoutRef.current = undefined),
+            1000,
+        );
     };
 
     const clearLastChar = () => {

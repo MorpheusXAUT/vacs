@@ -4,7 +4,11 @@ import {
     withLabels,
     isTransmitMode,
     TransmitConfig,
-    TransmitConfigWithLabels, RadioConfig, withRadioLabels, RadioConfigWithLabels, isRadioIntegration,
+    TransmitConfigWithLabels,
+    RadioConfig,
+    withRadioLabels,
+    RadioConfigWithLabels,
+    isRadioIntegration,
 } from "../types/transmit.ts";
 import {invokeSafe, invokeStrict} from "../error.ts";
 import KeyCapture from "./ui/KeyCapture.tsx";
@@ -19,7 +23,9 @@ import {useRadioState} from "../hooks/radio-state-hook.ts";
 function TransmitModeSettings() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
     const capPlatform = useCapabilitiesStore(state => state.platform);
-    const [transmitConfig, setTransmitConfig] = useState<TransmitConfigWithLabels | undefined>(undefined);
+    const [transmitConfig, setTransmitConfig] = useState<TransmitConfigWithLabels | undefined>(
+        undefined,
+    );
     const [radioConfig, setRadioConfig] = useState<RadioConfigWithLabels | undefined>(undefined);
 
     useEffect(() => {
@@ -46,41 +52,66 @@ function TransmitModeSettings() {
                 </p>
                 <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
                     {!capKeybindListener ? (
-                        <p className="text-sm text-gray-700 py-1.5 cursor-help"
-                           title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}
-                        >Not available.</p>
+                        <p
+                            className="text-sm text-gray-700 py-1.5 cursor-help"
+                            title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}
+                        >
+                            Not available.
+                        </p>
                     ) : transmitConfig !== undefined ? (
-                        <TransmitConfigSettings transmitConfig={transmitConfig} setTransmitConfig={setTransmitConfig}/>
-                    ) : <p className="w-full text-center">Loading...</p>}
+                        <TransmitConfigSettings
+                            transmitConfig={transmitConfig}
+                            setTransmitConfig={setTransmitConfig}
+                        />
+                    ) : (
+                        <p className="w-full text-center">Loading...</p>
+                    )}
                 </div>
             </div>
             <div className="grow flex flex-col gap-0.5">
-                <div
-                    className="w-full pt-1 flex flex-row gap-2 items-center justify-center border-t-2 border-zinc-200">
+                <div className="w-full pt-1 flex flex-row gap-2 items-center justify-center border-t-2 border-zinc-200">
                     <p className="font-semibold uppercase">Radio Integration</p>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-                         fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-                         strokeLinejoin="round"
-                         className="stroke-gray-600 cursor-help"
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="stroke-gray-600 cursor-help"
                     >
-                        <title>Use one key for all transmissions. Configure the radio integration’s PTT key and let vacs
-                            press it automatically: when not in a call, pressing the vacs PTT keys your radio; in a
-                            call, it transmits on vacs; with RADIO PRIO enabled, you can (temporarily) key the radio
-                            without interrupting your coordination.</title>
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                        <path d="M12 17h.01"/>
+                        <title>
+                            Use one key for all transmissions. Configure the radio integration’s PTT
+                            key and let vacs press it automatically: when not in a call, pressing
+                            the vacs PTT keys your radio; in a call, it transmits on vacs; with
+                            RADIO PRIO enabled, you can (temporarily) key the radio without
+                            interrupting your coordination.
+                        </title>
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                        <path d="M12 17h.01" />
                     </svg>
                 </div>
                 <div className="w-full grow px-3 flex flex-row gap-3 items-center justify-center">
                     {!capKeybindListener ? (
-                        <p className="text-sm text-gray-700 py-1.5 cursor-help"
-                           title={`Unfortunately, keybind emitters are not yet supported on ${capPlatform}`}
-                        >Not available.</p>
+                        <p
+                            className="text-sm text-gray-700 py-1.5 cursor-help"
+                            title={`Unfortunately, keybind emitters are not yet supported on ${capPlatform}`}
+                        >
+                            Not available.
+                        </p>
                     ) : transmitConfig !== undefined && radioConfig !== undefined ? (
-                        <RadioIntegrationSettings transmitConfig={transmitConfig} radioConfig={radioConfig}
-                                                  setRadioConfig={setRadioConfig}/>
-                    ) : <p className="w-full text-center">Loading...</p>}
+                        <RadioIntegrationSettings
+                            transmitConfig={transmitConfig}
+                            radioConfig={radioConfig}
+                            setRadioConfig={setRadioConfig}
+                        />
+                    ) : (
+                        <p className="w-full text-center">Loading...</p>
+                    )}
                 </div>
             </div>
         </div>
@@ -115,8 +146,7 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
         try {
             await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
             setTransmitConfig(await withLabels(newConfig));
-        } catch {
-        }
+        } catch {}
     };
 
     const handleOnTransmitModeChange = async (value: string) => {
@@ -153,8 +183,7 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
         try {
             await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
             setTransmitConfig(await withLabels(newConfig));
-        } catch {
-        }
+        } catch {}
     };
 
     const handleOpenSystemShortcutsOnClick = useAsyncDebounce(async () => {
@@ -163,7 +192,9 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
 
     useEffect(() => {
         const fetchExternalBinding = async () => {
-            const binding = await invokeSafe<string | null>("keybinds_get_external_binding", {mode: transmitConfig.mode});
+            const binding = await invokeSafe<string | null>("keybinds_get_external_binding", {
+                mode: transmitConfig.mode,
+            });
             setWaylandBinding(binding ?? undefined);
         };
 
@@ -185,9 +216,11 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
                     {value: "VoiceActivation", text: "Voice activation"},
                     {value: "PushToTalk", text: "Push-to-talk"},
                     {value: "PushToMute", text: "Push-to-mute"},
-                    ...(capPlatform === "Windows" || capPlatform === "MacOs" || capPlatform === "LinuxWayland"
+                    ...(capPlatform === "Windows" ||
+                    capPlatform === "MacOs" ||
+                    capPlatform === "LinuxWayland"
                         ? [{value: "RadioIntegration", text: "Radio Integration"}]
-                        : [])
+                        : []),
                 ]}
                 selected={transmitConfig.mode}
                 onChange={handleOnTransmitModeChange}
@@ -195,17 +228,38 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
             {capPlatform === "LinuxWayland" ? (
                 <div
                     onClick={handleOpenSystemShortcutsOnClick}
-                    title={transmitConfig.mode !== "VoiceActivation" ? "On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings. Click this field to try opening the appropriate system settings." : ""}
-                    className={clsx("w-full h-full min-h-8 grow truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
+                    title={
+                        transmitConfig.mode !== "VoiceActivation"
+                            ? "On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings. Click this field to try opening the appropriate system settings."
+                            : ""
+                    }
+                    className={clsx(
+                        "w-full h-full min-h-8 grow truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
                         "bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
-                        "brightness-90 cursor-help", transmitConfig.mode === "VoiceActivation" && "brightness-90 cursor-not-allowed")}>
-                    <p>{transmitConfig.mode !== "VoiceActivation" ? (waylandBinding || "Not bound") : ""}</p>
+                        "brightness-90 cursor-help",
+                        transmitConfig.mode === "VoiceActivation" &&
+                            "brightness-90 cursor-not-allowed",
+                    )}
+                >
+                    <p>
+                        {transmitConfig.mode !== "VoiceActivation"
+                            ? waylandBinding || "Not bound"
+                            : ""}
+                    </p>
                 </div>
             ) : (
                 <KeyCapture
-                    label={transmitConfig.mode === "PushToTalk" ? transmitConfig.pushToTalkLabel : transmitConfig.mode === "PushToMute" ? transmitConfig.pushToMuteLabel : transmitConfig.radioPushToTalkLabel}
-                    onCapture={handleOnTransmitCapture} onRemove={handleOnTransmitRemoveClick}
-                    disabled={transmitConfig.mode === "VoiceActivation"}/>
+                    label={
+                        transmitConfig.mode === "PushToTalk"
+                            ? transmitConfig.pushToTalkLabel
+                            : transmitConfig.mode === "PushToMute"
+                              ? transmitConfig.pushToMuteLabel
+                              : transmitConfig.radioPushToTalkLabel
+                    }
+                    onCapture={handleOnTransmitCapture}
+                    onRemove={handleOnTransmitRemoveClick}
+                    disabled={transmitConfig.mode === "VoiceActivation"}
+                />
             )}
         </>
     );
@@ -217,12 +271,22 @@ type RadioIntegrationSettingsProps = {
     setRadioConfig: Dispatch<StateUpdater<RadioConfigWithLabels | undefined>>;
 };
 
-function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}: RadioIntegrationSettingsProps) {
+function RadioIntegrationSettings({
+    transmitConfig,
+    radioConfig,
+    setRadioConfig,
+}: RadioIntegrationSettingsProps) {
     const capKeybindEmitter = useCapabilitiesStore(state => state.keybindEmitter);
-    const [trackAudioEndpoint, setTrackAudioEndpoint] = useState<string>(radioConfig.trackAudio?.endpoint ?? "");
+    const [trackAudioEndpoint, setTrackAudioEndpoint] = useState<string>(
+        radioConfig.trackAudio?.endpoint ?? "",
+    );
 
     const handleOnRadioIntegrationCapture = async (code: string) => {
-        if (transmitConfig === undefined || transmitConfig.mode !== "RadioIntegration" || radioConfig === undefined) {
+        if (
+            transmitConfig === undefined ||
+            transmitConfig.mode !== "RadioIntegration" ||
+            radioConfig === undefined
+        ) {
             return;
         }
 
@@ -230,9 +294,10 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
         switch (radioConfig.integration) {
             case "AudioForVatsim":
                 newConfig = {
-                    ...radioConfig, audioForVatsim: {
+                    ...radioConfig,
+                    audioForVatsim: {
                         emit: code,
-                    }
+                    },
                 };
                 break;
             default:
@@ -242,8 +307,7 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
         try {
             await invokeStrict("keybinds_set_radio_config", {radioConfig: newConfig});
             setRadioConfig(await withRadioLabels(newConfig));
-        } catch {
-        }
+        } catch {}
     };
 
     const handleOnRadioIntegrationChange = async (value: string) => {
@@ -268,9 +332,10 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
         switch (radioConfig.integration) {
             case "AudioForVatsim":
                 newConfig = {
-                    ...radioConfig, audioForVatsim: {
-                        emit: null
-                    }
+                    ...radioConfig,
+                    audioForVatsim: {
+                        emit: null,
+                    },
                 };
                 break;
             default:
@@ -280,8 +345,7 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
         try {
             await invokeStrict("keybinds_set_radio_config", {radioConfig: newConfig});
             setRadioConfig(await withRadioLabels(newConfig));
-        } catch {
-        }
+        } catch {}
     };
 
     const handleOnTrackAudioEndpointChange = (e: TargetedEvent<HTMLInputElement>) => {
@@ -290,7 +354,11 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
     };
 
     const handleOnTrackAudioEndpointCommit = async () => {
-        if (transmitConfig === undefined || transmitConfig.mode !== "RadioIntegration" || radioConfig === undefined) {
+        if (
+            transmitConfig === undefined ||
+            transmitConfig.mode !== "RadioIntegration" ||
+            radioConfig === undefined
+        ) {
             return;
         }
 
@@ -300,9 +368,10 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
         let newConfig: RadioConfig;
         if (radioConfig.integration === "TrackAudio") {
             newConfig = {
-                ...radioConfig, trackAudio: {
+                ...radioConfig,
+                trackAudio: {
                     endpoint: endpoint,
-                }
+                },
             };
             try {
                 await invokeStrict("keybinds_set_radio_config", {radioConfig: newConfig});
@@ -332,34 +401,37 @@ function RadioIntegrationSettings({transmitConfig, radioConfig, setRadioConfig}:
                 <div className="flex flex-row gap-2 items-center">
                     <input
                         type="text"
-                        className={clsx("w-full h-full px-3 py-1.5 border border-gray-700 bg-gray-300 rounded text-sm text-center focus:border-blue-500 focus:outline-none placeholder:text-gray-500",
-                            "disabled:brightness-90 disabled:cursor-not-allowed"
+                        className={clsx(
+                            "w-full h-full px-3 py-1.5 border border-gray-700 bg-gray-300 rounded text-sm text-center focus:border-blue-500 focus:outline-none placeholder:text-gray-500",
+                            "disabled:brightness-90 disabled:cursor-not-allowed",
                         )}
                         placeholder="localhost:49080"
                         title="The address where TrackAudio is running. Accepts a hostname or IP address, with an optional port (e.g., '192.168.1.69' or '192.168.1.69:49080'). If you're running TrackAudio on the same machine as vacs, you can leave this value empty as it will automatically attempt to connect to TrackAudio on its default listener at 'localhost:49080'."
                         value={trackAudioEndpoint}
                         onInput={handleOnTrackAudioEndpointChange}
                         onBlur={handleOnTrackAudioEndpointCommit}
-                        onKeyDown={(e) => {
+                        onKeyDown={e => {
                             if (e.key === "Enter") {
                                 e.currentTarget.blur();
                             }
                         }}
                         disabled={transmitConfig.mode !== "RadioIntegration"}
                     />
-                    <TrackAudioStatusIndicator/>
+                    <TrackAudioStatusIndicator />
                 </div>
             ) : (
                 <KeyCapture
                     label={radioConfig.audioForVatsim?.emitLabel ?? null}
-                    onCapture={handleOnRadioIntegrationCapture} onRemove={handleOnRadioIntegrationRemoveClick}
-                    disabled={transmitConfig.mode !== "RadioIntegration"}/>
+                    onCapture={handleOnRadioIntegrationCapture}
+                    onRemove={handleOnRadioIntegrationRemoveClick}
+                    disabled={transmitConfig.mode !== "RadioIntegration"}
+                />
             )}
         </>
     );
 }
 
-const RadioStateColors: { [key in RadioState]: string } = {
+const RadioStateColors: {[key in RadioState]: string} = {
     NotConfigured: StatusColors["gray"],
     Disconnected: StatusColors["red"],
     Error: StatusColors["red"],
@@ -378,10 +450,16 @@ function TrackAudioStatusIndicator() {
             className={clsx(
                 "shrink-0 h-3 w-3 rounded-full border",
                 RadioStateColors[state],
-                canReconnect && "cursor-pointer"
+                canReconnect && "cursor-pointer",
             )}
             onClick={handleButtonClick}
-            title={canReconnect ? "Reconnect to TrackAudio" : state !== "NotConfigured" ? "Connected to TrackAudio" : "Deactivated"}
+            title={
+                canReconnect
+                    ? "Reconnect to TrackAudio"
+                    : state !== "NotConfigured"
+                      ? "Connected to TrackAudio"
+                      : "Deactivated"
+            }
         ></div>
     );
 }

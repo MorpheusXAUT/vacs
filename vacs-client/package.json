@@ -11,9 +11,12 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.9.6"
+    "@tauri-apps/cli": "^2.9.6",
+    "prettier": "^3.7.4"
   }
 }

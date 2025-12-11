@@ -2,10 +2,10 @@
 
 @font-face {
     font-display: swap;
-    font-family: 'Noto Sans Mono';
+    font-family: "Noto Sans Mono";
     font-style: normal;
     font-weight: auto;
-    src: url('../assets/fonts/NotoSansMono-VariableFont_wdth,wght.ttf') format('truetype');
+    src: url("../assets/fonts/NotoSansMono-VariableFont_wdth,wght.ttf") format("truetype");
 }
 
 body {

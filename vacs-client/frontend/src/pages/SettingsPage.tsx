@@ -19,28 +19,43 @@ function SettingsPage() {
             <p className="w-full text-white bg-blue-700 font-semibold text-center">Settings</p>
             <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col">
                 <div className="w-full grow border-b-2 border-zinc-200 flex flex-row">
-                    <VolumeSettings/>
+                    <VolumeSettings />
                     <div className="h-full grow flex flex-col">
-                        <p className="w-full text-center border-b-2 border-zinc-200 uppercase font-semibold">Devices</p>
+                        <p className="w-full text-center border-b-2 border-zinc-200 uppercase font-semibold">
+                            Devices
+                        </p>
                         <div className="w-full px-3 py-1.5 flex flex-col">
-                            <AudioHostSelector/>
-                            <DeviceSelector deviceType="Output"/>
-                            <DeviceSelector deviceType="Input"/>
+                            <AudioHostSelector />
+                            <DeviceSelector deviceType="Output" />
+                            <DeviceSelector deviceType="Input" />
                         </div>
-                        <TransmitModeSettings/>
+                        <TransmitModeSettings />
                     </div>
                 </div>
-                <div
-                    className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:px-1 [&>button]:shrink-0">
+                <div className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:px-1 [&>button]:shrink-0">
                     <div className="h-full flex flex-row gap-2 items-center">
-                        <WindowStateButtons/>
-                        <UpdateButton/>
-                        <Button color="gray" className="h-full rounded text-sm"
-                                onClick={() => invokeSafe("app_open_folder", { folder: "Config" })}>Open<br/>Config</Button>
-                        <Button color="gray" className="h-full rounded text-sm"
-                                onClick={() => invokeSafe("app_open_folder", { folder: "Logs" })}>Open<br/>Logs</Button>
+                        <WindowStateButtons />
+                        <UpdateButton />
+                        <Button
+                            color="gray"
+                            className="h-full rounded text-sm"
+                            onClick={() => invokeSafe("app_open_folder", {folder: "Config"})}
+                        >
+                            Open
+                            <br />
+                            Config
+                        </Button>
+                        <Button
+                            color="gray"
+                            className="h-full rounded text-sm"
+                            onClick={() => invokeSafe("app_open_folder", {folder: "Logs"})}
+                        >
+                            Open
+                            <br />
+                            Logs
+                        </Button>
                     </div>
-                    <AppControlButtons/>
+                    <AppControlButtons />
                 </div>
             </div>
         </div>
@@ -55,16 +70,14 @@ function AppControlButtons() {
         try {
             await invokeStrict("auth_logout");
             navigate("/");
-        } catch {
-        }
+        } catch {}
     });
 
     const handleDisconnectClick = useAsyncDebounce(async () => {
         try {
             await invokeStrict("signaling_disconnect");
             navigate("/");
-        } catch {
-        }
+        } catch {}
     });
 
     const handleQuitClick = useAsyncDebounce(async () => {
@@ -73,12 +86,30 @@ function AppControlButtons() {
 
     return (
         <div className="h-full flex flex-row gap-2">
-            <Button color="salmon" className="w-auto px-3 text-sm rounded" disabled={!connected}
-                    onClick={handleDisconnectClick}>Disconnect</Button>
-            <Button color="salmon" className="text-sm rounded" disabled={!isAuthenticated}
-                    onClick={handleLogoutClick}>Logout</Button>
-            <Button color="salmon" muted={true} className="text-sm rounded ml-3"
-                    onClick={handleQuitClick}>Quit</Button>
+            <Button
+                color="salmon"
+                className="w-auto px-3 text-sm rounded"
+                disabled={!connected}
+                onClick={handleDisconnectClick}
+            >
+                Disconnect
+            </Button>
+            <Button
+                color="salmon"
+                className="text-sm rounded"
+                disabled={!isAuthenticated}
+                onClick={handleLogoutClick}
+            >
+                Logout
+            </Button>
+            <Button
+                color="salmon"
+                muted={true}
+                className="text-sm rounded ml-3"
+                onClick={handleQuitClick}
+            >
+                Quit
+            </Button>
         </div>
     );
 }
@@ -90,7 +121,7 @@ function UpdateButton() {
         setVersions: setUpdateVersions,
         openMandatoryDialog,
         openDownloadDialog,
-        closeOverlay
+        closeOverlay,
     } = useUpdateStore(state => state.actions);
 
     const handleOnClick = useAsyncDebounce(async () => {
@@ -103,9 +134,9 @@ function UpdateButton() {
             }
         } else {
             const checkUpdateResult = await invokeSafe<{
-                currentVersion: string,
-                newVersion?: string,
-                required: boolean
+                currentVersion: string;
+                newVersion?: string;
+                required: boolean;
             }>("app_check_for_update");
             if (checkUpdateResult === undefined) return;
 
@@ -129,8 +160,26 @@ function UpdateButton() {
             onClick={handleOnClick}
             disabled={noNewVersion}
         >
-            {newVersion === undefined ? (noNewVersion ? <p>No Update<br/>available</p> : <p>Check for<br/>Updates</p>) :
-                <p>Update &<br/>Restart</p>}
+            {newVersion === undefined ? (
+                noNewVersion ? (
+                    <p>
+                        No Update
+                        <br />
+                        available
+                    </p>
+                ) : (
+                    <p>
+                        Check for
+                        <br />
+                        Updates
+                    </p>
+                )
+            ) : (
+                <p>
+                    Update &<br />
+                    Restart
+                </p>
+            )}
         </Button>
     );
 }
@@ -143,12 +192,16 @@ function WindowStateButtons() {
     const capPlatform = useCapabilitiesStore(state => state.platform);
 
     const toggleAlwaysOnTop = useAsyncDebounce(async () => {
-        const isAlwaysOnTop = await invokeSafe<boolean>("app_set_always_on_top", {alwaysOnTop: !alwaysOnTop});
+        const isAlwaysOnTop = await invokeSafe<boolean>("app_set_always_on_top", {
+            alwaysOnTop: !alwaysOnTop,
+        });
         setAlwaysOnTop(alwaysOnTop => isAlwaysOnTop ?? alwaysOnTop);
     });
 
     const toggleFullscreen = useAsyncDebounce(async () => {
-        const isFullscreen = await invokeSafe<boolean>("app_set_fullscreen", {fullscreen: !fullscreen});
+        const isFullscreen = await invokeSafe<boolean>("app_set_fullscreen", {
+            fullscreen: !fullscreen,
+        });
         setFullscreen(isFullscreen ?? false);
     });
 
@@ -156,8 +209,7 @@ function WindowStateButtons() {
         try {
             await invokeStrict("app_reset_window_size");
             setFullscreen(false);
-        } catch {
-        }
+        } catch {}
     });
 
     useEffect(() => {
@@ -181,16 +233,28 @@ function WindowStateButtons() {
                 className="h-full rounded text-sm"
                 onClick={toggleAlwaysOnTop}
                 disabled={!capAlwaysOnTop}
-                title={!capAlwaysOnTop ? `Unfortunately, always-on-top is not yet supported on ${capPlatform}` : undefined}
+                title={
+                    !capAlwaysOnTop
+                        ? `Unfortunately, always-on-top is not yet supported on ${capPlatform}`
+                        : undefined
+                }
             >
-                <p>Always<br/>on Top</p>
+                <p>
+                    Always
+                    <br />
+                    on Top
+                </p>
             </Button>
             <Button
                 color={fullscreen ? "blue" : "cyan"}
                 className="h-full rounded text-sm"
                 onClick={toggleFullscreen}
             >
-                <p>Full<br/>Screen</p>
+                <p>
+                    Full
+                    <br />
+                    Screen
+                </p>
             </Button>
             <Button
                 color="gray"

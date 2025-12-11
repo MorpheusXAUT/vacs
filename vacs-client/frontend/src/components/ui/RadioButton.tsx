@@ -29,11 +29,13 @@ function RadioButton() {
     };
 
     return (
-        <Button color={buttonColor()}
-                disabled={state === "NotConfigured"}
-                softDisabled={disabled}
-                onClick={handleButtonClick}
-                className={clsx("text-xl w-46", textMuted && "text-gray-500")}>
+        <Button
+            color={buttonColor()}
+            disabled={state === "NotConfigured"}
+            softDisabled={disabled}
+            onClick={handleButtonClick}
+            className={clsx("text-xl w-46", textMuted && "text-gray-500")}
+        >
             Radio
         </Button>
     );

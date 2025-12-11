@@ -16,7 +16,10 @@ function IgnoreList() {
         if (event.target instanceof HTMLInputElement) {
             const rawValue = event.target.value;
 
-            const sanitized = rawValue.toUpperCase().replace(/[^0-9]/g, "").slice(0, 8);
+            const sanitized = rawValue
+                .toUpperCase()
+                .replace(/[^0-9]/g, "")
+                .slice(0, 8);
             event.target.value = sanitized;
 
             setInputValue(sanitized);
@@ -25,7 +28,9 @@ function IgnoreList() {
 
     const handleAddClick = useAsyncDebounce(async () => {
         try {
-            const added = await invokeStrict<boolean>("signaling_add_ignored_client", {clientId: inputValue});
+            const added = await invokeStrict<boolean>("signaling_add_ignored_client", {
+                clientId: inputValue,
+            });
             if (added) setIgnored([...ignored, inputValue]);
             setInputValue("");
         } catch {}
@@ -83,13 +88,25 @@ function IgnoreList() {
                     type="text"
                     className={clsx(
                         "flex-1 min-w-0 py-1 px-2.5 rounded-sm border border-gray-700 bg-slate-200 text-xl font-semibold",
-                        "focus:border-blue-500 focus:outline-none"
+                        "focus:border-blue-500 focus:outline-none",
                     )}
                 />
-                <Button color="gray" className="shrink-0 w-20" onClick={handleAddClick}
-                        disabled={inputValue === ""}>Add</Button>
-                <Button color="gray" className="shrink-0 w-20" onClick={handleRemoveClick}
-                        disabled={ignored[selected] === undefined || inputValue !== ""}>Remove</Button>
+                <Button
+                    color="gray"
+                    className="shrink-0 w-20"
+                    onClick={handleAddClick}
+                    disabled={inputValue === ""}
+                >
+                    Add
+                </Button>
+                <Button
+                    color="gray"
+                    className="shrink-0 w-20"
+                    onClick={handleRemoveClick}
+                    disabled={ignored[selected] === undefined || inputValue !== ""}
+                >
+                    Remove
+                </Button>
             </div>
         </div>
     );

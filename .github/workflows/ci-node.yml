@@ -52,3 +52,7 @@ jobs:
       - name: Lint
         working-directory: vacs-client
         run: npm run -w frontend lint
+
+      - name: Format
+        working-directory: vacs-client
+        run: npm run format:check

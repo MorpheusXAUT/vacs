@@ -6,7 +6,7 @@ import {defineConfig} from "eslint/config";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
-import type { ConfigObject } from "@eslint/core";
+import type {ConfigObject} from "@eslint/core";
 
 const config: ConfigObject[] = defineConfig(
     {
@@ -39,7 +39,7 @@ const config: ConfigObject[] = defineConfig(
             react: {
                 version: "detect",
             },
-        }
+        },
     },
 );
 

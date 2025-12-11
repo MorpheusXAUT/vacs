@@ -16,7 +16,7 @@ function InputLevelMeter() {
     const startLevelMeter = useEventCallback(async () => {
         if (isCallActive) return; // Cannot start input level meter while call is active
 
-        const unlisten = listen<InputLevel>("audio:input-level", (event) => {
+        const unlisten = listen<InputLevel>("audio:input-level", event => {
             setLevel(event.payload);
         });
 
@@ -72,7 +72,7 @@ function InputLevelMeter() {
 
         return () => {
             void stopLevelMeter();
-        }
+        };
     }, [startLevelMeter, stopLevelMeter]);
 
     return (
@@ -80,13 +80,19 @@ function InputLevelMeter() {
             <div
                 className={clsx(
                     "relative w-full h-full border-2 rounded",
-                    unlistenFn === undefined ? "border-gray-500" : level?.clipping ? "border-red-700" : "border-blue-700",
+                    unlistenFn === undefined
+                        ? "border-gray-500"
+                        : level?.clipping
+                          ? "border-red-700"
+                          : "border-blue-700",
                     isCallActive ? "cursor-not-allowed" : "cursor-pointer",
                 )}
                 onClick={handleOnClick}
             >
-                <div className="absolute bg-[rgba(0,0,0,0.5)] w-full"
-                     style={{height: `${100 - (level?.norm ?? 0) * 100}%`}}></div>
+                <div
+                    className="absolute bg-[rgba(0,0,0,0.5)] w-full"
+                    style={{height: `${100 - (level?.norm ?? 0) * 100}%`}}
+                ></div>
                 <div className="bg-red-500 w-full h-[5%]"></div>
                 <div className="bg-yellow-400 w-full h-[10%]"></div>
                 <div className="bg-green-500 w-full h-[20%]"></div>

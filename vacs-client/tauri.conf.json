@@ -26,13 +26,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": [
-      "deb",
-      "rpm",
-      "nsis",
-      "app",
-      "dmg"
-    ],
+    "targets": ["deb", "rpm", "nsis", "app", "dmg"],
     "icon": [
       "frontend/icons/32x32.png",
       "frontend/icons/128x128.png",
@@ -64,11 +58,7 @@
           "shared-mime-info",
           "xdg-utils"
         ],
-        "recommends": [
-          "pipewire-pulse",
-          "pipewire-alsa",
-          "libasound2-plugins"
-        ]
+        "recommends": ["pipewire-pulse", "pipewire-alsa", "libasound2-plugins"]
       },
       "rpm": {
         "depends": [
@@ -80,11 +70,7 @@
           "shared-mime-info",
           "xdg-utils"
         ],
-        "recommends": [
-          "pipewire-pulseaudio",
-          "pipewire-alsa",
-          "alsa-plugins-pulseaudio"
-        ]
+        "recommends": ["pipewire-pulseaudio", "pipewire-alsa", "alsa-plugins-pulseaudio"]
       }
     },
     "macOS": {
@@ -94,9 +80,7 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": [
-          "vacs"
-        ]
+        "schemes": ["vacs"]
       }
     },
     "updater": {

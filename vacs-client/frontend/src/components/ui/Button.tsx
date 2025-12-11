@@ -22,10 +22,12 @@ const ButtonColors: Record<ButtonColor, string> = {
     green: "bg-[#4b8747] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950",
     gray: "bg-gray-300 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700 shadow-[0_0_0_1px_#364153]",
     blue: "bg-blue-700 border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900 text-white",
-    cornflower: "bg-[#5B95F9] border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900",
-    emerald: "bg-[#05cf9c] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950",
+    cornflower:
+        "bg-[#5B95F9] border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900",
+    emerald:
+        "bg-[#05cf9c] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950",
     red: "bg-red-500 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900",
-    salmon: "bg-red-400 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900"
+    salmon: "bg-red-400 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900",
 };
 
 const ActiveButtonColors: Record<ButtonColor, string> = {
@@ -33,8 +35,10 @@ const ActiveButtonColors: Record<ButtonColor, string> = {
     green: "active:border-r-green-200 active:border-b-green-200 active:border-t-green-950 active:border-l-green-950",
     gray: "active:border-r-gray-100 active:border-b-gray-100 active:border-t-gray-700 active:border-l-gray-700",
     blue: "active:border-r-blue-300 active:border-b-blue-300 active:border-t-blue-900 active:border-l-blue-900",
-    cornflower: "active:border-r-blue-300 active:border-b-blue-300 active:border-t-blue-900 active:border-l-blue-900",
-    emerald: "active:border-r-green-200 active:border-b-green-200 active:border-t-green-950 active:border-l-green-950",
+    cornflower:
+        "active:border-r-blue-300 active:border-b-blue-300 active:border-t-blue-900 active:border-l-blue-900",
+    emerald:
+        "active:border-r-green-200 active:border-b-green-200 active:border-t-green-950 active:border-l-green-950",
     red: "active:border-r-red-200 active:border-b-red-200 active:border-t-red-900 active:border-l-red-900",
     salmon: "active:border-r-red-200 active:border-b-red-200 active:border-t-red-900 active:border-l-red-900",
 };
@@ -47,7 +51,7 @@ export const ForceDisabledButtonColors: Record<ButtonColor, string> = {
     cornflower: "!border-blue-950 !border",
     emerald: "!border-emerald-950 !border",
     red: "!border-red-950 !border",
-    salmon: "!border-red-950 !border"
+    salmon: "!border-red-950 !border",
 };
 
 const ButtonHighlightColors: Record<ButtonHighlightColor, string> = {
@@ -73,9 +77,11 @@ function Button(props: ButtonProps) {
                 (props.disabled || props.softDisabled) && ForceDisabledButtonColors[props.color],
                 props.className,
                 props.highlight !== undefined && "p-1.5",
-                !props.disabled && !props.softDisabled && "active:[&>*]:translate-y-[1px] active:[&>*]:translate-x-[1px]"
+                !props.disabled &&
+                    !props.softDisabled &&
+                    "active:[&>*]:translate-y-[1px] active:[&>*]:translate-x-[1px]",
             )}
-            onClick={(event) => {
+            onClick={event => {
                 if (props.muted !== true) {
                     void invokeSafe("audio_play_ui_click");
                 }
@@ -87,10 +93,12 @@ function Button(props: ButtonProps) {
             {props.highlight === undefined ? (
                 content
             ) : (
-                <div className={clsx(
-                    "w-full h-full text-center flex flex-col items-center justify-center",
-                    ButtonHighlightColors[props.highlight],
-                )}>
+                <div
+                    className={clsx(
+                        "w-full h-full text-center flex flex-col items-center justify-center",
+                        ButtonHighlightColors[props.highlight],
+                    )}
+                >
                     {content}
                 </div>
             )}

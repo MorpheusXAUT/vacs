@@ -16,29 +16,36 @@ function KeyCapture(props: KeyCaptureProps) {
 
     const isRemoveDisabled = props.disabled && props.label === null;
 
-    const handleKeyDownEvent = useCallback(async (event: KeyboardEvent) => {
-        event.preventDefault();
+    const handleKeyDownEvent = useCallback(
+        async (event: KeyboardEvent) => {
+            event.preventDefault();
 
-        // For some keys (e.g., the MediaPlayPause one), the code returned is empty and the event only contains a key.
-        // Since we want to remain layout independent, we prefer to use the code value, but fall back to the key if required.
-        let code = event.code || event.key;
+            // For some keys (e.g., the MediaPlayPause one), the code returned is empty and the event only contains a key.
+            // Since we want to remain layout independent, we prefer to use the code value, but fall back to the key if required.
+            let code = event.code || event.key;
 
-        // Additionally, we need to check if the NumLock key is active, since the code returned by the event will always be the numpad digit,
-        // however, in case it's deactivated, we want to bind the key instead (e.g., ArrowLeft instead of Numpad4).
-        // The DOM_KEY_LOCATION defines the location of the key on the keyboard, where DOM_KEY_LOCATION_NUMPAD (value 3) corresponds to the numpad.
-        if (event.location === KeyboardEvent.DOM_KEY_LOCATION_NUMPAD && !event.getModifierState("NumLock")) {
-            code = event.key;
-        }
+            // Additionally, we need to check if the NumLock key is active, since the code returned by the event will always be the numpad digit,
+            // however, in case it's deactivated, we want to bind the key instead (e.g., ArrowLeft instead of Numpad4).
+            // The DOM_KEY_LOCATION defines the location of the key on the keyboard, where DOM_KEY_LOCATION_NUMPAD (value 3) corresponds to the numpad.
+            if (
+                event.location === KeyboardEvent.DOM_KEY_LOCATION_NUMPAD &&
+                !event.getModifierState("NumLock")
+            ) {
+                code = event.key;
+            }
 
-        try {
-            await onCapture(code);
-        } finally {
-            setCapturing(false);
-        }
-    }, [onCapture]);
+            try {
+                await onCapture(code);
+            } finally {
+                setCapturing(false);
+            }
+        },
+        [onCapture],
+    );
 
     const handleClickOutside = useCallback((event: MouseEvent) => {
-        if (keySelectRef.current === null || keySelectRef.current.contains(event.target as Node)) return;
+        if (keySelectRef.current === null || keySelectRef.current.contains(event.target as Node))
+            return;
         setCapturing(false);
     }, []);
 
@@ -84,25 +91,36 @@ function KeyCapture(props: KeyCaptureProps) {
             <div
                 ref={keySelectRef}
                 onClick={handleKeySelectOnClick}
-                className={clsx("w-full h-full min-h-8 grow truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
+                className={clsx(
+                    "w-full h-full min-h-8 grow truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
                     "bg-gray-300 border-2",
-                    capturing ?
-                        "border-r-gray-100 border-b-gray-100 border-t-gray-700 border-l-gray-700 [&>*]:translate-y-[1px] [&>*]:translate-x-[1px]"
+                    capturing
+                        ? "border-r-gray-100 border-b-gray-100 border-t-gray-700 border-l-gray-700 [&>*]:translate-y-[1px] [&>*]:translate-x-[1px]"
                         : "border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
-                    props.disabled ? "brightness-90 cursor-not-allowed" : "cursor-pointer")}>
+                    props.disabled ? "brightness-90 cursor-not-allowed" : "cursor-pointer",
+                )}
+            >
                 <p>{capturing ? "Press your key" : !props.disabled ? props.label : ""}</p>
             </div>
-            <svg onClick={handleOnRemoveClick}
-                  xmlns="http://www.w3.org/2000/svg" width="27" height="27"
-                  viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={clsx("p-1 !pr-0",
-                      isRemoveDisabled ?
-                          "stroke-gray-500 cursor-not-allowed"
-                          : "stroke-gray-700 hover:stroke-red-500 transition-colors cursor-pointer"
-                  )}>
-                <path d="M18 6 6 18"/>
-                <path d="m6 6 12 12"/>
+            <svg
+                onClick={handleOnRemoveClick}
+                xmlns="http://www.w3.org/2000/svg"
+                width="27"
+                height="27"
+                viewBox="0 0 24 24"
+                fill="none"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={clsx(
+                    "p-1 !pr-0",
+                    isRemoveDisabled
+                        ? "stroke-gray-500 cursor-not-allowed"
+                        : "stroke-gray-700 hover:stroke-red-500 transition-colors cursor-pointer",
+                )}
+            >
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
             </svg>
         </div>
     );
@@ -110,6 +128,6 @@ function KeyCapture(props: KeyCaptureProps) {
 
 const preventKeyUpEvent = (event: KeyboardEvent) => {
     event.preventDefault();
-}
+};
 
 export default KeyCapture;

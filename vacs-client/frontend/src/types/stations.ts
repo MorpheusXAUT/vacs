@@ -3,7 +3,7 @@ import {ClientInfoWithAlias, splitDisplayName} from "./client-info.ts";
 export type StationsConfig = {
     selectedProfile: string;
     profiles: StationsConfigProfiles;
-}
+};
 
 export type StationsConfigProfiles = Record<string, StationsProfileConfig>;
 
@@ -14,16 +14,16 @@ export type StationsProfileConfig = {
     aliases: Record<string, string>;
     frequencies: FrequencyDisplayMode;
     grouping: StationsGroupMode;
-}
+};
 
 export type FrequencyDisplayMode = "ShowAll" | "HideAliased" | "HideAll";
 export type StationsGroupMode = "None" | "Fir" | "FirAndIcao" | "Icao";
 
 function globToRegex(pattern: string): RegExp {
     const escaped = pattern
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars except * and ?
-        .replace(/\*/g, '.*')                 // * matches any characters
-        .replace(/\?/g, '.');                 // ? matches single character
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&") // Escape regex special chars except * and ?
+        .replace(/\*/g, ".*") // * matches any characters
+        .replace(/\?/g, "."); // ? matches single character
 
     return new RegExp(`^${escaped}$`, "i");
 }
@@ -33,22 +33,27 @@ function matchesAnyPattern(callsign: string, patterns: string[]): boolean {
     return patterns.some(pattern => globToRegex(pattern).test(callsign));
 }
 
-
 function findFirstMatchIndex(callsign: string, patterns: string[]): number {
     return patterns.findIndex(pattern => globToRegex(pattern).test(callsign));
 }
 
-function filterClients(clients: ClientInfoWithAlias[], profile: StationsProfileConfig | undefined): ClientInfoWithAlias[] {
+function filterClients(
+    clients: ClientInfoWithAlias[],
+    profile: StationsProfileConfig | undefined,
+): ClientInfoWithAlias[] {
     if (!profile) return clients;
 
     return clients.filter(client => {
         if (matchesAnyPattern(client.displayName, profile.exclude)) return false;
         if (profile.include.length === 0) return true;
         return matchesAnyPattern(client.displayName, profile.include);
-    })
+    });
 }
 
-function sortClients(clients: ClientInfoWithAlias[], profile: StationsProfileConfig | undefined): ClientInfoWithAlias[] {
+function sortClients(
+    clients: ClientInfoWithAlias[],
+    profile: StationsProfileConfig | undefined,
+): ClientInfoWithAlias[] {
     if (!profile) return clients;
 
     return clients.sort((a, b) => {
@@ -78,10 +83,13 @@ function sortClients(clients: ClientInfoWithAlias[], profile: StationsProfileCon
 
         // 4. Sort by station name alphabetically
         return stationType !== 0 ? stationType : aStationName.localeCompare(bStationName);
-    })
+    });
 }
 
-export function filterAndSortClients(clients: ClientInfoWithAlias[], profile: StationsProfileConfig | undefined): ClientInfoWithAlias[] {
+export function filterAndSortClients(
+    clients: ClientInfoWithAlias[],
+    profile: StationsProfileConfig | undefined,
+): ClientInfoWithAlias[] {
     const filtered = filterClients(clients, profile);
     return sortClients(filtered, profile);
 }

@@ -5,13 +5,18 @@ import {Error} from "../error.ts";
 export function setupErrorListeners() {
     const openErrorOverlay = useErrorOverlayStore.getState().open;
 
-    const unlistenFns: (Promise<UnlistenFn>)[] = [];
+    const unlistenFns: Promise<UnlistenFn>[] = [];
 
     const init = () => {
         unlistenFns.push(
-            listen<Error>("error", (event) => {
-                openErrorOverlay(event.payload.title, event.payload.message, event.payload.isNonCritical, event.payload.timeoutMs);
-            })
+            listen<Error>("error", event => {
+                openErrorOverlay(
+                    event.payload.title,
+                    event.payload.message,
+                    event.payload.isNonCritical,
+                    event.payload.timeoutMs,
+                );
+            }),
         );
     };
 
@@ -19,5 +24,5 @@ export function setupErrorListeners() {
 
     return () => {
         unlistenFns.forEach(fn => fn.then(f => f()));
-    }
+    };
 }

@@ -15,23 +15,23 @@ type CallDisplay = {
 };
 
 type CallState = {
-    blink: boolean,
-    blinkTimeoutId: number | undefined,
-    callDisplay?: CallDisplay,
-    incomingCalls: ClientInfoWithAlias[],
+    blink: boolean;
+    blinkTimeoutId: number | undefined;
+    callDisplay?: CallDisplay;
+    incomingCalls: ClientInfoWithAlias[];
     actions: {
-        setOutgoingCall: (peer: ClientInfoWithAlias) => void,
-        acceptCall: (peer: ClientInfoWithAlias) => void,
-        endCall: () => void,
-        addIncomingCall: (peer: ClientInfoWithAlias) => void,
-        removePeer: (peerId: string, callEnd?: boolean) => void,
-        rejectPeer: (peerId: string) => void,
-        dismissRejectedPeer: () => void,
-        errorPeer: (peerId: string, reason: string) => void,
-        dismissErrorPeer: () => void,
-        setConnectionState: (peerId: string, connectionState: ConnectionState) => void,
-        reset: () => void,
-    },
+        setOutgoingCall: (peer: ClientInfoWithAlias) => void;
+        acceptCall: (peer: ClientInfoWithAlias) => void;
+        endCall: () => void;
+        addIncomingCall: (peer: ClientInfoWithAlias) => void;
+        removePeer: (peerId: string, callEnd?: boolean) => void;
+        rejectPeer: (peerId: string) => void;
+        dismissRejectedPeer: () => void;
+        errorPeer: (peerId: string, reason: string) => void;
+        dismissErrorPeer: () => void;
+        setConnectionState: (peerId: string, connectionState: ConnectionState) => void;
+        reset: () => void;
+    };
 };
 
 export const useCallStore = create<CallState>()((set, get) => ({
@@ -41,22 +41,25 @@ export const useCallStore = create<CallState>()((set, get) => ({
     incomingCalls: [],
     connecting: false,
     actions: {
-        setOutgoingCall: (peer) => {
+        setOutgoingCall: peer => {
             set({callDisplay: {type: "outgoing", peer, connectionState: undefined}});
         },
-        acceptCall: (peer) => {
+        acceptCall: peer => {
             const incomingCalls = get().incomingCalls.filter(info => info.id !== peer.id);
 
             if (shouldStopBlinking(incomingCalls.length, get().callDisplay)) {
                 clearTimeout(get().blinkTimeoutId);
                 set({blink: false, blinkTimeoutId: undefined, incomingCalls: []});
             }
-            set({callDisplay: {type: "accepted", peer, connectionState: "connecting"}, incomingCalls});
+            set({
+                callDisplay: {type: "accepted", peer, connectionState: "connecting"},
+                incomingCalls,
+            });
         },
         endCall: () => {
             set({callDisplay: undefined});
         },
-        addIncomingCall: (peer) => {
+        addIncomingCall: peer => {
             const incomingCalls = get().incomingCalls.filter(info => info.id !== peer.id);
 
             if (get().blinkTimeoutId === undefined) {
@@ -76,19 +79,29 @@ export const useCallStore = create<CallState>()((set, get) => ({
             }
 
             const callDisplay = get().callDisplay;
-            if (callDisplay?.peer.id === peerId && callDisplay?.type !== "error" && (!callEnd || callDisplay?.type !== "outgoing")) {
+            if (
+                callDisplay?.peer.id === peerId &&
+                callDisplay?.type !== "error" &&
+                (!callEnd || callDisplay?.type !== "outgoing")
+            ) {
                 set({callDisplay: undefined});
             }
         },
-        rejectPeer: (peerId) => {
+        rejectPeer: peerId => {
             const callDisplay = get().callDisplay;
 
-            if (callDisplay === undefined || callDisplay.peer.id !== peerId || callDisplay.type !== "outgoing") {
+            if (
+                callDisplay === undefined ||
+                callDisplay.peer.id !== peerId ||
+                callDisplay.type !== "outgoing"
+            ) {
                 get().actions.removePeer(peerId);
                 return;
             }
 
-            set({callDisplay: {type: "rejected", peer: callDisplay.peer, connectionState: undefined}});
+            set({
+                callDisplay: {type: "rejected", peer: callDisplay.peer, connectionState: undefined},
+            });
 
             if (get().blinkTimeoutId === undefined) {
                 startBlink(set);
@@ -105,7 +118,11 @@ export const useCallStore = create<CallState>()((set, get) => ({
         errorPeer: (peerId, reason) => {
             const callDisplay = get().callDisplay;
 
-            if (callDisplay === undefined || callDisplay.peer.id !== peerId || callDisplay.type === "rejected") {
+            if (
+                callDisplay === undefined ||
+                callDisplay.peer.id !== peerId ||
+                callDisplay.type === "rejected"
+            ) {
                 get().actions.removePeer(peerId);
                 return;
             }
@@ -115,8 +132,8 @@ export const useCallStore = create<CallState>()((set, get) => ({
                     type: "error",
                     peer: callDisplay.peer,
                     errorReason: reason,
-                    connectionState: undefined
-                }
+                    connectionState: undefined,
+                },
             });
 
             if (get().blinkTimeoutId === undefined) {
@@ -142,14 +159,23 @@ export const useCallStore = create<CallState>()((set, get) => ({
         },
         reset: () => {
             clearTimeout(get().blinkTimeoutId);
-            set({callDisplay: undefined, incomingCalls: [], blink: false, blinkTimeoutId: undefined});
-        }
+            set({
+                callDisplay: undefined,
+                incomingCalls: [],
+                blink: false,
+                blinkTimeoutId: undefined,
+            });
+        },
     },
 }));
 
 const shouldStopBlinking = (incomingCallsLength: number, callDisplay?: CallDisplay) => {
-    return incomingCallsLength === 0 && (callDisplay === undefined || (callDisplay.type !== "rejected" && callDisplay.type !== "error"));
-}
+    return (
+        incomingCallsLength === 0 &&
+        (callDisplay === undefined ||
+            (callDisplay.type !== "rejected" && callDisplay.type !== "error"))
+    );
+};
 
 const startBlink = (set: StateSetter) => {
     const toggleBlink = (blink: boolean) => {
@@ -157,17 +183,23 @@ const startBlink = (set: StateSetter) => {
             toggleBlink(!blink);
         }, 500);
         set({blinkTimeoutId: timeoutId, blink: blink});
-    }
+    };
     toggleBlink(true);
-}
+};
 
 type StateSetter = {
-    (partial: (CallState | Partial<CallState> | ((state: CallState) => (CallState | Partial<CallState>))), replace?: false): void
-    (state: (CallState | ((state: CallState) => CallState)), replace: true): void
+    (
+        partial:
+            | CallState
+            | Partial<CallState>
+            | ((state: CallState) => CallState | Partial<CallState>),
+        replace?: false,
+    ): void;
+    (state: CallState | ((state: CallState) => CallState), replace: true): void;
 };
 
 export const startCall = async (peerOrPeerId: ClientInfoWithAlias | string) => {
-    const {setOutgoingCall}  = useCallStore.getState().actions;
+    const {setOutgoingCall} = useCallStore.getState().actions;
     const openErrorOverlay = useErrorOverlayStore.getState().open;
     const {getClientInfo} = useSignalingStore.getState();
     const {cid} = useAuthStore.getState();
@@ -182,4 +214,4 @@ export const startCall = async (peerOrPeerId: ClientInfoWithAlias | string) => {
 
     setOutgoingCall(peer);
     await invokeSafe("signaling_start_call", {peerId});
-}
+};

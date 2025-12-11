@@ -28,10 +28,9 @@ function AudioHostSelector() {
             try {
                 const hosts = await invokeStrict<AudioHosts>("audio_get_hosts");
 
-                setHosts(hosts.all.map((hostName) => ({value: hostName, text: hostName})));
+                setHosts(hosts.all.map(hostName => ({value: hostName, text: hostName})));
                 setHost(hosts.selected);
-            } catch {
-            }
+            } catch {}
         };
 
         void fetchHosts();
@@ -46,7 +45,12 @@ function AudioHostSelector() {
                 options={hosts}
                 selected={host}
                 onChange={handleOnChange}
-                disabled={hosts === undefined || hosts.length === 0 || callDisplayType === "accepted" || callDisplayType === "outgoing" }
+                disabled={
+                    hosts === undefined ||
+                    hosts.length === 0 ||
+                    callDisplayType === "accepted" ||
+                    callDisplayType === "outgoing"
+                }
             />
         </>
     );

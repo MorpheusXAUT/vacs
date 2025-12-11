@@ -1,12 +1,17 @@
-const ALL_TRANSMIT_MODES = ["VoiceActivation", "PushToTalk", "PushToMute", "RadioIntegration"] as const;
-export type TransmitMode = typeof ALL_TRANSMIT_MODES[number];
+const ALL_TRANSMIT_MODES = [
+    "VoiceActivation",
+    "PushToTalk",
+    "PushToMute",
+    "RadioIntegration",
+] as const;
+export type TransmitMode = (typeof ALL_TRANSMIT_MODES)[number];
 
 export function isTransmitMode(value: string): value is TransmitMode {
     return ALL_TRANSMIT_MODES.includes(value as TransmitMode);
 }
 
 const ALL_RADIO_INTEGRATIONS = ["AudioForVatsim", "TrackAudio"] as const;
-export type RadioIntegration = typeof ALL_RADIO_INTEGRATIONS[number];
+export type RadioIntegration = (typeof ALL_RADIO_INTEGRATIONS)[number];
 
 export function isRadioIntegration(value: string): value is RadioIntegration {
     return ALL_RADIO_INTEGRATIONS.includes(value as RadioIntegration);
@@ -17,42 +22,42 @@ export type TransmitConfig = {
     pushToTalk: string | null;
     pushToMute: string | null;
     radioPushToTalk: string | null;
-}
+};
 
 export type TransmitConfigWithLabels = TransmitConfig & {
     pushToTalkLabel: string | null;
     pushToMuteLabel: string | null;
     radioPushToTalkLabel: string | null;
-}
+};
 
 export type RadioConfig = {
     integration: RadioIntegration;
     audioForVatsim: AudioForVatsimRadioConfig | null;
     trackAudio: TrackAudioRadioConfig | null;
-}
+};
 
 export type RadioConfigWithLabels = RadioConfig & {
     audioForVatsim: AudioForVatsimRadioConfigLabels | null;
-}
+};
 
 export type AudioForVatsimRadioConfig = {
     emit: string | null;
-}
+};
 
 export type AudioForVatsimRadioConfigLabels = {
     emitLabel: string | null;
-}
+};
 
 export type TrackAudioRadioConfig = {
     endpoint: string | null;
-}
+};
 
 export async function withLabels(config: TransmitConfig): Promise<TransmitConfigWithLabels> {
     return {
         ...config,
-        pushToTalkLabel: config.pushToTalk && await codeToLabel(config.pushToTalk),
-        pushToMuteLabel: config.pushToMute && await codeToLabel(config.pushToMute),
-        radioPushToTalkLabel: config.radioPushToTalk && await codeToLabel(config.radioPushToTalk),
+        pushToTalkLabel: config.pushToTalk && (await codeToLabel(config.pushToTalk)),
+        pushToMuteLabel: config.pushToMute && (await codeToLabel(config.pushToMute)),
+        radioPushToTalkLabel: config.radioPushToTalk && (await codeToLabel(config.radioPushToTalk)),
     };
 }
 
@@ -61,25 +66,27 @@ export async function withRadioLabels(config: RadioConfig): Promise<RadioConfigW
         ...config,
         audioForVatsim: config.audioForVatsim && {
             ...config.audioForVatsim,
-            emitLabel: config.audioForVatsim.emit && await codeToLabel(config.audioForVatsim.emit)
+            emitLabel:
+                config.audioForVatsim.emit && (await codeToLabel(config.audioForVatsim.emit)),
         },
-    }
+    };
 }
 
 export async function codeToLabel(code: string): Promise<string> {
-    const keyboard = (navigator as {
-        keyboard?: {
-            getLayoutMap: () => Promise<{ get: (value: string) => string }>
+    const keyboard = (
+        navigator as {
+            keyboard?: {
+                getLayoutMap: () => Promise<{get: (value: string) => string}>;
+            };
         }
-    }).keyboard;
+    ).keyboard;
 
     if (keyboard?.getLayoutMap) {
         try {
             const map = await keyboard.getLayoutMap();
             const label = map.get(code);
             if (label) return label.toUpperCase();
-        } catch {
-        }
+        } catch {}
     }
 
     return prettyFormatKeyCode(code);
@@ -178,7 +185,7 @@ export function prettyFormatKeyCode(keyCode: string): string {
         case "Period":
             return ".";
         case "Quote":
-            return "\"";
+            return '"';
         case "Semicolon":
             return ";";
         case "Slash":
