@@ -36,6 +36,7 @@ pub struct CaptureStream {
     muted: Arc<AtomicBool>,
     cancel: Option<CancellationToken>,
     task: Option<JoinHandle<()>>,
+    is_level_meter: bool,
 }
 
 impl CaptureStream {
@@ -202,6 +203,7 @@ impl CaptureStream {
             muted,
             cancel: Some(cancel),
             task: Some(task),
+            is_level_meter: false,
         })
     }
 
@@ -255,6 +257,7 @@ impl CaptureStream {
             muted: Arc::new(AtomicBool::new(false)),
             cancel: None,
             task: None,
+            is_level_meter: true,
         })
     }
 
@@ -289,6 +292,10 @@ impl CaptureStream {
         {
             tracing::warn!("Failed to queue volume op");
         }
+    }
+
+    pub fn is_level_meter(&self) -> bool {
+        self.is_level_meter
     }
 }
 
