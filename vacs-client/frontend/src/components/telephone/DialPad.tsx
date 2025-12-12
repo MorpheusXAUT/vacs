@@ -1,12 +1,12 @@
-import Button from "./ui/Button.tsx";
-import {useDialPadInput} from "../hooks/dial-pad-hook.ts";
+import Button from "../ui/Button.tsx";
+import {useDialPadInput} from "../../hooks/dial-pad-hook.ts";
 import {clsx} from "clsx";
-import {startCall, useCallStore} from "../stores/call-store.ts";
-import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
+import {startCall, useCallStore} from "../../stores/call-store.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {TargetedEvent} from "preact";
-import {useSignalingStore} from "../stores/signaling-store.ts";
-import {useAuthStore} from "../stores/auth-store.ts";
-import {useCallListStore} from "../stores/call-list-store.ts";
+import {useSignalingStore} from "../../stores/signaling-store.ts";
+import {useAuthStore} from "../../stores/auth-store.ts";
+import {useCallListStore} from "../../stores/call-list-store.ts";
 
 const DIAL_BUTTONS: {digit: string; chars: string}[] = [
     {digit: "1", chars: ""},

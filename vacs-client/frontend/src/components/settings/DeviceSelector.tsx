@@ -1,9 +1,9 @@
-import Select, {SelectOption} from "./ui/Select.tsx";
+import Select, {SelectOption} from "../ui/Select.tsx";
 import {useCallback, useEffect, useState} from "preact/hooks";
-import {invokeStrict} from "../error.ts";
-import {AudioDevices} from "../types/audio.ts";
-import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
-import {useCallStore} from "../stores/call-store.ts";
+import {invokeStrict} from "../../error.ts";
+import {AudioDevices} from "../../types/audio.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {useCallStore} from "../../stores/call-store.ts";
 import {clsx} from "clsx";
 
 type DeviceSelectorProps = {

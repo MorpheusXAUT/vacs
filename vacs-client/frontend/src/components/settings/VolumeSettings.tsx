@@ -1,13 +1,13 @@
-import VolumeSlider from "../components/ui/VolumeSlider.tsx";
-import mic from "../assets/mic.svg";
-import headphones from "../assets/headphones.svg";
-import mousePointerClick from "../assets/mouse-pointer-click.svg";
-import bellRing from "../assets/bell-ring.svg";
-import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
-import {invokeSafe, invokeStrict} from "../error.ts";
+import VolumeSlider from "./VolumeSlider.tsx";
+import mic from "../../assets/mic.svg";
+import headphones from "../../assets/headphones.svg";
+import mousePointerClick from "../../assets/mouse-pointer-click.svg";
+import bellRing from "../../assets/bell-ring.svg";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {invokeSafe, invokeStrict} from "../../error.ts";
 import {useEffect, useState} from "preact/hooks";
-import {AudioVolumes} from "../types/audio.ts";
-import InputLevelMeter from "./ui/InputLevelMeter.tsx";
+import {AudioVolumes} from "../../types/audio.ts";
+import InputLevelMeter from "./InputLevelMeter.tsx";
 
 function VolumeSettings() {
     const [volumes, setVolumes] = useState<AudioVolumes>({

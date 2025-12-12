@@ -1,10 +1,10 @@
-import List from "./ui/List.tsx";
+import List from "../ui/List.tsx";
 import {clsx} from "clsx";
-import Button from "./ui/Button.tsx";
+import Button from "../ui/Button.tsx";
 import {useEffect, useState} from "preact/hooks";
 import {TargetedEvent} from "preact";
-import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
-import {invokeStrict} from "../error.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {invokeStrict} from "../../error.ts";
 
 function IgnoreList() {
     const [ignored, setIgnored] = useState<string[]>([]);
