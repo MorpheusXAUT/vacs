@@ -24,7 +24,7 @@
     "preact": "^10.28.0",
     "react": "npm:@preact/compat@^18.3.1",
     "react-dom": "npm:@preact/compat@^18.3.1",
-    "tailwindcss": "^4.1.17",
+    "tailwindcss": "^4.1.18",
     "wouter": "^3.8.1",
     "zustand": "^5.0.9"
   },
