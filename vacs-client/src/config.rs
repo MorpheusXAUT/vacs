@@ -229,6 +229,8 @@ pub struct ClientConfig {
     /// parties as the (local) user can still actively initiate calls to them.
     #[serde(default, skip_serializing_if = "HashSet::is_empty")]
     pub ignored: HashSet<String>,
+    #[serde(default)]
+    pub call_control: CallControlConfig,
 }
 
 impl Default for ClientConfig {
@@ -244,6 +246,7 @@ impl Default for ClientConfig {
             radio: RadioConfig::default(),
             auto_hangup_seconds: 60,
             ignored: HashSet::new(),
+            call_control: CallControlConfig::default(),
         }
     }
 }
@@ -405,11 +408,19 @@ pub enum TransmitMode {
     RadioIntegration,
 }
 
+/// Configuration for the transmission mode and associated keybinds.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TransmitConfig {
+    /// The transmit mode to use.
     pub mode: TransmitMode,
+    /// Key code for Push-to-Talk mode.
+    /// Required if mode is `PushToTalk`.
     pub push_to_talk: Option<Code>,
+    /// Key code for Push-to-Mute mode.
+    /// Required if mode is `PushToMute`.
     pub push_to_mute: Option<Code>,
+    /// Key code for Radio Integration PTT.
+    /// Required if mode is `RadioIntegration`.
     pub radio_push_to_talk: Option<Code>,
 }
 
@@ -598,6 +609,55 @@ impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
     fn try_from(value: FrontendTrackAudioRadioConfig) -> Result<Self, Self::Error> {
         Ok(Self {
             endpoint: value.endpoint,
+        })
+    }
+}
+
+/// Configuration for generic call control keybinds.
+///
+/// These keybinds allow accepting and ending calls without needing to use the UI
+/// and can be used independently of the transmit mode.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CallControlConfig {
+    /// Key code to accept an incoming call.
+    pub accept_call: Option<Code>,
+    /// Key code to end an active call.
+    pub end_call: Option<Code>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendCallControlConfig {
+    pub accept_call: Option<String>,
+    pub end_call: Option<String>,
+}
+
+impl From<CallControlConfig> for FrontendCallControlConfig {
+    fn from(config: CallControlConfig) -> Self {
+        Self {
+            accept_call: config.accept_call.map(|c| c.to_string()),
+            end_call: config.end_call.map(|c| c.to_string()),
+        }
+    }
+}
+
+impl TryFrom<FrontendCallControlConfig> for CallControlConfig {
+    type Error = Error;
+
+    fn try_from(value: FrontendCallControlConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            accept_call: value
+                .accept_call
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.accept_call.unwrap_or_default()))))?,
+            end_call: value
+                .end_call
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.end_call.unwrap_or_default()))))?,
         })
     }
 }

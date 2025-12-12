@@ -311,16 +311,20 @@ async fn check_existing_shortcuts(
             let shortcuts = response.shortcuts();
             log::trace!("Found {} existing shortcuts", shortcuts.len());
 
-            let own_ids = PortalShortcutId::all()
+            let existing_ids = shortcuts.iter().map(|s| s.id()).collect::<Vec<_>>();
+            if PortalShortcutId::all()
                 .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>();
-            if shortcuts.iter().any(|s| own_ids.contains(&s.id())) {
-                log::trace!("Existing shortcuts found, skipping binding");
+                .all(|id| existing_ids.contains(&id.as_str()))
+            {
+                log::trace!("All required shortcuts found, skipping binding");
                 update_shortcuts_map(shortcuts_map, shortcuts);
                 Ok(false)
             } else {
-                log::trace!("No matching shortcuts found, binding");
+                log::trace!(
+                    "Missing shortcuts found (have {}/{}), binding",
+                    shortcuts.len(),
+                    PortalShortcutId::all().len()
+                );
                 Ok(true)
             }
         }

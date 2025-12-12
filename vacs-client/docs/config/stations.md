@@ -20,7 +20,6 @@ The `stations` configuration allows you to customize how stations are displayed 
 # Default configuration
 [stations]
 selected_profile = "Default"
-ignored = []
 
 # Profiles for filtering and prioritizing stations
 [stations.profiles.Default]
