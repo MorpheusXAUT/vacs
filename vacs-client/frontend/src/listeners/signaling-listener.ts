@@ -4,10 +4,18 @@ import {ClientInfo} from "../types/client-info.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 import {useCallListStore} from "../stores/call-list-store.ts";
+import {StationsConfig} from "../types/stations.ts";
 
 export function setupSignalingListeners() {
-    const {setConnectionState, setClientInfo, setClients, addClient, getClientInfo, removeClient} =
-        useSignalingStore.getState();
+    const {
+        setConnectionState,
+        setClientInfo,
+        setClients,
+        addClient,
+        getClientInfo,
+        removeClient,
+        setStationsConfig,
+    } = useSignalingStore.getState();
     const {
         addIncomingCall,
         removePeer,
@@ -83,6 +91,10 @@ export function setupSignalingListeners() {
                     name: clientInfo.displayName,
                     number: event.payload.peerId,
                 });
+            }),
+            listen<StationsConfig>("signaling:stations-config", event => {
+                console.log("Received stations config:", event.payload);
+                setStationsConfig(event.payload);
             }),
         );
     };
