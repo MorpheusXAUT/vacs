@@ -3,7 +3,7 @@ import {CloseButton} from "../../pages/SettingsPage.tsx";
 
 function TransmitModePage() {
     return (
-        <div className="absolute top-0 z-10 h-full w-1/2 bg-blue-700 border-t-0 px-2 pb-2 flex flex-col">
+        <div className="absolute top-0 z-10 h-full w-2/3 bg-blue-700 border-t-0 px-2 pb-2 flex flex-col">
             <p className="w-full text-white bg-blue-700 font-semibold text-center">
                 Transmit Config
             </p>
