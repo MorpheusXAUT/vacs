@@ -9,12 +9,16 @@ For general information on the configuration file format, file locations, and re
 The `client` configuration allows you to control the client's behavior and local logic. It consists of the following sections:
 
 - **[Ignore list](#ignore-list)** - Manage ignored users
+- **[Extra stations config](#extra-stations-config)** - Load an additional stations config file
+- **[Selected stations profile](#selected-stations-profile)** - Currently active stations profile
 
 ## Configuration structure
 
 ```toml
 [client]
 ignored = []
+selected_stations_profile = "Default"
+# extra_stations_config = "/path/to/extra_stations.toml"
 ```
 
 ---
@@ -45,3 +49,40 @@ Note that all changes made to the config file only apply after `vacs` has been r
 # Ignore calls from these CIDs
 ignored = ["10000003", "1234567"]
 ```
+
+---
+
+## Extra stations config
+
+The `extra_stations_config` setting allows you to load an additional stations configuration file. This is useful for including the stations profiles provided by your NAV team in your FIR's sector file.
+
+**Type:** String (Path)  
+**Default:** None  
+**Optional:** Yes
+
+The path can be absolute or relative to the configuration directory. You can pick an extra stations config file to apply via the `Mission` page in the client.
+
+> [!WARNING]  
+> Under Windows, all backslashes in the path must be escaped with another backslash (e.g., `C:\\Users\\user\\Documents\\EuroScope\\SectorFile\\stations.toml`).
+
+**Example:**
+
+```toml
+[client]
+extra_stations_config = "/home/user/Documents/EuroScope/SectorFile/stations.toml"
+```
+
+> [!NOTE]  
+> The extra stations config is merged with the main stations config. If there are any conflicts, the extra stations config takes precedence.
+
+---
+
+## Selected stations profile
+
+The `selected_stations_profile` setting determines which [stations profile](stations.md#profiles) is currently active.
+
+**Type:** String  
+**Default:** `"Default"`  
+**Optional:** Yes
+
+This value is updated automatically when you switch profiles in the client UI.

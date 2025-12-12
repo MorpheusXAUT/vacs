@@ -115,6 +115,7 @@ pub fn run() {
             app::commands::app_check_for_update,
             app::commands::app_frontend_ready,
             app::commands::app_open_folder,
+            app::commands::app_pick_extra_stations_config,
             app::commands::app_platform_capabilities,
             app::commands::app_quit,
             app::commands::app_reset_window_size,

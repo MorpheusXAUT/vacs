@@ -10,6 +10,10 @@ The `stations` configuration allows you to customize how stations are displayed 
 
 - **[Profiles](#profiles)** - Define (multiple) filtering configurations that you can switch between in the UI
 
+> [!TIP]  
+> You can load an additional stations configuration file (e.g., from a shared profile or sector file package) using the `extra_stations_config` setting in your `client.toml` file.  
+> See the [client configuration reference](client.md#extra-stations-config) for more details.
+
 > [!IMPORTANT]  
 > These settings are purely client-side and do not prevent a different user from calling you, even if your filters do not match their callsign and you thus cannot see them.  
 > If you are receiving a call from a station you cannot currently see, they will still have their respective callsign shown in the call display, however, you **will not** be able to call them back.
@@ -19,7 +23,6 @@ The `stations` configuration allows you to customize how stations are displayed 
 ```toml
 # Default configuration
 [stations]
-selected_profile = "Default"
 ignored = []
 
 # Profiles for filtering and prioritizing stations

@@ -1,7 +1,10 @@
 use crate::app::state::AppState;
 use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog};
 use crate::build::VersionInfo;
-use crate::config::{CLIENT_SETTINGS_FILE_NAME, ClientConfig, Persistable, PersistedClientConfig};
+use crate::config::{
+    AppConfig, CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendStationsConfig, Persistable,
+    PersistedClientConfig,
+};
 use crate::error::Error;
 use crate::platform::Capabilities;
 use anyhow::Context;
@@ -285,4 +288,51 @@ pub async fn app_reset_window_size(
     persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
 
     Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_pick_extra_stations_config(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+) -> Result<Option<String>, Error> {
+    log::debug!("Picking extra stations config file");
+
+    let path = rfd::AsyncFileDialog::new()
+        .set_title("Select a stations configuration file")
+        .add_filter("TOML Files", &["toml"])
+        .pick_file()
+        .await
+        .and_then(|p| p.path().to_str().map(String::from));
+
+    log::debug!("Picked extra stations config file: {path:?}");
+
+    if let Some(path) = &path {
+        let persisted_client_config = {
+            let mut state = app_state.lock().await;
+            if state.config.client.extra_stations_config.as_ref() == Some(path) {
+                return Ok(Some(path.clone()));
+            }
+
+            state.config.client.extra_stations_config = Some(path.clone());
+            PersistedClientConfig::from(state.config.client.clone())
+        };
+
+        let config_dir = app
+            .path()
+            .app_config_dir()
+            .expect("Cannot get config directory");
+        persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+        log::debug!("Reloading configuration");
+        let new_config = AppConfig::parse(&config_dir).context("Failed to reload configuration")?;
+
+        app_state.lock().await.config = new_config.clone();
+
+        let mut stations_config = FrontendStationsConfig::from(new_config.stations);
+        stations_config.selected_profile = new_config.client.selected_stations_profile.clone();
+        app.emit("signaling:stations-config", stations_config).ok();
+    }
+
+    Ok(path)
 }

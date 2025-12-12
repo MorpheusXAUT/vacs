@@ -9,11 +9,6 @@
       "title": "StationsConfig",
       "description": "Configuration for how stations are handled client-side",
       "properties": {
-        "selected_profile": {
-          "type": "string",
-          "default": "Default",
-          "description": "Name of the currently selected station profile."
-        },
         "profiles": {
           "type": "object",
           "description": "Named profiles for different station filtering configurations. Users can switch between profiles in the UI.",
@@ -88,6 +83,15 @@
       "title": "ClientConfig",
       "description": "Configuration for local client behavior",
       "properties": {
+        "selected_stations_profile": {
+          "type": "string",
+          "default": "Default",
+          "description": "Name of the currently selected stations profile."
+        },
+        "extra_stations_config": {
+          "type": "string",
+          "description": "Path to an additional stations configuration file to load."
+        },
         "ignored": {
           "type": "array",
           "items": {

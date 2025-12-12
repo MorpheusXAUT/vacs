@@ -38,7 +38,7 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn parse(config_dir: &Path) -> anyhow::Result<Self> {
-        Config::builder()
+        let mut builder = Config::builder()
             .add_source(Config::try_from(&AppConfig::default())?)
             .add_source(
                 File::with_name(
@@ -80,11 +80,46 @@ impl AppConfig {
                 .required(false),
             )
             .add_source(File::with_name(CLIENT_SETTINGS_FILE_NAME).required(false))
-            .add_source(Environment::with_prefix("vacs_client"))
+            .add_source(Environment::with_prefix("vacs_client"));
+
+        let preliminary_config: AppConfig = builder
+            .build_cloned()
+            .context("Failed to build preliminary config")?
+            .try_deserialize()
+            .context("Failed to deserialize preliminary config")?;
+
+        if let Some(extra_config_path) = preliminary_config.client.extra_stations_config {
+            log::info!("Loading extra stations config from: {}", extra_config_path);
+            builder = builder
+                .add_source(File::with_name(&extra_config_path).required(false))
+                // Re-add environment variables to ensure they still take precedence
+                .add_source(Environment::with_prefix("vacs_client"));
+        }
+
+        let mut config: AppConfig = builder
             .build()
             .context("Failed to build config")?
             .try_deserialize()
-            .context("Failed to deserialize config")
+            .context("Failed to deserialize config")?;
+
+        // Migration of legacy selected stations profile previously stored in stations.toml
+        if let Some(legacy_profile) = config.stations.legacy_selected_profile.take()
+            && config.client.selected_stations_profile == "Default"
+            && legacy_profile != "Default"
+        {
+            log::info!(
+                "Migrating legacy selected_stations_profile '{legacy_profile}' to client config"
+            );
+            config.client.selected_stations_profile = legacy_profile;
+
+            let persisted_client_config = PersistedClientConfig::from(config.client.clone());
+            if let Err(err) = persisted_client_config.persist(config_dir, CLIENT_SETTINGS_FILE_NAME)
+            {
+                log::error!("Failed to persist migrated client config: {err}");
+            }
+        }
+
+        Ok(config)
     }
 }
 
@@ -229,6 +264,8 @@ pub struct ClientConfig {
     /// parties as the (local) user can still actively initiate calls to them.
     #[serde(default, skip_serializing_if = "HashSet::is_empty")]
     pub ignored: HashSet<String>,
+    pub extra_stations_config: Option<String>,
+    pub selected_stations_profile: String,
 }
 
 impl Default for ClientConfig {
@@ -244,6 +281,8 @@ impl Default for ClientConfig {
             radio: RadioConfig::default(),
             auto_hangup_seconds: 60,
             ignored: HashSet::new(),
+            extra_stations_config: None,
+            selected_stations_profile: "Default".to_string(),
         }
     }
 }
@@ -616,7 +655,9 @@ impl From<ClientConfig> for PersistedClientConfig {
 /// Configuration for how stations are handled client-side.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StationsConfig {
-    pub selected_profile: String,
+    #[serde(alias = "selected_profile", default, skip_serializing)]
+    pub legacy_selected_profile: Option<String>,
+
     /// Named profiles for different station filtering configurations.
     /// Users can switch between profiles in the UI.
     pub profiles: HashMap<String, StationsProfileConfig>,
@@ -627,7 +668,7 @@ impl Default for StationsConfig {
         let mut profiles = HashMap::new();
         profiles.insert("Default".to_string(), StationsProfileConfig::default());
         Self {
-            selected_profile: "Default".to_string(),
+            legacy_selected_profile: None,
             profiles,
         }
     }
@@ -643,24 +684,15 @@ pub struct FrontendStationsConfig {
 impl From<StationsConfig> for FrontendStationsConfig {
     fn from(stations_config: StationsConfig) -> Self {
         Self {
-            selected_profile: stations_config.selected_profile,
+            selected_profile: stations_config
+                .legacy_selected_profile
+                .unwrap_or("Default".to_string()),
             profiles: stations_config
                 .profiles
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
         }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Default)]
-pub struct PersistedStationsConfig {
-    pub stations: StationsConfig,
-}
-
-impl From<StationsConfig> for PersistedStationsConfig {
-    fn from(stations: StationsConfig) -> Self {
-        Self { stations }
     }
 }
 

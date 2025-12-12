@@ -5,7 +5,7 @@ use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::config::{
     BackendEndpoint, CLIENT_SETTINGS_FILE_NAME, FrontendStationsConfig, Persistable,
-    PersistedClientConfig, PersistedStationsConfig, STATIONS_SETTINGS_FILE_NAME,
+    PersistedClientConfig,
 };
 use crate::error::{Error, HandleUnauthorizedExt};
 use std::collections::HashSet;
@@ -154,7 +154,14 @@ pub async fn signaling_end_call(
 pub async fn signaling_get_stations_config(
     app_state: State<'_, AppState>,
 ) -> Result<FrontendStationsConfig, Error> {
-    Ok(app_state.lock().await.config.stations.clone().into())
+    let config = {
+        let state = app_state.lock().await;
+        let mut config = FrontendStationsConfig::from(state.config.stations.clone());
+        config.selected_profile = state.config.client.selected_stations_profile.clone();
+        config
+    };
+
+    Ok(config)
 }
 
 #[tauri::command]
@@ -164,18 +171,18 @@ pub async fn signaling_set_selected_stations_config_profile(
     app_state: State<'_, AppState>,
     profile: String,
 ) -> Result<(), Error> {
-    let persisted_stations_config: PersistedStationsConfig = {
+    let persisted_client_config = {
         let mut state = app_state.lock().await;
-        state.config.stations.selected_profile = profile;
+        state.config.client.selected_stations_profile = profile;
 
-        state.config.stations.clone().into()
+        PersistedClientConfig::from(state.config.client.clone())
     };
 
     let config_dir = app
         .path()
         .app_config_dir()
         .expect("Cannot get config directory");
-    persisted_stations_config.persist(&config_dir, STATIONS_SETTINGS_FILE_NAME)?;
+    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
 
     Ok(())
 }
