@@ -35,7 +35,7 @@ function SettingsPage() {
                                 <p className="pt-1 text-center font-semibold uppercase border-t-2 border-zinc-200">
                                     Miscellaneous
                                 </p>
-                                <div className="px-3 grid grid-cols-[repeat(3,auto)] justify-center grid-rows-2 gap-4 [&>button]:h-16">
+                                <div className="px-3 pb-2 grid grid-cols-[repeat(3,auto)] justify-center grid-rows-2 gap-4 [&>button]:h-16">
                                     <UpdateButton />
                                     <Button
                                         color="gray"
@@ -74,10 +74,10 @@ function SettingsPage() {
                             >
                                 Transmit
                             </Button>
-                            <Button color="gray" className="w-20 h-full text-sm">
+                            <Button color="gray" className="w-20 h-full text-sm" disabled={true}>
                                 Hotkeys
                             </Button>
-                            <Button color="gray" className="w-20 h-full text-sm">
+                            <Button color="gray" className="w-20 h-full text-sm" disabled={true}>
                                 Sounds
                             </Button>
                         </div>

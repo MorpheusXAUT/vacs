@@ -45,7 +45,7 @@ function TransmitModeSettings() {
     }, [capKeybindListener]);
 
     return (
-        <div className="h-full flex min-h-0 flex-col">
+        <div className="h-full flex flex-col">
             <div className="flex flex-col gap-0.5">
                 <p className="w-full mb-2 text-center border-b-2 border-zinc-200 uppercase font-semibold">
                     Mode
@@ -68,28 +68,25 @@ function TransmitModeSettings() {
                     )}
                 </div>
                 <p className="py-2 px-3 text-sm text-gray-800">
-                    <span className="font-semibold">Voice activation:</span> Mic unmuted, toggle{" "}
+                    <b>Voice activation:</b> Mic unmuted, toggle{" "}
                     <span className="bg-[#92e1fe] border-2 border-t-cyan-100 border-l-cyan-100 border-r-cyan-950 border-b-cyan-950 rounded px-1 text-xs text-black font-semibold">
                         RADIO PRIO
                     </span>{" "}
                     to mute.
                     <br />
-                    <span className="font-semibold">Push-to-talk:</span> Mic muted, press and hold
-                    key to talk in a call.
+                    <b>Push-to-talk:</b> Mic muted, press and hold key to talk in a call.
                     <br />
-                    <span className="font-semibold">Push-to-mute:</span> Mic unmuted, press and hold
-                    key to mute in a call.
+                    <b>Push-to-mute:</b> Mic unmuted, press and hold key to mute in a call.
                     <br />
-                    <span className="font-semibold">Radio Integration:</span> While not in a call,
-                    press and hold key to transmit on radio. During a call, the key will behave as a
-                    PTT key. Toggling{" "}
+                    <b>Radio Integration:</b> While not in a call, press and hold key to transmit on
+                    radio. During a call, the key will behave as a PTT key. Toggling{" "}
                     <span className="bg-[#92e1fe] border-2 border-t-cyan-100 border-l-cyan-100 border-r-cyan-950 border-b-cyan-950 rounded px-1 text-xs text-black font-semibold">
                         RADIO PRIO
                     </span>{" "}
                     forces radio transmission during a call.
                 </p>
             </div>
-            <div className="grow min-h-0 flex flex-col gap-0.5">
+            <div className="grow flex flex-col gap-0.5">
                 <div className="w-full pt-1 mb-1 flex flex-row gap-2 items-center justify-center border-t-2 border-zinc-200">
                     <p className="font-semibold uppercase">Radio Integration</p>
                 </div>
@@ -112,24 +109,23 @@ function TransmitModeSettings() {
                     )}
                 </div>
                 {radioConfig?.integration === "AudioForVatsim" ? (
-                    <p className="py-2 px-3 text-sm text-gray-800 leading-4.5 overflow-y-auto">
-                        vacs simulates a key press for you to trigger a radio transmission in AFV.
+                    <p className="py-2 px-3 text-sm text-gray-800 leading-4.5">
+                        vacs simulates a key press for you to trigger a radio transmission in AFV.{" "}
                         <br />
-                        <span className="font-semibold text-red-600">IMPORTANT:</span> The key you
-                        configure in this section <span className="font-semibold">MUST</span> be
-                        distinct from your Radio Integration key. Set this key (e.g. ScrollLock) as
-                        your PTT key in AFV. If you use the same key as configured in the
-                        &quot;Mode&quot; section above, every coordination will be heard on
-                        frequency.
+                        Set this key as your PTT key in AFV. You will not press it yourself, vacs
+                        will do so automatically for you. Choosing a rarely used key such as
+                        ScrollLock helps avoid accidental triggers. <br />
+                        <span className="font-semibold text-red-600">IMPORTANT:</span> Do{" "}
+                        <b className="uppercase">not</b> set the key configured in the
+                        &quot;Mode&quot; section above in AFV.
                     </p>
                 ) : radioConfig?.integration === "TrackAudio" ? (
-                    <p className="py-2 px-3 text-sm text-gray-800 leading-4.5 overflow-y-auto">
+                    <p className="py-2 px-3 text-sm text-gray-800 leading-4.5">
                         vacs can connect to your TrackAudio client to trigger transmissions as well
                         as monitor radio and frequency state.
                         <br />
-                        <span className="font-semibold">Note:</span> TrackAudio must be connected to
-                        VATSIM and tuned to at least one frequency for the radio to show a
-                        successful connection.
+                        <b>Note:</b> TrackAudio must be connected to VATSIM and tuned to at least
+                        one frequency for the radio to show a successful connection.
                         <br />
                         Connection status is indicated by the button color:{" "}
                         <span className="bg-[#05cf9c] border-2 border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950 rounded px-1 text-xs text-black font-semibold">
@@ -143,10 +139,10 @@ function TransmitModeSettings() {
                         <span className="bg-red-500 border-2 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900 rounded px-1 text-xs text-black font-semibold">
                             Radio
                         </span>{" "}
-                        (error). A gray button indicates the radio not being ready.
+                        (error). A gray button indicates the radio is not ready.
                     </p>
                 ) : (
-                    <p className="py-2 px-3 text-sm text-gray-800 leading-4.5 overflow-y-auto">
+                    <p className="py-2 px-3 text-sm text-gray-800 leading-4.5">
                         How did you get here?
                     </p>
                 )}
