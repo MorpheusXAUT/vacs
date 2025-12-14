@@ -4,9 +4,10 @@ use crate::config::{
     PersistedClientConfig, RadioConfig, TransmitConfig, TransmitMode,
 };
 use crate::error::Error;
+use crate::keybinds::KeybindsError;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
-use crate::radio::RadioState;
+use crate::radio::{RadioIntegration, RadioState};
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
@@ -41,6 +42,8 @@ pub async fn keybinds_set_transmit_config(
         let mut state = app_state.lock().await;
 
         let transmit_config: TransmitConfig = transmit_config.try_into()?;
+
+        validate_afv_radio_integration_config(&transmit_config, &state.config.client.radio)?;
 
         keybind_engine
             .write()
@@ -86,6 +89,8 @@ pub async fn keybinds_set_radio_config(
         let mut state = app_state.lock().await;
 
         let radio_config: RadioConfig = radio_config.try_into()?;
+
+        validate_afv_radio_integration_config(&state.config.client.transmit_config, &radio_config)?;
 
         keybind_engine
             .write()
@@ -157,4 +162,23 @@ pub async fn keybinds_reconnect_radio(
     keybind_engine: State<'_, KeybindEngineHandle>,
 ) -> Result<(), Error> {
     keybind_engine.read().await.reconnect_radio().await
+}
+
+fn validate_afv_radio_integration_config(
+    transmit_config: &TransmitConfig,
+    radio_config: &RadioConfig,
+) -> Result<(), Error> {
+    if transmit_config.mode == TransmitMode::RadioIntegration
+        && radio_config.integration == RadioIntegration::AudioForVatsim
+        && let Some(selected_key) = transmit_config.radio_push_to_talk
+        && let Some(afv_key) = radio_config.audio_for_vatsim.as_ref().and_then(|c| c.emit)
+        && afv_key == selected_key
+    {
+        return Err(KeybindsError::Other(
+            "AFV emit key must be distinct from your radio integration push-to-talk key"
+                .to_string(),
+        )
+        .into());
+    }
+    Ok(())
 }
