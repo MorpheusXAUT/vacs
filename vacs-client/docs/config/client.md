@@ -12,7 +12,7 @@ The `client` configuration allows you to control the client's behavior and local
 - **[Extra stations config](#extra-stations-config)** - Load an additional stations config file
 - **[Selected stations profile](#selected-stations-profile)** - Currently active stations profile
 - **[Transmit configuration](#transmit-configuration)** - Configure transmission mode and PTT keys
-- **[Call control](#call-control)** - Configure call control keybinds
+- **[Keybinds](#call-control)** - Configure general keybinds
 
 ## Configuration structure
 
@@ -28,7 +28,7 @@ mode = "VoiceActivation" # or "PushToTalk", "PushToMute", "RadioIntegration"
 # push_to_mute = "AltRight"
 # radio_push_to_talk = "ControlRight"
 
-[client.call_control]
+[client.keybinds]
 # accept_call = "ControlRight"
 # end_call = "ControlRight"
 
@@ -146,9 +146,9 @@ Key code for Radio Integration Push-to-talk.
 
 ---
 
-## Call control
+## Keybinds
 
-The `call_control` section allows you to configure global keybinds for accepting and ending calls. These keybinds work independently of the application focus.
+The `keybinds` section allows you to configure global keybinds. These keybinds work independently of the application focus.
 
 #### `accept_call`: accept call key
 
@@ -193,7 +193,7 @@ Simple setup with separate keys for PTT and call control.
 mode = "PushToTalk"
 push_to_talk = "ShiftRight"
 
-[client.call_control]
+[client.keybinds]
 accept_call = "ControlRight"
 end_call = "AltRight"
 ```
@@ -206,7 +206,7 @@ Use voice activation for transmission but keep call controls on keys.
 [client.transmit_config]
 mode = "VoiceActivation"
 
-[client.call_control]
+[client.keybinds]
 accept_call = "ControlRight"
 end_call = "AltRight"
 ```
@@ -220,7 +220,7 @@ Combine accept and end call into a single context-aware key (`ControlRight`).
 mode = "PushToTalk"
 push_to_talk = "ShiftRight"
 
-[client.call_control]
+[client.keybinds]
 # Use ControlRight for both actions
 accept_call = "ControlRight"
 end_call = "ControlRight"

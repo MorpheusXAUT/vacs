@@ -127,9 +127,9 @@
             }
           }
         },
-        "call_control": {
+        "keybinds": {
           "type": "object",
-          "description": "Configuration for generic call control keybinds.",
+          "description": "Configuration for keybinds.",
           "properties": {
             "accept_call": {
               "type": ["string", "null"],
