@@ -19,6 +19,7 @@ import {TargetedEvent} from "preact";
 import {RadioState} from "../../types/radio.ts";
 import {StatusColors} from "../ui/StatusIndicator.tsx";
 import {useRadioState} from "../../hooks/radio-state-hook.ts";
+import {transmitModeToKeybind} from "../../types/keybinds.ts";
 
 function TransmitModeSettings() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
@@ -225,8 +226,14 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
 
     useEffect(() => {
         const fetchExternalBinding = async () => {
+            const keybind = transmitModeToKeybind(transmitConfig.mode);
+            if (keybind === null) {
+                setWaylandBinding(undefined);
+                return;
+            }
+
             const binding = await invokeSafe<string | null>("keybinds_get_external_binding", {
-                mode: transmitConfig.mode,
+                keybind,
             });
             setWaylandBinding(binding ?? undefined);
         };

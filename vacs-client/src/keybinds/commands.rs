@@ -5,8 +5,8 @@ use crate::config::{
     TransmitMode,
 };
 use crate::error::Error;
-use crate::keybinds::KeybindsError;
 use crate::keybinds::engine::KeybindEngineHandle;
+use crate::keybinds::{Keybind, KeybindsError};
 use crate::platform::Capabilities;
 use crate::radio::{RadioIntegration, RadioState};
 use tauri::{AppHandle, Manager, State};
@@ -181,13 +181,13 @@ pub async fn keybinds_get_radio_state(
 #[vacs_macros::log_err]
 pub async fn keybinds_get_external_binding(
     keybind_engine: State<'_, KeybindEngineHandle>,
-    mode: TransmitMode,
+    keybind: Keybind,
 ) -> Result<Option<String>, Error> {
     let capabilities = Capabilities::default();
     if !capabilities.keybind_listener {
         return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
     }
-    Ok(keybind_engine.read().await.get_external_binding(mode))
+    Ok(keybind_engine.read().await.get_external_binding(keybind))
 }
 
 #[tauri::command]

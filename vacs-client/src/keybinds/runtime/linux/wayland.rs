@@ -43,6 +43,7 @@
 mod listener;
 pub use listener::*;
 
+use crate::keybinds::Keybind;
 use ashpd::desktop::global_shortcuts::NewShortcut;
 use keyboard_types::Code;
 use std::str::FromStr;
@@ -167,6 +168,18 @@ impl TryFrom<Code> for PortalShortcutId {
             Code::F34 => Ok(PortalShortcutId::PushToMute),
             Code::F35 => Ok(PortalShortcutId::RadioIntegration),
             _ => Err(format!("unknown portal shortcut code {value}")),
+        }
+    }
+}
+
+impl From<Keybind> for PortalShortcutId {
+    fn from(value: Keybind) -> Self {
+        match value {
+            Keybind::PushToTalk => PortalShortcutId::PushToTalk,
+            Keybind::PushToMute => PortalShortcutId::PushToMute,
+            Keybind::RadioIntegration => PortalShortcutId::RadioIntegration,
+            Keybind::AcceptCall => PortalShortcutId::CallControl,
+            Keybind::EndCall => PortalShortcutId::CallControl,
         }
     }
 }

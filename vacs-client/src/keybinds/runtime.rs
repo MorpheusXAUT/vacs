@@ -37,7 +37,7 @@
 //! keybinds. This is currently only implemented for Wayland, where shortcuts are configured
 //! in the desktop environment rather than in the app.
 
-use crate::keybinds::{KeyEvent, KeybindsError};
+use crate::keybinds::{KeyEvent, Keybind, KeybindsError};
 use keyboard_types::{Code, KeyState};
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -52,14 +52,14 @@ pub trait KeybindListener: Send + Sync + Debug + 'static {
     where
         Self: Sized;
 
-    /// Get the external (OS-configured) keybind for a transmit mode, if available.
+    /// Get the external (OS-configured) key for a keybind, if available.
     ///
     /// This is used on platforms where keybinds are configured at the OS level
     /// (e.g., Wayland via XDG Global Shortcuts portal) rather than in the application.
     ///
     /// Returns `None` by default for platforms where keybinds are app-configured.
     #[allow(dead_code)]
-    fn get_external_binding(&self, _mode: crate::config::TransmitMode) -> Option<String> {
+    fn get_external_binding(&self, _keybind: Keybind) -> Option<String> {
         None
     }
 }

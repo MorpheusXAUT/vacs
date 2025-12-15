@@ -4,8 +4,8 @@ use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::AudioManagerHandle;
 use crate::config::{CallControlConfig, RadioConfig, TransmitConfig, TransmitMode};
 use crate::error::Error;
-use crate::keybinds::KeyEvent;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
+use crate::keybinds::{KeyEvent, Keybind};
 use crate::radio::{DynRadio, RadioState, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
@@ -240,7 +240,7 @@ impl KeybindEngine {
         }
     }
 
-    /// Get the external (OS-configured) keybind for a transmit mode, if available.
+    /// Get the external (OS-configured) key for a keybind, if available.
     ///
     /// On Wayland, keybinds are configured at the OS level via the XDG Global Shortcuts
     /// portal. This method queries the listener to get the actual key combination the
@@ -248,22 +248,22 @@ impl KeybindEngine {
     ///
     /// Returns `None` on all other platforms where keybinds are configured in-app.
     #[cfg(target_os = "linux")]
-    pub fn get_external_binding(&self, mode: TransmitMode) -> Option<String> {
+    pub fn get_external_binding(&self, keybind: Keybind) -> Option<String> {
         if matches!(Platform::get(), Platform::LinuxWayland) {
             return self
                 .listener
                 .read()
                 .as_ref()
-                .and_then(|l| l.get_external_binding(mode));
+                .and_then(|l| l.get_external_binding(keybind));
         }
         None
     }
 
-    /// Get the external (OS-configured) keybind for a transmit mode, if available.
+    /// Get the external (OS-configured) key for a keybind, if available.
     ///
     /// Returns `None` on all other platforms where keybinds are configured in-app.
     #[cfg(not(target_os = "linux"))]
-    pub fn get_external_binding(&self, _mode: TransmitMode) -> Option<String> {
+    pub fn get_external_binding(&self, _keybind: Keybind) -> Option<String> {
         None
     }
 

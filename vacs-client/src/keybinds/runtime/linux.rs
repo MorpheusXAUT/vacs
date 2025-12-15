@@ -28,7 +28,7 @@
 mod wayland;
 
 use crate::keybinds::runtime::{KeybindEmitter, KeybindListener, stub};
-use crate::keybinds::{KeyEvent, KeybindsError};
+use crate::keybinds::{KeyEvent, Keybind, KeybindsError};
 use crate::platform::Platform;
 use keyboard_types::{Code, KeyState};
 use std::fmt::{Debug, Formatter};
@@ -75,9 +75,9 @@ impl KeybindListener for LinuxKeybindListener {
         }
     }
 
-    fn get_external_binding(&self, mode: crate::config::TransmitMode) -> Option<String> {
+    fn get_external_binding(&self, keybind: Keybind) -> Option<String> {
         match self {
-            Self::Wayland(l) => l.get_external_binding(mode),
+            Self::Wayland(l) => l.get_external_binding(keybind),
             Self::X11(_) => None,
             Self::Stub(_) => None,
         }

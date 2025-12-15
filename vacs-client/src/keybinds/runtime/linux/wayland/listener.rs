@@ -40,7 +40,7 @@
 
 use crate::keybinds::runtime::KeybindListener;
 use crate::keybinds::runtime::linux::wayland::PortalShortcutId;
-use crate::keybinds::{KeyEvent, KeybindsError};
+use crate::keybinds::{KeyEvent, Keybind, KeybindsError};
 use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut, Shortcut};
 use ashpd::zbus::export::futures_core::Stream;
 use futures_util::StreamExt;
@@ -144,12 +144,8 @@ impl KeybindListener for WaylandKeybindListener {
         }
     }
 
-    fn get_external_binding(&self, mode: crate::config::TransmitMode) -> Option<String> {
-        if let Some(id) = PortalShortcutId::from_transmit_mode(mode) {
-            self.get_shortcut_binding(id)
-        } else {
-            None
-        }
+    fn get_external_binding(&self, keybind: Keybind) -> Option<String> {
+        self.get_shortcut_binding(PortalShortcutId::from(keybind))
     }
 }
 

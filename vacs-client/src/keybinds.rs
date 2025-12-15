@@ -1,4 +1,5 @@
 use keyboard_types::{Code, KeyState};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod commands;
@@ -25,4 +26,13 @@ pub struct KeyEvent {
     #[allow(dead_code)]
     label: String,
     state: KeyState,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Keybind {
+    PushToTalk,
+    PushToMute,
+    RadioIntegration,
+    AcceptCall,
+    EndCall,
 }
