@@ -72,23 +72,6 @@ type KeybindFieldProps = {
 
 function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
     const hasExternal = useCapabilitiesStore(state => state.platform === "LinuxWayland");
-    if (hasExternal) {
-        return (
-            <>
-                <p>{label}</p>
-                <ExternalKeybindField type={type} />
-            </>
-        );
-    }
-
-    if (keybind === undefined) {
-        return (
-            <>
-                <p>{label}</p>
-                <p>Loading...</p>
-            </>
-        );
-    }
 
     const handleOnCapture = async (code: string | null) => {
         try {
@@ -100,11 +83,17 @@ function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
     return (
         <>
             <p>{label}</p>
-            <KeyCapture
-                label={keybind.label}
-                onCapture={handleOnCapture}
-                onRemove={() => handleOnCapture(null)}
-            />
+            {hasExternal ? (
+                <ExternalKeybindField type={type} />
+            ) : keybind !== undefined ? (
+                <KeyCapture
+                    label={keybind.label}
+                    onCapture={handleOnCapture}
+                    onRemove={() => handleOnCapture(null)}
+                />
+            ) : (
+                <p>Loading...</p>
+            )}
         </>
     );
 }
@@ -120,7 +109,7 @@ function ExternalKeybindField({type}: {type: KeybindType}) {
         const fetchExternalBinding = async () => {
             try {
                 const binding = await invokeStrict<string | null>("keybinds_get_external_binding", {
-                    type,
+                    keybind: type,
                 });
                 setBinding(binding);
             } catch {}
@@ -134,7 +123,7 @@ function ExternalKeybindField({type}: {type: KeybindType}) {
             onClick={handleOpenSystemShortcutsOnClick}
             title="On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings. Click this field to try opening the appropriate system settings."
             className={clsx(
-                "w-full h-full min-w-0 min-h-8 grow text-sm py-1 px-2 rounded text-center flex items-center justify-center",
+                "w-full h-full min-w-10 min-h-8 grow text-sm py-1 px-2 rounded text-center flex items-center justify-center",
                 "bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
                 "brightness-90 cursor-help",
             )}
