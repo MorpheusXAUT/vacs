@@ -9,7 +9,6 @@ features = ["test-utils"]
 
 [advisories]
 ignore = [
-    { id = "RUSTSEC-2025-0120", reason = "config dependency" },
     # Allow RUSTSEC-2023-0071 for rsa transitively via jsonwebtoken.
     # RSA is used only for local GitHub App JWT signing; no RSA decryption/signing API is exposed to untrusted callers.
     # Timing side-channels are not considered exploitable due to network noise, caching, and rate limiting of version endpoint.
@@ -51,7 +50,6 @@ exceptions = [
     { allow = ["Zlib"], crate = "foldhash" },
     { allow = ["CC0-1.0"], crate = "tiny-keccak" },
     { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
-    { allow = ["OpenSSL"], crate = "aws-lc-sys" },
 ]
 
 [licenses.private]
