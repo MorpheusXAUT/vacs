@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-audio-v0.2.0...vacs-audio-v0.3.0) (2025-12-15)
+
+
+### Features
+
+* **vacs-audio:** add input level meter flag to capture stream ([16be9da](https://github.com/MorpheusXAUT/vacs/commit/16be9da1660432feeeac88b42599c19c8911994d))
+* **vacs-client:** auto-start input level meter when opening settings ([#332](https://github.com/MorpheusXAUT/vacs/issues/332)) ([16be9da](https://github.com/MorpheusXAUT/vacs/commit/16be9da1660432feeeac88b42599c19c8911994d))
+
+
+### Bug Fixes
+
+* **vacs-client:** fix other group DA nav key color ([16be9da](https://github.com/MorpheusXAUT/vacs/commit/16be9da1660432feeeac88b42599c19c8911994d))
+
 ## [0.2.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-audio-v0.1.1...vacs-audio-v0.2.0) (2025-11-30)
 
 
