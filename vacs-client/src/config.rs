@@ -267,7 +267,7 @@ pub struct ClientConfig {
     pub extra_stations_config: Option<String>,
     pub selected_stations_profile: String,
     #[serde(default)]
-    pub call_control: CallControlConfig,
+    pub keybinds: KeybindsConfig,
 }
 
 impl Default for ClientConfig {
@@ -285,7 +285,7 @@ impl Default for ClientConfig {
             ignored: HashSet::new(),
             extra_stations_config: None,
             selected_stations_profile: "Default".to_string(),
-            call_control: CallControlConfig::default(),
+            keybinds: KeybindsConfig::default(),
         }
     }
 }
@@ -657,7 +657,7 @@ impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
 /// These keybinds allow accepting and ending calls without needing to use the UI
 /// and can be used independently of the transmit mode.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct CallControlConfig {
+pub struct KeybindsConfig {
     /// Key code to accept an incoming call.
     pub accept_call: Option<Code>,
     /// Key code to end an active call.
@@ -666,13 +666,13 @@ pub struct CallControlConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct FrontendCallControlConfig {
+pub struct FrontendKeybindsConfig {
     pub accept_call: Option<String>,
     pub end_call: Option<String>,
 }
 
-impl From<CallControlConfig> for FrontendCallControlConfig {
-    fn from(config: CallControlConfig) -> Self {
+impl From<KeybindsConfig> for FrontendKeybindsConfig {
+    fn from(config: KeybindsConfig) -> Self {
         Self {
             accept_call: config.accept_call.map(|c| c.to_string()),
             end_call: config.end_call.map(|c| c.to_string()),
@@ -680,10 +680,10 @@ impl From<CallControlConfig> for FrontendCallControlConfig {
     }
 }
 
-impl TryFrom<FrontendCallControlConfig> for CallControlConfig {
+impl TryFrom<FrontendKeybindsConfig> for KeybindsConfig {
     type Error = Error;
 
-    fn try_from(value: FrontendCallControlConfig) -> Result<Self, Self::Error> {
+    fn try_from(value: FrontendKeybindsConfig) -> Result<Self, Self::Error> {
         Ok(Self {
             accept_call: value
                 .accept_call

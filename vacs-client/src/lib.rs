@@ -79,7 +79,7 @@ pub fn run() {
                 let state = AppStateInner::new(app.handle())?;
 
                 let transmit_config = state.config.client.transmit_config.clone();
-                let call_control_config = state.config.client.call_control.clone();
+                let call_control_config = state.config.client.keybinds.clone();
                 let keybind_engine = state.keybind_engine_handle();
 
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
@@ -136,14 +136,14 @@ pub fn run() {
             auth::commands::auth_check_session,
             auth::commands::auth_logout,
             auth::commands::auth_open_oauth_url,
-            keybinds::commands::keybinds_get_call_control_config,
             keybinds::commands::keybinds_get_external_binding,
+            keybinds::commands::keybinds_get_keybinds_config,
             keybinds::commands::keybinds_get_radio_config,
             keybinds::commands::keybinds_get_radio_state,
             keybinds::commands::keybinds_get_transmit_config,
             keybinds::commands::keybinds_open_system_shortcuts_settings,
             keybinds::commands::keybinds_reconnect_radio,
-            keybinds::commands::keybinds_set_call_control_config,
+            keybinds::commands::keybinds_set_binding,
             keybinds::commands::keybinds_set_radio_config,
             keybinds::commands::keybinds_set_transmit_config,
             signaling::commands::signaling_accept_call,

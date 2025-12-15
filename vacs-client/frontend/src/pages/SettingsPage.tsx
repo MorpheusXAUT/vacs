@@ -13,13 +13,14 @@ import {useUpdateStore} from "../stores/update-store.ts";
 import {Route, Switch} from "wouter";
 import TransmitModePage from "../components/settings/TransmitModePage.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
+import HotkeysConfigPage from "../components/settings/HotkeysConfigPage.tsx";
 
 function SettingsPage() {
     return (
         <div className="h-full w-full relative">
-            <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col overflow-auto">
+            <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col">
                 <p className="w-full text-white bg-blue-700 font-semibold text-center">Settings</p>
-                <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col">
+                <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col overflow-auto">
                     <div className="w-full grow border-b-2 border-zinc-200 flex flex-row">
                         <VolumeSettings />
                         <div className="h-full grow flex flex-col">
@@ -74,7 +75,11 @@ function SettingsPage() {
                             >
                                 Transmit
                             </Button>
-                            <Button color="gray" className="w-20 h-full text-sm" disabled={true}>
+                            <Button
+                                color="gray"
+                                className="w-20 h-full text-sm"
+                                onClick={() => navigate("/settings/hotkeys")}
+                            >
                                 Hotkeys
                             </Button>
                             <Button color="gray" className="w-20 h-full text-sm" disabled={true}>
@@ -87,6 +92,7 @@ function SettingsPage() {
             </div>
             <Switch>
                 <Route path="/transmit" component={TransmitModePage} />
+                <Route path="/hotkeys" component={HotkeysConfigPage} />
             </Switch>
         </div>
     );

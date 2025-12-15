@@ -52,7 +52,9 @@ export type TrackAudioRadioConfig = {
     endpoint: string | null;
 };
 
-export async function withLabels(config: TransmitConfig): Promise<TransmitConfigWithLabels> {
+export async function withTransmitLabels(
+    config: TransmitConfig,
+): Promise<TransmitConfigWithLabels> {
     return {
         ...config,
         pushToTalkLabel: config.pushToTalk && (await codeToLabel(config.pushToTalk)),

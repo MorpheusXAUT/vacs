@@ -1,14 +1,14 @@
 use crate::app::state::AppState;
 use crate::config::{
-    CLIENT_SETTINGS_FILE_NAME, CallControlConfig, FrontendCallControlConfig, FrontendRadioConfig,
-    FrontendTransmitConfig, Persistable, PersistedClientConfig, RadioConfig, TransmitConfig,
-    TransmitMode,
+    CLIENT_SETTINGS_FILE_NAME, FrontendKeybindsConfig, FrontendRadioConfig, FrontendTransmitConfig,
+    KeybindsConfig, Persistable, PersistedClientConfig, RadioConfig, TransmitConfig, TransmitMode,
 };
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::keybinds::{Keybind, KeybindsError};
 use crate::platform::Capabilities;
 use crate::radio::{RadioIntegration, RadioState};
+use keyboard_types::Code;
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
@@ -49,7 +49,7 @@ pub async fn keybinds_set_transmit_config(
         keybind_engine
             .write()
             .await
-            .set_config(&transmit_config, &state.config.client.call_control)
+            .set_config(&transmit_config, &state.config.client.keybinds)
             .await?;
 
         state.config.client.transmit_config = transmit_config;
@@ -67,44 +67,46 @@ pub async fn keybinds_set_transmit_config(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn keybinds_get_call_control_config(
+pub async fn keybinds_get_keybinds_config(
     app_state: State<'_, AppState>,
-) -> Result<FrontendCallControlConfig, Error> {
-    Ok(app_state
-        .lock()
-        .await
-        .config
-        .client
-        .call_control
-        .clone()
-        .into())
+) -> Result<FrontendKeybindsConfig, Error> {
+    Ok(app_state.lock().await.config.client.keybinds.clone().into())
 }
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn keybinds_set_call_control_config(
+pub async fn keybinds_set_binding(
     app: AppHandle,
     app_state: State<'_, AppState>,
     keybind_engine: State<'_, KeybindEngineHandle>,
-    config: FrontendCallControlConfig,
+    code: Option<String>,
+    keybind: Keybind,
 ) -> Result<(), Error> {
     let capabilities = Capabilities::default();
     if !capabilities.keybind_listener {
         return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
     }
 
+    let code = code.as_ref().map(|s| s.parse::<Code>()).transpose().map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", code.unwrap_or_default()))))?;
+
     let persisted_client_config: PersistedClientConfig = {
         let mut state = app_state.lock().await;
 
-        let call_control_config: CallControlConfig = config.try_into()?;
+        let mut keybinds_config: KeybindsConfig = state.config.client.keybinds.clone();
+
+        match keybind {
+            Keybind::AcceptCall => keybinds_config.accept_call = code,
+            Keybind::EndCall => keybinds_config.end_call = code,
+            _ => {}
+        }
 
         keybind_engine
             .write()
             .await
-            .set_config(&state.config.client.transmit_config, &call_control_config)
+            .set_config(&state.config.client.transmit_config, &keybinds_config)
             .await?;
 
-        state.config.client.call_control = call_control_config;
+        state.config.client.keybinds = keybinds_config;
         state.config.client.clone().into()
     };
 

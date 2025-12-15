@@ -2,7 +2,7 @@ use crate::app::state::AppState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::AudioManagerHandle;
-use crate::config::{CallControlConfig, RadioConfig, TransmitConfig, TransmitMode};
+use crate::config::{KeybindsConfig, RadioConfig, TransmitConfig, TransmitMode};
 use crate::error::Error;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
 use crate::keybinds::{KeyEvent, Keybind};
@@ -45,7 +45,7 @@ impl KeybindEngine {
     pub fn new(
         app: AppHandle,
         transmit_config: &TransmitConfig,
-        call_control_config: &CallControlConfig,
+        call_control_config: &KeybindsConfig,
         radio_config: &RadioConfig,
         shutdown_token: CancellationToken,
     ) -> Self {
@@ -132,15 +132,15 @@ impl KeybindEngine {
     pub async fn set_config(
         &mut self,
         transmit_config: &TransmitConfig,
-        call_control_config: &CallControlConfig,
+        keybinds_config: &KeybindsConfig,
     ) -> Result<(), Error> {
         self.stop();
 
         self.transmit_code = Self::select_active_transmit_code(transmit_config);
         self.mode = transmit_config.mode;
 
-        self.accept_call_code = Self::select_accept_call_code(call_control_config);
-        self.end_call_code = Self::select_end_call_code(call_control_config);
+        self.accept_call_code = Self::select_accept_call_code(keybinds_config);
+        self.end_call_code = Self::select_end_call_code(keybinds_config);
 
         self.reset_input_state();
 
@@ -486,7 +486,7 @@ impl KeybindEngine {
     }
 
     #[inline]
-    fn select_accept_call_code(config: &CallControlConfig) -> Option<Code> {
+    fn select_accept_call_code(config: &KeybindsConfig) -> Option<Code> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
             // Wayland Code Mapping Strategy:
@@ -500,7 +500,7 @@ impl KeybindEngine {
     }
 
     #[inline]
-    fn select_end_call_code(config: &CallControlConfig) -> Option<Code> {
+    fn select_end_call_code(config: &KeybindsConfig) -> Option<Code> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
             // Wayland Code Mapping Strategy:

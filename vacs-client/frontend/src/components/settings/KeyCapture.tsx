@@ -14,7 +14,7 @@ function KeyCapture(props: KeyCaptureProps) {
     const [capturing, setCapturing] = useState<boolean>(false);
     const keySelectRef = useRef<HTMLDivElement | null>(null);
 
-    const isRemoveDisabled = props.disabled && props.label === null;
+    const isRemoveDisabled = props.disabled || props.label === null;
 
     const handleKeyDownEvent = useCallback(
         async (event: KeyboardEvent) => {
@@ -87,12 +87,12 @@ function KeyCapture(props: KeyCaptureProps) {
     }, [capturing, handleKeyDownEvent, handleClickOutside]);
 
     return (
-        <div className="grow h-full flex flex-row items-center justify-center">
+        <div className="grow h-full min-w-0 flex flex-row items-center justify-center">
             <div
                 ref={keySelectRef}
                 onClick={handleKeySelectOnClick}
                 className={clsx(
-                    "w-full h-full min-h-8 grow truncate text-sm py-1 px-2 rounded text-center flex items-center justify-center",
+                    "w-full h-full min-w-10 min-h-8 grow text-sm py-1 px-2 rounded text-center flex items-center justify-center",
                     "bg-gray-300 border-2",
                     capturing
                         ? "border-r-gray-100 border-b-gray-100 border-t-gray-700 border-l-gray-700 [&>*]:translate-y-[1px] [&>*]:translate-x-[1px]"
@@ -100,7 +100,9 @@ function KeyCapture(props: KeyCaptureProps) {
                     props.disabled ? "brightness-90 cursor-not-allowed" : "cursor-pointer",
                 )}
             >
-                <p>{capturing ? "Press your key" : !props.disabled ? props.label : ""}</p>
+                <p className="truncate max-w-full">
+                    {capturing ? "Press your key" : (props.label ?? "Not bound")}
+                </p>
             </div>
             <svg
                 onClick={handleOnRemoveClick}
@@ -113,7 +115,7 @@ function KeyCapture(props: KeyCaptureProps) {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 className={clsx(
-                    "p-1 !pr-0",
+                    "shrink-0 p-1 !pr-0",
                     isRemoveDisabled
                         ? "stroke-gray-500 cursor-not-allowed"
                         : "stroke-gray-700 hover:stroke-red-500 transition-colors cursor-pointer",
