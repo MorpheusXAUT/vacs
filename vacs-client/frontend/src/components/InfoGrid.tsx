@@ -6,6 +6,7 @@ import {useUpdateStore} from "../stores/update-store.ts";
 import {navigate} from "wouter/use-browser-location";
 import {invokeSafe} from "../error.ts";
 import {clsx} from "clsx";
+import {openUrl} from "@tauri-apps/plugin-opener";
 
 function InfoGrid() {
     const cid = useAuthStore(state => state.cid);
@@ -20,7 +21,8 @@ function InfoGrid() {
     const currentVersionText = `Version: v${currentVersion}`;
     const updateAvailableText = newVersion !== undefined ? `UPDATE AVAILABLE (v${newVersion})` : "";
 
-    const handleVersionClick = () => {
+    const handleVersionClick = async (version: string) => {
+        await openUrl(`https://github.com/MorpheusXAUT/vacs/releases/tag/vacs-client-v${version}`);
         void invokeSafe("audio_play_ui_click");
         navigate("/settings");
     };
@@ -36,7 +38,7 @@ function InfoGrid() {
             <div
                 className="info-grid-cell cursor-pointer"
                 title={currentVersionText}
-                onClick={handleVersionClick}
+                onClick={() => handleVersionClick(currentVersion)}
             >
                 {currentVersionText}
             </div>
@@ -47,7 +49,7 @@ function InfoGrid() {
             <div
                 className={clsx("info-grid-cell", newVersion !== undefined && "cursor-pointer")}
                 title={updateAvailableText}
-                onClick={() => newVersion !== undefined && handleVersionClick()}
+                onClick={() => newVersion !== undefined && handleVersionClick(newVersion)}
             >
                 {updateAvailableText}
             </div>
