@@ -21,13 +21,14 @@ jobs:
 
     steps:
       - name: Generate GitHub token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.1
         id: generate-token
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-pull-requests: write
           permission-contents: write
+
       - uses: googleapis/release-please-action@v4.4.0
         id: release
         with:
@@ -45,14 +46,15 @@ jobs:
 
     steps:
       - name: Generate GitHub token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.1
         id: generate-token
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-contents: write
+
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
         with:
           ref: ${{ matrix.pr.headBranchName }}
           fetch-depth: 0
@@ -62,7 +64,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.8.2
         with:
           shared-key: 'ubuntu-22.04-x86_64'
 
@@ -71,7 +73,7 @@ jobs:
 
       - name: Setup Node (LTS)
         if: contains(join(matrix.pr.files, ','), 'vacs-client')
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.1.0
         with:
           node-version: 'lts/*'
           cache: 'npm'

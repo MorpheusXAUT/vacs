@@ -37,9 +37,10 @@ jobs:
     continue-on-error: ${{ matrix.checks == 'advisories' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
+
       - name: cargo deny
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@v2.0.14
         with:
           arguments: --all-features
           command: check ${{ matrix.checks }}
@@ -49,7 +50,8 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
+
       - name: cargo machete
         uses: bnjbvr/cargo-machete@v0.9.1
 
@@ -58,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
 
       - name: Install build dependencies
         run: |
@@ -86,7 +88,7 @@ jobs:
           components: rustfmt
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.8.2
 
       - name: Format
         run: cargo fmt --all -- --check
@@ -113,7 +115,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
 
       - name: Install build dependencies (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -137,7 +139,7 @@ jobs:
           components: clippy
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.8.2
         with:
           shared-key: ${{ matrix.platform }}-${{ matrix.arch }}
 
