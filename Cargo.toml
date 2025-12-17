@@ -40,7 +40,7 @@ cpal = "0.16.0"
 csv = "1.4.0"
 dashmap = "6.1.0"
 futures-util = "0.3.31"
-governor = "0.10.2"
+governor = "0.10.4"
 jsonwebtoken = "10.2.0"
 keyboard-types = { version = "0.8.3", features = ["serde"] }
 keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "linux-native-sync-persistent", "crypto-openssl"] }
