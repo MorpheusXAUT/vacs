@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v1.2.0...vacs-client-v1.3.0) (2025-12-18)
+
+
+### Features
+
+* **vacs-audio:** add input level meter flag to capture stream ([16be9da](https://github.com/MorpheusXAUT/vacs/commit/16be9da1660432feeeac88b42599c19c8911994d))
+* **vacs-client:** add call control keybinds ([#337](https://github.com/MorpheusXAUT/vacs/issues/337)) ([c26e4e9](https://github.com/MorpheusXAUT/vacs/commit/c26e4e92c8848c7b340492b4f14bf5c896d5efc2))
+* **vacs-client:** add extra stations config parsing ([#341](https://github.com/MorpheusXAUT/vacs/issues/341)) ([b903c3b](https://github.com/MorpheusXAUT/vacs/commit/b903c3b8091f6fb16e9358d71c99a844836ae447))
+* **vacs-client:** auto-start input level meter when opening settings ([#332](https://github.com/MorpheusXAUT/vacs/issues/332)) ([16be9da](https://github.com/MorpheusXAUT/vacs/commit/16be9da1660432feeeac88b42599c19c8911994d))
+* **vacs-client:** open changelog when clicking on version or update available ([28cfed1](https://github.com/MorpheusXAUT/vacs/commit/28cfed18dec5a5b78f4f5803fe7de0822f4801fd))
+* **vacs-client:** open changelog when clicking on version or update available ([#352](https://github.com/MorpheusXAUT/vacs/issues/352)) ([28cfed1](https://github.com/MorpheusXAUT/vacs/commit/28cfed18dec5a5b78f4f5803fe7de0822f4801fd))
+* **vacs-client:** split settings page into multiple tabs ([d007558](https://github.com/MorpheusXAUT/vacs/commit/d007558e6b51929a4576f92d0a6a477bbe7defbd))
+
+
+### Bug Fixes
+
+* **vacs-client:** fix other group DA nav key color ([16be9da](https://github.com/MorpheusXAUT/vacs/commit/16be9da1660432feeeac88b42599c19c8911994d))
+
 ## [1.2.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v1.1.0...vacs-client-v1.2.0) (2025-12-11)
 
 
