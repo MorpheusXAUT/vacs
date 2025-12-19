@@ -33,8 +33,8 @@
 //! }
 //! ```
 
-use crate::{ControllerInfo, FacilityType};
-use anyhow::Context;
+use crate::{ControllerInfo, FacilityType, Result};
+use thiserror::Error;
 use tracing::instrument;
 
 /// Default timeout for HTTP requests against the slurper API.
@@ -59,6 +59,14 @@ const SLURPER_FACILITY_TYPE_ATC: &str = "atc";
 /// Slurper facility type for pilots.
 const SLURPER_FACILITY_TYPE_PILOT: &str = "pilot";
 
+#[derive(Debug, Error)]
+pub enum SlurperError {
+    #[error("Request failed: {0}")]
+    Request(#[from] reqwest::Error),
+    #[error("CSV error: {0}")]
+    Csv(#[from] csv::Error),
+}
+
 /// Client for accessing the VATSIM Slurper API.
 pub struct SlurperClient {
     /// HTTP client used for all requests.
@@ -80,12 +88,12 @@ impl SlurperClient {
     ///
     /// let client = SlurperClient::new("https://slurper.vatsim.net").unwrap();
     /// ```
-    pub fn new(api_base_url: &str) -> anyhow::Result<Self> {
+    pub fn new(api_base_url: &str) -> Result<Self> {
         let client = reqwest::ClientBuilder::new()
             .user_agent(crate::APP_USER_AGENT)
             .timeout(SLURPER_DEFAULT_HTTP_TIMEOUT)
             .build()
-            .context("Failed to create HTTP client")?;
+            .map_err(SlurperError::from)?;
         Ok(Self {
             client,
             user_info_endpoint_url: format!("{api_base_url}{SLURPER_USER_INFO_ENDPOINT}"),
@@ -105,12 +113,12 @@ impl SlurperClient {
     ///     .with_timeout(Duration::from_secs(2))
     ///     .unwrap();
     /// ```
-    pub fn with_timeout(mut self, timeout: std::time::Duration) -> anyhow::Result<Self> {
+    pub fn with_timeout(mut self, timeout: std::time::Duration) -> Result<Self> {
         self.client = reqwest::ClientBuilder::new()
             .user_agent(crate::APP_USER_AGENT)
             .timeout(timeout)
             .build()
-            .context("Failed to create HTTP client")?;
+            .map_err(SlurperError::from)?;
         Ok(self)
     }
 
@@ -159,7 +167,7 @@ impl SlurperClient {
     ///  }
     /// ```
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn get_controller_info(&self, cid: &str) -> anyhow::Result<Option<ControllerInfo>> {
+    pub async fn get_controller_info(&self, cid: &str) -> Result<Option<ControllerInfo>> {
         tracing::debug!("Retrieving controller info for CID");
 
         if cid.is_empty() {
@@ -178,7 +186,7 @@ impl SlurperClient {
 
     /// Performs an HTTP request to fetch the user info data from the Slurper API.
     #[instrument(level = "trace", skip(self), err)]
-    async fn fetch_slurper_data(&self, cid: &str) -> anyhow::Result<bytes::Bytes> {
+    async fn fetch_slurper_data(&self, cid: &str) -> Result<bytes::Bytes> {
         tracing::trace!("Performing HTTP request");
         let response = self
             .client
@@ -186,15 +194,12 @@ impl SlurperClient {
             .query(&[("cid", cid)])
             .send()
             .await
-            .context("Failed to perform HTTP request")?
+            .map_err(SlurperError::from)?
             .error_for_status()
-            .context("Received non-200 HTTP status code")?;
+            .map_err(SlurperError::from)?;
 
         tracing::trace!(content_length = ?response.content_length(), "Reading response body");
-        let body = response
-            .bytes()
-            .await
-            .context("Failed to read response body")?;
+        let body = response.bytes().await.map_err(SlurperError::from)?;
 
         Ok(body)
     }
@@ -202,11 +207,7 @@ impl SlurperClient {
     /// Parses the CSV data retrieved from the Slurper user info endpoint and returns the
     /// extracted [`ControllerInfo`].
     #[instrument(level = "trace", skip(self, body), err)]
-    fn parse_slurper_data(
-        &self,
-        cid: &str,
-        body: bytes::Bytes,
-    ) -> anyhow::Result<Option<ControllerInfo>> {
+    fn parse_slurper_data(&self, cid: &str, body: bytes::Bytes) -> Result<Option<ControllerInfo>> {
         tracing::trace!("Parsing CSV");
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(false)
@@ -240,7 +241,7 @@ impl SlurperClient {
         &self,
         cid: &str,
         record: csv::StringRecord,
-    ) -> anyhow::Result<Option<ControllerInfo>> {
+    ) -> Result<Option<ControllerInfo>> {
         let facility_type = record
             .get(SLURPER_FACILITY_TYPE_FIELD_INDEX)
             .unwrap_or(SLURPER_FACILITY_TYPE_PILOT);
@@ -315,14 +316,15 @@ impl SlurperClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
+    use pretty_assertions::{assert_eq, assert_matches};
+    use reqwest::StatusCode;
     use std::time::Duration;
     use test_log::test;
     use wiremock::matchers::{method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
-    fn new_client() -> anyhow::Result<()> {
+    fn new_client() -> Result<()> {
         let client = SlurperClient::new("https://example.org")?;
         assert_eq!(
             client.user_info_endpoint_url,
@@ -332,7 +334,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info() -> anyhow::Result<()> {
+    async fn get_controller_info() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -343,12 +345,11 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?;
 
         let controller_info = client
             .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?
+            .await?
             .expect("No controller info found");
 
         assert_eq!(controller_info.callsign, "LOVV_CTR".to_string());
@@ -357,7 +358,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_multiple_entries() -> anyhow::Result<()> {
+    async fn get_controller_info_multiple_entries() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -370,12 +371,11 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?;
 
         let controller_info = client
             .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?
+            .await?
             .expect("No controller info found");
 
         assert_eq!(controller_info.callsign, "LOVV_CTR".to_string());
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_atis_with_visibility_range() -> anyhow::Result<()> {
+    async fn get_controller_info_atis_with_visibility_range() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -397,12 +397,11 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?;
 
         let controller_info = client
             .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?
+            .await?
             .expect("No controller info found");
 
         assert_eq!(controller_info.callsign, "LOVV_CTR".to_string());
@@ -411,7 +410,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_pilot() -> anyhow::Result<()> {
+    async fn get_controller_info_pilot() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -423,19 +422,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_visibility_range_zero() -> anyhow::Result<()> {
+    async fn get_controller_info_visibility_range_zero() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -447,19 +443,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_only_atis() -> anyhow::Result<()> {
+    async fn get_controller_info_only_atis() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -471,19 +464,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_empty() -> anyhow::Result<()> {
+    async fn get_controller_info_empty() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -492,32 +482,26 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_empty_cid() -> anyhow::Result<()> {
-        let client = SlurperClient::new("http://localhost").context("Failed to create client")?;
+    async fn get_controller_info_empty_cid() -> Result<()> {
+        let client = SlurperClient::new("http://localhost")?;
 
-        let controller_info = client
-            .get_controller_info("")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_non_200_status_code() -> anyhow::Result<()> {
+    async fn get_controller_info_non_200_status_code() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -526,20 +510,17 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri()).context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?;
 
         let result = client.get_controller_info("1234567").await;
 
-        assert!(result.is_err());
-        assert!(result.unwrap_err().chain().any(|e| {
-            e.to_string()
-                .contains("HTTP status client error (404 Not Found)")
-        }));
+        matches!(result, Err(crate::Error::Slurper(SlurperError::Request(err)))
+            if err.is_status() && err.status().is_some_and(|status| status == StatusCode::NOT_FOUND));
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_timeout() -> anyhow::Result<()> {
+    async fn get_controller_info_timeout() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -548,24 +529,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri())?
-            .with_timeout(Duration::from_millis(50))
-            .context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
         let result = client.get_controller_info("1234567").await;
 
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .chain()
-                .any(|e| e.to_string().contains("operation timed out"))
-        );
+        assert_matches!(result, Err(crate::Error::Slurper(SlurperError::Request(err))) if err.is_timeout());
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_missing_facility_type() -> anyhow::Result<()> {
+    async fn get_controller_info_missing_facility_type() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -574,21 +547,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri())?
-            .with_timeout(Duration::from_millis(50))
-            .context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_empty_callsign() -> anyhow::Result<()> {
+    async fn get_controller_info_empty_callsign() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -597,21 +565,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri())?
-            .with_timeout(Duration::from_millis(50))
-            .context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_missing_callsign() -> anyhow::Result<()> {
+    async fn get_controller_info_missing_callsign() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -620,21 +583,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri())?
-            .with_timeout(Duration::from_millis(50))
-            .context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_empty_frequency() -> anyhow::Result<()> {
+    async fn get_controller_info_empty_frequency() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -643,21 +601,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri())?
-            .with_timeout(Duration::from_millis(50))
-            .context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_missing_frequency() -> anyhow::Result<()> {
+    async fn get_controller_info_missing_frequency() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -666,21 +619,16 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri())?
-            .with_timeout(Duration::from_millis(50))
-            .context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())
     }
 
     #[test(tokio::test)]
-    async fn get_controller_info_empty_csv_record() -> anyhow::Result<()> {
+    async fn get_controller_info_empty_csv_record() -> Result<()> {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/users/info"))
@@ -689,14 +637,9 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SlurperClient::new(&server.uri())?
-            .with_timeout(Duration::from_millis(50))
-            .context("Failed to create client")?;
+        let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client
-            .get_controller_info("1234567")
-            .await
-            .context("Failed to get controller info")?;
+        let controller_info = client.get_controller_info("1234567").await?;
 
         assert_eq!(controller_info, None);
         Ok(())

@@ -8183,7 +8183,6 @@ dependencies = [
 name = "vacs-vatsim"
 version = "0.2.1"
 dependencies = [
- "anyhow",
  "async-trait",
  "bytes",
  "csv",
@@ -8192,6 +8191,7 @@ dependencies = [
  "reqwest",
  "serde",
  "test-log",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "wiremock",

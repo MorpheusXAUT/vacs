@@ -46,9 +46,9 @@ impl Default for MockDataFeed {
 
 #[async_trait]
 impl DataFeed for MockDataFeed {
-    async fn fetch_controller_info(&self) -> anyhow::Result<Vec<ControllerInfo>> {
+    async fn fetch_controller_info(&self) -> crate::Result<Vec<ControllerInfo>> {
         if self.should_error {
-            return Err(anyhow::anyhow!("Mock error"));
+            return Err(crate::Error::Other("Mock error".to_string()));
         }
         Ok(self.controllers.clone())
     }
