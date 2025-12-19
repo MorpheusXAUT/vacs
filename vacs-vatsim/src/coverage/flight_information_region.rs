@@ -287,4 +287,283 @@ mod tests {
         };
         assert_eq!(f1, f2); // Should be equal because only IDs check
     }
+
+    #[test]
+    fn load_from_dir_valid_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        let stations_toml = r#"
+            [[stations]]
+            id = "LOWW_TWR"
+        "#;
+        std::fs::write(fir_path.join("stations.toml"), stations_toml).unwrap();
+
+        let positions_toml = r#"
+            [[positions]]
+            id = "LOWW_TWR"
+            prefixes = ["LOWW"]
+            frequency = "119.400"
+            facility_type = "Tower"
+        "#;
+        std::fs::write(fir_path.join("positions.toml"), positions_toml).unwrap();
+
+        let raw = FlightInformationRegionRaw::load_from_dir(&fir_path).expect("Should load");
+        assert_eq!(raw.id.as_str(), "LOVV");
+        assert_eq!(raw.stations.len(), 1);
+        assert_eq!(raw.stations[0].id.as_str(), "LOWW_TWR");
+        assert_eq!(raw.positions.len(), 1);
+        assert_eq!(raw.positions[0].id.as_str(), "LOWW_TWR");
+    }
+
+    #[test]
+    fn load_from_dir_valid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        let stations_json = r#"{
+            "stations": [
+                {
+                    "id": "LOWW_TWR"
+                }
+            ]
+        }"#;
+        std::fs::write(fir_path.join("stations.json"), stations_json).unwrap();
+
+        let positions_json = r#"{
+            "positions": [
+                {
+                    "id": "LOWW_TWR",
+                    "prefixes": ["LOWW"],
+                    "frequency": "119.400",
+                    "facility_type": "Tower"
+                }
+            ]
+        }"#;
+        std::fs::write(fir_path.join("positions.json"), positions_json).unwrap();
+
+        let raw = FlightInformationRegionRaw::load_from_dir(&fir_path).expect("Should load");
+        assert_eq!(raw.id.as_str(), "LOVV");
+        assert_eq!(raw.stations.len(), 1);
+        assert_eq!(raw.stations[0].id.as_str(), "LOWW_TWR");
+        assert_eq!(raw.positions.len(), 1);
+        assert_eq!(raw.positions[0].id.as_str(), "LOWW_TWR");
+    }
+
+    #[test]
+    fn load_from_dir_mixed_toml_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        let stations_toml = r#"
+            [[stations]]
+            id = "LOWW_TWR"
+        "#;
+        std::fs::write(fir_path.join("stations.toml"), stations_toml).unwrap();
+
+        let positions_json = r#"{
+            "positions": [
+                {
+                    "id": "LOWW_TWR",
+                    "prefixes": ["LOWW"],
+                    "frequency": "119.400",
+                    "facility_type": "Tower"
+                }
+            ]
+        }"#;
+        std::fs::write(fir_path.join("positions.json"), positions_json).unwrap();
+
+        let raw = FlightInformationRegionRaw::load_from_dir(&fir_path).expect("Should load");
+        assert_eq!(raw.id.as_str(), "LOVV");
+        assert_eq!(raw.stations.len(), 1);
+        assert_eq!(raw.stations[0].id.as_str(), "LOWW_TWR");
+        assert_eq!(raw.positions.len(), 1);
+        assert_eq!(raw.positions[0].id.as_str(), "LOWW_TWR");
+    }
+
+    #[test]
+    fn load_from_dir_missing_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        // No files
+        let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
+        assert_matches!(res, Err(CoverageError::Io(IoError::Read { ref reason, .. })) if reason.contains("No stations file found"));
+
+        // Only stations
+        let stations_toml = r#"
+            [[stations]]
+            id = "LOWW_TWR"
+            controlled_by = []
+        "#;
+        std::fs::write(fir_path.join("stations.toml"), stations_toml).unwrap();
+
+        let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
+        assert_matches!(res, Err(CoverageError::Io(IoError::Read { ref reason, .. })) if reason.contains("No positions file found"));
+
+        // Only positions
+        let positions_toml = r#"
+            [[positions]]
+            id = "LOWW_TWR"
+            prefixes = ["LOWW"]
+            frequency = "119.400"
+            facility_type = "Tower"
+        "#;
+        std::fs::write(fir_path.join("positions.toml"), positions_toml).unwrap();
+        std::fs::remove_file(fir_path.join("stations.toml")).unwrap();
+
+        let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
+        assert_matches!(res, Err(CoverageError::Io(IoError::Read { ref reason, .. })) if reason.contains("No stations file found"));
+    }
+
+    #[test]
+    fn load_from_dir_complex_chain() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        let stations_toml = r#"
+            [[stations]]
+            id = "LOVV_CTR"
+
+            [[stations]]
+            id = "LOWW_APP"
+            parent_id = "LOVV_CTR"
+            controlled_by = ["LOWW_APP", "LOWW_B_APP", "LOWW_P_APP"]
+
+            [[stations]]
+            id = "LOWW_TWR"
+            parent_id = "LOWW_APP"
+            controlled_by = ["LOWW_TWR", "LOWW_E_TWR"]
+
+            [[stations]]
+            id = "LOWW_E_TWR"
+            parent_id = "LOWW_TWR"
+            controlled_by = ["LOWW_E_TWR", "LOWW_TWR"]
+
+            [[stations]]
+            id = "LOWW_GND"
+            parent_id = "LOWW_E_TWR"
+            controlled_by = ["LOWW_GND", "LOWW_W_GND"]
+
+            [[stations]]
+            id = "LOWW_DEL"
+            parent_id = "LOWW_GND"
+        "#;
+        std::fs::write(fir_path.join("stations.toml"), stations_toml).unwrap();
+
+        let positions_toml = r#"
+            [[positions]]
+            id = "LOVV_CTR"
+            prefixes = ["LOVV"]
+            frequency = "135.200"
+            facility_type = "Enroute"
+
+            [[positions]]
+            id = "LOWW_APP"
+            prefixes = ["LOWW", "LOVV"]
+            frequency = "119.400"
+            facility_type = "Approach"
+
+            [[positions]]
+            id = "LOWW_B_APP"
+            prefixes = ["LOWW"]
+            frequency = "118.500"
+            facility_type = "Approach"
+
+            [[positions]]
+            id = "LOWW_P_APP"
+            prefixes = ["LOWW"]
+            frequency = "128.950"
+            facility_type = "Approach"
+
+            [[positions]]
+            id = "LOWW_TWR"
+            prefixes = ["LOWW"]
+            frequency = "119.400"
+            facility_type = "Tower"
+
+            [[positions]]
+            id = "LOWW_E_TWR"
+            prefixes = ["LOWW"]
+            frequency = "118.775"
+            facility_type = "Tower"
+
+            [[positions]]
+            id = "LOWW_GND"
+            prefixes = ["LOWW"]
+            frequency = "121.600"
+            facility_type = "Ground"
+
+            [[positions]]
+            id = "LOWW_W_GND"
+            prefixes = ["LOWW"]
+            frequency = "121.775"
+            facility_type = "Ground"
+
+            [[positions]]
+            id = "LOWW_DEL"
+            prefixes = ["LOWW"]
+            frequency = "122.950"
+            facility_type = "Delivery"
+        "#;
+        std::fs::write(fir_path.join("positions.toml"), positions_toml).unwrap();
+
+        let raw = FlightInformationRegionRaw::load_from_dir(&fir_path).expect("Should load");
+        let fir = FlightInformationRegion::try_from(raw.clone()).expect("Should convert");
+
+        let stations_map: std::collections::HashMap<_, _> =
+            raw.stations.iter().map(|s| (s.id.clone(), s)).collect();
+        let leaf = stations_map
+            .get(&StationId::from("LOWW_DEL"))
+            .expect("LOWW_DEL should exist");
+
+        let resolved = leaf.resolve_controlled_by(fir.id.clone(), &stations_map);
+
+        let expected_ids: Vec<PositionId> = vec![
+            "LOWW_DEL",
+            "LOWW_GND",
+            "LOWW_W_GND",
+            "LOWW_E_TWR",
+            "LOWW_TWR",
+            "LOWW_APP",
+            "LOWW_B_APP",
+            "LOWW_P_APP",
+            "LOVV_CTR",
+        ]
+        .into_iter()
+        .map(PositionId::from)
+        .collect();
+
+        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
+        assert_eq!(actual_ids, expected_ids);
+    }
+
+    #[test]
+    fn load_from_dir_invalid_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        std::fs::write(fir_path.join("stations.toml"), "invalid toml").unwrap();
+
+        let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
+        assert_matches!(res, Err(CoverageError::Io(IoError::Parse { .. })));
+    }
+
+    #[test]
+    fn load_from_dir_invalid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        std::fs::write(fir_path.join("stations.json"), "invalid json").unwrap();
+
+        let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
+        assert_matches!(res, Err(CoverageError::Io(IoError::Parse { .. })));
+    }
 }
