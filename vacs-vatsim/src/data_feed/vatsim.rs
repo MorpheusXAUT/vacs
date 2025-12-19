@@ -1,6 +1,5 @@
-use crate::data_feed::DataFeed;
-use crate::{ControllerInfo, FacilityType};
-use anyhow::Context;
+use crate::data_feed::{DataFeed, DataFeedError};
+use crate::{ControllerInfo, FacilityType, Result};
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use serde::Deserialize;
@@ -20,12 +19,12 @@ pub struct VatsimDataFeed {
 }
 
 impl VatsimDataFeed {
-    pub fn new(url: &str) -> anyhow::Result<Self> {
+    pub fn new(url: &str) -> Result<Self> {
         let client = reqwest::ClientBuilder::new()
             .user_agent(crate::APP_USER_AGENT)
             .timeout(DATA_FEED_DEFAULT_HTTP_TIMEOUT)
             .build()
-            .context("Failed to create HTTP client")?;
+            .map_err(DataFeedError::from)?;
 
         Ok(Self {
             url: url.to_string(),
@@ -35,12 +34,12 @@ impl VatsimDataFeed {
         })
     }
 
-    pub fn with_timeout(mut self, timeout: Duration) -> anyhow::Result<Self> {
+    pub fn with_timeout(mut self, timeout: Duration) -> Result<Self> {
         self.client = reqwest::ClientBuilder::new()
             .user_agent(crate::APP_USER_AGENT)
             .timeout(timeout)
             .build()
-            .context("Failed to create HTTP client")?;
+            .map_err(DataFeedError::from)?;
         Ok(self)
     }
 
@@ -51,20 +50,17 @@ impl VatsimDataFeed {
     }
 
     #[instrument(level = "trace", skip(self), err)]
-    async fn fetch_data_feed(&self) -> anyhow::Result<VatsimDataFeedResponse> {
+    async fn fetch_data_feed(&self) -> Result<VatsimDataFeedResponse> {
         tracing::trace!("Fetching VATSIM data feed");
         let response = self
             .client
             .get(self.url.clone())
             .send()
             .await
-            .context("Failed to perform HTTP request")?;
+            .map_err(DataFeedError::from)?;
 
         tracing::trace!(content_length = ?response.headers().get(reqwest::header::CONTENT_LENGTH), "Parsing VATSIM data feed response body");
-        let body = response
-            .json()
-            .await
-            .context("Failed to parse VATSIM data feed response body")?;
+        let body = response.json().await.map_err(DataFeedError::from)?;
 
         Ok(body)
     }
@@ -73,7 +69,7 @@ impl VatsimDataFeed {
 #[async_trait]
 impl DataFeed for VatsimDataFeed {
     #[instrument(level = "debug", skip(self), err)]
-    async fn fetch_controller_info(&self) -> anyhow::Result<Vec<ControllerInfo>> {
+    async fn fetch_controller_info(&self) -> Result<Vec<ControllerInfo>> {
         tracing::debug!("Fetching controller info");
 
         if let Some(cache) = self.cache.read().as_ref()
