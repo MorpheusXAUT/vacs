@@ -136,3 +136,275 @@ impl std::borrow::Borrow<str> for StationId {
         &self.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::{assert_eq, assert_matches};
+
+    #[test]
+    fn station_id_creation() {
+        let id = StationId::from("loww_twr");
+        assert_eq!(id.as_str(), "LOWW_TWR");
+        assert_eq!(id.to_string(), "LOWW_TWR");
+        assert!(!id.is_empty());
+
+        let empty = StationId::from("");
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn station_id_equality() {
+        let id1 = StationId::from("LOWW_TWR");
+        let id2 = StationId::from("loww_twr");
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn station_raw_valid() {
+        let raw1 = StationRaw {
+            id: "LOWW_TWR".into(),
+            parent_id: None,
+            controlled_by: vec![],
+        };
+        assert!(raw1.validate().is_ok());
+
+        let raw2 = StationRaw {
+            id: "LOWW_TWR".into(),
+            parent_id: Some("LOWW_APP".into()),
+            controlled_by: vec![],
+        };
+        assert!(raw2.validate().is_ok());
+    }
+
+    #[test]
+    fn station_raw_invalid_id() {
+        let raw = StationRaw {
+            id: "".into(),
+            parent_id: None,
+            controlled_by: vec![],
+        };
+        assert_matches!(
+            raw.validate(),
+            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "id"
+        );
+    }
+
+    #[test]
+    fn station_equality() {
+        let s1 = Station {
+            id: "LOWW_TWR".into(),
+            parent_id: None,
+            controlled_by: vec![],
+            fir_id: "LOVV".into(),
+        };
+        let s2 = Station {
+            id: "LOWW_TWR".into(),
+            parent_id: Some("LOWW_APP".into()),     // Different
+            controlled_by: vec!["LOWW_TWR".into()], // Different
+            fir_id: "LOVV".into(),
+        };
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    fn resolve_controlled_by_simple() {
+        let fir_id = FlightInformationRegionId::from("LOVV");
+        let station = StationRaw {
+            id: "LOWW_TWR".into(),
+            parent_id: None,
+            controlled_by: vec!["LOWW_APP".into()],
+        };
+        let all_stations = HashMap::from([("LOWW_TWR".into(), &station)]);
+
+        let resolved = station.resolve_controlled_by(fir_id.clone(), &all_stations);
+
+        // Should contain itself (implicit) + explicit controlled_by
+        let expected_ids: Vec<PositionId> =
+            vec![PositionId::from("LOWW_TWR"), PositionId::from("LOWW_APP")];
+        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
+
+        assert_eq!(actual_ids, expected_ids);
+        assert_eq!(resolved.id, station.id);
+        assert_eq!(resolved.fir_id, fir_id);
+    }
+
+    #[test]
+    fn resolve_controlled_by_inheritance() {
+        let fir_id = FlightInformationRegionId::from("LOVV");
+
+        let parent = StationRaw {
+            id: "LOVV_CTR".into(),
+            parent_id: None,
+            controlled_by: vec!["LOVV_CTR".into()],
+        };
+        let child = StationRaw {
+            id: "LOWW_TWR".into(),
+            parent_id: Some("LOVV_CTR".into()),
+            controlled_by: vec!["LOWW_APP".into()],
+        };
+
+        let map = HashMap::from([(parent.id.clone(), &parent), (child.id.clone(), &child)]);
+
+        let resolved = child.resolve_controlled_by(fir_id, &map);
+
+        let expected_ids: Vec<PositionId> = vec![
+            PositionId::from("LOWW_TWR"), // Self
+            PositionId::from("LOWW_APP"), // Self explicit
+            PositionId::from("LOVV_CTR"), // Parent inherited
+        ];
+        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
+
+        assert_eq!(actual_ids, expected_ids);
+    }
+
+    #[test]
+    fn resolve_controlled_by_complex_chain() {
+        let fir_id = FlightInformationRegionId::from("LOVV");
+
+        let root = StationRaw {
+            id: "LOVV_CTR".into(),
+            parent_id: None,
+            controlled_by: vec![],
+        };
+
+        let intermediate1 = StationRaw {
+            id: "LOWW_APP".into(),
+            parent_id: Some("LOVV_CTR".into()),
+            controlled_by: vec!["LOWW_APP".into(), "LOWW_B_APP".into(), "LOWW_P_APP".into()],
+        };
+
+        let intermediate2 = StationRaw {
+            id: "LOWW_TWR".into(),
+            parent_id: Some("LOWW_APP".into()),
+            controlled_by: vec!["LOWW_TWR".into(), "LOWW_E_TWR".into()],
+        };
+
+        let intermediate3 = StationRaw {
+            id: "LOWW_E_TWR".into(),
+            parent_id: Some("LOWW_TWR".into()),
+            controlled_by: vec!["LOWW_E_TWR".into(), "LOWW_TWR".into()],
+        };
+
+        let intermediate4 = StationRaw {
+            id: "LOWW_GND".into(),
+            parent_id: Some("LOWW_E_TWR".into()),
+            controlled_by: vec!["LOWW_GND".into(), "LOWW_W_GND".into()],
+        };
+
+        let leaf = StationRaw {
+            id: "LOWW_DEL".into(),
+            parent_id: Some("LOWW_GND".into()),
+            controlled_by: vec![],
+        };
+
+        let map = HashMap::from([
+            (root.id.clone(), &root),
+            (intermediate1.id.clone(), &intermediate1),
+            (intermediate2.id.clone(), &intermediate2),
+            (intermediate3.id.clone(), &intermediate3),
+            (intermediate4.id.clone(), &intermediate4),
+            (leaf.id.clone(), &leaf),
+        ]);
+
+        let resolved = leaf.resolve_controlled_by(fir_id, &map);
+
+        let expected_ids: Vec<PositionId> = vec![
+            PositionId::from("LOWW_DEL"),   // Self
+            PositionId::from("LOWW_GND"),   // Intermediate4
+            PositionId::from("LOWW_W_GND"), // Intermediate4
+            PositionId::from("LOWW_E_TWR"), // Intermediate3
+            PositionId::from("LOWW_TWR"),   // Intermediate2
+            PositionId::from("LOWW_APP"),   // Intermediate1
+            PositionId::from("LOWW_B_APP"), // Intermediate1
+            PositionId::from("LOWW_P_APP"), // Intermediate1
+            PositionId::from("LOVV_CTR"),   // Root
+        ];
+        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
+
+        assert_eq!(actual_ids, expected_ids);
+    }
+
+    #[test]
+    fn resolve_controlled_by_unique_positions() {
+        let fir_id = FlightInformationRegionId::from("LOVV");
+
+        let parent = StationRaw {
+            id: "LOWW_GND".into(),
+            parent_id: None,
+            controlled_by: vec!["LOWW_GND".into(), "LOWW_W_GND".into()],
+        };
+        let child = StationRaw {
+            id: "LOWW_W_GND".into(),
+            parent_id: Some("LOWW_GND".into()),
+            controlled_by: vec!["LOWW_W_GND".into(), "LOWW_GND".into()],
+        };
+
+        let map = HashMap::from([(parent.id.clone(), &parent), (child.id.clone(), &child)]);
+
+        let resolved = child.resolve_controlled_by(fir_id, &map);
+
+        let expected_ids: Vec<PositionId> = vec![
+            PositionId::from("LOWW_W_GND"), // Self
+            PositionId::from("LOWW_GND"),   // Self explicit
+        ];
+        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
+
+        assert_eq!(actual_ids, expected_ids);
+    }
+
+    #[test]
+    fn resolve_controlled_by_cycle() {
+        let fir_id = FlightInformationRegionId::from("LOVV");
+
+        let s1 = StationRaw {
+            id: "A".into(),
+            parent_id: Some("B".into()),
+            controlled_by: vec!["POS_A".into()],
+        };
+        let s2 = StationRaw {
+            id: "B".into(),
+            parent_id: Some("A".into()), // Cycle back to A
+            controlled_by: vec!["POS_B".into()],
+        };
+
+        let map = HashMap::from([(s1.id.clone(), &s1), (s2.id.clone(), &s2)]);
+
+        let resolved = s1.resolve_controlled_by(fir_id, &map);
+
+        // Should resolve A, then go to B, then see A and stop.
+        // Result: A's positions and B's positions.
+        let expected_ids: Vec<PositionId> = vec![
+            PositionId::from("A"),     // Self
+            PositionId::from("POS_A"), // Self explicit
+            PositionId::from("B"),     // From B
+            PositionId::from("POS_B"), // From B explicit
+        ];
+        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
+
+        assert_eq!(actual_ids, expected_ids);
+    }
+
+    #[test]
+    fn resolve_controlled_by_missing_parent() {
+        let fir_id = FlightInformationRegionId::from("LOVV");
+
+        let child = StationRaw {
+            id: "LOWW_DEL".into(),
+            parent_id: Some("LOWW_GND".into()),
+            controlled_by: vec![],
+        };
+
+        // Explicitly omit the parent station from the map of all stations.
+        let map = HashMap::from([(child.id.clone(), &child)]);
+
+        let resolved = child.resolve_controlled_by(fir_id, &map);
+
+        let expected_ids: Vec<PositionId> = vec![
+            PositionId::from("LOWW_DEL"), // Self
+        ];
+        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
+
+        assert_eq!(actual_ids, expected_ids);
+    }
+}

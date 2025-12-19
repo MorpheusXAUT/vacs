@@ -151,3 +151,140 @@ impl std::borrow::Borrow<str> for FlightInformationRegionId {
         &self.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::{assert_eq, assert_matches};
+
+    #[test]
+    fn fir_id_creation() {
+        let id = FlightInformationRegionId::from("lovv");
+        assert_eq!(id.as_str(), "LOVV");
+        assert_eq!(id.to_string(), "LOVV");
+        assert!(!id.is_empty());
+
+        let empty = FlightInformationRegionId::from("");
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn fir_id_equality() {
+        let id1 = FlightInformationRegionId::from("LOVV");
+        let id2 = FlightInformationRegionId::from("lovv");
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn fir_raw_valid() {
+        let raw = FlightInformationRegionRaw {
+            id: "LOVV".into(),
+            stations: vec![StationRaw {
+                id: "LOWW_TWR".into(),
+                parent_id: None,
+                controlled_by: vec![],
+            }],
+            positions: vec![PositionRaw {
+                id: "LOWW_TWR".into(),
+                prefixes: HashSet::from(["LOWW".to_string()]),
+                frequency: "119.400".to_string(),
+                facility_type: crate::FacilityType::Tower,
+            }],
+        };
+        assert!(raw.validate().is_ok());
+    }
+
+    #[test]
+    fn fir_raw_invalid_id() {
+        let raw = FlightInformationRegionRaw {
+            id: "".into(),
+            stations: vec![StationRaw {
+                id: "LOWW_TWR".into(),
+                parent_id: None,
+                controlled_by: vec![],
+            }],
+            positions: vec![PositionRaw {
+                id: "LOWW_TWR".into(),
+                prefixes: HashSet::from(["LOWW".to_string()]),
+                frequency: "119.400".to_string(),
+                facility_type: crate::FacilityType::Tower,
+            }],
+        };
+        assert_matches!(
+            raw.validate(),
+            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "id"
+        );
+    }
+
+    #[test]
+    fn fir_raw_invalid_stations() {
+        let raw = FlightInformationRegionRaw {
+            id: "LOVV".into(),
+            stations: vec![],
+            positions: vec![PositionRaw {
+                id: "LOWW_TWR".into(),
+                prefixes: HashSet::from(["LOWW".to_string()]),
+                frequency: "119.400".to_string(),
+                facility_type: crate::FacilityType::Tower,
+            }],
+        };
+        assert_matches!(
+            raw.validate(),
+            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "stations"
+        );
+    }
+
+    #[test]
+    fn fir_raw_invalid_positions() {
+        let raw = FlightInformationRegionRaw {
+            id: "LOVV".into(),
+            stations: vec![StationRaw {
+                id: "LOWW_TWR".into(),
+                parent_id: None,
+                controlled_by: vec![],
+            }],
+            positions: vec![],
+        };
+        assert_matches!(
+            raw.validate(),
+            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "positions"
+        );
+    }
+
+    #[test]
+    fn fir_conversion() {
+        let raw = FlightInformationRegionRaw {
+            id: "LOVV".into(),
+            stations: vec![StationRaw {
+                id: "LOWW_TWR".into(),
+                parent_id: None,
+                controlled_by: vec![],
+            }],
+            positions: vec![PositionRaw {
+                id: "LOWW_TWR".into(),
+                prefixes: HashSet::from(["LOWW".to_string()]),
+                frequency: "119.400".to_string(),
+                facility_type: crate::FacilityType::Tower,
+            }],
+        };
+        let fir = FlightInformationRegion::try_from(raw).unwrap();
+        assert_eq!(fir.id.as_str(), "LOVV");
+        assert!(fir.stations.contains(&StationId::from("LOWW_TWR")));
+        assert!(fir.positions.contains(&PositionId::from("LOWW_TWR")));
+    }
+
+    #[test]
+    fn fir_equality() {
+        let f1 = FlightInformationRegion {
+            id: "LOVV".into(),
+            stations: HashSet::new(),
+            positions: HashSet::new(),
+        };
+        let f2 = FlightInformationRegion {
+            id: "LOVV".into(),
+            stations: HashSet::from(["LOWW_TWR".into()]),
+            positions: HashSet::from(["LOWW_TWR".into()]),
+        };
+        assert_eq!(f1, f2); // Should be equal because only IDs check
+    }
+}
