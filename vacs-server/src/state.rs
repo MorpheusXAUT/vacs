@@ -253,13 +253,19 @@ impl AppState {
         cid: &str,
     ) -> anyhow::Result<Option<ControllerInfo>> {
         tracing::debug!("Retrieving connection info from VATSIM slurper");
-        self.slurper.get_controller_info(cid).await
+        self.slurper
+            .get_controller_info(cid)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(level = "debug", skip(self), err)]
     pub async fn get_vatsim_controllers(&self) -> anyhow::Result<Vec<ControllerInfo>> {
         tracing::debug!("Retrieving controller info from VATSIM data feed");
-        self.data_feed.fetch_controller_info().await
+        self.data_feed
+            .fetch_controller_info()
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(level = "debug", skip(state))]

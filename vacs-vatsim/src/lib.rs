@@ -2,9 +2,24 @@ pub mod data_feed;
 pub mod slurper;
 
 use std::str::FromStr;
+use thiserror::Error;
 
 /// User-Agent string used for all HTTP requests.
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Unknown facility type: {0}")]
+    UnknownFacilityType(String),
+    #[error(transparent)]
+    Slurper(#[from] crate::slurper::SlurperError),
+    #[error(transparent)]
+    DataFeed(#[from] crate::data_feed::DataFeedError),
+    #[error("{0}")]
+    Other(String),
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ControllerInfo {
@@ -33,8 +48,8 @@ pub enum FacilityType {
 }
 
 impl FromStr for FacilityType {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self> {
         let s = s.to_ascii_uppercase();
         let facility_suffix = s.split('_').next_back().unwrap_or_default();
         match facility_suffix {
@@ -48,7 +63,7 @@ impl FromStr for FacilityType {
             "FSS" => Ok(FacilityType::FlightServiceStation),
             "RDO" => Ok(FacilityType::Radio),
             "TMU" | "FMP" => Ok(FacilityType::TrafficFlow),
-            _ => Ok(FacilityType::Unknown),
+            other => Err(Error::UnknownFacilityType(other.to_string())),
         }
     }
 }
