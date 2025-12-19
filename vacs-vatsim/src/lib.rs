@@ -148,3 +148,151 @@ impl<'de> Deserialize<'de> for FacilityType {
         FacilityType::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn facility_type_parse_valid() {
+        assert_eq!(
+            FacilityType::from_str("LOWW_DEL").unwrap(),
+            FacilityType::Delivery
+        );
+        assert_eq!(
+            FacilityType::from_str("LOWW_RMP").unwrap(),
+            FacilityType::Ramp
+        );
+        assert_eq!(
+            FacilityType::from_str("LOWW_GND").unwrap(),
+            FacilityType::Ground
+        );
+        assert_eq!(
+            FacilityType::from_str("LOWW_TWR").unwrap(),
+            FacilityType::Tower
+        );
+        assert_eq!(
+            FacilityType::from_str("LOWW_APP").unwrap(),
+            FacilityType::Approach
+        );
+        assert_eq!(
+            FacilityType::from_str("LOWW_DEP").unwrap(),
+            FacilityType::Departure
+        );
+        assert_eq!(
+            FacilityType::from_str("LOVV_CTR").unwrap(),
+            FacilityType::Enroute
+        );
+        assert_eq!(
+            FacilityType::from_str("LOVV_FSS").unwrap(),
+            FacilityType::FlightServiceStation
+        );
+        assert_eq!(
+            FacilityType::from_str("LOAV_RDO").unwrap(),
+            FacilityType::Radio
+        );
+        assert_eq!(
+            FacilityType::from_str("LOWW_FMP").unwrap(),
+            FacilityType::TrafficFlow
+        );
+    }
+
+    #[test]
+    fn facility_type_parse_case_insensitive() {
+        assert_eq!(
+            FacilityType::from_str("loww_twr").unwrap(),
+            FacilityType::Tower
+        );
+        assert_eq!(
+            FacilityType::from_str("LOVV_ctr").unwrap(),
+            FacilityType::Enroute
+        );
+    }
+
+    #[test]
+    fn facility_type_parse_full_names() {
+        assert_eq!(
+            FacilityType::from_str("Delivery").unwrap(),
+            FacilityType::Delivery
+        );
+        assert_eq!(
+            FacilityType::from_str("DELIVERY").unwrap(),
+            FacilityType::Delivery
+        );
+        assert_eq!(FacilityType::from_str("Ramp").unwrap(), FacilityType::Ramp);
+        assert_eq!(
+            FacilityType::from_str("Ground").unwrap(),
+            FacilityType::Ground
+        );
+        assert_eq!(
+            FacilityType::from_str("Tower").unwrap(),
+            FacilityType::Tower
+        );
+        assert_eq!(
+            FacilityType::from_str("Approach").unwrap(),
+            FacilityType::Approach
+        );
+        assert_eq!(
+            FacilityType::from_str("Departure").unwrap(),
+            FacilityType::Departure
+        );
+        assert_eq!(
+            FacilityType::from_str("Enroute").unwrap(),
+            FacilityType::Enroute
+        );
+        assert_eq!(
+            FacilityType::from_str("FlightServiceStation").unwrap(),
+            FacilityType::FlightServiceStation
+        );
+        assert_eq!(
+            FacilityType::from_str("Radio").unwrap(),
+            FacilityType::Radio
+        );
+        assert_eq!(
+            FacilityType::from_str("TrafficFlow").unwrap(),
+            FacilityType::TrafficFlow
+        );
+        assert_eq!(
+            FacilityType::from_str("FlowManagementPosition").unwrap(),
+            FacilityType::TrafficFlow
+        );
+    }
+
+    #[test]
+    fn facility_type_parse_unknown() {
+        assert!(matches!(
+            FacilityType::from_str("UNKNOWN_FOO"),
+            Err(Error::UnknownFacilityType(_))
+        ));
+    }
+
+    #[test]
+    fn facility_type_from_u8() {
+        assert_eq!(
+            FacilityType::try_from(1).unwrap(),
+            FacilityType::FlightServiceStation
+        );
+        assert_eq!(FacilityType::try_from(2).unwrap(), FacilityType::Delivery);
+        assert_eq!(FacilityType::try_from(3).unwrap(), FacilityType::Ground);
+        assert_eq!(FacilityType::try_from(4).unwrap(), FacilityType::Tower);
+        assert_eq!(FacilityType::try_from(5).unwrap(), FacilityType::Approach);
+        assert_eq!(FacilityType::try_from(6).unwrap(), FacilityType::Enroute);
+        assert!(FacilityType::try_from(0).is_err());
+        assert!(FacilityType::try_from(7).is_err());
+    }
+
+    #[test]
+    fn facility_type_serialization() {
+        assert_eq!(FacilityType::Delivery.as_str(), "DEL");
+        assert_eq!(FacilityType::Ramp.as_str(), "RMP");
+        assert_eq!(FacilityType::Ground.as_str(), "GND");
+        assert_eq!(FacilityType::Tower.as_str(), "TWR");
+        assert_eq!(FacilityType::Approach.as_str(), "APP");
+        assert_eq!(FacilityType::Departure.as_str(), "DEP");
+        assert_eq!(FacilityType::Enroute.as_str(), "CTR");
+        assert_eq!(FacilityType::FlightServiceStation.as_str(), "FSS");
+        assert_eq!(FacilityType::Radio.as_str(), "RDO");
+        assert_eq!(FacilityType::TrafficFlow.as_str(), "FMP");
+    }
+}
