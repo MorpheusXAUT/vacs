@@ -1,4 +1,6 @@
+#[cfg(feature = "data-feed")]
 pub mod data_feed;
+#[cfg(feature = "slurper")]
 pub mod slurper;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -13,8 +15,10 @@ pub enum Error {
     #[error("Unknown facility type: {0}")]
     UnknownFacilityType(String),
     #[error(transparent)]
+    #[cfg(feature = "slurper")]
     Slurper(#[from] crate::slurper::SlurperError),
     #[error(transparent)]
+    #[cfg(feature = "data-feed")]
     DataFeed(#[from] crate::data_feed::DataFeedError),
     #[error("{0}")]
     Other(String),
