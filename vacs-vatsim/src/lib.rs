@@ -1,3 +1,5 @@
+#[cfg(feature = "coverage")]
+pub mod coverage;
 #[cfg(feature = "data-feed")]
 pub mod data_feed;
 #[cfg(feature = "slurper")]
@@ -14,6 +16,9 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 pub enum Error {
     #[error("Unknown facility type: {0}")]
     UnknownFacilityType(String),
+    #[error(transparent)]
+    #[cfg(feature = "coverage")]
+    Coverage(#[from] crate::coverage::CoverageError),
     #[error(transparent)]
     #[cfg(feature = "slurper")]
     Slurper(#[from] crate::slurper::SlurperError),
