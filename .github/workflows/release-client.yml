@@ -227,7 +227,7 @@ jobs:
 
       - name: Attest build provenance
         if: ${{ !github.event.repository.private || github.event.repository.owner.type == 'Organization' }}
-        uses: actions/attest-build-provenance@v3.0.0
+        uses: actions/attest-build-provenance@v3.1.0
         with:
           subject-path: |
             target/**/release/bundle/**/*.msi
