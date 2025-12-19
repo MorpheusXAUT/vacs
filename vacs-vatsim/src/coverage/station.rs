@@ -220,8 +220,10 @@ mod tests {
         let resolved = station.resolve_controlled_by(fir_id.clone(), &all_stations);
 
         // Should contain itself (implicit) + explicit controlled_by
-        let expected_ids: Vec<PositionId> =
-            vec![PositionId::from("LOWW_TWR"), PositionId::from("LOWW_APP")];
+        let expected_ids: Vec<PositionId> = vec!["LOWW_TWR", "LOWW_APP"]
+            .into_iter()
+            .map(PositionId::from)
+            .collect();
         let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
@@ -249,10 +251,13 @@ mod tests {
         let resolved = child.resolve_controlled_by(fir_id, &map);
 
         let expected_ids: Vec<PositionId> = vec![
-            PositionId::from("LOWW_TWR"), // Self
-            PositionId::from("LOWW_APP"), // Self explicit
-            PositionId::from("LOVV_CTR"), // Parent inherited
-        ];
+            "LOWW_TWR", // Self
+            "LOWW_APP", // Self explicit
+            "LOVV_CTR", // Parent inherited
+        ]
+        .into_iter()
+        .map(PositionId::from)
+        .collect();
         let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
@@ -310,16 +315,19 @@ mod tests {
         let resolved = leaf.resolve_controlled_by(fir_id, &map);
 
         let expected_ids: Vec<PositionId> = vec![
-            PositionId::from("LOWW_DEL"),   // Self
-            PositionId::from("LOWW_GND"),   // Intermediate4
-            PositionId::from("LOWW_W_GND"), // Intermediate4
-            PositionId::from("LOWW_E_TWR"), // Intermediate3
-            PositionId::from("LOWW_TWR"),   // Intermediate2
-            PositionId::from("LOWW_APP"),   // Intermediate1
-            PositionId::from("LOWW_B_APP"), // Intermediate1
-            PositionId::from("LOWW_P_APP"), // Intermediate1
-            PositionId::from("LOVV_CTR"),   // Root
-        ];
+            "LOWW_DEL",   // Self
+            "LOWW_GND",   // Intermediate4
+            "LOWW_W_GND", // Intermediate4
+            "LOWW_E_TWR", // Intermediate3
+            "LOWW_TWR",   // Intermediate2
+            "LOWW_APP",   // Intermediate1
+            "LOWW_B_APP", // Intermediate1
+            "LOWW_P_APP", // Intermediate1
+            "LOVV_CTR",   // Root
+        ]
+        .into_iter()
+        .map(PositionId::from)
+        .collect();
         let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
@@ -345,9 +353,12 @@ mod tests {
         let resolved = child.resolve_controlled_by(fir_id, &map);
 
         let expected_ids: Vec<PositionId> = vec![
-            PositionId::from("LOWW_W_GND"), // Self
-            PositionId::from("LOWW_GND"),   // Self explicit
-        ];
+            "LOWW_W_GND", // Self
+            "LOWW_GND",   // Self explicit
+        ]
+        .into_iter()
+        .map(PositionId::from)
+        .collect();
         let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
@@ -375,11 +386,14 @@ mod tests {
         // Should resolve A, then go to B, then see A and stop.
         // Result: A's positions and B's positions.
         let expected_ids: Vec<PositionId> = vec![
-            PositionId::from("A"),     // Self
-            PositionId::from("POS_A"), // Self explicit
-            PositionId::from("B"),     // From B
-            PositionId::from("POS_B"), // From B explicit
-        ];
+            "A",     // Self
+            "POS_A", // Self explicit
+            "B",     // From B
+            "POS_B", // From B explicit
+        ]
+        .into_iter()
+        .map(PositionId::from)
+        .collect();
         let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
@@ -401,8 +415,11 @@ mod tests {
         let resolved = child.resolve_controlled_by(fir_id, &map);
 
         let expected_ids: Vec<PositionId> = vec![
-            PositionId::from("LOWW_DEL"), // Self
-        ];
+            "LOWW_DEL", // Self
+        ]
+        .into_iter()
+        .map(PositionId::from)
+        .collect();
         let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
