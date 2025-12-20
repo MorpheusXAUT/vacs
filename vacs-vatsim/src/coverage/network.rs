@@ -903,4 +903,103 @@ mod tests {
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"))));
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Station" && id == "A")));
     }
+
+    #[test]
+    fn find_positions_callsign_match() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        create_minimal_valid_fir(dir.path(), "EDMM");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let positions = network.find_positions("LOVV_CTR", "199.998", FacilityType::Enroute);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].id.as_str(), "LOVV_CTR");
+    }
+
+    #[test]
+    fn find_positions_relieve_callsign_match() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        create_minimal_valid_fir(dir.path(), "EDMM");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let positions = network.find_positions("LOVV__CTR", "199.998", FacilityType::Enroute);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].id.as_str(), "LOVV_CTR");
+    }
+
+    #[test]
+    fn find_positions_different_frequency() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        create_minimal_valid_fir(dir.path(), "EDMM");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let positions = network.find_positions("LOVV_CTR", "121.500", FacilityType::Enroute);
+        assert_eq!(positions.len(), 0);
+    }
+
+    #[test]
+    fn find_positions_different_facility_type() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        create_minimal_valid_fir(dir.path(), "EDMM");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let positions = network.find_positions("LOVV_CTR", "199.998", FacilityType::TrafficFlow);
+        assert_eq!(positions.len(), 0);
+    }
+
+    #[test]
+    fn find_positions_different_prefixes() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "EDMM");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let positions = network.find_positions("LOVV_CTR", "199.998", FacilityType::Enroute);
+        assert_eq!(positions.len(), 0);
+    }
+
+    #[test]
+    fn find_positions_multiple_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir = dir.path().join("LOVV");
+        fs::create_dir(&fir).unwrap();
+        fs::write(
+            fir.join("stations.toml"),
+            r#"
+            [[stations]]
+            id = "LOWI_E_APP"
+            controlled_by = ["LOWI_E_APP"]
+
+            [[stations]]
+            id = "LOWI_S_APP"
+            controlled_by = ["LOWI_S_APP"]
+        "#,
+        )
+        .unwrap();
+        fs::write(
+            fir.join("positions.toml"),
+            r#"
+            [[positions]]
+            id = "LOWI_S_APP"
+            prefixes = ["LOWI"]
+            frequency = "128.975"
+            facility_type = "APP"
+
+            [[positions]]
+            id = "LOWI_E_APP"
+            prefixes = ["LOWI"]
+            frequency = "128.975"
+            facility_type = "Approach"
+        "#,
+        )
+        .unwrap();
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let positions = network.find_positions("LOWI_X_APP", "128.975", FacilityType::Approach);
+        assert_eq!(positions.len(), 2);
+        assert_eq!(positions[0].id.as_str(), "LOWI_E_APP");
+        assert_eq!(positions[1].id.as_str(), "LOWI_S_APP");
+    }
 }
