@@ -1,4 +1,5 @@
 use crate::FacilityType;
+use crate::coverage::flight_information_region::FlightInformationRegionId;
 use crate::coverage::{CoverageError, ValidationError, Validator};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,7 @@ pub struct Position {
     pub prefixes: HashSet<String>,
     pub frequency: String,
     pub facility_type: FacilityType,
+    pub fir_id: FlightInformationRegionId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +37,23 @@ pub(super) struct PositionConfigFile {
 impl PartialEq for Position {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
+    }
+}
+
+impl Position {
+    pub(super) fn from_raw(
+        position_raw: PositionRaw,
+        fir_id: impl Into<FlightInformationRegionId>,
+    ) -> Result<Self, CoverageError> {
+        position_raw.validate()?;
+
+        Ok(Position {
+            id: position_raw.id,
+            prefixes: position_raw.prefixes,
+            frequency: position_raw.frequency,
+            facility_type: position_raw.facility_type,
+            fir_id: fir_id.into(),
+        })
     }
 }
 
@@ -62,20 +81,6 @@ impl Validator for PositionRaw {
             );
         }
         Ok(())
-    }
-}
-
-impl TryFrom<PositionRaw> for Position {
-    type Error = CoverageError;
-    fn try_from(value: PositionRaw) -> Result<Self, Self::Error> {
-        value.validate()?;
-
-        Ok(Self {
-            id: value.id,
-            prefixes: value.prefixes,
-            frequency: value.frequency,
-            facility_type: value.facility_type,
-        })
     }
 }
 
@@ -245,8 +250,9 @@ mod tests {
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
         };
-        let pos = Position::try_from(raw).unwrap();
+        let pos = Position::from_raw(raw, "LOVV").unwrap();
         assert_eq!(pos.id.as_str(), "LOWW_TWR");
+        assert_eq!(pos.fir_id.as_str(), "LOVV");
     }
 
     #[test]
@@ -256,12 +262,14 @@ mod tests {
             prefixes: HashSet::from(["LOWW".to_string()]),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
+            fir_id: FlightInformationRegionId::from("LOVV"),
         };
         let p2 = Position {
             id: "LOWW_TWR".into(),
             prefixes: HashSet::new(),            // Different content
             frequency: "119.000".to_string(),    // Different content
             facility_type: FacilityType::Ground, // Different content
+            fir_id: FlightInformationRegionId::from("LOVV"),
         };
         assert_eq!(p1, p2); // Should be equal because IDs are equal
 
@@ -270,6 +278,7 @@ mod tests {
             prefixes: HashSet::from(["LOWW".to_string()]),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
+            fir_id: FlightInformationRegionId::from("LOVV"),
         };
         assert_ne!(p1, p3);
     }
