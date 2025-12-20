@@ -6,7 +6,7 @@ use crate::coverage::flight_information_region::{
 };
 use crate::coverage::position::{Position, PositionId};
 use crate::coverage::station::{Station, StationId};
-use crate::coverage::{CoverageError, IoError, StructureError, Validator};
+use crate::coverage::{CoverageError, IoError, StructureError};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 
@@ -285,21 +285,6 @@ impl Network {
             };
 
             for station_raw in &fir_raw.stations {
-                if let Err(err) = station_raw.validate() {
-                    let err: CoverageError = StructureError::Load {
-                        entity: "Station".to_string(),
-                        id: station_raw.id.to_string(),
-                        reason: err.to_string(),
-                    }
-                    .into();
-                    if strict {
-                        return Err(err);
-                    }
-                    tracing::warn!(?err, ?station_raw, "Failed to validate station");
-                    errors.push(err);
-                    continue;
-                }
-
                 if stations.contains_key(&station_raw.id) {
                     let err: CoverageError = StructureError::Duplicate {
                         entity: "Station".to_string(),
@@ -314,7 +299,26 @@ impl Network {
                     continue;
                 }
 
-                let station = station_raw.resolve_controlled_by(fir_raw.id.clone(), &all_stations);
+                let station =
+                    match Station::from_raw(station_raw.clone(), fir_raw.id.clone(), &all_stations)
+                    {
+                        Ok(station) => station,
+                        Err(err) => {
+                            let err: CoverageError = StructureError::Load {
+                                entity: "Station".to_string(),
+                                id: station_raw.id.to_string(),
+                                reason: err.to_string(),
+                            }
+                            .into();
+                            if strict {
+                                return Err(err);
+                            }
+                            tracing::warn!(?err, ?station_raw, "Failed to parse station");
+                            errors.push(err);
+                            continue;
+                        }
+                    };
+
                 if station.controlled_by.is_empty() {
                     let err: CoverageError =
                         StructureError::EmptyCoverage(station.id.to_string()).into();
@@ -482,7 +486,7 @@ mod tests {
             r#"
             [[stations]]
             id = "LOWW_TWR"
-            controlled_by = []
+            controlled_by = ["LOWW_TWR"]
         "#,
         )
         .unwrap();
@@ -505,7 +509,7 @@ mod tests {
             r#"
             [[stations]]
             id = "LOWW_TWR"
-            controlled_by = []
+            controlled_by = ["LOWW_TWR"]
         "#,
         )
         .unwrap();
@@ -535,7 +539,7 @@ mod tests {
             r#"
             [[stations]]
             id = "LOWW_TWR"
-            controlled_by = []
+            controlled_by = ["LOWW_TWR"]
         "#,
         )
         .unwrap();
@@ -558,7 +562,7 @@ mod tests {
             r#"
             [[stations]]
             id = "EDDM_S_TWR"
-            controlled_by = []
+            controlled_by = ["EDDM_S_TWR"]
         "#,
         )
         .unwrap();
@@ -605,10 +609,8 @@ mod tests {
         )
         .unwrap();
 
-        // Even with empty explicit controlled_by, the station controls itself.
-        // So this should NOT error with EmptyCoverage.
         let res = Network::load_from_dir(dir.path());
-        assert!(res.is_ok());
+        assert_matches!(res, Err(CoverageError::Structure(StructureError::EmptyCoverage(station))) if station == "LOWW_TWR");
     }
 
     #[test]
