@@ -332,7 +332,7 @@ impl Network {
             }
 
             for position_raw in &fir_raw.positions {
-                match Position::try_from(position_raw.clone()) {
+                match Position::from_raw(position_raw.clone(), fir_raw.id.clone()) {
                     Ok(position) => {
                         if positions.contains_key(&position.id) {
                             let err: CoverageError = StructureError::Duplicate {
@@ -361,6 +361,7 @@ impl Network {
                         }
                         tracing::warn!(?err, ?position_raw, "Failed to parse position");
                         errors.push(err);
+                        continue;
                     }
                 }
             }
