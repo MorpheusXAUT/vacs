@@ -36,6 +36,24 @@ impl PartialEq for Station {
     }
 }
 
+impl Station {
+    pub(super) fn from_raw(
+        station_raw: StationRaw,
+        fir_id: impl Into<FlightInformationRegionId>,
+        all_stations: &HashMap<StationId, &StationRaw>,
+    ) -> Result<Self, CoverageError> {
+        station_raw.validate()?;
+
+        let controlled_by = station_raw.resolve_controlled_by(all_stations);
+        Ok(Station {
+            id: station_raw.id,
+            parent_id: station_raw.parent_id,
+            controlled_by,
+            fir_id: fir_id.into(),
+        })
+    }
+}
+
 impl Validator for StationRaw {
     fn validate(&self) -> Result<(), CoverageError> {
         if self.id.is_empty() {
@@ -46,20 +64,14 @@ impl Validator for StationRaw {
 }
 
 impl StationRaw {
-    pub fn resolve_controlled_by(
+    pub(super) fn resolve_controlled_by(
         &self,
-        fir_id: FlightInformationRegionId,
         all_stations: &HashMap<StationId, &StationRaw>,
-    ) -> Station {
+    ) -> Vec<PositionId> {
         let mut controlled_by = Vec::new();
         let mut visited_stations = HashSet::new();
         let mut seen_positions = HashSet::new();
         let mut current = Some(self);
-
-        // Positions matching the station itself are always included as explicit matches, even if
-        // they are not explicitly listed in the station's coverage.
-        controlled_by.push(PositionId::from(self.id.as_str()));
-        seen_positions.insert(PositionId::from(self.id.as_str()));
 
         while let Some(station) = current {
             if !visited_stations.insert(&station.id) {
@@ -68,11 +80,6 @@ impl StationRaw {
                     "Cycle detected in station parent chain, stopping resolution"
                 );
                 break;
-            }
-
-            // Insert position matching the parent station exactly, same as with the leaf station above.
-            if seen_positions.insert(PositionId::from(station.id.as_str())) {
-                controlled_by.push(PositionId::from(station.id.as_str()));
             }
 
             controlled_by.extend(
@@ -92,12 +99,7 @@ impl StationRaw {
             });
         }
 
-        Station {
-            id: self.id.clone(),
-            parent_id: self.parent_id.clone(),
-            controlled_by,
-            fir_id,
-        }
+        controlled_by
     }
 }
 
@@ -209,32 +211,25 @@ mod tests {
 
     #[test]
     fn resolve_controlled_by_simple() {
-        let fir_id = FlightInformationRegionId::from("LOVV");
         let station = StationRaw {
             id: "LOWW_TWR".into(),
             parent_id: None,
-            controlled_by: vec!["LOWW_APP".into()],
+            controlled_by: vec!["LOWW_TWR".into(), "LOWW_APP".into()],
         };
         let all_stations = HashMap::from([("LOWW_TWR".into(), &station)]);
 
-        let resolved = station.resolve_controlled_by(fir_id.clone(), &all_stations);
-
-        // Should contain itself (implicit) + explicit controlled_by
+        let actual_ids = station.resolve_controlled_by(&all_stations);
+        // Should contain explicit controlled_by
         let expected_ids: Vec<PositionId> = vec!["LOWW_TWR", "LOWW_APP"]
             .into_iter()
             .map(PositionId::from)
             .collect();
-        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
-        assert_eq!(resolved.id, station.id);
-        assert_eq!(resolved.fir_id, fir_id);
     }
 
     #[test]
     fn resolve_controlled_by_inheritance() {
-        let fir_id = FlightInformationRegionId::from("LOVV");
-
         let parent = StationRaw {
             id: "LOVV_CTR".into(),
             parent_id: None,
@@ -243,34 +238,31 @@ mod tests {
         let child = StationRaw {
             id: "LOWW_TWR".into(),
             parent_id: Some("LOVV_CTR".into()),
-            controlled_by: vec!["LOWW_APP".into()],
+            controlled_by: vec!["LOWW_TWR".into(), "LOWW_APP".into()],
         };
 
-        let map = HashMap::from([(parent.id.clone(), &parent), (child.id.clone(), &child)]);
+        let all_stations =
+            HashMap::from([(parent.id.clone(), &parent), (child.id.clone(), &child)]);
 
-        let resolved = child.resolve_controlled_by(fir_id, &map);
-
+        let actual_ids = child.resolve_controlled_by(&all_stations);
         let expected_ids: Vec<PositionId> = vec![
             "LOWW_TWR", // Self
-            "LOWW_APP", // Self explicit
+            "LOWW_APP", // Self
             "LOVV_CTR", // Parent inherited
         ]
         .into_iter()
         .map(PositionId::from)
         .collect();
-        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
     }
 
     #[test]
     fn resolve_controlled_by_complex_chain() {
-        let fir_id = FlightInformationRegionId::from("LOVV");
-
         let root = StationRaw {
             id: "LOVV_CTR".into(),
             parent_id: None,
-            controlled_by: vec![],
+            controlled_by: vec!["LOVV_CTR".into()],
         };
 
         let intermediate1 = StationRaw {
@@ -300,10 +292,10 @@ mod tests {
         let leaf = StationRaw {
             id: "LOWW_DEL".into(),
             parent_id: Some("LOWW_GND".into()),
-            controlled_by: vec![],
+            controlled_by: vec!["LOWW_DEL".into()],
         };
 
-        let map = HashMap::from([
+        let all_stations = HashMap::from([
             (root.id.clone(), &root),
             (intermediate1.id.clone(), &intermediate1),
             (intermediate2.id.clone(), &intermediate2),
@@ -312,7 +304,7 @@ mod tests {
             (leaf.id.clone(), &leaf),
         ]);
 
-        let resolved = leaf.resolve_controlled_by(fir_id, &map);
+        let actual_ids = leaf.resolve_controlled_by(&all_stations);
 
         let expected_ids: Vec<PositionId> = vec![
             "LOWW_DEL",   // Self
@@ -328,15 +320,12 @@ mod tests {
         .into_iter()
         .map(PositionId::from)
         .collect();
-        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
     }
 
     #[test]
     fn resolve_controlled_by_unique_positions() {
-        let fir_id = FlightInformationRegionId::from("LOVV");
-
         let parent = StationRaw {
             id: "LOWW_GND".into(),
             parent_id: None,
@@ -348,26 +337,24 @@ mod tests {
             controlled_by: vec!["LOWW_W_GND".into(), "LOWW_GND".into()],
         };
 
-        let map = HashMap::from([(parent.id.clone(), &parent), (child.id.clone(), &child)]);
+        let all_stations =
+            HashMap::from([(parent.id.clone(), &parent), (child.id.clone(), &child)]);
 
-        let resolved = child.resolve_controlled_by(fir_id, &map);
+        let actual_ids = child.resolve_controlled_by(&all_stations);
 
         let expected_ids: Vec<PositionId> = vec![
             "LOWW_W_GND", // Self
-            "LOWW_GND",   // Self explicit
+            "LOWW_GND",   // Self
         ]
         .into_iter()
         .map(PositionId::from)
         .collect();
-        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
     }
 
     #[test]
     fn resolve_controlled_by_cycle() {
-        let fir_id = FlightInformationRegionId::from("LOVV");
-
         let s1 = StationRaw {
             id: "A".into(),
             parent_id: Some("B".into()),
@@ -379,40 +366,35 @@ mod tests {
             controlled_by: vec!["POS_B".into()],
         };
 
-        let map = HashMap::from([(s1.id.clone(), &s1), (s2.id.clone(), &s2)]);
+        let all_stations = HashMap::from([(s1.id.clone(), &s1), (s2.id.clone(), &s2)]);
 
-        let resolved = s1.resolve_controlled_by(fir_id, &map);
+        let actual_ids = s1.resolve_controlled_by(&all_stations);
 
         // Should resolve A, then go to B, then see A and stop.
         // Result: A's positions and B's positions.
         let expected_ids: Vec<PositionId> = vec![
-            "A",     // Self
-            "POS_A", // Self explicit
-            "B",     // From B
-            "POS_B", // From B explicit
+            "POS_A", // Self
+            "POS_B", // From B
         ]
         .into_iter()
         .map(PositionId::from)
         .collect();
-        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
     }
 
     #[test]
     fn resolve_controlled_by_missing_parent() {
-        let fir_id = FlightInformationRegionId::from("LOVV");
-
         let child = StationRaw {
             id: "LOWW_DEL".into(),
             parent_id: Some("LOWW_GND".into()),
-            controlled_by: vec![],
+            controlled_by: vec!["LOWW_DEL".into()],
         };
 
         // Explicitly omit the parent station from the map of all stations.
-        let map = HashMap::from([(child.id.clone(), &child)]);
+        let all_stations = HashMap::from([(child.id.clone(), &child)]);
 
-        let resolved = child.resolve_controlled_by(fir_id, &map);
+        let actual_ids = child.resolve_controlled_by(&all_stations);
 
         let expected_ids: Vec<PositionId> = vec![
             "LOWW_DEL", // Self
@@ -420,7 +402,6 @@ mod tests {
         .into_iter()
         .map(PositionId::from)
         .collect();
-        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
 
         assert_eq!(actual_ids, expected_ids);
     }

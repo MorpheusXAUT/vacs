@@ -429,6 +429,7 @@ mod tests {
         let stations_toml = r#"
             [[stations]]
             id = "LOVV_CTR"
+            controlled_by = ["LOVV_CTR"]
 
             [[stations]]
             id = "LOWW_APP"
@@ -453,6 +454,7 @@ mod tests {
             [[stations]]
             id = "LOWW_DEL"
             parent_id = "LOWW_GND"
+            controlled_by = ["LOWW_DEL"]
         "#;
         std::fs::write(fir_path.join("stations.toml"), stations_toml).unwrap();
 
@@ -516,13 +518,13 @@ mod tests {
         let raw = FlightInformationRegionRaw::load_from_dir(&fir_path).expect("Should load");
         let fir = FlightInformationRegion::try_from(raw.clone()).expect("Should convert");
 
-        let stations_map: std::collections::HashMap<_, _> =
+        let all_stations: std::collections::HashMap<_, _> =
             raw.stations.iter().map(|s| (s.id.clone(), s)).collect();
-        let leaf = stations_map
+        let leaf = all_stations
             .get(&StationId::from("LOWW_DEL"))
             .expect("LOWW_DEL should exist");
 
-        let resolved = leaf.resolve_controlled_by(fir.id.clone(), &stations_map);
+        let actual_ids = leaf.resolve_controlled_by(&all_stations);
 
         let expected_ids: Vec<PositionId> = vec![
             "LOWW_DEL",
@@ -539,8 +541,9 @@ mod tests {
         .map(PositionId::from)
         .collect();
 
-        let actual_ids: Vec<PositionId> = resolved.controlled_by.into_iter().collect();
         assert_eq!(actual_ids, expected_ids);
+        assert_eq!(fir.positions.len(), 9);
+        assert_eq!(fir.stations.len(), 6);
     }
 
     #[test]
