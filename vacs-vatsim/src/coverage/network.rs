@@ -36,51 +36,48 @@ impl Network {
         frequency: impl AsRef<str>,
         facility_type: impl Into<FacilityType>,
     ) -> Vec<&Position> {
-        let callsign = callsign.as_ref();
+        // Normalize callsign (standard relieve pattern) and ensure uppercase for matching
+        let callsign = callsign.as_ref().replace("__", "_").to_ascii_uppercase();
         let frequency = frequency.as_ref();
         let facility_type = facility_type.into();
         tracing::Span::current()
-            .record("callsign", callsign)
+            .record("callsign", &callsign)
             .record("frequency", frequency)
             .record("facility_type", tracing::field::debug(&facility_type));
 
-        let frequency_matches: Vec<&Position> = self
-            .positions
-            .values()
-            .filter(|p| p.frequency == frequency && p.facility_type == facility_type)
-            .collect();
-
-        if frequency_matches.len() == 1 {
-            tracing::trace!(position = ?frequency_matches[0], "Found exact match for frequency and station type");
-            return frequency_matches;
-        }
-
-        let clean_callsign = callsign.replace("__", "_").to_ascii_uppercase();
-
-        if let Some(position) = self.positions.get(clean_callsign.as_str()) {
-            tracing::trace!(?position, ?clean_callsign, "Found exact match for callsign");
+        // Check if a position with the exact callsign exists and the frequency and facility type match
+        if let Some(position) = self.positions.get(callsign.as_str())
+            && position.frequency == frequency
+            && position.facility_type == facility_type
+        {
+            tracing::trace!(?position, "Found exact match for callsign");
             return vec![position];
         }
 
-        let positions = frequency_matches
-            .into_iter()
+        // Find all positions with the same frequency and facility type that have a prefix matching the callsign
+        let mut positions = self
+            .positions
+            .values()
             .filter(|p| {
-                p.prefixes
-                    .iter()
-                    .any(|prefix| clean_callsign.starts_with(prefix))
+                p.frequency == frequency
+                    && p.facility_type == facility_type
+                    && p.prefixes.iter().any(|pre| callsign.starts_with(pre))
             })
             .collect::<Vec<_>>();
 
         if positions.len() == 1 {
-            tracing::trace!(position = ?positions[0], ?clean_callsign, "Found exact match using prefixes");
-            return positions;
+            // Non-standard relieve/COO callsign, but only one matching position found --> successful match
+            tracing::trace!(position = ?positions[0], "Found exact match for frequency and station type");
+        } else if positions.is_empty() {
+            // No matches found at all (frequency and facility type might yield results, but callsign
+            // didn't match any defined prefixes and FIR from callsign doesn't match) --> no match
+            tracing::trace!("No matches found");
+        } else {
+            // Multiple matches found, no automatic selection possible --> user has to select the correct one
+            tracing::trace!(positions = positions.len(), "Found multiple matches");
         }
 
-        tracing::trace!(
-            positions = positions.len(),
-            ?clean_callsign,
-            "Found multiple matches"
-        );
+        positions.sort_by_key(|p| p.id.as_str());
         positions
     }
 
