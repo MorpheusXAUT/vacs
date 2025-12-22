@@ -36,7 +36,7 @@ impl Network {
         frequency: impl AsRef<str>,
         facility_type: impl Into<FacilityType>,
     ) -> Vec<&Position> {
-        // Normalize callsign (standard relieve pattern) and ensure uppercase for matching
+        // Normalize callsign (standard relief pattern) and ensure uppercase for matching
         let callsign = callsign.as_ref().replace("__", "_").to_ascii_uppercase();
         let frequency = frequency.as_ref();
         let facility_type = facility_type.into();
@@ -66,7 +66,7 @@ impl Network {
             .collect::<Vec<_>>();
 
         if positions.len() == 1 {
-            // Non-standard relieve/COO callsign, but only one matching position found --> successful match
+            // Non-standard relief/COO callsign, but only one matching position found --> successful match
             tracing::trace!(position = ?positions[0], "Found exact match for frequency and station type");
         } else if positions.is_empty() {
             // No matches found at all (frequency and facility type might yield results, but callsign
@@ -324,6 +324,7 @@ impl Network {
                     }
                     tracing::warn!(?station, "Station has no coverage");
                     errors.push(err);
+                    continue;
                 }
                 stations.insert(station.id.clone(), station);
             }
@@ -427,11 +428,11 @@ mod tests {
     }
 
     #[test]
-    fn load_from_dir_valid_single() {
+    fn parse_dir_valid_single() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");
 
-        let network = Network::load_from_dir(dir.path()).expect("Should load");
+        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 1);
         assert!(
             network
@@ -440,15 +441,16 @@ mod tests {
         );
         assert_eq!(network.stations.len(), 1);
         assert_eq!(network.positions.len(), 1);
+        assert!(errors.is_empty());
     }
 
     #[test]
-    fn load_from_dir_valid_multiple() {
+    fn parse_dir_valid_multiple() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");
         create_minimal_valid_fir(dir.path(), "EDMM");
 
-        let network = Network::load_from_dir(dir.path()).expect("Should load");
+        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 2);
         assert!(
             network
@@ -462,20 +464,63 @@ mod tests {
         );
         assert_eq!(network.stations.len(), 2);
         assert_eq!(network.positions.len(), 2);
+        assert!(errors.is_empty());
     }
 
     #[test]
-    fn load_from_dir_strict_duplicate_fir_id() {
+    fn parse_dir_duplicate_fir_id() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");
         create_minimal_valid_fir(dir.path(), "lovv");
 
-        let res = Network::load_from_dir(dir.path());
-        assert_matches!(res, Err(CoverageError::Structure(StructureError::Duplicate { entity, .. })) if entity == "FIR");
+        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
+        assert_eq!(network.firs.len(), 1);
+        assert_eq!(network.stations.len(), 1);
+        assert_eq!(network.positions.len(), 1);
+        assert_eq!(errors.len(), 1);
+        assert_matches!(&errors[0], CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "FIR");
     }
 
     #[test]
-    fn load_from_dir_strict_duplicate_station_id() {
+    fn parse_dir_duplicate_station_id_same_fir() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir = dir.path().join("LOVV");
+        fs::create_dir(&fir).unwrap();
+        fs::write(
+            fir.join("stations.toml"),
+            r#"
+            [[stations]]
+            id = "LOWW_TWR"
+            controlled_by = ["LOWW_TWR"]
+
+            [[stations]]
+            id = "LOWW_TWR"
+            controlled_by = ["LOWW_TWR"]
+        "#,
+        )
+        .unwrap();
+        fs::write(
+            fir.join("positions.toml"),
+            r#"
+            [[positions]]
+            id = "LOWW_TWR"
+            prefixes = ["LOWW"]
+            frequency = "119.400"
+            facility_type = "Tower"
+        "#,
+        )
+        .unwrap();
+
+        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
+        assert_eq!(network.firs.len(), 1);
+        assert_eq!(network.stations.len(), 1);
+        assert_eq!(network.positions.len(), 1);
+        assert!(!errors.is_empty());
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Station")));
+    }
+
+    #[test]
+    fn parse_dir_duplicate_station_id_different_fir() {
         let dir = tempfile::tempdir().unwrap();
         let fir1 = dir.path().join("LOVV");
         fs::create_dir(&fir1).unwrap();
@@ -507,7 +552,7 @@ mod tests {
             r#"
             [[stations]]
             id = "LOWW_TWR"
-            controlled_by = ["LOWW_TWR"]
+            controlled_by = ["EDDM_S_TWR"]
         "#,
         )
         .unwrap();
@@ -523,12 +568,56 @@ mod tests {
         )
         .unwrap();
 
-        let res = Network::load_from_dir(dir.path());
-        assert_matches!(res, Err(CoverageError::Structure(StructureError::Duplicate { entity, .. })) if entity == "Station");
+        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
+        assert_eq!(network.firs.len(), 2);
+        assert_eq!(network.stations.len(), 1);
+        assert_eq!(network.positions.len(), 2);
+        assert!(!errors.is_empty());
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Station")));
     }
 
     #[test]
-    fn load_from_dir_strict_duplicate_position_id() {
+    fn parse_dir_duplicate_position_id_same_fir() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir = dir.path().join("LOVV");
+        fs::create_dir(&fir).unwrap();
+        fs::write(
+            fir.join("stations.toml"),
+            r#"
+            [[stations]]
+            id = "LOWW_TWR"
+            controlled_by = ["LOWW_TWR"]
+        "#,
+        )
+        .unwrap();
+        fs::write(
+            fir.join("positions.toml"),
+            r#"
+            [[positions]]
+            id = "LOWW_TWR"
+            prefixes = ["LOWW"]
+            frequency = "119.400"
+            facility_type = "Tower"
+
+            [[positions]]
+            id = "LOWW_TWR"
+            prefixes = ["LOWW"]
+            frequency = "119.400"
+            facility_type = "Tower"
+        "#,
+        )
+        .unwrap();
+
+        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
+        assert_eq!(network.firs.len(), 1);
+        assert_eq!(network.stations.len(), 1);
+        assert_eq!(network.positions.len(), 1);
+        assert!(!errors.is_empty());
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Position")));
+    }
+
+    #[test]
+    fn parse_dir_duplicate_position_id_different_fir() {
         let dir = tempfile::tempdir().unwrap();
         let fir1 = dir.path().join("LOVV");
         fs::create_dir(&fir1).unwrap();
@@ -576,12 +665,16 @@ mod tests {
         )
         .unwrap();
 
-        let res = Network::load_from_dir(dir.path());
-        assert_matches!(res, Err(CoverageError::Structure(StructureError::Duplicate { entity, .. })) if entity == "Position");
+        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
+        assert_eq!(network.firs.len(), 2);
+        assert_eq!(network.stations.len(), 2);
+        assert_eq!(network.positions.len(), 1);
+        assert!(!errors.is_empty());
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Position")));
     }
 
     #[test]
-    fn load_from_dir_strict_empty_coverage() {
+    fn parse_dir_empty_coverage() {
         let dir = tempfile::tempdir().unwrap();
         let fir_path = dir.path().join("LOVV");
         fs::create_dir(&fir_path).unwrap();
@@ -591,7 +684,7 @@ mod tests {
             r#"
              [[stations]]
              id = "LOWW_TWR"
-             controlled_by = [] 
+             controlled_by = []
          "#,
         )
         .unwrap();
@@ -599,266 +692,24 @@ mod tests {
             fir_path.join("positions.toml"),
             r#"
             [[positions]]
-            id = "DUMMY_POS"
-            prefixes = ["DUM"]
-            frequency = "120.000"
-            facility_type = "Center"
+            id = "LOWW_TWR"
+            prefixes = ["LOWW"]
+            frequency = "119.400"
+            facility_type = "Tower"
          "#,
         )
         .unwrap();
 
-        let res = Network::load_from_dir(dir.path());
-        assert_matches!(res, Err(CoverageError::Structure(StructureError::EmptyCoverage(station))) if station == "LOWW_TWR");
-    }
-
-    #[test]
-    fn validate_dir_valid_single() {
-        let dir = tempfile::tempdir().unwrap();
-        create_minimal_valid_fir(dir.path(), "LOVV");
-
-        let (network, errors) = Network::validate_dir(dir.path()).expect("Should load");
+        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 1);
-        assert!(errors.is_empty());
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("LOVV"))
-        );
-        assert_eq!(network.stations.len(), 1);
+        assert_eq!(network.stations.len(), 0);
         assert_eq!(network.positions.len(), 1);
+        assert_eq!(errors.len(), 1);
+        assert_matches!(&errors[0], CoverageError::Structure(StructureError::EmptyCoverage(station)) if station == "LOWW_TWR");
     }
 
     #[test]
-    fn validate_dir_valid_multiple() {
-        let dir = tempfile::tempdir().unwrap();
-        create_minimal_valid_fir(dir.path(), "LOVV");
-        create_minimal_valid_fir(dir.path(), "EDMM");
-
-        let (network, errors) = Network::validate_dir(dir.path()).expect("Should load");
-        assert_eq!(network.firs.len(), 2);
-        assert!(errors.is_empty());
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("LOVV"))
-        );
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("EDMM"))
-        );
-        assert_eq!(network.stations.len(), 2);
-        assert_eq!(network.positions.len(), 2);
-    }
-
-    #[test]
-    fn validate_dir_duplicate_fir_id() {
-        let dir = tempfile::tempdir().unwrap();
-        create_minimal_valid_fir(dir.path(), "LOVV");
-        create_minimal_valid_fir(dir.path(), "lovv");
-
-        let (network, errors) = Network::validate_dir(dir.path()).unwrap();
-        assert_eq!(network.firs.len(), 1);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 1);
-        assert!(!errors.is_empty());
-        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "FIR")));
-    }
-
-    #[test]
-    fn validate_dir_strict_duplicate_station_id_same_fir() {
-        let dir = tempfile::tempdir().unwrap();
-        let fir = dir.path().join("LOVV");
-        fs::create_dir(&fir).unwrap();
-        fs::write(
-            fir.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = []
-
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = []
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
-
-        let (network, errors) = Network::validate_dir(dir.path()).unwrap();
-        assert_eq!(network.firs.len(), 1);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 1);
-        assert!(!errors.is_empty());
-        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Station")));
-    }
-
-    #[test]
-    fn validate_dir_strict_duplicate_station_id_different_fir() {
-        let dir = tempfile::tempdir().unwrap();
-        let fir1 = dir.path().join("LOVV");
-        fs::create_dir(&fir1).unwrap();
-        fs::write(
-            fir1.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = []
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir1.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
-
-        let fir2 = dir.path().join("EDMM");
-        fs::create_dir(&fir2).unwrap();
-        fs::write(
-            fir2.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = []
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir2.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "EDDM_S_TWR"
-            prefixes = ["EDDM"]
-            frequency = "120.505"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
-
-        let (network, errors) = Network::validate_dir(dir.path()).unwrap();
-        assert_eq!(network.firs.len(), 2);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 2);
-        assert!(!errors.is_empty());
-        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Station")));
-    }
-
-    #[test]
-    fn validate_dir_strict_duplicate_position_id_same_fir() {
-        let dir = tempfile::tempdir().unwrap();
-        let fir = dir.path().join("LOVV");
-        fs::create_dir(&fir).unwrap();
-        fs::write(
-            fir.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = []
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
-
-        let (network, errors) = Network::validate_dir(dir.path()).unwrap();
-        assert_eq!(network.firs.len(), 1);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 1);
-        assert!(!errors.is_empty());
-        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Position")));
-    }
-
-    #[test]
-    fn validate_dir_strict_duplicate_position_id_different_fir() {
-        let dir = tempfile::tempdir().unwrap();
-        let fir1 = dir.path().join("LOVV");
-        fs::create_dir(&fir1).unwrap();
-        fs::write(
-            fir1.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = []
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir1.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
-
-        let fir2 = dir.path().join("EDMM");
-        fs::create_dir(&fir2).unwrap();
-        fs::write(
-            fir2.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "EDDM_S_TWR"
-            controlled_by = []
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir2.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
-
-        let (network, errors) = Network::validate_dir(dir.path()).unwrap();
-        assert_eq!(network.firs.len(), 2);
-        assert_eq!(network.stations.len(), 2);
-        assert_eq!(network.positions.len(), 1);
-        assert!(!errors.is_empty());
-        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Position")));
-    }
-
-    #[test]
-    fn validate_dir_multiple_errors() {
+    fn parse_dir_multiple_errors() {
         let dir = tempfile::tempdir().unwrap();
 
         // FIR 1: Malformed TOML
@@ -875,11 +726,81 @@ mod tests {
             r#"
             [[stations]]
             id = "A"
-            controlled_by = []
+            controlled_by = ["A"]
             
             [[stations]]
             id = "A"
-            controlled_by = []
+            controlled_by = ["A"]
+        "#,
+        )
+        .unwrap();
+        fs::write(
+            fir2.join("positions.toml"),
+            r#"
+            [[positions]]
+            id = "B"
+            prefixes = ["B"]
+            frequency = "120.000"
+            facility_type = "Center"
+        "#,
+        )
+        .unwrap();
+
+        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
+        assert_eq!(network.firs.len(), 1);
+        assert_eq!(network.stations.len(), 1);
+        assert_eq!(network.positions.len(), 1);
+        assert!(errors.len() >= 2);
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"))));
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Station" && id == "A")));
+    }
+
+    #[test]
+    fn validate_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        create_minimal_valid_fir(dir.path(), "EDMM");
+
+        let (network, errors) = Network::validate_dir(dir.path()).unwrap();
+        assert_eq!(network.firs.len(), 2);
+        assert!(
+            network
+                .firs
+                .contains_key(&FlightInformationRegionId::from("LOVV"))
+        );
+        assert!(
+            network
+                .firs
+                .contains_key(&FlightInformationRegionId::from("EDMM"))
+        );
+        assert_eq!(network.stations.len(), 2);
+        assert_eq!(network.positions.len(), 2);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn validate_dir_error() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // FIR 1: Malformed TOML
+        let fir1 = dir.path().join("FIR1");
+        fs::create_dir(&fir1).unwrap();
+        fs::write(fir1.join("stations.toml"), "invalid").unwrap();
+        fs::write(fir1.join("positions.toml"), "").unwrap();
+
+        // FIR 2: Duplicate station within same FIR file
+        let fir2 = dir.path().join("FIR2");
+        fs::create_dir(&fir2).unwrap();
+        fs::write(
+            fir2.join("stations.toml"),
+            r#"
+            [[stations]]
+            id = "A"
+            controlled_by = ["A"]
+
+            [[stations]]
+            id = "A"
+            controlled_by = ["A"]
         "#,
         )
         .unwrap();
@@ -905,6 +826,70 @@ mod tests {
     }
 
     #[test]
+    fn load_from_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        create_minimal_valid_fir(dir.path(), "EDMM");
+
+        let network = Network::load_from_dir(dir.path()).expect("should load from dir");
+        assert_eq!(network.firs.len(), 2);
+        assert!(
+            network
+                .firs
+                .contains_key(&FlightInformationRegionId::from("LOVV"))
+        );
+        assert!(
+            network
+                .firs
+                .contains_key(&FlightInformationRegionId::from("EDMM"))
+        );
+        assert_eq!(network.stations.len(), 2);
+        assert_eq!(network.positions.len(), 2);
+    }
+
+    #[test]
+    fn load_from_dir_error() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // FIR 1: Malformed TOML
+        let fir1 = dir.path().join("FIR1");
+        fs::create_dir(&fir1).unwrap();
+        fs::write(fir1.join("stations.toml"), "invalid").unwrap();
+        fs::write(fir1.join("positions.toml"), "").unwrap();
+
+        // FIR 2: Duplicate station within same FIR file
+        let fir2 = dir.path().join("FIR2");
+        fs::create_dir(&fir2).unwrap();
+        fs::write(
+            fir2.join("stations.toml"),
+            r#"
+            [[stations]]
+            id = "A"
+            controlled_by = ["A"]
+
+            [[stations]]
+            id = "A"
+            controlled_by = ["A"]
+        "#,
+        )
+        .unwrap();
+        fs::write(
+            fir2.join("positions.toml"),
+            r#"
+            [[positions]]
+            id = "B"
+            prefixes = ["B"]
+            frequency = "120.000"
+            facility_type = "Center"
+        "#,
+        )
+        .unwrap();
+
+        let err = Network::load_from_dir(dir.path()).expect_err("should not load from dir");
+        assert_matches!(err, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"));
+    }
+
+    #[test]
     fn find_positions_callsign_match() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");
@@ -917,7 +902,7 @@ mod tests {
     }
 
     #[test]
-    fn find_positions_relieve_callsign_match() {
+    fn find_positions_relief_callsign_match() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");
         create_minimal_valid_fir(dir.path(), "EDMM");
@@ -926,6 +911,102 @@ mod tests {
         let positions = network.find_positions("LOVV__CTR", "199.998", FacilityType::Enroute);
         assert_eq!(positions.len(), 1);
         assert_eq!(positions[0].id.as_str(), "LOVV_CTR");
+    }
+
+    #[test]
+    fn find_positions_prefix_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir1 = dir.path().join("ENOR");
+        fs::create_dir(&fir1).unwrap();
+        fs::write(
+            fir1.join("stations.toml"),
+            r#"
+            [[stations]]
+            id = "ENCN_TWR"
+            controlled_by = ["ENCN_TWR"]
+
+            [[stations]]
+            id = "ENDU_TWR"
+            controlled_by = ["ENDU_TWR"]
+
+            [[stations]]
+            id = "ENAL_TWR"
+            controlled_by = ["ENAL_TWR"]
+
+            [[stations]]
+            id = "ENBO_TWR"
+            controlled_by = ["ENBO_TWR"]
+
+            [[stations]]
+            id = "ENKR_TWR"
+            controlled_by = ["ENKR_TWR"]
+        "#,
+        )
+        .unwrap();
+        fs::write(
+            fir1.join("positions.toml"),
+            r#"
+            [[positions]]
+            id = "ENKR_TWR"
+            prefixes = ["ENKR"]
+            frequency = "118.105"
+            facility_type = "TWR"
+
+            [[positions]]
+            id = "ENCN_TWR"
+            prefixes = ["ENCN"]
+            frequency = "118.105"
+            facility_type = "TWR"
+
+            [[positions]]
+            id = "ENAL_TWR"
+            prefixes = ["ENAL"]
+            frequency = "118.105"
+            facility_type = "TWR"
+
+            [[positions]]
+            id = "ENBO_TWR"
+            prefixes = ["ENBO"]
+            frequency = "118.105"
+            facility_type = "TWR"
+
+            [[positions]]
+            id = "ENDU_TWR"
+            prefixes = ["ENDU"]
+            frequency = "118.105"
+            facility_type = "TWR"
+        "#,
+        )
+        .unwrap();
+
+        let fir2 = dir.path().join("EBBU");
+        fs::create_dir(&fir2).unwrap();
+        fs::write(
+            fir2.join("stations.toml"),
+            r#"
+            [[stations]]
+            id = "ELLX_TWR"
+            controlled_by = ["ELLX_TWR"]
+        "#,
+        )
+        .unwrap();
+        fs::write(
+            fir2.join("positions.toml"),
+            r#"
+            [[positions]]
+            id = "ELLX_TWR"
+            prefixes = ["ELLX"]
+            frequency = "118.105"
+            facility_type = "TWR"
+        "#,
+        )
+        .unwrap();
+
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let positions = network.find_positions("ENBO_X_TWR", "118.105", FacilityType::Tower);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].id.as_str(), "ENBO_TWR");
     }
 
     #[test]
