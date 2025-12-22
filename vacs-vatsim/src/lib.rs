@@ -19,13 +19,13 @@ pub enum Error {
     UnknownFacilityType(String),
     #[error(transparent)]
     #[cfg(feature = "coverage")]
-    Coverage(#[from] crate::coverage::CoverageError),
+    Coverage(#[from] coverage::CoverageError),
     #[error(transparent)]
     #[cfg(feature = "slurper")]
-    Slurper(#[from] crate::slurper::SlurperError),
+    Slurper(#[from] slurper::SlurperError),
     #[error(transparent)]
     #[cfg(feature = "data-feed")]
-    DataFeed(#[from] crate::data_feed::DataFeedError),
+    DataFeed(#[from] data_feed::DataFeedError),
     #[error("{0}")]
     Other(String),
 }
