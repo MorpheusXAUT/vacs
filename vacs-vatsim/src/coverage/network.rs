@@ -438,157 +438,147 @@ mod tests {
     use super::*;
     use pretty_assertions::{assert_eq, assert_matches};
 
+    struct TestFirBuilder {
+        name: String,
+        stations: Vec<String>,
+        positions: Vec<String>,
+    }
+
+    impl TestFirBuilder {
+        fn new(name: &str) -> Self {
+            Self {
+                name: name.to_string(),
+                stations: Vec::new(),
+                positions: Vec::new(),
+            }
+        }
+
+        fn station(mut self, id: &str, controlled_by: &[&str]) -> Self {
+            self.stations.push(format!(
+                r#"
+                [[stations]]
+                id = "{id}"
+                controlled_by = {controlled_by:?}
+            "#
+            ));
+            self
+        }
+
+        fn station_with_parent(
+            mut self,
+            id: &str,
+            parent_id: &str,
+            controlled_by: &[&str],
+        ) -> Self {
+            self.stations.push(format!(
+                r#"
+                [[stations]]
+                id = "{id}"
+                parent_id = "{parent_id}"
+                controlled_by = {controlled_by:?}
+            "#
+            ));
+            self
+        }
+
+        fn position(
+            mut self,
+            id: &str,
+            prefixes: &[&str],
+            frequency: &str,
+            facility_type: &str,
+        ) -> Self {
+            self.positions.push(format!(
+                r#"
+                [[positions]]
+                id = "{id}"
+                prefixes = {prefixes:?}
+                frequency = "{frequency}"
+                facility_type = "{facility_type}"
+            "#
+            ));
+            self
+        }
+
+        fn create(self, dir: &std::path::Path) {
+            let fir_path = dir.join(&self.name);
+            if !fir_path.exists() {
+                fs::create_dir(&fir_path).unwrap();
+            }
+
+            if !self.stations.is_empty() {
+                fs::write(fir_path.join("stations.toml"), self.stations.join("\n")).unwrap();
+            }
+
+            if !self.positions.is_empty() {
+                fs::write(fir_path.join("positions.toml"), self.positions.join("\n")).unwrap();
+            }
+        }
+    }
+
     fn create_minimal_valid_fir(dir: &std::path::Path, name: &str) {
-        let fir_path = dir.join(name);
-        fs::create_dir(&fir_path).unwrap();
-
-        let stations_toml = format!(
-            r#"
-            [[stations]]
-            id = "{name}_CTR"
-            controlled_by = ["{name}_CTR"]
-        "#
-        );
-        fs::write(fir_path.join("stations.toml"), stations_toml).unwrap();
-
-        let positions_toml = format!(
-            r#"
-            [[positions]]
-            id = "{name}_CTR"
-            prefixes = ["{name}"]
-            frequency = "199.998"
-            facility_type = "Enroute"
-        "#
-        );
-        fs::write(fir_path.join("positions.toml"), positions_toml).unwrap();
+        TestFirBuilder::new(name)
+            .station(&format!("{name}_CTR"), &[&format!("{name}_CTR")])
+            .position(&format!("{name}_CTR"), &[name], "199.998", "Enroute")
+            .create(dir);
     }
 
     fn create_extended_valid_fir(dir: &std::path::Path) {
-        let fir = dir.join("LOVV");
-        fs::create_dir(&fir).unwrap();
-        fs::write(
-            fir.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOVV_E2"
-            controlled_by = [
-                "LOVV_EU_CTR",
-                "LOVV_NU_CTR",
-                "LOVV_U_CTR",
-                "LOVV_E_CTR",
-                "LOVV_N_CTR",
-                "LOVV_CTR",
-                "LOVV_C_CTR",
-            ]
-
-            [[stations]]
-            id = "LOVV_E1"
-            controlled_by = [
-                "LOVV_E_CTR",
-                "LOVV_N_CTR",
-                "LOVV_CTR",
-                "LOVV_C_CTR",
-                "LOVV_EU_CTR",
-                "LOVV_NU_CTR",
-                "LOVV_U_CTR",
-            ]
-
-            [[stations]]
-            id = "LOWW_APP"
-            controlled_by = [
+        TestFirBuilder::new("LOVV")
+            .station(
+                "LOVV_E2",
+                &[
+                    "LOVV_EU_CTR",
+                    "LOVV_NU_CTR",
+                    "LOVV_U_CTR",
+                    "LOVV_E_CTR",
+                    "LOVV_N_CTR",
+                    "LOVV_CTR",
+                    "LOVV_C_CTR",
+                ],
+            )
+            .station(
+                "LOVV_E1",
+                &[
+                    "LOVV_E_CTR",
+                    "LOVV_N_CTR",
+                    "LOVV_CTR",
+                    "LOVV_C_CTR",
+                    "LOVV_EU_CTR",
+                    "LOVV_NU_CTR",
+                    "LOVV_U_CTR",
+                ],
+            )
+            .station(
                 "LOWW_APP",
-                "LOWW_P_APP",
-                "LOWW_N_APP",
-                "LOWW_M_APP",
-                "LOVV_L_CTR",
-                "LOVV_E_CTR",
-                "LOVV_N_CTR",
-                "LOVV_CTR",
-                "LOVV_C_CTR",
-                "LOVV_EU_CTR",
-                "LOVV_NU_CTR",
-            ]
-
-            [[stations]]
-            id = "LOWW_TWR"
-            parent_id = "LOWW_APP"
-            controlled_by = ["LOWW_TWR", "LOWW_E_TWR"]
-
-            [[stations]]
-            id = "LOWW_E_TWR"
-            parent_id = "LOWW_TWR"
-            controlled_by = ["LOWW_E_TWR"]
-
-            [[stations]]
-            id = "LOWW_GND"
-            parent_id = "LOWW_TWR"
-            controlled_by = ["LOWW_GND", "LOWW_W_GND"]
-
-            [[stations]]
-            id = "LOWW_W_GND"
-            parent_id = "LOWW_GND"
-            controlled_by = ["LOWW_W_GND"]
-
-            [[stations]]
-            id = "LOWW_DEL"
-            parent_id = "LOWW_GND"
-            controlled_by = ["LOWW_DEL"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOVV_E_CTR"
-            prefixes = ["LOVV"]
-            frequency = "134.440"
-            facility_type = "CTR"
-
-            [[positions]]
-            id = "LOVV_CTR"
-            prefixes = ["LOVV"]
-            frequency = "132.600"
-            facility_type = "CTR"
-
-            [[positions]]
-            id = "LOWW_APP"
-            prefixes = ["LOWW"]
-            frequency = "134.675"
-            facility_type = "APP"
-
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "TWR"
-
-            [[positions]]
-            id = "LOWW_E_TWR"
-            prefixes = ["LOWW"]
-            frequency = "123.800"
-            facility_type = "TWR"
-
-            [[positions]]
-            id = "LOWW_GND"
-            prefixes = ["LOWW"]
-            frequency = "121.600"
-            facility_type = "GND"
-
-            [[positions]]
-            id = "LOWW_W_GND"
-            prefixes = ["LOWW"]
-            frequency = "121.775"
-            facility_type = "GND"
-
-            [[positions]]
-            id = "LOWW_DEL"
-            prefixes = ["LOWW"]
-            frequency = "122.125"
-            facility_type = "DEL"
-        "#,
-        )
-        .unwrap();
+                &[
+                    "LOWW_APP",
+                    "LOWW_P_APP",
+                    "LOWW_N_APP",
+                    "LOWW_M_APP",
+                    "LOVV_L_CTR",
+                    "LOVV_E_CTR",
+                    "LOVV_N_CTR",
+                    "LOVV_CTR",
+                    "LOVV_C_CTR",
+                    "LOVV_EU_CTR",
+                    "LOVV_NU_CTR",
+                ],
+            )
+            .station_with_parent("LOWW_TWR", "LOWW_APP", &["LOWW_TWR", "LOWW_E_TWR"])
+            .station_with_parent("LOWW_E_TWR", "LOWW_TWR", &["LOWW_E_TWR"])
+            .station_with_parent("LOWW_GND", "LOWW_TWR", &["LOWW_GND", "LOWW_W_GND"])
+            .station_with_parent("LOWW_W_GND", "LOWW_GND", &["LOWW_W_GND"])
+            .station_with_parent("LOWW_DEL", "LOWW_GND", &["LOWW_DEL"])
+            .position("LOVV_E_CTR", &["LOVV"], "134.440", "CTR")
+            .position("LOVV_CTR", &["LOVV"], "132.600", "CTR")
+            .position("LOWW_APP", &["LOWW"], "134.675", "APP")
+            .position("LOWW_TWR", &["LOWW"], "119.400", "TWR")
+            .position("LOWW_E_TWR", &["LOWW"], "123.800", "TWR")
+            .position("LOWW_GND", &["LOWW"], "121.600", "GND")
+            .position("LOWW_W_GND", &["LOWW"], "121.775", "GND")
+            .position("LOWW_DEL", &["LOWW"], "122.125", "DEL")
+            .create(dir);
     }
 
     #[test]
@@ -636,32 +626,11 @@ mod tests {
     #[test]
     fn parse_dir_duplicate_station_id_same_fir() {
         let dir = tempfile::tempdir().unwrap();
-        let fir = dir.path().join("LOVV");
-        fs::create_dir(&fir).unwrap();
-        fs::write(
-            fir.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = ["LOWW_TWR"]
-
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = ["LOWW_TWR"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_TWR", &["LOWW_TWR"])
+            .station("LOWW_TWR", &["LOWW_TWR"])
+            .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
+            .create(dir.path());
 
         let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 1);
@@ -674,51 +643,15 @@ mod tests {
     #[test]
     fn parse_dir_duplicate_station_id_different_fir() {
         let dir = tempfile::tempdir().unwrap();
-        let fir1 = dir.path().join("LOVV");
-        fs::create_dir(&fir1).unwrap();
-        fs::write(
-            fir1.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = ["LOWW_TWR"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir1.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_TWR", &["LOWW_TWR"])
+            .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
+            .create(dir.path());
 
-        let fir2 = dir.path().join("EDMM");
-        fs::create_dir(&fir2).unwrap();
-        fs::write(
-            fir2.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = ["EDDM_S_TWR"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir2.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "EDDM_S_TWR"
-            prefixes = ["EDDM"]
-            frequency = "120.505"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("EDMM")
+            .station("LOWW_TWR", &["EDDM_S_TWR"])
+            .position("EDDM_S_TWR", &["EDDM"], "120.505", "Tower")
+            .create(dir.path());
 
         let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 2);
@@ -731,34 +664,11 @@ mod tests {
     #[test]
     fn parse_dir_duplicate_position_id_same_fir() {
         let dir = tempfile::tempdir().unwrap();
-        let fir = dir.path().join("LOVV");
-        fs::create_dir(&fir).unwrap();
-        fs::write(
-            fir.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = ["LOWW_TWR"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_TWR", &["LOWW_TWR"])
+            .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
+            .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
+            .create(dir.path());
 
         let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 1);
@@ -771,51 +681,15 @@ mod tests {
     #[test]
     fn parse_dir_duplicate_position_id_different_fir() {
         let dir = tempfile::tempdir().unwrap();
-        let fir1 = dir.path().join("LOVV");
-        fs::create_dir(&fir1).unwrap();
-        fs::write(
-            fir1.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWW_TWR"
-            controlled_by = ["LOWW_TWR"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir1.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_TWR", &["LOWW_TWR"])
+            .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
+            .create(dir.path());
 
-        let fir2 = dir.path().join("EDMM");
-        fs::create_dir(&fir2).unwrap();
-        fs::write(
-            fir2.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "EDDM_S_TWR"
-            controlled_by = ["EDDM_S_TWR"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir2.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("EDMM")
+            .station("EDDM_S_TWR", &["EDDM_S_TWR"])
+            .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
+            .create(dir.path());
 
         let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 2);
@@ -828,29 +702,10 @@ mod tests {
     #[test]
     fn parse_dir_empty_coverage() {
         let dir = tempfile::tempdir().unwrap();
-        let fir_path = dir.path().join("LOVV");
-        fs::create_dir(&fir_path).unwrap();
-
-        fs::write(
-            fir_path.join("stations.toml"),
-            r#"
-             [[stations]]
-             id = "LOWW_TWR"
-             controlled_by = []
-         "#,
-        )
-        .unwrap();
-        fs::write(
-            fir_path.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWW_TWR"
-            prefixes = ["LOWW"]
-            frequency = "119.400"
-            facility_type = "Tower"
-         "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_TWR", &[])
+            .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
+            .create(dir.path());
 
         let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 1);
@@ -871,32 +726,11 @@ mod tests {
         fs::write(fir1.join("positions.toml"), "").unwrap();
 
         // FIR 2: Duplicate station within same FIR file
-        let fir2 = dir.path().join("FIR2");
-        fs::create_dir(&fir2).unwrap();
-        fs::write(
-            fir2.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "A"
-            controlled_by = ["A"]
-            
-            [[stations]]
-            id = "A"
-            controlled_by = ["A"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir2.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "B"
-            prefixes = ["B"]
-            frequency = "120.000"
-            facility_type = "Center"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("FIR2")
+            .station("A", &["A"])
+            .station("A", &["A"])
+            .position("B", &["B"], "199.998", "Center")
+            .create(dir.path());
 
         let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 1);
@@ -933,32 +767,11 @@ mod tests {
         fs::write(fir1.join("positions.toml"), "").unwrap();
 
         // FIR 2: Duplicate station within same FIR file
-        let fir2 = dir.path().join("FIR2");
-        fs::create_dir(&fir2).unwrap();
-        fs::write(
-            fir2.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "A"
-            controlled_by = ["A"]
-
-            [[stations]]
-            id = "A"
-            controlled_by = ["A"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir2.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "B"
-            prefixes = ["B"]
-            frequency = "120.000"
-            facility_type = "Center"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("FIR2")
+            .station("A", &["A"])
+            .station("A", &["A"])
+            .position("B", &["B"], "199.998", "Center")
+            .create(dir.path());
 
         let (network, errors) = Network::validate_dir(dir.path()).unwrap();
         assert_eq!(network.firs.len(), 1);
@@ -994,32 +807,11 @@ mod tests {
         fs::write(fir1.join("positions.toml"), "").unwrap();
 
         // FIR 2: Duplicate station within same FIR file
-        let fir2 = dir.path().join("FIR2");
-        fs::create_dir(&fir2).unwrap();
-        fs::write(
-            fir2.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "A"
-            controlled_by = ["A"]
-
-            [[stations]]
-            id = "A"
-            controlled_by = ["A"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir2.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "B"
-            prefixes = ["B"]
-            frequency = "120.000"
-            facility_type = "Center"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("FIR2")
+            .station("A", &["A"])
+            .station("A", &["A"])
+            .position("B", &["B"], "199.998", "Center")
+            .create(dir.path());
 
         let err = Network::load_from_dir(dir.path()).expect_err("should not load from dir");
         assert_matches!(err, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"));
@@ -1052,91 +844,23 @@ mod tests {
     #[test]
     fn find_positions_prefix_match() {
         let dir = tempfile::tempdir().unwrap();
-        let fir1 = dir.path().join("ENOR");
-        fs::create_dir(&fir1).unwrap();
-        fs::write(
-            fir1.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "ENCN_TWR"
-            controlled_by = ["ENCN_TWR"]
+        TestFirBuilder::new("ENOR")
+            .station("ENCN_TWR", &["ENCN_TWR"])
+            .station("ENDU_TWR", &["ENDU_TWR"])
+            .station("ENAL_TWR", &["ENAL_TWR"])
+            .station("ENBO_TWR", &["ENBO_TWR"])
+            .station("ENKR_TWR", &["ENKR_TWR"])
+            .position("ENKR_TWR", &["ENKR"], "118.105", "TWR")
+            .position("ENCN_TWR", &["ENCN"], "118.105", "TWR")
+            .position("ENAL_TWR", &["ENAL"], "118.105", "TWR")
+            .position("ENBO_TWR", &["ENBO"], "118.105", "TWR")
+            .position("ENDU_TWR", &["ENDU"], "118.105", "TWR")
+            .create(dir.path());
 
-            [[stations]]
-            id = "ENDU_TWR"
-            controlled_by = ["ENDU_TWR"]
-
-            [[stations]]
-            id = "ENAL_TWR"
-            controlled_by = ["ENAL_TWR"]
-
-            [[stations]]
-            id = "ENBO_TWR"
-            controlled_by = ["ENBO_TWR"]
-
-            [[stations]]
-            id = "ENKR_TWR"
-            controlled_by = ["ENKR_TWR"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir1.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "ENKR_TWR"
-            prefixes = ["ENKR"]
-            frequency = "118.105"
-            facility_type = "TWR"
-
-            [[positions]]
-            id = "ENCN_TWR"
-            prefixes = ["ENCN"]
-            frequency = "118.105"
-            facility_type = "TWR"
-
-            [[positions]]
-            id = "ENAL_TWR"
-            prefixes = ["ENAL"]
-            frequency = "118.105"
-            facility_type = "TWR"
-
-            [[positions]]
-            id = "ENBO_TWR"
-            prefixes = ["ENBO"]
-            frequency = "118.105"
-            facility_type = "TWR"
-
-            [[positions]]
-            id = "ENDU_TWR"
-            prefixes = ["ENDU"]
-            frequency = "118.105"
-            facility_type = "TWR"
-        "#,
-        )
-        .unwrap();
-
-        let fir2 = dir.path().join("EBBU");
-        fs::create_dir(&fir2).unwrap();
-        fs::write(
-            fir2.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "ELLX_TWR"
-            controlled_by = ["ELLX_TWR"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir2.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "ELLX_TWR"
-            prefixes = ["ELLX"]
-            frequency = "118.105"
-            facility_type = "TWR"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("EBBU")
+            .station("ELLX_TWR", &["ELLX_TWR"])
+            .position("ELLX_TWR", &["ELLX"], "118.105", "TWR")
+            .create(dir.path());
 
         let network = Network::load_from_dir(dir.path()).unwrap();
 
@@ -1180,38 +904,12 @@ mod tests {
     #[test]
     fn find_positions_multiple_matches() {
         let dir = tempfile::tempdir().unwrap();
-        let fir = dir.path().join("LOVV");
-        fs::create_dir(&fir).unwrap();
-        fs::write(
-            fir.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWI_E_APP"
-            controlled_by = ["LOWI_E_APP"]
-
-            [[stations]]
-            id = "LOWI_S_APP"
-            controlled_by = ["LOWI_S_APP"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWI_S_APP"
-            prefixes = ["LOWI"]
-            frequency = "128.975"
-            facility_type = "APP"
-
-            [[positions]]
-            id = "LOWI_E_APP"
-            prefixes = ["LOWI"]
-            frequency = "128.975"
-            facility_type = "Approach"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("LOVV")
+            .station("LOWI_E_APP", &["LOWI_E_APP"])
+            .station("LOWI_S_APP", &["LOWI_S_APP"])
+            .position("LOWI_S_APP", &["LOWI"], "128.975", "APP")
+            .position("LOWI_E_APP", &["LOWI"], "128.975", "Approach")
+            .create(dir.path());
         let network = Network::load_from_dir(dir.path()).unwrap();
 
         let positions = network.find_positions("LOWI_X_APP", "128.975", FacilityType::Approach);
@@ -1223,38 +921,12 @@ mod tests {
     #[test]
     fn find_positions_callsign_match_identical_frequency() {
         let dir = tempfile::tempdir().unwrap();
-        let fir = dir.path().join("LOVV");
-        fs::create_dir(&fir).unwrap();
-        fs::write(
-            fir.join("stations.toml"),
-            r#"
-            [[stations]]
-            id = "LOWI_E_APP"
-            controlled_by = ["LOWI_E_APP"]
-
-            [[stations]]
-            id = "LOWI_S_APP"
-            controlled_by = ["LOWI_S_APP"]
-        "#,
-        )
-        .unwrap();
-        fs::write(
-            fir.join("positions.toml"),
-            r#"
-            [[positions]]
-            id = "LOWI_S_APP"
-            prefixes = ["LOWI"]
-            frequency = "128.975"
-            facility_type = "APP"
-
-            [[positions]]
-            id = "LOWI_E_APP"
-            prefixes = ["LOWI"]
-            frequency = "128.975"
-            facility_type = "Approach"
-        "#,
-        )
-        .unwrap();
+        TestFirBuilder::new("LOVV")
+            .station("LOWI_E_APP", &["LOWI_E_APP"])
+            .station("LOWI_S_APP", &["LOWI_S_APP"])
+            .position("LOWI_S_APP", &["LOWI"], "128.975", "APP")
+            .position("LOWI_E_APP", &["LOWI"], "128.975", "Approach")
+            .create(dir.path());
         let network = Network::load_from_dir(dir.path()).unwrap();
 
         let positions = network.find_positions("LOWI_S_APP", "128.975", FacilityType::Approach);
