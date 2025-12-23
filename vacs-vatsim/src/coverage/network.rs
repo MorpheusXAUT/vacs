@@ -87,7 +87,8 @@ impl Network {
         client_position_id: Option<&PositionId>,
         online_positions: &HashSet<PositionId>,
     ) -> Vec<CoveredStation<'_>> {
-        self.stations
+        let mut stations = self
+            .stations
             .values()
             .filter_map(|station| {
                 self.controlling_position(&station.id, online_positions)
@@ -99,7 +100,10 @@ impl Network {
                         }
                     })
             })
-            .collect()
+            .collect::<Vec<_>>();
+
+        stations.sort_by_key(|s| s.station.id.as_str());
+        stations
     }
 
     #[tracing::instrument(level = "trace", skip(self, online_positions), fields(online_positions = online_positions.len()))]
@@ -425,6 +429,134 @@ mod tests {
         "#
         );
         fs::write(fir_path.join("positions.toml"), positions_toml).unwrap();
+    }
+
+    fn create_extended_valid_fir(dir: &std::path::Path) {
+        let fir = dir.join("LOVV");
+        fs::create_dir(&fir).unwrap();
+        fs::write(
+            fir.join("stations.toml"),
+            r#"
+            [[stations]]
+            id = "LOVV_E2"
+            controlled_by = [
+                "LOVV_EU_CTR",
+                "LOVV_NU_CTR",
+                "LOVV_U_CTR",
+                "LOVV_E_CTR",
+                "LOVV_N_CTR",
+                "LOVV_CTR",
+                "LOVV_C_CTR",
+            ]
+
+            [[stations]]
+            id = "LOVV_E1"
+            controlled_by = [
+                "LOVV_E_CTR",
+                "LOVV_N_CTR",
+                "LOVV_CTR",
+                "LOVV_C_CTR",
+                "LOVV_EU_CTR",
+                "LOVV_NU_CTR",
+                "LOVV_U_CTR",
+            ]
+
+            [[stations]]
+            id = "LOWW_APP"
+            controlled_by = [
+                "LOWW_APP",
+                "LOWW_P_APP",
+                "LOWW_N_APP",
+                "LOWW_M_APP",
+                "LOVV_L_CTR",
+                "LOVV_E_CTR",
+                "LOVV_N_CTR",
+                "LOVV_CTR",
+                "LOVV_C_CTR",
+                "LOVV_EU_CTR",
+                "LOVV_NU_CTR",
+            ]
+
+            [[stations]]
+            id = "LOWW_TWR"
+            parent_id = "LOWW_APP"
+            controlled_by = ["LOWW_TWR", "LOWW_E_TWR"]
+
+            [[stations]]
+            id = "LOWW_E_TWR"
+            parent_id = "LOWW_TWR"
+            controlled_by = ["LOWW_E_TWR", "LOWW_TWR"]
+
+            [[stations]]
+            id = "LOWW_GND"
+            parent_id = "LOWW_TWR"
+            controlled_by = ["LOWW_GND", "LOWW_W_GND"]
+
+            [[stations]]
+            id = "LOWW_W_GND"
+            parent_id = "LOWW_GND"
+            controlled_by = ["LOWW_W_GND", "LOWW_GND"]
+
+            [[stations]]
+            id = "LOWW_DEL"
+            parent_id = "LOWW_GND"
+            controlled_by = ["LOWW_DEL", "LOWW_GND", "LOWW_W_GND"]
+        "#,
+        )
+        .unwrap();
+        fs::write(
+            fir.join("positions.toml"),
+            r#"
+            [[positions]]
+            id = "LOVV_E_CTR"
+            prefixes = ["LOVV"]
+            frequency = "134.440"
+            facility_type = "CTR"
+
+            [[positions]]
+            id = "LOVV_CTR"
+            prefixes = ["LOVV"]
+            frequency = "132.600"
+            facility_type = "CTR"
+
+            [[positions]]
+            id = "LOWW_APP"
+            prefixes = ["LOWW"]
+            frequency = "134.675"
+            facility_type = "APP"
+
+            [[positions]]
+            id = "LOWW_TWR"
+            prefixes = ["LOWW"]
+            frequency = "119.400"
+            facility_type = "TWR"
+
+            [[positions]]
+            id = "LOWW_E_TWR"
+            prefixes = ["LOWW"]
+            frequency = "123.800"
+            facility_type = "TWR"
+
+            [[positions]]
+            id = "LOWW_GND"
+            prefixes = ["LOWW"]
+            frequency = "121.600"
+            facility_type = "GND"
+
+            [[positions]]
+            id = "LOWW_W_GND"
+            prefixes = ["LOWW"]
+            frequency = "121.775"
+            facility_type = "GND"
+
+            [[positions]]
+            id = "LOWW_DEL"
+            prefixes = ["LOWW"]
+            frequency = "122.125"
+            facility_type = "DEL"
+        "#,
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1082,5 +1214,307 @@ mod tests {
         assert_eq!(positions.len(), 2);
         assert_eq!(positions[0].id.as_str(), "LOWI_E_APP");
         assert_eq!(positions[1].id.as_str(), "LOWI_S_APP");
+    }
+
+    #[test]
+    fn controlling_position_found() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let online = HashSet::from([PositionId::from("LOVV_CTR")]);
+        let station_id = StationId::from("LOVV_CTR");
+
+        let pos = network.controlling_position(&station_id, &online);
+        assert!(pos.is_some());
+        assert_eq!(pos.unwrap().id.as_str(), "LOVV_CTR");
+    }
+
+    #[test]
+    fn controlling_position_multiple_covering() {
+        let dir = tempfile::tempdir().unwrap();
+        create_extended_valid_fir(dir.path());
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let mut online = HashSet::from([PositionId::from("LOVV_CTR")]);
+        let station_id = StationId::from("LOWW_DEL");
+
+        let mut pos = network.controlling_position(&station_id, &online);
+        assert_eq!(pos.map(|p| p.id.as_str()), Some("LOVV_CTR"));
+
+        online.insert(PositionId::from("LOVV_E_CTR"));
+        pos = network.controlling_position(&station_id, &online);
+        assert_eq!(pos.map(|p| p.id.as_str()), Some("LOVV_E_CTR"));
+
+        online.insert(PositionId::from("LOWW_DEL"));
+        pos = network.controlling_position(&station_id, &online);
+        assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_DEL"));
+
+        online.remove(&PositionId::from("LOWW_DEL"));
+        online.insert(PositionId::from("LOWW_W_GND"));
+        pos = network.controlling_position(&station_id, &online);
+        assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_W_GND"));
+
+        online.insert(PositionId::from("LOWW_GND"));
+        pos = network.controlling_position(&station_id, &online);
+        assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_GND"));
+
+        online.remove(&PositionId::from("LOWW_GND"));
+        online.remove(&PositionId::from("LOWW_W_GND"));
+        online.insert(PositionId::from("LOWW_APP"));
+        pos = network.controlling_position(&station_id, &online);
+        assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_APP"));
+
+        online.remove(&PositionId::from("LOVV_CTR"));
+        online.remove(&PositionId::from("LOVV_E_CTR"));
+        pos = network.controlling_position(&station_id, &online);
+        assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_APP"));
+
+        online.remove(&PositionId::from("LOWW_APP"));
+        pos = network.controlling_position(&station_id, &online);
+        assert!(pos.is_none());
+
+        online.insert(PositionId::from("EDMM_RDG_CTR"));
+        pos = network.controlling_position(&station_id, &online);
+        assert!(pos.is_none());
+    }
+
+    #[test]
+    fn controlling_position_none() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let online = HashSet::new();
+        let station_id = StationId::from("LOVV_CTR");
+
+        let pos = network.controlling_position(&station_id, &online);
+        assert!(pos.is_none());
+    }
+
+    #[test]
+    fn controlling_position_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let online = HashSet::from([PositionId::from("LOVV_CTR")]);
+        let station_id = StationId::from("EDMM_RDG_CTR");
+
+        let pos = network.controlling_position(&station_id, &online);
+        assert!(pos.is_none());
+    }
+
+    #[test]
+    fn covered_stations_basic() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let online = HashSet::from([PositionId::from("LOVV_CTR")]);
+        let covered = network.covered_stations(None, &online);
+
+        assert_eq!(covered.len(), 1);
+        assert_eq!(covered[0].station.id.as_str(), "LOVV_CTR");
+        assert!(!covered[0].is_self_controlled);
+    }
+
+    #[test]
+    fn convered_stations_complex() {
+        let dir = tempfile::tempdir().unwrap();
+        create_extended_valid_fir(dir.path());
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let mut online = HashSet::from([
+            PositionId::from("LOVV_CTR"),
+            PositionId::from("LOWW_APP"),
+            PositionId::from("LOWW_DEL"),
+            PositionId::from("LOWW_W_GND"),
+            PositionId::from("EDMM_RDG_CTR"),
+        ]);
+        let mut covered = network.covered_stations(None, &online);
+        let mut covered_ids = covered
+            .iter()
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        let mut expected_ids = vec![
+            "LOVV_E1",
+            "LOVV_E2",
+            "LOWW_APP",
+            "LOWW_DEL",
+            "LOWW_E_TWR",
+            "LOWW_GND",
+            "LOWW_TWR",
+            "LOWW_W_GND",
+        ]
+        .into_iter()
+        .map(StationId::from)
+        .collect::<Vec<_>>();
+        assert_eq!(covered_ids, expected_ids);
+
+        online.remove(&PositionId::from("LOVV_CTR"));
+        expected_ids = vec![
+            "LOWW_APP",
+            "LOWW_DEL",
+            "LOWW_E_TWR",
+            "LOWW_GND",
+            "LOWW_TWR",
+            "LOWW_W_GND",
+        ]
+        .into_iter()
+        .map(StationId::from)
+        .collect::<Vec<_>>();
+        covered = network.covered_stations(None, &online);
+        covered_ids = covered
+            .iter()
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(covered_ids, expected_ids);
+
+        online.remove(&PositionId::from("LOWW_APP"));
+        expected_ids = vec!["LOWW_DEL", "LOWW_GND", "LOWW_W_GND"]
+            .into_iter()
+            .map(StationId::from)
+            .collect::<Vec<_>>();
+        covered = network.covered_stations(None, &online);
+        covered_ids = covered
+            .iter()
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(covered_ids, expected_ids);
+
+        online.remove(&PositionId::from("LOWW_DEL"));
+        expected_ids = vec!["LOWW_DEL", "LOWW_GND", "LOWW_W_GND"]
+            .into_iter()
+            .map(StationId::from)
+            .collect::<Vec<_>>();
+        covered = network.covered_stations(None, &online);
+        covered_ids = covered
+            .iter()
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(covered_ids, expected_ids);
+
+        online.insert(PositionId::from("LOWW_DEL"));
+        online.remove(&PositionId::from("LOWW_W_GND"));
+        expected_ids = vec!["LOWW_DEL"]
+            .into_iter()
+            .map(StationId::from)
+            .collect::<Vec<_>>();
+        covered = network.covered_stations(None, &online);
+        covered_ids = covered
+            .iter()
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(covered_ids, expected_ids);
+
+        online.remove(&PositionId::from("LOWW_DEL"));
+        covered = network.covered_stations(None, &online);
+        assert!(covered.is_empty());
+    }
+
+    #[test]
+    fn covered_stations_self_controlled() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let pos_id = PositionId::from("LOVV_CTR");
+        let online = HashSet::from([pos_id.clone()]);
+        let mut covered = network.covered_stations(Some(&pos_id), &online);
+        assert_eq!(covered.len(), 1);
+        assert_eq!(covered[0].station.id.as_str(), "LOVV_CTR");
+        assert!(covered[0].is_self_controlled);
+
+        covered = network.covered_stations(Some(&PositionId::from("LOWW_DEL")), &online);
+        assert_eq!(covered.len(), 1);
+        assert_eq!(covered[0].station.id.as_str(), "LOVV_CTR");
+        assert!(!covered[0].is_self_controlled);
+    }
+
+    #[test]
+    fn convered_stations_self_controlled_complex() {
+        let dir = tempfile::tempdir().unwrap();
+        create_extended_valid_fir(dir.path());
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let mut online = HashSet::from([
+            PositionId::from("LOVV_CTR"),
+            PositionId::from("LOWW_APP"),
+            PositionId::from("LOWW_DEL"),
+            PositionId::from("LOWW_W_GND"),
+            PositionId::from("EDMM_RDG_CTR"),
+        ]);
+        let mut covered = network.covered_stations(Some(&PositionId::from("LOWW_APP")), &online);
+        let mut covered_ids = covered
+            .iter()
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        let mut self_controlled_ids = covered
+            .iter()
+            .filter(|s| s.is_self_controlled)
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        let expected_ids = vec![
+            "LOVV_E1",
+            "LOVV_E2",
+            "LOWW_APP",
+            "LOWW_DEL",
+            "LOWW_E_TWR",
+            "LOWW_GND",
+            "LOWW_TWR",
+            "LOWW_W_GND",
+        ]
+        .into_iter()
+        .map(StationId::from)
+        .collect::<Vec<_>>();
+        let mut expected_self_controlled_ids = vec!["LOWW_APP", "LOWW_E_TWR", "LOWW_TWR"]
+            .into_iter()
+            .map(StationId::from)
+            .collect::<Vec<_>>();
+        assert_eq!(covered_ids, expected_ids);
+        assert_ne!(covered_ids, expected_self_controlled_ids);
+        assert_eq!(self_controlled_ids, expected_self_controlled_ids);
+
+        online.remove("LOWW_DEL");
+        covered = network.covered_stations(Some(&PositionId::from("LOWW_APP")), &online);
+        covered_ids = covered
+            .iter()
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        self_controlled_ids = covered
+            .iter()
+            .filter(|s| s.is_self_controlled)
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(covered_ids, expected_ids);
+        assert_ne!(covered_ids, expected_self_controlled_ids);
+        assert_eq!(self_controlled_ids, expected_self_controlled_ids);
+
+        online.remove("LOWW_W_GND");
+        covered = network.covered_stations(Some(&PositionId::from("LOWW_APP")), &online);
+        covered_ids = covered
+            .iter()
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        self_controlled_ids = covered
+            .iter()
+            .filter(|s| s.is_self_controlled)
+            .map(|s| s.station.id.clone())
+            .collect::<Vec<_>>();
+        expected_self_controlled_ids = vec![
+            "LOWW_APP",
+            "LOWW_DEL",
+            "LOWW_E_TWR",
+            "LOWW_GND",
+            "LOWW_TWR",
+            "LOWW_W_GND",
+        ]
+        .into_iter()
+        .map(StationId::from)
+        .collect::<Vec<_>>();
+        assert_eq!(covered_ids, expected_ids);
+        assert_ne!(covered_ids, expected_self_controlled_ids);
+        assert_eq!(self_controlled_ids, expected_self_controlled_ids);
     }
 }
