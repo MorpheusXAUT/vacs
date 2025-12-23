@@ -28,6 +28,12 @@ impl PartialEq for FlightInformationRegion {
     }
 }
 
+impl PartialOrd for FlightInformationRegion {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
 impl Validator for FlightInformationRegionRaw {
     fn validate(&self) -> Result<(), CoverageError> {
         if self.id.is_empty() {

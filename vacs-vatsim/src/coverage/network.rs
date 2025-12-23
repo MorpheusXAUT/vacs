@@ -77,7 +77,7 @@ impl Network {
             tracing::trace!(positions = positions.len(), "Found multiple matches");
         }
 
-        positions.sort_by_key(|p| p.id.as_str());
+        positions.sort_by(|a, b| a.id.cmp(&b.id));
         positions
     }
 
@@ -102,7 +102,7 @@ impl Network {
             })
             .collect::<Vec<_>>();
 
-        stations.sort_by_key(|s| s.station.id.as_str());
+        stations.sort_by(|a, b| a.station.id.cmp(&b.station.id));
         stations
     }
 
@@ -183,6 +183,7 @@ impl Network {
             }
         }
 
+        diffs.iter_mut().for_each(|(_, stations)| stations.sort());
         diffs
     }
 
@@ -389,16 +390,28 @@ pub enum DiffType {
     GainedControl,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct StationDiff {
     pub station_id: StationId,
     pub diff_type: DiffType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct CoveredStation<'a> {
     pub station: &'a Station,
     pub is_self_controlled: bool,
+}
+
+impl<S> From<(S, DiffType)> for StationDiff
+where
+    S: Into<StationId>,
+{
+    fn from((station_id, diff_type): (S, DiffType)) -> Self {
+        Self {
+            station_id: station_id.into(),
+            diff_type,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -566,11 +579,7 @@ mod tests {
 
         let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 1);
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("LOVV"))
-        );
+        assert!(network.firs.contains_key("LOVV"));
         assert_eq!(network.stations.len(), 1);
         assert_eq!(network.positions.len(), 1);
         assert!(errors.is_empty());
@@ -584,16 +593,8 @@ mod tests {
 
         let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
         assert_eq!(network.firs.len(), 2);
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("LOVV"))
-        );
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("EDMM"))
-        );
+        assert!(network.firs.contains_key("LOVV"));
+        assert!(network.firs.contains_key("EDMM"));
         assert_eq!(network.stations.len(), 2);
         assert_eq!(network.positions.len(), 2);
         assert!(errors.is_empty());
@@ -895,16 +896,8 @@ mod tests {
 
         let (network, errors) = Network::validate_dir(dir.path()).unwrap();
         assert_eq!(network.firs.len(), 2);
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("LOVV"))
-        );
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("EDMM"))
-        );
+        assert!(network.firs.contains_key("LOVV"));
+        assert!(network.firs.contains_key("EDMM"));
         assert_eq!(network.stations.len(), 2);
         assert_eq!(network.positions.len(), 2);
         assert!(errors.is_empty());
@@ -965,16 +958,8 @@ mod tests {
 
         let network = Network::load_from_dir(dir.path()).expect("should load from dir");
         assert_eq!(network.firs.len(), 2);
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("LOVV"))
-        );
-        assert!(
-            network
-                .firs
-                .contains_key(&FlightInformationRegionId::from("EDMM"))
-        );
+        assert!(network.firs.contains_key("LOVV"));
+        assert!(network.firs.contains_key("EDMM"));
         assert_eq!(network.stations.len(), 2);
         assert_eq!(network.positions.len(), 2);
     }
@@ -1250,7 +1235,7 @@ mod tests {
         pos = network.controlling_position(&station_id, &online);
         assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_DEL"));
 
-        online.remove(&PositionId::from("LOWW_DEL"));
+        online.remove("LOWW_DEL");
         online.insert(PositionId::from("LOWW_W_GND"));
         pos = network.controlling_position(&station_id, &online);
         assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_W_GND"));
@@ -1259,18 +1244,18 @@ mod tests {
         pos = network.controlling_position(&station_id, &online);
         assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_GND"));
 
-        online.remove(&PositionId::from("LOWW_GND"));
-        online.remove(&PositionId::from("LOWW_W_GND"));
+        online.remove("LOWW_GND");
+        online.remove("LOWW_W_GND");
         online.insert(PositionId::from("LOWW_APP"));
         pos = network.controlling_position(&station_id, &online);
         assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_APP"));
 
-        online.remove(&PositionId::from("LOVV_CTR"));
-        online.remove(&PositionId::from("LOVV_E_CTR"));
+        online.remove("LOVV_CTR");
+        online.remove("LOVV_E_CTR");
         pos = network.controlling_position(&station_id, &online);
         assert_eq!(pos.map(|p| p.id.as_str()), Some("LOWW_APP"));
 
-        online.remove(&PositionId::from("LOWW_APP"));
+        online.remove("LOWW_APP");
         pos = network.controlling_position(&station_id, &online);
         assert!(pos.is_none());
 
@@ -1352,7 +1337,7 @@ mod tests {
         .collect::<Vec<_>>();
         assert_eq!(covered_ids, expected_ids);
 
-        online.remove(&PositionId::from("LOVV_CTR"));
+        online.remove("LOVV_CTR");
         expected_ids = vec![
             "LOWW_APP",
             "LOWW_DEL",
@@ -1371,7 +1356,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(covered_ids, expected_ids);
 
-        online.remove(&PositionId::from("LOWW_APP"));
+        online.remove("LOWW_APP");
         expected_ids = vec!["LOWW_DEL", "LOWW_GND", "LOWW_W_GND"]
             .into_iter()
             .map(StationId::from)
@@ -1383,7 +1368,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(covered_ids, expected_ids);
 
-        online.remove(&PositionId::from("LOWW_DEL"));
+        online.remove("LOWW_DEL");
         expected_ids = vec!["LOWW_DEL", "LOWW_GND", "LOWW_W_GND"]
             .into_iter()
             .map(StationId::from)
@@ -1396,7 +1381,7 @@ mod tests {
         assert_eq!(covered_ids, expected_ids);
 
         online.insert(PositionId::from("LOWW_DEL"));
-        online.remove(&PositionId::from("LOWW_W_GND"));
+        online.remove("LOWW_W_GND");
         expected_ids = vec!["LOWW_DEL"]
             .into_iter()
             .map(StationId::from)
@@ -1408,7 +1393,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(covered_ids, expected_ids);
 
-        online.remove(&PositionId::from("LOWW_DEL"));
+        online.remove("LOWW_DEL");
         covered = network.covered_stations(None, &online);
         assert!(covered.is_empty());
     }
