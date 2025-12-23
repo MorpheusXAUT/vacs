@@ -40,6 +40,12 @@ impl PartialEq for Position {
     }
 }
 
+impl PartialOrd for Position {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
 impl Position {
     pub(super) fn from_raw(
         position_raw: PositionRaw,
