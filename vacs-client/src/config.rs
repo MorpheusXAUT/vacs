@@ -835,7 +835,7 @@ pub struct StationsProfileConfig {
     /// This is useful for:
     /// - Customizing station names if the VATSIM callsign doesn't match the sector's desired display name
     /// - Using local language or abbreviations (e.g., "Wien" instead of "LOWW")
-    /// - Providing a "stable" list of stations even when relieve/personalized callsigns are used
+    /// - Providing a "stable" list of stations even when relief/personalized callsigns are used
     ///
     /// Example:
     /// ```toml
