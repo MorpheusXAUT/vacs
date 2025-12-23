@@ -12,7 +12,7 @@ use std::fs;
 
 #[derive(Debug, Clone, Default)]
 pub struct Network {
-    #[allow(dead_code)] // TODO remove if not needed
+    #[allow(dead_code)]
     firs: HashMap<FlightInformationRegionId, FlightInformationRegion>,
     positions: HashMap<PositionId, Position>,
     stations: HashMap<StationId, Station>,
@@ -112,34 +112,40 @@ impl Network {
         station_id: &StationId,
         online_positions: &HashSet<PositionId>,
     ) -> Option<&Position> {
-        let station = self.stations.get(station_id)?;
-
-        station.controlled_by.iter().find_map(|pos_id| {
-            if online_positions.contains(pos_id) {
-                let position = self.positions.get(pos_id.as_str())?;
-                tracing::trace!(?position, "Found position with matching coverage");
-                Some(position)
-            } else {
-                None
-            }
-        })
+        self.stations
+            .get(station_id)?
+            .controlled_by
+            .iter()
+            .find_map(|pos_id| {
+                if online_positions.contains(pos_id) {
+                    let position = self.positions.get(pos_id.as_str())?;
+                    tracing::trace!(?position, "Found position with matching coverage");
+                    Some(position)
+                } else {
+                    None
+                }
+            })
     }
 
     #[tracing::instrument(level = "trace", skip(self, online_positions), fields(online_positions = online_positions.len()))]
-    pub fn coverage_diff(
+    pub fn coverage_changes(
         &self,
         position_id: &PositionId,
-        disconnected: bool,
+        change: PositionChange,
         online_positions: &HashSet<PositionId>,
-    ) -> HashMap<PositionId, Vec<StationDiff>> {
+    ) -> Vec<StationChange> {
         let mut updated_positions = online_positions.clone();
-        if disconnected {
-            updated_positions.remove(position_id);
-        } else {
-            updated_positions.insert(position_id.clone());
+        if change == PositionChange::Disconnected {
+            if !updated_positions.remove(position_id) {
+                tracing::trace!("Position not online, no coverage change");
+                return Vec::new();
+            }
+        } else if !updated_positions.insert(position_id.clone()) {
+            tracing::trace!("Position already online, no coverage change");
+            return Vec::new();
         }
 
-        let mut diffs: HashMap<PositionId, Vec<StationDiff>> = HashMap::new();
+        let mut changes: Vec<StationChange> = Vec::new();
 
         for station in self.stations.values() {
             let before = self
@@ -155,36 +161,31 @@ impl Network {
 
             match (before, after) {
                 (None, Some(new_pos)) => {
-                    tracing::trace!(?new_pos, "Station is now online");
-                    diffs.entry(new_pos).or_default().push(StationDiff {
+                    tracing::trace!(?station, ?new_pos, "Station is now online");
+                    changes.push(StationChange::Online {
                         station_id: station.id.clone(),
-                        diff_type: DiffType::Online,
                     });
                 }
                 (Some(old_pos), None) => {
-                    tracing::trace!(?old_pos, "Station is now offline");
-                    diffs.entry(old_pos).or_default().push(StationDiff {
+                    tracing::trace!(?station, ?old_pos, "Station is now offline");
+                    changes.push(StationChange::Offline {
                         station_id: station.id.clone(),
-                        diff_type: DiffType::Offline,
                     });
                 }
-                (Some(old_pos), Some(new_pos)) if old_pos != new_pos => {
-                    tracing::trace!(?old_pos, ?new_pos, "Station coverage changed");
-                    diffs.entry(old_pos).or_default().push(StationDiff {
+                (Some(old_pos), Some(new_pos)) => {
+                    tracing::trace!(?station, ?old_pos, ?new_pos, "Station coverage changed");
+                    changes.push(StationChange::Handoff {
                         station_id: station.id.clone(),
-                        diff_type: DiffType::LostControl,
-                    });
-                    diffs.entry(new_pos).or_default().push(StationDiff {
-                        station_id: station.id.clone(),
-                        diff_type: DiffType::GainedControl,
+                        from_position_id: old_pos.clone(),
+                        to_position_id: new_pos.clone(),
                     });
                 }
                 _ => {}
             }
         }
 
-        diffs.iter_mut().for_each(|(_, stations)| stations.sort());
-        diffs
+        changes.sort();
+        changes
     }
 
     #[tracing::instrument(level = "trace", skip(dir), err, fields(dir = tracing::field::Empty))]
@@ -382,18 +383,10 @@ impl Network {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
-pub enum DiffType {
+pub enum PositionChange {
     #[default]
-    Offline,
-    LostControl,
-    Online,
-    GainedControl,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct StationDiff {
-    pub station_id: StationId,
-    pub diff_type: DiffType,
+    Disconnected,
+    Connected,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -402,14 +395,40 @@ pub struct CoveredStation<'a> {
     pub is_self_controlled: bool,
 }
 
-impl<S> From<(S, DiffType)> for StationDiff
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum StationChange {
+    Online {
+        station_id: StationId,
+    },
+    Handoff {
+        station_id: StationId,
+        from_position_id: PositionId,
+        to_position_id: PositionId,
+    },
+    Offline {
+        station_id: StationId,
+    },
+}
+
+impl<S, P> From<(S, Option<P>, Option<P>)> for StationChange
 where
     S: Into<StationId>,
+    P: Into<PositionId>,
 {
-    fn from((station_id, diff_type): (S, DiffType)) -> Self {
-        Self {
-            station_id: station_id.into(),
-            diff_type,
+    fn from((station_id, from, to): (S, Option<P>, Option<P>)) -> Self {
+        match (from, to) {
+            (None, Some(_)) => Self::Online {
+                station_id: station_id.into(),
+            },
+            (Some(_), None) => Self::Offline {
+                station_id: station_id.into(),
+            },
+            (Some(from), Some(to)) => Self::Handoff {
+                station_id: station_id.into(),
+                from_position_id: from.into(),
+                to_position_id: to.into(),
+            },
+            _ => unreachable!(),
         }
     }
 }
@@ -498,7 +517,7 @@ mod tests {
             [[stations]]
             id = "LOWW_E_TWR"
             parent_id = "LOWW_TWR"
-            controlled_by = ["LOWW_E_TWR", "LOWW_TWR"]
+            controlled_by = ["LOWW_E_TWR"]
 
             [[stations]]
             id = "LOWW_GND"
@@ -508,12 +527,12 @@ mod tests {
             [[stations]]
             id = "LOWW_W_GND"
             parent_id = "LOWW_GND"
-            controlled_by = ["LOWW_W_GND", "LOWW_GND"]
+            controlled_by = ["LOWW_W_GND"]
 
             [[stations]]
             id = "LOWW_DEL"
             parent_id = "LOWW_GND"
-            controlled_by = ["LOWW_DEL", "LOWW_GND", "LOWW_W_GND"]
+            controlled_by = ["LOWW_DEL"]
         "#,
         )
         .unwrap();
@@ -1134,7 +1153,7 @@ mod tests {
         let network = Network::load_from_dir(dir.path()).unwrap();
 
         let positions = network.find_positions("LOVV_CTR", "121.500", FacilityType::Enroute);
-        assert_eq!(positions.len(), 0);
+        assert!(positions.is_empty());
     }
 
     #[test]
@@ -1145,7 +1164,7 @@ mod tests {
         let network = Network::load_from_dir(dir.path()).unwrap();
 
         let positions = network.find_positions("LOVV_CTR", "199.998", FacilityType::TrafficFlow);
-        assert_eq!(positions.len(), 0);
+        assert!(positions.is_empty());
     }
 
     #[test]
@@ -1202,12 +1221,57 @@ mod tests {
     }
 
     #[test]
+    fn find_positions_callsign_match_identical_frequency() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir = dir.path().join("LOVV");
+        fs::create_dir(&fir).unwrap();
+        fs::write(
+            fir.join("stations.toml"),
+            r#"
+            [[stations]]
+            id = "LOWI_E_APP"
+            controlled_by = ["LOWI_E_APP"]
+
+            [[stations]]
+            id = "LOWI_S_APP"
+            controlled_by = ["LOWI_S_APP"]
+        "#,
+        )
+        .unwrap();
+        fs::write(
+            fir.join("positions.toml"),
+            r#"
+            [[positions]]
+            id = "LOWI_S_APP"
+            prefixes = ["LOWI"]
+            frequency = "128.975"
+            facility_type = "APP"
+
+            [[positions]]
+            id = "LOWI_E_APP"
+            prefixes = ["LOWI"]
+            frequency = "128.975"
+            facility_type = "Approach"
+        "#,
+        )
+        .unwrap();
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let positions = network.find_positions("LOWI_S_APP", "128.975", FacilityType::Approach);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].id.as_str(), "LOWI_S_APP");
+    }
+
+    #[test]
     fn controlling_position_found() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");
         let network = Network::load_from_dir(dir.path()).unwrap();
 
-        let online = HashSet::from([PositionId::from("LOVV_CTR")]);
+        let online = ["LOVV_CTR"]
+            .into_iter()
+            .map(PositionId::from)
+            .collect::<HashSet<_>>();
         let station_id = StationId::from("LOVV_CTR");
 
         let pos = network.controlling_position(&station_id, &online);
@@ -1221,7 +1285,10 @@ mod tests {
         create_extended_valid_fir(dir.path());
         let network = Network::load_from_dir(dir.path()).unwrap();
 
-        let mut online = HashSet::from([PositionId::from("LOVV_CTR")]);
+        let mut online = ["LOVV_CTR"]
+            .into_iter()
+            .map(PositionId::from)
+            .collect::<HashSet<_>>();
         let station_id = StationId::from("LOWW_DEL");
 
         let mut pos = network.controlling_position(&station_id, &online);
@@ -1283,7 +1350,10 @@ mod tests {
         create_minimal_valid_fir(dir.path(), "LOVV");
         let network = Network::load_from_dir(dir.path()).unwrap();
 
-        let online = HashSet::from([PositionId::from("LOVV_CTR")]);
+        let online = ["LOVV_CTR"]
+            .into_iter()
+            .map(PositionId::from)
+            .collect::<HashSet<_>>();
         let station_id = StationId::from("EDMM_RDG_CTR");
 
         let pos = network.controlling_position(&station_id, &online);
@@ -1296,7 +1366,10 @@ mod tests {
         create_minimal_valid_fir(dir.path(), "LOVV");
         let network = Network::load_from_dir(dir.path()).unwrap();
 
-        let online = HashSet::from([PositionId::from("LOVV_CTR")]);
+        let online = ["LOVV_CTR"]
+            .into_iter()
+            .map(PositionId::from)
+            .collect::<HashSet<_>>();
         let covered = network.covered_stations(None, &online);
 
         assert_eq!(covered.len(), 1);
@@ -1305,18 +1378,21 @@ mod tests {
     }
 
     #[test]
-    fn convered_stations_complex() {
+    fn covered_stations_complex() {
         let dir = tempfile::tempdir().unwrap();
         create_extended_valid_fir(dir.path());
         let network = Network::load_from_dir(dir.path()).unwrap();
 
-        let mut online = HashSet::from([
-            PositionId::from("LOVV_CTR"),
-            PositionId::from("LOWW_APP"),
-            PositionId::from("LOWW_DEL"),
-            PositionId::from("LOWW_W_GND"),
-            PositionId::from("EDMM_RDG_CTR"),
-        ]);
+        let mut online = [
+            "LOVV_CTR",
+            "LOWW_APP",
+            "LOWW_DEL",
+            "LOWW_W_GND",
+            "EDMM_RDG_CTR",
+        ]
+        .into_iter()
+        .map(PositionId::from)
+        .collect::<HashSet<_>>();
         let mut covered = network.covered_stations(None, &online);
         let mut covered_ids = covered
             .iter()
@@ -1404,9 +1480,11 @@ mod tests {
         create_minimal_valid_fir(dir.path(), "LOVV");
         let network = Network::load_from_dir(dir.path()).unwrap();
 
-        let pos_id = PositionId::from("LOVV_CTR");
-        let online = HashSet::from([pos_id.clone()]);
-        let mut covered = network.covered_stations(Some(&pos_id), &online);
+        let online = ["LOVV_CTR"]
+            .into_iter()
+            .map(PositionId::from)
+            .collect::<HashSet<_>>();
+        let mut covered = network.covered_stations(Some(&PositionId::from("LOVV_CTR")), &online);
         assert_eq!(covered.len(), 1);
         assert_eq!(covered[0].station.id.as_str(), "LOVV_CTR");
         assert!(covered[0].is_self_controlled);
@@ -1418,18 +1496,21 @@ mod tests {
     }
 
     #[test]
-    fn convered_stations_self_controlled_complex() {
+    fn covered_stations_self_controlled_complex() {
         let dir = tempfile::tempdir().unwrap();
         create_extended_valid_fir(dir.path());
         let network = Network::load_from_dir(dir.path()).unwrap();
 
-        let mut online = HashSet::from([
-            PositionId::from("LOVV_CTR"),
-            PositionId::from("LOWW_APP"),
-            PositionId::from("LOWW_DEL"),
-            PositionId::from("LOWW_W_GND"),
-            PositionId::from("EDMM_RDG_CTR"),
-        ]);
+        let mut online = [
+            "LOVV_CTR",
+            "LOWW_APP",
+            "LOWW_DEL",
+            "LOWW_W_GND",
+            "EDMM_RDG_CTR",
+        ]
+        .into_iter()
+        .map(PositionId::from)
+        .collect::<HashSet<_>>();
         let mut covered = network.covered_stations(Some(&PositionId::from("LOWW_APP")), &online);
         let mut covered_ids = covered
             .iter()
@@ -1501,5 +1582,205 @@ mod tests {
         assert_eq!(covered_ids, expected_ids);
         assert_ne!(covered_ids, expected_self_controlled_ids);
         assert_eq!(self_controlled_ids, expected_self_controlled_ids);
+    }
+
+    #[test]
+    fn coverage_changes_coming_online() {
+        let dir = tempfile::tempdir().unwrap();
+        create_extended_valid_fir(dir.path());
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let online = HashSet::new();
+        let changes = network.coverage_changes(
+            &PositionId::from("LOVV_CTR"),
+            PositionChange::Connected,
+            &online,
+        );
+        let expected_changes = vec![
+            ("LOVV_E1", None, Some("LOVV_CTR")),
+            ("LOVV_E2", None, Some("LOVV_CTR")),
+            ("LOWW_APP", None, Some("LOVV_CTR")),
+            ("LOWW_DEL", None, Some("LOVV_CTR")),
+            ("LOWW_E_TWR", None, Some("LOVV_CTR")),
+            ("LOWW_GND", None, Some("LOVV_CTR")),
+            ("LOWW_TWR", None, Some("LOVV_CTR")),
+            ("LOWW_W_GND", None, Some("LOVV_CTR")),
+        ]
+        .into_iter()
+        .map(StationChange::from)
+        .collect::<Vec<_>>();
+        assert_eq!(changes, expected_changes);
+    }
+
+    #[test]
+    fn coverage_changes_going_offline() {
+        let dir = tempfile::tempdir().unwrap();
+        create_extended_valid_fir(dir.path());
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let online = ["LOVV_CTR"]
+            .into_iter()
+            .map(PositionId::from)
+            .collect::<HashSet<_>>();
+        let changes = network.coverage_changes(
+            &PositionId::from("LOVV_CTR"),
+            PositionChange::Disconnected,
+            &online,
+        );
+        let expected_changes = vec![
+            ("LOVV_E1", Some("LOVV_CTR"), None),
+            ("LOVV_E2", Some("LOVV_CTR"), None),
+            ("LOWW_APP", Some("LOVV_CTR"), None),
+            ("LOWW_DEL", Some("LOVV_CTR"), None),
+            ("LOWW_E_TWR", Some("LOVV_CTR"), None),
+            ("LOWW_GND", Some("LOVV_CTR"), None),
+            ("LOWW_TWR", Some("LOVV_CTR"), None),
+            ("LOWW_W_GND", Some("LOVV_CTR"), None),
+        ]
+        .into_iter()
+        .map(StationChange::from)
+        .collect::<Vec<_>>();
+        assert_eq!(changes, expected_changes);
+    }
+
+    #[test]
+    fn coverage_changes_complex() {
+        let dir = tempfile::tempdir().unwrap();
+        create_extended_valid_fir(dir.path());
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let mut online = HashSet::new();
+        let mut changes = network.coverage_changes(
+            &PositionId::from("LOVV_CTR"),
+            PositionChange::Connected,
+            &online,
+        );
+        let mut expected_changes = vec![
+            ("LOVV_E1", None, Some("LOVV_CTR")),
+            ("LOVV_E2", None, Some("LOVV_CTR")),
+            ("LOWW_APP", None, Some("LOVV_CTR")),
+            ("LOWW_DEL", None, Some("LOVV_CTR")),
+            ("LOWW_E_TWR", None, Some("LOVV_CTR")),
+            ("LOWW_GND", None, Some("LOVV_CTR")),
+            ("LOWW_TWR", None, Some("LOVV_CTR")),
+            ("LOWW_W_GND", None, Some("LOVV_CTR")),
+        ]
+        .into_iter()
+        .map(StationChange::from)
+        .collect::<Vec<_>>();
+        assert_eq!(changes, expected_changes);
+
+        online.insert(PositionId::from("LOVV_CTR"));
+        changes = network.coverage_changes(
+            &PositionId::from("LOWW_DEL"),
+            PositionChange::Connected,
+            &online,
+        );
+        expected_changes = vec![("LOWW_DEL", Some("LOVV_CTR"), Some("LOWW_DEL"))]
+            .into_iter()
+            .map(StationChange::from)
+            .collect::<Vec<_>>();
+        assert_eq!(changes, expected_changes);
+
+        online.insert(PositionId::from("LOWW_DEL"));
+        changes = network.coverage_changes(
+            &PositionId::from("LOWW_DEL"),
+            PositionChange::Connected,
+            &online,
+        );
+        assert!(changes.is_empty());
+
+        changes = network.coverage_changes(
+            &PositionId::from("LOWW_GND"),
+            PositionChange::Connected,
+            &online,
+        );
+        expected_changes = vec![
+            ("LOWW_GND", Some("LOVV_CTR"), Some("LOWW_GND")),
+            ("LOWW_W_GND", Some("LOVV_CTR"), Some("LOWW_GND")),
+        ]
+        .into_iter()
+        .map(StationChange::from)
+        .collect::<Vec<_>>();
+        assert_eq!(changes, expected_changes);
+
+        online.insert(PositionId::from("LOWW_GND"));
+        changes = network.coverage_changes(
+            &PositionId::from("LOWW_W_GND"),
+            PositionChange::Connected,
+            &online,
+        );
+        expected_changes = vec![("LOWW_W_GND", Some("LOWW_GND"), Some("LOWW_W_GND"))]
+            .into_iter()
+            .map(StationChange::from)
+            .collect::<Vec<_>>();
+        assert_eq!(changes, expected_changes);
+
+        online.insert(PositionId::from("LOWW_W_GND"));
+        changes = network.coverage_changes(
+            &PositionId::from("LOWW_DEL"),
+            PositionChange::Disconnected,
+            &online,
+        );
+        expected_changes = vec![("LOWW_DEL", Some("LOWW_DEL"), Some("LOWW_GND"))]
+            .into_iter()
+            .map(StationChange::from)
+            .collect::<Vec<_>>();
+        assert_eq!(changes, expected_changes);
+
+        online.remove("LOWW_DEL");
+        changes = network.coverage_changes(
+            &PositionId::from("LOWW_GND"),
+            PositionChange::Disconnected,
+            &online,
+        );
+        expected_changes = vec![
+            ("LOWW_DEL", Some("LOWW_GND"), Some("LOWW_W_GND")),
+            ("LOWW_GND", Some("LOWW_GND"), Some("LOWW_W_GND")),
+        ]
+        .into_iter()
+        .map(StationChange::from)
+        .collect::<Vec<_>>();
+        assert_eq!(changes, expected_changes);
+
+        online.remove("LOWW_GND");
+        changes = network.coverage_changes(
+            &PositionId::from("LOVV_CTR"),
+            PositionChange::Disconnected,
+            &online,
+        );
+        expected_changes = vec![
+            ("LOVV_E1", Some("LOVV_CTR"), None),
+            ("LOVV_E2", Some("LOVV_CTR"), None),
+            ("LOWW_APP", Some("LOVV_CTR"), None),
+            ("LOWW_E_TWR", Some("LOVV_CTR"), None),
+            ("LOWW_TWR", Some("LOVV_CTR"), None),
+        ]
+        .into_iter()
+        .map(StationChange::from)
+        .collect::<Vec<_>>();
+        assert_eq!(changes, expected_changes);
+
+        online.remove("LOVV_CTR");
+        changes = network.coverage_changes(
+            &PositionId::from("LOVV_CTR"),
+            PositionChange::Disconnected,
+            &online,
+        );
+        assert!(changes.is_empty());
+
+        changes = network.coverage_changes(
+            &PositionId::from("EDMM_RDG_CTR"),
+            PositionChange::Connected,
+            &online,
+        );
+        assert!(changes.is_empty());
+
+        changes = network.coverage_changes(
+            &PositionId::from("EDMM_RDG_CTR"),
+            PositionChange::Disconnected,
+            &online,
+        );
+        assert!(changes.is_empty());
     }
 }
