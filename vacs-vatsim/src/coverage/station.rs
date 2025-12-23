@@ -36,6 +36,12 @@ impl PartialEq for Station {
     }
 }
 
+impl PartialOrd for Station {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
 impl Station {
     pub(super) fn from_raw(
         station_raw: StationRaw,
