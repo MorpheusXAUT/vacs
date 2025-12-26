@@ -51,7 +51,7 @@ nonzero_ext = "0.3.0"
 objc2-core-foundation = "0.3.1"
 objc2-core-graphics = "0.3.1"
 oauth2 = { version = "5.0.0", features = ["reqwest"] }
-octocrab = "0.49.3"
+octocrab = "0.49.4"
 opus = "0.3.0"
 parking_lot = "0.12.5"
 pretty_assertions = "1.4.1"
