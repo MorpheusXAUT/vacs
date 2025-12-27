@@ -136,19 +136,21 @@ pub async fn audio_set_device(
     let mut state = app_state.lock().await;
     let mut audio_manager = audio_manager.write();
 
-    let should_reattach_input_level_meter =
-        audio_manager.is_input_level_meter_attached() && matches!(device_type, DeviceType::Input);
-
-    if audio_manager.is_input_device_attached() {
-        if should_reattach_input_level_meter {
-            audio_manager.detach_input_device();
-        } else {
-            return Err(AudioError::Other(anyhow::anyhow!(
-                "Cannot set audio device while call is active"
-            ))
-            .into());
-        }
+    if state.active_call_peer_id().is_some() {
+        return Err(AudioError::Other(anyhow::anyhow!(
+            "Cannot set audio device while call is active"
+        ))
+        .into());
     }
+
+    let reattach_input_level_meter =
+        if audio_manager.is_input_device_attached() && matches!(device_type, DeviceType::Input) {
+            log::trace!("Detaching input level meter before switching input device");
+            audio_manager.detach_input_device();
+            true
+        } else {
+            false
+        };
 
     log::info!(
         "Setting audio device (name: {:?}, type: {:?})",
@@ -170,7 +172,8 @@ pub async fn audio_set_device(
             }
         }
 
-        if should_reattach_input_level_meter {
+        if reattach_input_level_meter {
+            log::trace!("Re-attaching input level meter after switching input device");
             let app = app.clone();
             audio_manager.attach_input_level_meter(
                 app.clone(),
