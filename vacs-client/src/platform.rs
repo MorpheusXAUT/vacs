@@ -20,18 +20,65 @@ pub struct Capabilities {
     pub platform: Platform,
 }
 
-impl Default for Capabilities {
-    fn default() -> Self {
-        let platform = Platform::get();
+static CAPABILITIES_CACHE: OnceLock<Capabilities> = OnceLock::new();
+
+impl Capabilities {
+    pub fn get() -> &'static Self {
+        CAPABILITIES_CACHE.get_or_init(Self::detect)
+    }
+
+    fn detect() -> Self {
+        let platform = *Platform::get();
+
+        #[cfg(target_os = "linux")]
+        let keybind_listener = if matches!(platform, Platform::LinuxWayland) {
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                tokio::task::block_in_place(|| {
+                    handle.block_on(check_wayland_global_shortcuts_portal())
+                })
+            } else {
+                tauri::async_runtime::block_on(check_wayland_global_shortcuts_portal())
+            }
+        } else {
+            false
+        };
+
+        #[cfg(not(target_os = "linux"))]
+        let keybind_listener = matches!(platform, Platform::Windows | Platform::MacOs);
 
         Self {
             always_on_top: !matches!(platform, Platform::LinuxWayland),
-            keybind_listener: matches!(
-                platform,
-                Platform::Windows | Platform::MacOs | Platform::LinuxWayland
-            ),
+            keybind_listener,
             keybind_emitter: matches!(platform, Platform::Windows | Platform::MacOs),
             platform,
+        }
+    }
+}
+
+impl Default for Capabilities {
+    fn default() -> Self {
+        *Self::get()
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn check_wayland_global_shortcuts_portal() -> bool {
+    use ashpd::desktop::global_shortcuts::GlobalShortcuts;
+    use std::time::Duration;
+
+    log::debug!("Checking availability of Wayland Global Shortcuts portal");
+    match tokio::time::timeout(Duration::from_secs(1), GlobalShortcuts::new()).await {
+        Ok(Ok(_)) => {
+            log::debug!("Wayland Global Shortcuts portal is available");
+            true
+        }
+        Ok(Err(err)) => {
+            log::warn!("Wayland Global Shortcuts portal check failed: {err}");
+            false
+        }
+        Err(_) => {
+            log::warn!("Wayland Global Shortcuts portal check timed out");
+            false
         }
     }
 }
@@ -66,8 +113,8 @@ impl Platform {
     ///
     /// This method is thread-safe and can be called from multiple threads
     /// simultaneously. Only one thread will perform the actual detection.
-    pub fn get() -> Platform {
-        *PLATFORM_CACHE.get_or_init(Self::detect)
+    pub fn get() -> &'static Self {
+        PLATFORM_CACHE.get_or_init(Self::detect)
     }
 
     /// Detect the current platform by examining environment variables.
@@ -83,7 +130,7 @@ impl Platform {
     /// 2. `WAYLAND_DISPLAY` environment variable (fallback for Wayland)
     /// 3. `DISPLAY` environment variable (fallback for X11)
     /// 4. If none are set, return `LinuxUnknown`
-    fn detect() -> Platform {
+    fn detect() -> Self {
         #[cfg(target_os = "windows")]
         {
             Platform::Windows
@@ -142,7 +189,7 @@ impl Platform {
 
 impl Default for Platform {
     fn default() -> Self {
-        Self::get()
+        *Self::get()
     }
 }
 
