@@ -68,7 +68,10 @@ function InputLevelMeter() {
     });
 
     useEffect(() => {
-        void startLevelMeter();
+        // Briefly delay input level meter start to avoid blocking input devices with exclusive access
+        setTimeout(() => {
+            void startLevelMeter();
+        }, 250);
 
         return () => {
             void stopLevelMeter();
