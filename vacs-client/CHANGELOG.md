@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v1.3.0...vacs-client-v1.3.1) (2025-12-29)
+
+
+### Bug Fixes
+
+* **vacs-client:** detect XDG global shortcut portal availability on Wayland ([#380](https://github.com/MorpheusXAUT/vacs/issues/380)) ([939ad28](https://github.com/MorpheusXAUT/vacs/commit/939ad282f84ff56ce7533921d1b849606f1a96f5))
+* **vacs-client:** fix input level meter preventing device switch ([#379](https://github.com/MorpheusXAUT/vacs/issues/379)) ([91720ff](https://github.com/MorpheusXAUT/vacs/commit/91720ffb248e355dfab764a7884d7e240516d42b))
+
 ## [1.3.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-client-v1.2.0...vacs-client-v1.3.0) (2025-12-18)
 
 
