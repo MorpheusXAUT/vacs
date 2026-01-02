@@ -21,9 +21,41 @@ pub struct ProfileId(String);
 #[repr(transparent)]
 pub struct StationId(String);
 
+/// Represents a change in station status (online, offline, or handoff).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StationChange {
+    /// A station has come online.
+    Online {
+        /// The ID of the station that came online.
+        station_id: StationId,
+        /// The ID of the position that controls the station.
+        position_id: PositionId,
+    },
+    /// A station has been handed off from one position to another.
+    Handoff {
+        /// The ID of the station being handed off.
+        station_id: StationId,
+        /// The ID of the position handing off control over the station.
+        from_position_id: PositionId,
+        /// The ID of the position receiving control over the station.
+        to_position_id: PositionId,
+    },
+    /// A station has gone offline.
+    Offline {
+        /// The ID of the station that went offline.
+        station_id: StationId,
+    },
+}
+
 impl ClientId {
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
+    }
+
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
     }
 
     #[inline]
@@ -85,6 +117,11 @@ impl PositionId {
     }
 
     #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+
+    #[inline]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -134,6 +171,11 @@ impl std::borrow::Borrow<String> for PositionId {
 impl ProfileId {
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
+    }
+
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
     }
 
     #[inline]
@@ -189,6 +231,11 @@ impl StationId {
     }
 
     #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+
+    #[inline]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -232,5 +279,29 @@ impl std::borrow::Borrow<str> for StationId {
 impl std::borrow::Borrow<String> for StationId {
     fn borrow(&self) -> &String {
         &self.0
+    }
+}
+
+impl<S, P> From<(S, Option<P>, Option<P>)> for StationChange
+where
+    S: Into<StationId>,
+    P: Into<PositionId>,
+{
+    fn from((station_id, from, to): (S, Option<P>, Option<P>)) -> Self {
+        match (from, to) {
+            (None, Some(to)) => Self::Online {
+                station_id: station_id.into(),
+                position_id: to.into(),
+            },
+            (Some(_), None) => Self::Offline {
+                station_id: station_id.into(),
+            },
+            (Some(from), Some(to)) => Self::Handoff {
+                station_id: station_id.into(),
+                from_position_id: from.into(),
+                to_position_id: to.into(),
+            },
+            _ => unreachable!(),
+        }
     }
 }

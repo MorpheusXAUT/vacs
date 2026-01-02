@@ -1,12 +1,8 @@
 use crate::coverage::flight_information_region::FlightInformationRegionId;
-use crate::coverage::position::PositionId;
 use crate::coverage::{CoverageError, ValidationError, Validator};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
-#[repr(transparent)]
-pub struct StationId(String);
+use vacs_protocol::vatsim::{PositionId, StationId};
 
 #[derive(Debug, Clone)]
 pub struct Station {
@@ -106,42 +102,6 @@ impl StationRaw {
         }
 
         controlled_by
-    }
-}
-
-impl StationId {
-    #[inline]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl std::fmt::Display for StationId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl From<String> for StationId {
-    fn from(value: String) -> Self {
-        StationId(value.to_ascii_uppercase())
-    }
-}
-
-impl From<&str> for StationId {
-    fn from(value: &str) -> Self {
-        StationId(value.to_ascii_uppercase())
-    }
-}
-
-impl std::borrow::Borrow<str> for StationId {
-    fn borrow(&self) -> &str {
-        &self.0
     }
 }
 

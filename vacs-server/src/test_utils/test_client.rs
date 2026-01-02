@@ -6,19 +6,20 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use vacs_protocol::VACS_PROTOCOL_VERSION;
+use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 
 pub struct TestClient {
-    id: String,
+    id: ClientId,
     token: String,
     ws_stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
 }
 
 impl TestClient {
-    pub async fn new(ws_addr: &str, id: &str, token: &str) -> anyhow::Result<Self> {
+    pub async fn new(ws_addr: &str, id: impl Into<ClientId>, token: &str) -> anyhow::Result<Self> {
         let ws_stream = connect_to_websocket(ws_addr).await;
         Ok(Self {
-            id: id.to_string(),
+            id: id.into(),
             token: token.to_string(),
             ws_stream,
         })
@@ -26,7 +27,7 @@ impl TestClient {
 
     pub async fn new_with_login<FI, FC>(
         ws_addr: &str,
-        id: &str,
+        id: impl Into<ClientId>,
         token: &str,
         client_info_predicate: FI,
         client_list_predicate: FC,
@@ -42,7 +43,7 @@ impl TestClient {
         Ok(client)
     }
 
-    pub fn id(&self) -> &str {
+    pub fn id(&self) -> &ClientId {
         &self.id
     }
 
@@ -230,10 +231,10 @@ impl TestClient {
 pub async fn setup_test_clients(
     addr: &str,
     clients: &[(&str, &str)],
-) -> HashMap<String, TestClient> {
+) -> HashMap<ClientId, TestClient> {
     let mut test_clients = HashMap::new();
     for (id, token) in clients {
-        let client = TestClient::new_with_login(addr, id, token, |_, _| Ok(()), |_| Ok(()))
+        let client = TestClient::new_with_login(addr, *id, token, |_, _| Ok(()), |_| Ok(()))
             .await
             .expect("Failed to create test client");
         test_clients.insert(client.id.clone(), client);
@@ -247,7 +248,7 @@ pub async fn setup_n_test_clients(addr: &str, num_clients: usize) -> Vec<TestCli
     for n in 1..=num_clients {
         let client = TestClient::new_with_login(
             addr,
-            &format!("client{n}"),
+            format!("client{n}"),
             &format!("token{n}"),
             |_, _| Ok(()),
             |_| Ok(()),

@@ -1,5 +1,6 @@
 use std::time::Duration;
 use test_log::test;
+use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::SignalingMessage;
 use vacs_server::test_utils::{TestApp, setup_n_test_clients};
 
@@ -13,7 +14,7 @@ async fn call_offer() -> anyhow::Result<()> {
 
     client1
         .send(SignalingMessage::CallOffer {
-            peer_id: client2.id().to_string(),
+            peer_id: client2.id().clone(),
             sdp: "sdp1".to_string(),
         })
         .await?;
@@ -32,11 +33,7 @@ async fn call_offer() -> anyhow::Result<()> {
 
     match &call_offer_messages[0] {
         SignalingMessage::CallOffer { peer_id, sdp } => {
-            assert_eq!(
-                peer_id,
-                &client1.id(),
-                "CallOffer targeted the wrong client"
-            );
+            assert_eq!(peer_id, client1.id(), "CallOffer targeted the wrong client");
             assert_eq!(sdp, "sdp1", "CallOffer contains the wrong SDP");
         }
         message => panic!(
@@ -84,7 +81,7 @@ async fn call_offer_answer() -> anyhow::Result<()> {
 
     client1
         .send(SignalingMessage::CallOffer {
-            peer_id: client2.id().to_string(),
+            peer_id: client2.id().clone(),
             sdp: "sdp1".to_string(),
         })
         .await?;
@@ -103,11 +100,7 @@ async fn call_offer_answer() -> anyhow::Result<()> {
 
     match &call_offer_messages[0] {
         SignalingMessage::CallOffer { peer_id, sdp } => {
-            assert_eq!(
-                peer_id,
-                &client1.id(),
-                "CallOffer targeted the wrong client"
-            );
+            assert_eq!(peer_id, client1.id(), "CallOffer targeted the wrong client");
             assert_eq!(sdp, "sdp1", "CallOffer contains the wrong SDP");
         }
         message => panic!(
@@ -118,7 +111,7 @@ async fn call_offer_answer() -> anyhow::Result<()> {
 
     client2
         .send(SignalingMessage::CallAnswer {
-            peer_id: client1.id().to_string(),
+            peer_id: client1.id().clone(),
             sdp: "sdp2".to_string(),
         })
         .await?;
@@ -139,7 +132,7 @@ async fn call_offer_answer() -> anyhow::Result<()> {
         SignalingMessage::CallAnswer { peer_id, sdp } => {
             assert_eq!(
                 peer_id,
-                &client2.id(),
+                client2.id(),
                 "CallAnswer targeted the wrong client"
             );
             assert_eq!(sdp, "sdp2", "CallAnswer contains the wrong SDP");
@@ -203,7 +196,7 @@ async fn peer_not_found() -> anyhow::Result<()> {
 
     client1
         .send(SignalingMessage::CallOffer {
-            peer_id: "client69".to_string(),
+            peer_id: ClientId::from("client69"),
             sdp: "sdp1".to_string(),
         })
         .await?;
@@ -235,7 +228,8 @@ async fn peer_not_found() -> anyhow::Result<()> {
     match &peer_not_found_messages[0] {
         SignalingMessage::PeerNotFound { peer_id } => {
             assert_eq!(
-                peer_id, "client69",
+                peer_id,
+                &ClientId::from("client69"),
                 "PeerNotFound targeted the wrong client"
             );
         }

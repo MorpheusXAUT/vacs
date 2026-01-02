@@ -107,6 +107,7 @@ mod tests {
     use tokio::sync::{Mutex, mpsc};
     use tokio_tungstenite::tungstenite;
     use vacs_protocol::VACS_PROTOCOL_VERSION;
+    use vacs_protocol::vatsim::ClientId;
     use vacs_protocol::ws::ClientInfo;
 
     #[test(tokio::test)]
@@ -116,7 +117,7 @@ mod tests {
 
         let message = SignalingMessage::ClientConnected {
             client: ClientInfo {
-                id: "client1".to_string(),
+                id: ClientId::from("client1"),
                 display_name: "Client 1".to_string(),
                 frequency: "100.000".to_string(),
             },
@@ -230,7 +231,7 @@ mod tests {
 
         let message = SignalingMessage::ClientConnected {
             client: ClientInfo {
-                id: "client1".to_string(),
+                id: ClientId::from("client1"),
                 display_name: "Client 1".to_string(),
                 frequency: "100.000".to_string(),
             },
@@ -286,7 +287,7 @@ mod tests {
         assert_eq!(
             receive_message(&mut mock_stream).await,
             MessageResult::ApplicationMessage(SignalingMessage::CallOffer {
-                peer_id: "client1".to_string(),
+                peer_id: ClientId::from("client1"),
                 sdp: "sdp1".to_string()
             })
         );

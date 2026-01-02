@@ -8,6 +8,7 @@ pub mod slurper;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::str::FromStr;
 use thiserror::Error;
+use vacs_protocol::vatsim::ClientId;
 
 #[cfg(any(feature = "data-feed", feature = "slurper"))]
 /// User-Agent string used for all HTTP requests.
@@ -34,7 +35,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ControllerInfo {
-    pub cid: String,
+    pub cid: ClientId,
     pub callsign: String,
     pub frequency: String,
     pub facility_type: FacilityType,

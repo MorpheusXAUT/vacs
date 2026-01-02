@@ -17,6 +17,7 @@ use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::{Instrument, instrument};
 use uuid::Uuid;
+use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::{ClientInfo, DisconnectReason, ErrorReason, SignalingMessage};
 use vacs_vatsim::data_feed::DataFeed;
 use vacs_vatsim::slurper::SlurperClient;
@@ -29,7 +30,7 @@ pub struct AppState {
     pub ice_config_provider: Arc<dyn IceConfigProvider>,
     store: Store,
     /// Key: CID
-    clients: RwLock<HashMap<String, ClientSession>>,
+    clients: RwLock<HashMap<ClientId, ClientSession>>,
     broadcast_tx: broadcast::Sender<SignalingMessage>,
     slurper: SlurperClient,
     data_feed: Arc<dyn DataFeed>,
@@ -88,10 +89,7 @@ impl AppState {
         let (tx, rx) = mpsc::channel(config::CLIENT_CHANNEL_CAPACITY);
         let client = ClientSession::new(client_info, tx, client_connection_guard);
 
-        self.clients
-            .write()
-            .await
-            .insert(client_id.to_string(), client.clone());
+        self.clients.write().await.insert(client_id, client.clone());
 
         if self.broadcast_tx.receiver_count() > 0 {
             tracing::trace!("Broadcasting client connected message");
@@ -113,7 +111,7 @@ impl AppState {
     #[instrument(level = "debug", skip(self))]
     pub async fn unregister_client(
         &self,
-        client_id: &str,
+        client_id: &ClientId,
         disconnect_reason: Option<DisconnectReason>,
     ) {
         tracing::trace!("Unregistering client");
@@ -132,7 +130,7 @@ impl AppState {
             if let Err(err) = self
                 .broadcast_tx
                 .send(SignalingMessage::ClientDisconnected {
-                    id: client_id.to_string(),
+                    id: client_id.clone(),
                 })
             {
                 tracing::warn!(?err, "Failed to broadcast client disconnected message");
@@ -159,22 +157,22 @@ impl AppState {
         clients
     }
 
-    pub async fn list_clients_without_self(&self, self_client_id: &str) -> Vec<ClientInfo> {
+    pub async fn list_clients_without_self(&self, self_client_id: &ClientId) -> Vec<ClientInfo> {
         self.list_clients()
             .await
             .into_iter()
-            .filter(|c| c.id != self_client_id)
+            .filter(|c| c.id != *self_client_id)
             .collect()
     }
 
-    pub async fn get_client(&self, client_id: &str) -> Option<ClientSession> {
+    pub async fn get_client(&self, client_id: &ClientId) -> Option<ClientSession> {
         self.clients.read().await.get(client_id).cloned()
     }
 
     pub async fn send_message_to_peer(
         &self,
         client: &ClientSession,
-        peer_id: &str,
+        peer_id: &ClientId,
         message: SignalingMessage,
     ) {
         match self.get_client(peer_id).await {
@@ -186,7 +184,7 @@ impl AppState {
                     if let Err(e) = client
                         .send_message(SignalingMessage::Error {
                             reason: ErrorReason::PeerConnection,
-                            peer_id: Some(peer_id.to_string()),
+                            peer_id: Some(peer_id.clone()),
                         })
                         .await
                     {
@@ -195,11 +193,11 @@ impl AppState {
                 }
             }
             None => {
-                tracing::warn!(peer_id, "Peer not found");
+                tracing::warn!(?peer_id, "Peer not found");
                 ErrorMetrics::peer_not_found();
                 if let Err(err) = client
                     .send_message(SignalingMessage::PeerNotFound {
-                        peer_id: peer_id.to_string(),
+                        peer_id: peer_id.clone(),
                     })
                     .await
                 {
@@ -234,7 +232,7 @@ impl AppState {
     }
 
     #[instrument(level = "debug", skip_all, err)]
-    pub async fn verify_ws_auth_token(&self, token: &str) -> anyhow::Result<String> {
+    pub async fn verify_ws_auth_token(&self, token: &str) -> anyhow::Result<ClientId> {
         tracing::debug!("Verifying web socket auth token");
 
         match self.store.get(format!("ws.token.{token}").as_str()).await {
@@ -250,7 +248,7 @@ impl AppState {
     #[instrument(level = "debug", skip(self), err)]
     pub async fn get_vatsim_controller_info(
         &self,
-        cid: &str,
+        cid: &ClientId,
     ) -> anyhow::Result<Option<ControllerInfo>> {
         tracing::debug!("Retrieving connection info from VATSIM slurper");
         self.slurper
@@ -307,34 +305,34 @@ impl AppState {
 
     async fn update_vatsim_controllers(
         state: &Arc<AppState>,
-        pending_disconnect: &mut HashSet<String>,
+        pending_disconnect: &mut HashSet<ClientId>,
     ) -> anyhow::Result<()> {
         let controllers = state.get_vatsim_controllers().await?;
-        let current: HashMap<String, ControllerInfo> = controllers
+        let current: HashMap<ClientId, ControllerInfo> = controllers
             .into_iter()
             .map(|c| (c.cid.clone(), c))
             .collect();
 
         let mut updates: Vec<SignalingMessage> = Vec::new();
-        let mut disconnected_clients: Vec<String> = Vec::new();
+        let mut disconnected_clients: Vec<ClientId> = Vec::new();
 
         fn flag_or_disconnect_controller(
-            cid: &str,
-            pending_disconnect: &mut HashSet<String>,
-            disconnected_clients: &mut Vec<String>,
+            cid: &ClientId,
+            pending_disconnect: &mut HashSet<ClientId>,
+            disconnected_clients: &mut Vec<ClientId>,
         ) {
             if pending_disconnect.remove(cid) {
                 tracing::trace!(
                     ?cid,
                     "No active VATSIM connection found after grace period, disconnecting client and sending broadcast"
                 );
-                disconnected_clients.push(cid.to_string());
+                disconnected_clients.push(cid.clone());
             } else {
                 tracing::trace!(
                     ?cid,
                     "Client not found in data feed, but active VATSIM connection is required, marking for disconnect"
                 );
-                pending_disconnect.insert(cid.to_string());
+                pending_disconnect.insert(cid.clone());
             }
         }
 
@@ -409,9 +407,7 @@ impl AppState {
             state
                 .unregister_client(cid, Some(DisconnectReason::NoActiveVatsimConnection))
                 .await;
-            updates.push(SignalingMessage::ClientDisconnected {
-                id: cid.to_string(),
-            });
+            updates.push(SignalingMessage::ClientDisconnected { id: cid.clone() });
         }
 
         if state.broadcast_tx.receiver_count() > 0 {

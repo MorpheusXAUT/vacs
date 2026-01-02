@@ -38,7 +38,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             None => return,
         };
 
-    tracing::Span::current().record("client_id", &controller_info.cid);
+    tracing::Span::current().record("client_id", tracing::field::display(&controller_info.cid));
 
     let client_info = ClientInfo {
         id: controller_info.cid.clone(),
