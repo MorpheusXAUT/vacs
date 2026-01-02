@@ -305,3 +305,44 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn station_id_creation() {
+        let id = StationId::from("loww_twr");
+        assert_eq!(id.as_str(), "LOWW_TWR");
+        assert_eq!(id.to_string(), "LOWW_TWR");
+        assert!(!id.is_empty());
+
+        let empty = StationId::from("");
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn station_id_equality() {
+        let id1 = StationId::from("LOWW_TWR");
+        let id2 = StationId::from("loww_twr");
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn position_id_creation() {
+        let id = PositionId::from("loww_twr");
+        assert_eq!(id.as_str(), "LOWW_TWR");
+        assert_eq!(id.to_string(), "LOWW_TWR");
+        assert!(!id.is_empty());
+
+        let empty = PositionId::from("");
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn position_id_equality() {
+        let id1 = PositionId::from("LOWW_TWR");
+        let id2 = PositionId::from("loww_twr");
+        assert_eq!(id1, id2);
+    }
+}
