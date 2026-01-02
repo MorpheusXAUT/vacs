@@ -1,8 +1,9 @@
 use crate::coverage::position::{PositionConfigFile, PositionRaw};
+use crate::coverage::profile::{Profile, ProfileRaw};
 use crate::coverage::station::{StationConfigFile, StationRaw};
 use crate::coverage::{CoverageError, IoError, ValidationError, Validator};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use vacs_protocol::vatsim::{PositionId, ProfileId, StationId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
@@ -14,6 +15,7 @@ pub struct FlightInformationRegion {
     pub id: FlightInformationRegionId,
     pub stations: HashSet<StationId>,
     pub positions: HashSet<PositionId>,
+    pub profiles: HashMap<ProfileId, Profile>,
 }
 
 #[derive(Debug, Clone)]
@@ -21,6 +23,7 @@ pub(super) struct FlightInformationRegionRaw {
     pub id: FlightInformationRegionId,
     pub stations: Vec<StationRaw>,
     pub positions: Vec<PositionRaw>,
+    pub profiles: HashMap<ProfileId, Profile>,
 }
 
 impl PartialEq for FlightInformationRegion {
@@ -38,14 +41,24 @@ impl PartialOrd for FlightInformationRegion {
 impl Validator for FlightInformationRegionRaw {
     fn validate(&self) -> Result<(), CoverageError> {
         if self.id.is_empty() {
-            return Err(ValidationError::MissingField("id".to_string()).into());
+            return Err(ValidationError::Empty {
+                field: "id".to_string(),
+            }
+            .into());
         }
         if self.stations.is_empty() {
-            return Err(ValidationError::MissingField("stations".to_string()).into());
+            return Err(ValidationError::Empty {
+                field: "stations".to_string(),
+            }
+            .into());
         }
         if self.positions.is_empty() {
-            return Err(ValidationError::MissingField("positions".to_string()).into());
+            return Err(ValidationError::Empty {
+                field: "positions".to_string(),
+            }
+            .into());
         }
+
         Ok(())
     }
 }
@@ -54,59 +67,105 @@ impl FlightInformationRegionRaw {
     pub fn load_from_dir(dir: impl AsRef<std::path::Path>) -> Result<Self, CoverageError> {
         let path = dir.as_ref();
         let Some(dir_name) = path.file_name() else {
-            return Err(ValidationError::Custom(format!("missing dir name: {path:?}")).into());
+            return Err(IoError::Read {
+                path: path.into(),
+                reason: "missing dir name".to_string(),
+            }
+            .into());
         };
         let Some(dir_name) = dir_name.to_str() else {
-            return Err(ValidationError::Custom(format!("invalid dir name: {path:?}")).into());
+            return Err(IoError::Read {
+                path: path.into(),
+                reason: "invalid dir name".to_string(),
+            }
+            .into());
         };
 
         Ok(Self {
             id: FlightInformationRegionId::from(dir_name),
             stations: Self::read_file::<StationConfigFile>(path, "stations")?.stations,
             positions: Self::read_file::<PositionConfigFile>(path, "positions")?.positions,
+            profiles: Self::read_profiles(path)?,
         })
     }
 
     const FILE_EXTENSIONS: &'static [&'static str] = &["toml", "json"];
     fn read_file<T: for<'de> Deserialize<'de>>(
         dir: &std::path::Path,
-        kind: &'static str,
+        kind: &str,
     ) -> Result<T, CoverageError> {
-        let (path, ext) = Self::FILE_EXTENSIONS
+        let path = Self::FILE_EXTENSIONS
             .iter()
             .find_map(|ext| {
                 let path = dir.join(std::path::Path::new(kind).with_extension(ext));
-                if path.is_file() {
-                    Some((path.clone(), ext))
-                } else {
-                    None
-                }
+                if path.is_file() { Some(path) } else { None }
             })
             .ok_or_else(|| IoError::Read {
                 path: dir.into(),
                 reason: format!("No {kind} file found"),
             })?;
 
-        let bytes = std::fs::read(&path).map_err(|err| IoError::Read {
-            path: path.clone(),
+        Self::parse_file(&path)
+    }
+
+    fn parse_file<T: for<'de> Deserialize<'de>>(
+        path: &std::path::Path,
+    ) -> Result<T, CoverageError> {
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let bytes = std::fs::read(path).map_err(|err| IoError::Read {
+            path: path.into(),
             reason: err.to_string(),
         })?;
 
-        match *ext {
+        match ext {
             "toml" => toml::from_slice(&bytes).map_err(|err| IoError::Parse {
-                path: path.clone(),
+                path: path.into(),
                 reason: err.to_string(),
             }),
             "json" => serde_json::from_slice(&bytes).map_err(|err| IoError::Parse {
-                path: path.clone(),
+                path: path.into(),
                 reason: err.to_string(),
             }),
             _ => Err(IoError::Read {
-                path: path.clone(),
+                path: path.into(),
                 reason: format!("unsupported file extension: {ext}"),
             }),
         }
         .map_err(Into::into)
+    }
+
+    fn read_profiles(
+        base_dir: &std::path::Path,
+    ) -> Result<HashMap<ProfileId, Profile>, CoverageError> {
+        let mut profiles = HashMap::new();
+
+        if let Ok(profile_raw) = Self::read_file::<ProfileRaw>(base_dir, "profile") {
+            profiles.insert(profile_raw.id.clone(), Profile::from_raw(profile_raw)?);
+        }
+
+        let profiles_dir = base_dir.join("profiles");
+        if profiles_dir.is_dir() {
+            let entries = std::fs::read_dir(&profiles_dir).map_err(|err| IoError::Read {
+                path: profiles_dir.to_path_buf(),
+                reason: err.to_string(),
+            })?;
+
+            for entry in entries {
+                let entry = entry.map_err(|err| IoError::Read {
+                    path: profiles_dir.clone(),
+                    reason: err.to_string(),
+                })?;
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+
+                let profile_raw = Self::parse_file::<ProfileRaw>(&path)?;
+                profiles.insert(profile_raw.id.clone(), Profile::from_raw(profile_raw)?);
+            }
+        }
+
+        Ok(profiles)
     }
 }
 
@@ -119,6 +178,7 @@ impl TryFrom<FlightInformationRegionRaw> for FlightInformationRegion {
             id: value.id,
             stations: value.stations.iter().map(|s| s.id.clone()).collect(),
             positions: value.positions.iter().map(|p| p.id.clone()).collect(),
+            profiles: value.profiles,
         })
     }
 }
@@ -197,6 +257,7 @@ mod tests {
                 frequency: "119.400".to_string(),
                 facility_type: crate::FacilityType::Tower,
             }],
+            profiles: HashMap::new(),
         };
         assert!(raw.validate().is_ok());
     }
@@ -216,10 +277,11 @@ mod tests {
                 frequency: "119.400".to_string(),
                 facility_type: crate::FacilityType::Tower,
             }],
+            profiles: HashMap::new(),
         };
         assert_matches!(
             raw.validate(),
-            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "id"
+            Err(CoverageError::Validation(ValidationError::Empty{field})) if field == "id"
         );
     }
 
@@ -234,10 +296,11 @@ mod tests {
                 frequency: "119.400".to_string(),
                 facility_type: crate::FacilityType::Tower,
             }],
+            profiles: HashMap::new(),
         };
         assert_matches!(
             raw.validate(),
-            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "stations"
+            Err(CoverageError::Validation(ValidationError::Empty{field})) if field == "stations"
         );
     }
 
@@ -251,10 +314,11 @@ mod tests {
                 controlled_by: vec![],
             }],
             positions: vec![],
+            profiles: HashMap::new(),
         };
         assert_matches!(
             raw.validate(),
-            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "positions"
+            Err(CoverageError::Validation(ValidationError::Empty{field})) if field == "positions"
         );
     }
 
@@ -273,6 +337,7 @@ mod tests {
                 frequency: "119.400".to_string(),
                 facility_type: crate::FacilityType::Tower,
             }],
+            profiles: HashMap::new(),
         };
         let fir = FlightInformationRegion::try_from(raw).unwrap();
         assert_eq!(fir.id.as_str(), "LOVV");
@@ -286,11 +351,13 @@ mod tests {
             id: "LOVV".into(),
             stations: HashSet::new(),
             positions: HashSet::new(),
+            profiles: HashMap::new(),
         };
         let f2 = FlightInformationRegion {
             id: "LOVV".into(),
             stations: HashSet::from(["LOWW_TWR".into()]),
             positions: HashSet::from(["LOWW_TWR".into()]),
+            profiles: HashMap::new(),
         };
         assert_eq!(f1, f2); // Should be equal because only IDs check
     }
@@ -575,5 +642,59 @@ mod tests {
 
         let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
         assert_matches!(res, Err(CoverageError::Io(IoError::Parse { .. })));
+    }
+
+    #[test]
+    fn load_profiles() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        // Dummy stations/positions
+        std::fs::write(
+            fir_path.join("stations.toml"),
+            "[[stations]]\nid=\"S\"\ncontrolled_by=[]",
+        )
+        .unwrap();
+        std::fs::write(
+            fir_path.join("positions.toml"),
+            "[[positions]]\nid=\"P\"\nprefixes=[]\nfrequency=\"118.0\"\nfacility_type=\"Tower\"",
+        )
+        .unwrap();
+
+        // profile.toml (Default)
+        let default_profile = r#"
+            id = "Default"
+            type = "Geo"
+            [[buttons]]
+            label = ["A"]
+            x = 10
+            y = 10
+            size = 10
+            page.keys = []
+        "#;
+        std::fs::write(fir_path.join("profile.toml"), default_profile).unwrap();
+
+        // profiles/other.toml
+        let profiles_dir = fir_path.join("profiles");
+        std::fs::create_dir(&profiles_dir).unwrap();
+        let other_profile = r#"
+            id = "Other"
+            type = "Geo"
+            [[buttons]]
+            label = ["B"]
+            x = 20
+            y = 20
+            size = 20
+            page.keys = []
+        "#;
+        std::fs::write(profiles_dir.join("other.toml"), other_profile).unwrap();
+
+        let raw = FlightInformationRegionRaw::load_from_dir(&fir_path).expect("Should load");
+        assert_eq!(raw.profiles.len(), 2);
+
+        let ids: Vec<_> = raw.profiles.keys().map(|i| i.as_str()).collect();
+        assert!(ids.contains(&"Default"));
+        assert!(ids.contains(&"Other"));
     }
 }

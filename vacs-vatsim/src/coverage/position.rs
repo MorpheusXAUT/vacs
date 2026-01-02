@@ -50,7 +50,7 @@ impl Position {
     ) -> Result<Self, CoverageError> {
         position_raw.validate()?;
 
-        Ok(Position {
+        Ok(Self {
             id: position_raw.id,
             prefixes: position_raw.prefixes,
             frequency: position_raw.frequency,
@@ -63,13 +63,22 @@ impl Position {
 impl Validator for PositionRaw {
     fn validate(&self) -> Result<(), CoverageError> {
         if self.id.is_empty() {
-            return Err(ValidationError::MissingField("id".to_string()).into());
+            return Err(ValidationError::Empty {
+                field: "id".to_string(),
+            }
+            .into());
         }
         if self.prefixes.is_empty() || self.prefixes.iter().any(|p| p.is_empty()) {
-            return Err(ValidationError::MissingField("prefixes".to_string()).into());
+            return Err(ValidationError::Empty {
+                field: "prefixes".to_string(),
+            }
+            .into());
         }
         if self.frequency.is_empty() {
-            return Err(ValidationError::MissingField("frequency".to_string()).into());
+            return Err(ValidationError::Empty {
+                field: "frequency".to_string(),
+            }
+            .into());
         } else if !FREQUENCY_REGEX.is_match(&self.frequency) {
             return Err(ValidationError::InvalidFormat {
                 field: "frequency".to_string(),
@@ -79,9 +88,12 @@ impl Validator for PositionRaw {
             .into());
         }
         if self.facility_type == FacilityType::Unknown {
-            return Err(
-                ValidationError::Custom("Facility type must not be Unknown".to_string()).into(),
-            );
+            return Err(ValidationError::InvalidValue {
+                field: "facility_type".to_string(),
+                value: "Unknown".to_string(),
+                reason: "must not be Unknown".to_string(),
+            }
+            .into());
         }
         Ok(())
     }
@@ -131,7 +143,7 @@ mod tests {
         };
         assert_matches!(
             raw.validate(),
-            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "id"
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "id"
         );
     }
 
@@ -146,7 +158,7 @@ mod tests {
         };
         assert_matches!(
             raw.validate(),
-            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "prefixes"
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "prefixes"
         );
 
         // Empty string in hashset
@@ -158,7 +170,7 @@ mod tests {
         };
         assert_matches!(
             raw.validate(),
-            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "prefixes"
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "prefixes"
         );
     }
 
@@ -173,7 +185,7 @@ mod tests {
         };
         assert_matches!(
             raw.validate(),
-            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "frequency"
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "frequency"
         );
 
         // Bad format
@@ -205,7 +217,8 @@ mod tests {
         };
         assert_matches!(
             raw.validate(),
-            Err(CoverageError::Validation(ValidationError::Custom(msg))) if msg == "Facility type must not be Unknown"
+            Err(CoverageError::Validation(ValidationError::InvalidValue { field, value, .. }))
+                if field == "facility_type" && value == "Unknown"
         );
     }
 
