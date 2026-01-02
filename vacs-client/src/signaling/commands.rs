@@ -11,6 +11,7 @@ use crate::error::{Error, HandleUnauthorizedExt};
 use std::collections::HashSet;
 use tauri::{AppHandle, Manager, State};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
+use vacs_signaling::protocol::vatsim::ClientId;
 use vacs_signaling::protocol::ws::SignalingMessage;
 
 #[tauri::command]
@@ -69,7 +70,7 @@ pub async fn signaling_start_call(
     app_state: State<'_, AppState>,
     http_state: State<'_, HttpState>,
     audio_manager: State<'_, AudioManagerHandle>,
-    peer_id: String,
+    peer_id: ClientId,
 ) -> Result<(), Error> {
     log::debug!("Starting call with {peer_id}");
 
@@ -99,7 +100,7 @@ pub async fn signaling_start_call(
 pub async fn signaling_accept_call(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    peer_id: String,
+    peer_id: ClientId,
 ) -> Result<(), Error> {
     log::debug!("Accepting call from {peer_id}");
 
@@ -114,7 +115,7 @@ pub async fn signaling_accept_call(
 pub async fn signaling_end_call(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    peer_id: String,
+    peer_id: ClientId,
 ) -> Result<(), Error> {
     log::debug!("Ending call with {peer_id}");
 
@@ -166,7 +167,7 @@ pub async fn signaling_set_selected_stations_config_profile(
 #[vacs_macros::log_err]
 pub async fn signaling_get_ignored_clients(
     app_state: State<'_, AppState>,
-) -> Result<HashSet<String>, Error> {
+) -> Result<HashSet<ClientId>, Error> {
     let state = app_state.lock().await;
 
     Ok(state.config.client.ignored.clone())
@@ -177,7 +178,7 @@ pub async fn signaling_get_ignored_clients(
 pub async fn signaling_add_ignored_client(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    client_id: String,
+    client_id: ClientId,
 ) -> Result<bool, Error> {
     let (persisted_stations_config, added): (PersistedClientConfig, bool) = {
         let mut state = app_state.lock().await;
@@ -199,7 +200,7 @@ pub async fn signaling_add_ignored_client(
 pub async fn signaling_remove_ignored_client(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    client_id: String,
+    client_id: ClientId,
 ) -> Result<bool, Error> {
     let (persisted_stations_config, removed): (PersistedClientConfig, bool) = {
         let mut state = app_state.lock().await;

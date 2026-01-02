@@ -43,7 +43,7 @@ pub async fn handle_websocket_login(
                         Ok(cid) => {
                             if !state.config.vatsim.require_active_connection {
                                 tracing::trace!(?cid, "Websocket token verified, no active VATSIM connection required, websocket login flow completed");
-                                return Some(ControllerInfo { cid: cid.to_string(), callsign: cid, frequency: "".to_string(), facility_type: FacilityType::Unknown });
+                                return Some(ControllerInfo { cid: cid.clone(), callsign: cid.to_string(), frequency: "".to_string(), facility_type: FacilityType::Unknown });
                             }
 
                             tracing::trace!(?cid, "Websocket token verified, checking for active VATSIM connection");

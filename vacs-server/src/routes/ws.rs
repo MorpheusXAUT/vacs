@@ -49,7 +49,7 @@ mod delete {
 
         tracing::debug!(?user, "Terminating existing web socket connection");
         state
-            .unregister_client(user.cid.as_str(), Some(DisconnectReason::Terminated))
+            .unregister_client(&user.cid, Some(DisconnectReason::Terminated))
             .await;
 
         Ok(StatusCode::NO_CONTENT)

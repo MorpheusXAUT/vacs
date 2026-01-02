@@ -4,11 +4,12 @@ use crate::FacilityType;
 use crate::coverage::flight_information_region::{
     FlightInformationRegion, FlightInformationRegionId, FlightInformationRegionRaw,
 };
-use crate::coverage::position::{Position, PositionId};
-use crate::coverage::station::{Station, StationId};
+use crate::coverage::position::Position;
+use crate::coverage::station::Station;
 use crate::coverage::{CoverageError, IoError, StructureError};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use vacs_protocol::vatsim::{PositionId, StationChange, StationId};
 
 #[derive(Debug, Clone, Default)]
 pub struct Network {
@@ -393,44 +394,6 @@ pub enum PositionChange {
 pub struct CoveredStation<'a> {
     pub station: &'a Station,
     pub is_self_controlled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum StationChange {
-    Online {
-        station_id: StationId,
-    },
-    Handoff {
-        station_id: StationId,
-        from_position_id: PositionId,
-        to_position_id: PositionId,
-    },
-    Offline {
-        station_id: StationId,
-    },
-}
-
-impl<S, P> From<(S, Option<P>, Option<P>)> for StationChange
-where
-    S: Into<StationId>,
-    P: Into<PositionId>,
-{
-    fn from((station_id, from, to): (S, Option<P>, Option<P>)) -> Self {
-        match (from, to) {
-            (None, Some(_)) => Self::Online {
-                station_id: station_id.into(),
-            },
-            (Some(_), None) => Self::Offline {
-                station_id: station_id.into(),
-            },
-            (Some(from), Some(to)) => Self::Handoff {
-                station_id: station_id.into(),
-                from_position_id: from.into(),
-                to_position_id: to.into(),
-            },
-            _ => unreachable!(),
-        }
-    }
 }
 
 #[cfg(test)]

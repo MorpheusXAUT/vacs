@@ -7,6 +7,7 @@ use axum::extract::ws;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
 
 pub async fn handle_application_message(
@@ -33,7 +34,7 @@ pub async fn handle_application_message(
             ControlFlow::Break(())
         }
         SignalingMessage::CallInvite { peer_id } => {
-            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+            if check_self_message(ws_outbound_tx, client, &peer_id).await {
                 return ControlFlow::Continue(());
             }
             if let Err(until) = state.rate_limiters().check_call_invite(client.id()) {
@@ -47,7 +48,7 @@ pub async fn handle_application_message(
                     ws_outbound_tx,
                     SignalingMessage::Error {
                         reason,
-                        peer_id: Some(peer_id.to_string()),
+                        peer_id: Some(peer_id.clone()),
                     },
                 )
                 .await
@@ -60,49 +61,49 @@ pub async fn handle_application_message(
             ControlFlow::Continue(())
         }
         SignalingMessage::CallAccept { peer_id } => {
-            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+            if check_self_message(ws_outbound_tx, client, &peer_id).await {
                 return ControlFlow::Continue(());
             }
             handle_call_accept(state, client, &peer_id).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallReject { peer_id } => {
-            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+            if check_self_message(ws_outbound_tx, client, &peer_id).await {
                 return ControlFlow::Continue(());
             }
             handle_call_reject(state, client, &peer_id).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallOffer { peer_id, sdp } => {
-            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+            if check_self_message(ws_outbound_tx, client, &peer_id).await {
                 return ControlFlow::Continue(());
             }
             handle_call_offer(state, client, &peer_id, &sdp).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallAnswer { peer_id, sdp } => {
-            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+            if check_self_message(ws_outbound_tx, client, &peer_id).await {
                 return ControlFlow::Continue(());
             }
             handle_call_answer(state, client, &peer_id, &sdp).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallEnd { peer_id } => {
-            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+            if check_self_message(ws_outbound_tx, client, &peer_id).await {
                 return ControlFlow::Continue(());
             }
             handle_call_end(state, client, &peer_id).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallError { peer_id, reason } => {
-            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+            if check_self_message(ws_outbound_tx, client, &peer_id).await {
                 return ControlFlow::Continue(());
             }
             handle_call_error(state, client, &peer_id, reason).await;
             ControlFlow::Continue(())
         }
         SignalingMessage::CallIceCandidate { peer_id, candidate } => {
-            if check_self_message(ws_outbound_tx, client, peer_id.clone()).await {
+            if check_self_message(ws_outbound_tx, client, &peer_id).await {
                 return ControlFlow::Continue(());
             }
             handle_call_ice_candidate(state, client, &peer_id, &candidate).await;
@@ -115,7 +116,7 @@ pub async fn handle_application_message(
 async fn check_self_message(
     ws_outbound_tx: &mpsc::Sender<ws::Message>,
     client: &ClientSession,
-    peer_id: String,
+    peer_id: &ClientId,
 ) -> bool {
     if peer_id == client.id() {
         tracing::debug!(?peer_id, "Rejecting message to self");
@@ -125,7 +126,7 @@ async fn check_self_message(
             ws_outbound_tx,
             SignalingMessage::Error {
                 reason,
-                peer_id: Some(peer_id.to_string()),
+                peer_id: Some(peer_id.clone()),
             },
         )
         .await
@@ -137,98 +138,120 @@ async fn check_self_message(
     false
 }
 
-async fn handle_call_invite(state: &AppState, client: &ClientSession, peer_id: &str) {
+async fn handle_call_invite(state: &AppState, client: &ClientSession, peer_id: &ClientId) {
     tracing::trace!(?peer_id, "Handling call invite");
-    state.call_state.start_call_attempt(client.id(), peer_id);
+    state
+        .call_state
+        .start_call_attempt(client.id().clone(), peer_id.clone());
 
     state
         .send_message_to_peer(
             client,
             peer_id,
             SignalingMessage::CallInvite {
-                peer_id: client.id().to_string(),
+                peer_id: client.id().clone(),
             },
         )
         .await;
 }
 
-async fn handle_call_accept(state: &AppState, client: &ClientSession, peer_id: &str) {
+async fn handle_call_accept(state: &AppState, client: &ClientSession, peer_id: &ClientId) {
     tracing::trace!(?peer_id, "Handling call acceptance");
-    state
-        .call_state
-        .complete_call_attempt(client.id(), peer_id, CallAttemptOutcome::Accepted);
+    state.call_state.complete_call_attempt(
+        client.id().clone(),
+        peer_id.clone(),
+        CallAttemptOutcome::Accepted,
+    );
 
     state
         .send_message_to_peer(
             client,
             peer_id,
             SignalingMessage::CallAccept {
-                peer_id: client.id().to_string(),
+                peer_id: client.id().clone(),
             },
         )
         .await;
 }
 
-async fn handle_call_reject(state: &AppState, client: &ClientSession, peer_id: &str) {
+async fn handle_call_reject(state: &AppState, client: &ClientSession, peer_id: &ClientId) {
     tracing::trace!(?peer_id, "Handling call rejection");
-    state
-        .call_state
-        .complete_call_attempt(client.id(), peer_id, CallAttemptOutcome::Rejected);
+    state.call_state.complete_call_attempt(
+        client.id().clone(),
+        peer_id.clone(),
+        CallAttemptOutcome::Rejected,
+    );
 
     state
         .send_message_to_peer(
             client,
             peer_id,
             SignalingMessage::CallReject {
-                peer_id: client.id().to_string(),
+                peer_id: client.id().clone(),
             },
         )
         .await;
 }
 
-async fn handle_call_offer(state: &AppState, client: &ClientSession, peer_id: &str, sdp: &str) {
+async fn handle_call_offer(
+    state: &AppState,
+    client: &ClientSession,
+    peer_id: &ClientId,
+    sdp: &str,
+) {
     tracing::trace!(?peer_id, "Handling call offer");
     state
         .send_message_to_peer(
             client,
             peer_id,
             SignalingMessage::CallOffer {
-                peer_id: client.id().to_string(),
+                peer_id: client.id().clone(),
                 sdp: sdp.to_string(),
             },
         )
         .await;
 }
 
-async fn handle_call_answer(state: &AppState, client: &ClientSession, peer_id: &str, sdp: &str) {
+async fn handle_call_answer(
+    state: &AppState,
+    client: &ClientSession,
+    peer_id: &ClientId,
+    sdp: &str,
+) {
     tracing::trace!(?peer_id, "Handling call answer");
-    state.call_state.start_call(client.id(), peer_id);
+    state
+        .call_state
+        .start_call(client.id().clone(), peer_id.clone());
 
     state
         .send_message_to_peer(
             client,
             peer_id,
             SignalingMessage::CallAnswer {
-                peer_id: client.id().to_string(),
+                peer_id: client.id().clone(),
                 sdp: sdp.to_string(),
             },
         )
         .await;
 }
 
-async fn handle_call_end(state: &AppState, client: &ClientSession, peer_id: &str) {
+async fn handle_call_end(state: &AppState, client: &ClientSession, peer_id: &ClientId) {
     tracing::trace!(?peer_id, "Handling call end");
+    state.call_state.complete_call_attempt(
+        client.id().clone(),
+        peer_id.clone(),
+        CallAttemptOutcome::Cancelled,
+    );
     state
         .call_state
-        .complete_call_attempt(client.id(), peer_id, CallAttemptOutcome::Cancelled);
-    state.call_state.end_call(client.id(), peer_id);
+        .end_call(client.id().clone(), peer_id.clone());
 
     state
         .send_message_to_peer(
             client,
             peer_id,
             SignalingMessage::CallEnd {
-                peer_id: client.id().to_string(),
+                peer_id: client.id().clone(),
             },
         )
         .await;
@@ -237,23 +260,25 @@ async fn handle_call_end(state: &AppState, client: &ClientSession, peer_id: &str
 async fn handle_call_error(
     state: &AppState,
     client: &ClientSession,
-    peer_id: &str,
+    peer_id: &ClientId,
     reason: CallErrorReason,
 ) {
     tracing::trace!(?peer_id, "Handling call error");
     state.call_state.complete_call_attempt(
-        client.id(),
-        peer_id,
+        client.id().clone(),
+        peer_id.clone(),
         CallAttemptOutcome::Error(reason.clone()),
     );
-    state.call_state.end_call(client.id(), peer_id);
+    state
+        .call_state
+        .end_call(client.id().clone(), peer_id.clone());
 
     state
         .send_message_to_peer(
             client,
             peer_id,
             SignalingMessage::CallError {
-                peer_id: client.id().to_string(),
+                peer_id: client.id().clone(),
                 reason,
             },
         )
@@ -263,7 +288,7 @@ async fn handle_call_error(
 async fn handle_call_ice_candidate(
     state: &AppState,
     client: &ClientSession,
-    peer_id: &str,
+    peer_id: &ClientId,
     candidate: &str,
 ) {
     tracing::trace!(?peer_id, "Handling call ICE candidate");
@@ -272,7 +297,7 @@ async fn handle_call_ice_candidate(
             client,
             peer_id,
             SignalingMessage::CallIceCandidate {
-                peer_id: client.id().to_string(),
+                peer_id: client.id().clone(),
                 candidate: candidate.to_string(),
             },
         )
@@ -372,7 +397,7 @@ mod tests {
             &setup.session,
             setup.websocket_tx.lock().await.deref(),
             SignalingMessage::CallOffer {
-                peer_id: "client2".to_string(),
+                peer_id: ClientId::from("client2"),
                 sdp: "sdp1".to_string(),
             },
         )
@@ -389,7 +414,7 @@ mod tests {
         assert_eq!(
             message,
             SignalingMessage::CallOffer {
-                peer_id: "client1".to_string(),
+                peer_id: ClientId::from("client1"),
                 sdp: "sdp1".to_string()
             }
         );
@@ -418,7 +443,7 @@ mod tests {
         let is_self_message = check_self_message(
             setup.websocket_tx.lock().await.deref(),
             &setup.session,
-            "client2".to_string(),
+            &ClientId::from("client2"),
         )
         .await;
         assert_eq!(is_self_message, false);
@@ -431,7 +456,7 @@ mod tests {
         let is_self_message = check_self_message(
             setup.websocket_tx.lock().await.deref(),
             &setup.session,
-            "client1".to_string(),
+            &ClientId::from("client1"),
         )
         .await;
         assert_eq!(is_self_message, true);

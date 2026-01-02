@@ -15,6 +15,7 @@ use std::time::Duration;
 use tauri::{AppHandle, LogicalSize, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
+use vacs_signaling::protocol::vatsim::ClientId;
 
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -263,7 +264,7 @@ pub struct ClientConfig {
     /// by the client. This does **not** completely block communications with ignored
     /// parties as the (local) user can still actively initiate calls to them.
     #[serde(default, skip_serializing_if = "HashSet::is_empty")]
-    pub ignored: HashSet<String>,
+    pub ignored: HashSet<ClientId>,
     pub extra_stations_config: Option<String>,
     pub selected_stations_profile: String,
     #[serde(default)]

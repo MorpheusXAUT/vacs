@@ -1,3 +1,4 @@
+use crate::vatsim::ClientId;
 use serde::{Deserialize, Serialize};
 
 /// Possible reasons for a login failure.
@@ -66,8 +67,8 @@ pub enum DisconnectReason {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientInfo {
-    /// ID of the client.
-    pub id: String,
+    /// ID of the client (VATSIM CID).
+    pub id: ClientId,
     /// The VATSIM callsign of the client.
     pub display_name: String,
     /// The primary VATSIM frequency of the client.
@@ -114,7 +115,7 @@ pub enum SignalingMessage {
     CallInvite {
         /// When sent to the signaling server by the caller, this is the ID of the target client to call.
         /// When received from the signaling server (by the callee), this is the ID of the source client initiating the call.
-        peer_id: String,
+        peer_id: ClientId,
     },
     /// A message containing the (updated) info for a connected client.
     ///
@@ -133,7 +134,7 @@ pub enum SignalingMessage {
     CallAccept {
         /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
         /// When received from the signaling server (by the caller), this is the ID of the target client rejecting the call.
-        peer_id: String,
+        peer_id: ClientId,
     },
     /// A call reject message sent by the target client to reject an incoming call.
     ///
@@ -142,7 +143,7 @@ pub enum SignalingMessage {
     CallReject {
         /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
         /// When received from the signaling server (by the caller), this is the ID of the target client rejecting the call.
-        peer_id: String,
+        peer_id: ClientId,
     },
     /// A call offer message sent by the client to initiate a call with another client.
     ///
@@ -159,7 +160,7 @@ pub enum SignalingMessage {
         sdp: String,
         /// When sent to the signaling server by the caller, this is the ID of the target client to call.
         /// When received from the signaling server (by the callee), this is the ID of the source client initiating the call.
-        peer_id: String,
+        peer_id: ClientId,
     },
     /// A call answer message sent by the target client to accept an incoming call.
     ///
@@ -175,13 +176,13 @@ pub enum SignalingMessage {
         sdp: String,
         /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
         /// When received from the signaling server (by the caller), this is the ID of the target client accepting the call.
-        peer_id: String,
+        peer_id: ClientId,
     },
     /// A call end message sent by either client to indicate the gracious end of a call.
     ///
     /// The signaling server will forward the message to the given peer, exchanging the [`SignalingMessage::CallEnd::peer_id`] with the other peer's ID.
     #[serde(rename_all = "camelCase")]
-    CallEnd { peer_id: String },
+    CallEnd { peer_id: ClientId },
     /// A call error message sent by either client to indicate an error during an active call or while trying to establish a call.
     ///
     /// The signaling server will forward the message to the given peer, exchanging the [`SignalingMessage::CallError::peer_id`] with the other peer's ID.
@@ -189,7 +190,7 @@ pub enum SignalingMessage {
     CallError {
         /// When sent to the signaling server by the caller, this is the ID of the target client.
         /// When received from the signaling server (by the callee), this is the ID of the source client sending the error.
-        peer_id: String,
+        peer_id: ClientId,
         /// Reason for the error.
         reason: CallErrorReason,
     },
@@ -201,13 +202,13 @@ pub enum SignalingMessage {
         /// ICE candidate to be trickled to the other peer.
         candidate: String,
         /// Contains the ID of the respective other peer during call setup.
-        peer_id: String,
+        peer_id: ClientId,
     },
     /// A message sent by the signaling server if no peer with the given ID was found.
     #[serde(rename_all = "camelCase")]
     PeerNotFound {
         /// ID of the peer that was not found.
-        peer_id: String,
+        peer_id: ClientId,
     },
     /// A message broadcasted by the signaling server when a new client connects.
     ClientConnected {
@@ -217,7 +218,7 @@ pub enum SignalingMessage {
     /// A message broadcasted by the signaling server when a client disconnects.
     ClientDisconnected {
         /// ID of the disconnected client.
-        id: String,
+        id: ClientId,
     },
     /// A message sent by a client to request a list of all currently connected clients.
     ListClients,
@@ -236,7 +237,7 @@ pub enum SignalingMessage {
         /// Reason for the error.
         reason: ErrorReason,
         /// Optional ID of the peer that caused the error.
-        peer_id: Option<String>,
+        peer_id: Option<ClientId>,
     },
     /// A message sent by the signaling server before (forcefully) disconnecting a client.
     Disconnected {
@@ -329,7 +330,7 @@ mod tests {
     fn test_serialize_deserialize_call_offer() {
         let message = SignalingMessage::CallOffer {
             sdp: "sdp1".to_string(),
-            peer_id: "client1".to_string(),
+            peer_id: ClientId::from("client1"),
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
@@ -342,7 +343,7 @@ mod tests {
         match deserialized {
             SignalingMessage::CallOffer { sdp, peer_id } => {
                 assert_eq!(sdp, "sdp1");
-                assert_eq!(peer_id, "client1");
+                assert_eq!(peer_id, ClientId::from("client1"));
             }
             _ => panic!("Expected CallOffer message"),
         }
@@ -352,7 +353,7 @@ mod tests {
     fn test_serialize_deserialize_call_answer() {
         let message = SignalingMessage::CallAnswer {
             sdp: "sdp1".to_string(),
-            peer_id: "client1".to_string(),
+            peer_id: ClientId::from("client1"),
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
@@ -365,7 +366,7 @@ mod tests {
         match deserialized {
             SignalingMessage::CallAnswer { sdp, peer_id } => {
                 assert_eq!(sdp, "sdp1");
-                assert_eq!(peer_id, "client1");
+                assert_eq!(peer_id, ClientId::from("client1"));
             }
             _ => panic!("Expected CallAnswer message"),
         }
@@ -374,7 +375,7 @@ mod tests {
     #[test]
     fn test_serialize_deserialize_call_reject() {
         let message = SignalingMessage::CallReject {
-            peer_id: "client1".to_string(),
+            peer_id: ClientId::from("client1"),
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
@@ -386,7 +387,7 @@ mod tests {
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         match deserialized {
             SignalingMessage::CallReject { peer_id } => {
-                assert_eq!(peer_id, "client1");
+                assert_eq!(peer_id, ClientId::from("client1"));
             }
             _ => panic!("Expected CallReject message"),
         }
@@ -395,7 +396,7 @@ mod tests {
     #[test]
     fn test_serialize_deserialize_call_end() {
         let message = SignalingMessage::CallEnd {
-            peer_id: "client1".to_string(),
+            peer_id: ClientId::from("client1"),
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
@@ -404,7 +405,7 @@ mod tests {
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         match deserialized {
             SignalingMessage::CallEnd { peer_id } => {
-                assert_eq!(peer_id, "client1");
+                assert_eq!(peer_id, ClientId::from("client1"));
             }
             _ => panic!("Expected CallEnd message"),
         }
@@ -414,7 +415,7 @@ mod tests {
     fn test_serialize_deserialize_call_ice_candidate() {
         let message = SignalingMessage::CallIceCandidate {
             candidate: "candidate1".to_string(),
-            peer_id: "client1".to_string(),
+            peer_id: ClientId::from("client1"),
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
@@ -427,7 +428,7 @@ mod tests {
         match deserialized {
             SignalingMessage::CallIceCandidate { candidate, peer_id } => {
                 assert_eq!(candidate, "candidate1");
-                assert_eq!(peer_id, "client1");
+                assert_eq!(peer_id, ClientId::from("client1"));
             }
             _ => panic!("Expected CallIceCandidate message"),
         }
@@ -437,7 +438,7 @@ mod tests {
     fn test_serialize_deserialize_client_connected() {
         let message = SignalingMessage::ClientConnected {
             client: ClientInfo {
-                id: "client1".to_string(),
+                id: ClientId::from("client1"),
                 display_name: "station1".to_string(),
                 frequency: "100.000".to_string(),
             },
@@ -452,7 +453,7 @@ mod tests {
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         match deserialized {
             SignalingMessage::ClientConnected { client } => {
-                assert_eq!(client.id, "client1");
+                assert_eq!(client.id, ClientId::from("client1"));
                 assert_eq!(client.display_name, "station1");
             }
             _ => panic!("Expected ClientConnected message"),
@@ -462,7 +463,7 @@ mod tests {
     #[test]
     fn test_serialize_deserialize_client_disconnected() {
         let message = SignalingMessage::ClientDisconnected {
-            id: "client1".to_string(),
+            id: ClientId::from("client1"),
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
@@ -474,7 +475,7 @@ mod tests {
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         match deserialized {
             SignalingMessage::ClientDisconnected { id } => {
-                assert_eq!(id, "client1");
+                assert_eq!(id, ClientId::from("client1"));
             }
             _ => panic!("Expected ClientDisconnected message"),
         }
@@ -496,12 +497,12 @@ mod tests {
         let message = SignalingMessage::ClientList {
             clients: vec![
                 ClientInfo {
-                    id: "client1".to_string(),
+                    id: ClientId::from("client1"),
                     display_name: "station1".to_string(),
                     frequency: "100.000".to_string(),
                 },
                 ClientInfo {
-                    id: "client2".to_string(),
+                    id: ClientId::from("client2"),
                     display_name: "station2".to_string(),
                     frequency: "200.000".to_string(),
                 },
@@ -518,8 +519,8 @@ mod tests {
         match deserialized {
             SignalingMessage::ClientList { clients } => {
                 assert_eq!(clients.len(), 2);
-                assert_eq!(clients[0].id, "client1");
-                assert_eq!(clients[1].id, "client2");
+                assert_eq!(clients[0].id, ClientId::from("client1"));
+                assert_eq!(clients[1].id, ClientId::from("client2"));
             }
             _ => panic!("Expected CallIceCandidate message"),
         }
@@ -552,7 +553,7 @@ mod tests {
     fn test_serialize_deserialize_error_with_peer_id() {
         let message = SignalingMessage::Error {
             reason: ErrorReason::UnexpectedMessage("error1".to_string()),
-            peer_id: Some("client1".to_string()),
+            peer_id: Some(ClientId::from("client1")),
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
@@ -565,7 +566,7 @@ mod tests {
         match deserialized {
             SignalingMessage::Error { reason, peer_id } => {
                 assert_eq!(reason, ErrorReason::UnexpectedMessage("error1".to_string()));
-                assert_eq!(peer_id, Some("client1".to_string()));
+                assert_eq!(peer_id, Some(ClientId::from("client1")));
             }
             _ => panic!("Expected Error message"),
         }

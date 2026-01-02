@@ -14,6 +14,7 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{Instrument, instrument};
+use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::{ClientInfo, DisconnectReason, SignalingMessage};
 
 #[derive(Clone)]
@@ -39,7 +40,8 @@ impl ClientSession {
         }
     }
 
-    pub fn id(&self) -> &str {
+    #[inline]
+    pub fn id(&self) -> &ClientId {
         &self.client_info.id
     }
 
@@ -412,7 +414,7 @@ mod tests {
         let session =
             ClientSession::new(client_info_1.clone(), tx, ClientConnectionGuard::default());
 
-        assert_eq!(session.id(), "client1");
+        assert_eq!(session.id(), &ClientId::from("client1"));
         assert_eq!(session.get_client_info(), &client_info_1);
     }
 
@@ -557,7 +559,7 @@ mod tests {
         assert_eq!(
             call_offer,
             SignalingMessage::CallOffer {
-                peer_id: "client1".to_string(),
+                peer_id: ClientId::from("client1"),
                 sdp: "sdp1".to_string()
             }
         );

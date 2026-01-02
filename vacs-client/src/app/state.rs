@@ -19,6 +19,7 @@ use tauri::{AppHandle, Manager};
 use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
 use tokio_util::sync::CancellationToken;
 use vacs_signaling::client::SignalingClient;
+use vacs_signaling::protocol::vatsim::ClientId;
 use vacs_signaling::transport::tokio::TokioTransport;
 
 pub struct AppStateInner {
@@ -29,9 +30,9 @@ pub struct AppStateInner {
     keybind_engine: KeybindEngineHandle,
     active_call: Option<Call>,
     unanswered_call_guard: Option<UnansweredCallGuard>,
-    held_calls: HashMap<String, Call>,       // peer_id -> call
-    outgoing_call_peer_id: Option<String>,   // peer_id
-    incoming_call_peer_ids: HashSet<String>, // peer_id
+    held_calls: HashMap<ClientId, Call>,       // peer_id -> call
+    outgoing_call_peer_id: Option<ClientId>,   // peer_id
+    incoming_call_peer_ids: HashSet<ClientId>, // peer_id
 }
 
 pub type AppState = TokioMutex<AppStateInner>;

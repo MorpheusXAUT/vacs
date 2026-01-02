@@ -810,6 +810,7 @@ mod tests {
     use pretty_assertions::{assert_eq, assert_matches};
     use test_log::test;
     use tokio::sync::Notify;
+    use vacs_protocol::vatsim::ClientId;
     use vacs_protocol::ws::{ErrorReason, LoginFailureReason};
 
     async fn setup_test_client(
@@ -831,7 +832,7 @@ mod tests {
                 SignalingMessage::serialize(&SignalingMessage::ClientInfo {
                     own: true,
                     info: ClientInfo {
-                        id: "client1".to_string(),
+                        id: ClientId::from("client1"),
                         display_name: "client1".to_string(),
                         frequency: "".to_string(),
                     },
@@ -891,7 +892,7 @@ mod tests {
         let (client, _shutdown_token) = setup_test_client(transport, 0).await;
 
         let msg = SignalingMessage::CallInvite {
-            peer_id: "client2".to_string(),
+            peer_id: ClientId::from("client2"),
         };
         let serialized = tungstenite::Message::from(SignalingMessage::serialize(&msg).unwrap());
 
@@ -954,7 +955,7 @@ mod tests {
         tokio::spawn(async move {
             transport_ready.notified().await;
             let msg = SignalingMessage::CallInvite {
-                peer_id: "client2".to_string(),
+                peer_id: ClientId::from("client2"),
             };
 
             let result = client_clone.send(msg.clone()).await;
@@ -1024,7 +1025,7 @@ mod tests {
         let (client, _shutdown_token) = setup_test_client(transport, 0).await;
 
         let msg = SignalingMessage::CallInvite {
-            peer_id: "client2".to_string(),
+            peer_id: ClientId::from("client2"),
         };
 
         let task = tokio::spawn(async move {
@@ -1071,7 +1072,7 @@ mod tests {
         let (client, _shutdown_token) = setup_test_client(transport, 0).await;
 
         let msg = SignalingMessage::CallInvite {
-            peer_id: "client2".to_string(),
+            peer_id: ClientId::from("client2"),
         };
 
         let task = tokio::spawn(async move {
@@ -1093,7 +1094,7 @@ mod tests {
         let (client, _shutdown_token) = setup_test_client(transport, 0).await;
 
         let msg = SignalingMessage::CallInvite {
-            peer_id: "client2".to_string(),
+            peer_id: ClientId::from("client2"),
         };
 
         let client_clone = client.clone();
@@ -1332,7 +1333,7 @@ mod tests {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
                 SignalingMessage::serialize(&SignalingMessage::CallAnswer {
-                    peer_id: "client2".to_string(),
+                    peer_id: ClientId::from("client2"),
                     sdp: "sdp2".to_string(),
                 })
                 .unwrap()

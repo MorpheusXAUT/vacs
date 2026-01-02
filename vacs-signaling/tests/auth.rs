@@ -2,6 +2,7 @@ use pretty_assertions::assert_matches;
 use std::time::Duration;
 use test_log::test;
 use tokio_util::sync::CancellationToken;
+use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::{LoginFailureReason, SignalingMessage};
 use vacs_server::test_utils::{TestApp, TestClient};
 use vacs_signaling::auth::mock::MockTokenProvider;
@@ -32,7 +33,7 @@ async fn login_without_self() {
     let mut broadcast_rx = client.subscribe();
     let res = client.connect().await;
     let connected_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client1" && client_info.display_name == "client1" && client_info.frequency.is_empty()),
+        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == ClientId::from("client1") && client_info.display_name == "client1" && client_info.frequency.is_empty()),
     ).await;
     let client_info_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
 
@@ -66,7 +67,7 @@ async fn login() {
     let mut broadcast_rx1 = client1.subscribe();
     let res1 = client1.connect().await;
     let connected_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client1" && client_info.display_name == "client1" && client_info.frequency.is_empty()),
+        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == ClientId::from("client1") && client_info.display_name == "client1" && client_info.frequency.is_empty()),
     ).await;
     let client_list_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
 
@@ -91,9 +92,9 @@ async fn login() {
     let mut broadcast_rx2 = client2.subscribe();
     let res2 = client2.connect().await;
     let connected_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event|
-        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == "client2" && client_info.display_name == "client2" && client_info.frequency.is_empty()),
+        matches!(event, SignalingEvent::Connected{ client_info } if client_info.id == ClientId::from("client2") && client_info.display_name == "client2" && client_info.frequency.is_empty()),
     ).await;
-    let client_list_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == "client1")).await;
+    let client_list_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == ClientId::from("client1"))).await;
 
     assert!(res2.is_ok());
     assert!(connected_event2.is_ok());
@@ -226,7 +227,7 @@ async fn client_disconnects() {
         .client_mut(1)
         .recv_with_timeout_and_filter(
             Duration::from_millis(300),
-            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0"),
+            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if *id == ClientId::from("client0")),
         )
         .await;
     assert!(event.is_some());
@@ -245,7 +246,7 @@ async fn client_list_synchronization() {
         .client_mut(2)
         .recv_with_timeout_and_filter(
             Duration::from_millis(300),
-            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if id == "client0"),
+            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if *id == ClientId::from("client0")),
         )
         .await;
     assert!(event.is_some());
@@ -261,7 +262,7 @@ async fn client_list_synchronization() {
         .client_mut(2)
         .recv_with_timeout_and_filter(
             Duration::from_millis(300),
-            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == "client1"),
+            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == ClientId::from("client1")),
         )
         .await;
     assert!(event.is_some());
@@ -298,7 +299,9 @@ async fn client_connected_broadcast() {
             }
         }
 
-        let expected_ids: Vec<_> = (i + 1..=3).map(|i| format!("client{i}")).collect();
+        let expected_ids: Vec<_> = (i + 1..=3)
+            .map(|i| ClientId::from(format!("client{i}")))
+            .collect();
         assert_eq!(
             received_client_ids,
             expected_ids,

@@ -4,6 +4,7 @@ use std::time::Duration;
 use test_log::test;
 use tokio_tungstenite::tungstenite;
 use vacs_protocol::VACS_PROTOCOL_VERSION;
+use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::{LoginFailureReason, SignalingMessage};
 use vacs_server::test_utils::{
     TestApp, TestClient, assert_message_matches, assert_raw_message_matches, connect_to_websocket,
@@ -42,7 +43,7 @@ async fn login() {
         },
         |clients| {
             assert_eq!(clients.len(), 1);
-            assert_eq!(clients[0].id, "client1");
+            assert_eq!(clients[0].id, ClientId::from("client1"));
             assert_eq!(clients[0].display_name, "client1");
             Ok(())
         },
@@ -200,7 +201,7 @@ async fn client_connected() {
     let client_connected = client1.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_connected, |message| match message {
         SignalingMessage::ClientConnected { client } => {
-            assert_eq!(client.id, "client2");
+            assert_eq!(client.id, ClientId::from("client2"));
             assert_eq!(client.display_name, "client2");
         }
         _ => panic!("Unexpected message: {message:?}"),
@@ -229,7 +230,7 @@ async fn client_disconnected() {
     let client_connected = client1.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_connected, |message| match message {
         SignalingMessage::ClientConnected { client } => {
-            assert_eq!(client.id, "client2");
+            assert_eq!(client.id, ClientId::from("client2"));
             assert_eq!(client.display_name, "client2");
         }
         _ => panic!("Unexpected message: {message:?}"),
@@ -240,7 +241,7 @@ async fn client_disconnected() {
     let client2 = clients.get_mut("client2").unwrap();
     let client_disconnected = client2.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_disconnected, |message| match message {
-        SignalingMessage::ClientDisconnected { id } => assert_eq!(id, "client1"),
+        SignalingMessage::ClientDisconnected { id } => assert_eq!(id, ClientId::from("client1")),
         _ => panic!("Unexpected message: {message:?}"),
     });
 }
@@ -270,9 +271,21 @@ async fn login_client_list() {
         },
         |clients| {
             assert_eq!(clients.len(), 3);
-            assert!(clients.iter().any(|client| client.id == "client1"));
-            assert!(clients.iter().any(|client| client.id == "client2"));
-            assert!(clients.iter().any(|client| client.id == "client3"));
+            assert!(
+                clients
+                    .iter()
+                    .any(|client| client.id == ClientId::from("client1"))
+            );
+            assert!(
+                clients
+                    .iter()
+                    .any(|client| client.id == ClientId::from("client2"))
+            );
+            assert!(
+                clients
+                    .iter()
+                    .any(|client| client.id == ClientId::from("client3"))
+            );
             Ok(())
         },
     )
@@ -294,7 +307,7 @@ async fn logout() {
     let client_connected = client1.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_connected, |message| match message {
         SignalingMessage::ClientConnected { client } => {
-            assert_eq!(client.id, "client2");
+            assert_eq!(client.id, ClientId::from("client2"));
             assert_eq!(client.display_name, "client2");
         }
         _ => panic!("Unexpected message: {message:?}"),
@@ -311,7 +324,7 @@ async fn logout() {
     let client2 = clients.get_mut("client2").unwrap();
     let client_disconnected = client2.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_disconnected, |message| match message {
-        SignalingMessage::ClientDisconnected { id } => assert_eq!(id, "client1"),
+        SignalingMessage::ClientDisconnected { id } => assert_eq!(id, ClientId::from("client1")),
         _ => panic!("Unexpected message: {message:?}"),
     });
 }

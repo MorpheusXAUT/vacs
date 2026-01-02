@@ -108,6 +108,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_matches;
     use test_log::test;
+    use vacs_protocol::vatsim::ClientId;
     use vacs_protocol::ws::ClientInfo;
 
     #[test(tokio::test)]
@@ -133,7 +134,7 @@ mod tests {
         let matcher = ResponseMatcher::new();
         let msg = SignalingMessage::ClientList {
             clients: vec![ClientInfo {
-                id: "client1".to_string(),
+                id: ClientId::from("client1"),
                 display_name: "Client 1".to_string(),
                 frequency: "100.000".to_string(),
             }],
@@ -158,15 +159,15 @@ mod tests {
         let matcher = ResponseMatcher::new();
         let messages = vec![
             SignalingMessage::CallAnswer {
-                peer_id: "client1".to_string(),
+                peer_id: ClientId::from("client1"),
                 sdp: "sdp1".to_string(),
             },
             SignalingMessage::CallAnswer {
-                peer_id: "client2".to_string(),
+                peer_id: ClientId::from("client2"),
                 sdp: "sdp2".to_string(),
             },
             SignalingMessage::CallAnswer {
-                peer_id: "client3".to_string(),
+                peer_id: ClientId::from("client3"),
                 sdp: "sdp3".to_string(),
             },
         ];
@@ -174,7 +175,7 @@ mod tests {
         let matcher_clone = matcher.clone();
         let handle = tokio::spawn(async move {
             matcher_clone
-                .wait_for(|msg| matches!(msg, SignalingMessage::CallAnswer { peer_id, .. } if peer_id == "client2"))
+                .wait_for(|msg| matches!(msg, SignalingMessage::CallAnswer { peer_id, .. } if *peer_id == ClientId::from("client2")))
                 .await
         });
 
@@ -184,7 +185,7 @@ mod tests {
         }
 
         let result = handle.await.unwrap();
-        assert_matches!(result, Ok(SignalingMessage::CallAnswer { peer_id, sdp }) if peer_id == "client2" && sdp == "sdp2");
+        assert_matches!(result, Ok(SignalingMessage::CallAnswer { peer_id, sdp }) if peer_id == ClientId::from("client2") && sdp == "sdp2");
     }
 
     #[test(tokio::test)]
@@ -355,13 +356,13 @@ mod tests {
 
         matcher.try_match(&SignalingMessage::ClientList {
             clients: vec![ClientInfo {
-                id: "client1".into(),
+                id: ClientId::from("client1"),
                 display_name: "Client 1".into(),
                 frequency: "100.000".into(),
             }],
         });
         matcher.try_match(&SignalingMessage::CallAnswer {
-            peer_id: "client2".to_string(),
+            peer_id: ClientId::from("client2"),
             sdp: "sdp2".into(),
         });
 

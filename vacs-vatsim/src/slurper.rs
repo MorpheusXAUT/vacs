@@ -24,7 +24,7 @@
 //!         let client = SlurperClient::new(&server.uri())?;
 //!
 //!         let controller_info = client
-//!             .get_controller_info("1234567")
+//!             .get_controller_info(&ClientId::from("1234567"))
 //!             .await?;
 //!
 //!         assert_eq!(controller_info, None);
@@ -36,6 +36,7 @@
 use crate::{ControllerInfo, FacilityType, Result};
 use thiserror::Error;
 use tracing::instrument;
+use vacs_protocol::vatsim::ClientId;
 
 /// Default timeout for HTTP requests against the slurper API.
 /// Can be overwritten using [`SlurperClient::with_timeout`].
@@ -158,7 +159,7 @@ impl SlurperClient {
     ///     let client = SlurperClient::new(&server.uri())?;
     ///
     ///     let controller_info = client
-    ///         .get_controller_info("1234567")
+    ///         .get_controller_info(&ClientId::from("1234567"))
     ///         .await?.unwrap();
     ///
     ///     assert_eq!(controller_info.callsign, "LOVV_CTR");
@@ -167,7 +168,7 @@ impl SlurperClient {
     ///  }
     /// ```
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn get_controller_info(&self, cid: &str) -> Result<Option<ControllerInfo>> {
+    pub async fn get_controller_info(&self, cid: &ClientId) -> Result<Option<ControllerInfo>> {
         tracing::debug!("Retrieving controller info for CID");
 
         if cid.is_empty() {
@@ -186,7 +187,7 @@ impl SlurperClient {
 
     /// Performs an HTTP request to fetch the user info data from the Slurper API.
     #[instrument(level = "trace", skip(self), err)]
-    async fn fetch_slurper_data(&self, cid: &str) -> Result<bytes::Bytes> {
+    async fn fetch_slurper_data(&self, cid: &ClientId) -> Result<bytes::Bytes> {
         tracing::trace!("Performing HTTP request");
         let response = self
             .client
@@ -207,7 +208,11 @@ impl SlurperClient {
     /// Parses the CSV data retrieved from the Slurper user info endpoint and returns the
     /// extracted [`ControllerInfo`].
     #[instrument(level = "trace", skip(self, body), err)]
-    fn parse_slurper_data(&self, cid: &str, body: bytes::Bytes) -> Result<Option<ControllerInfo>> {
+    fn parse_slurper_data(
+        &self,
+        cid: &ClientId,
+        body: bytes::Bytes,
+    ) -> Result<Option<ControllerInfo>> {
         tracing::trace!("Parsing CSV");
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(false)
@@ -239,7 +244,7 @@ impl SlurperClient {
     #[instrument(level = "trace", skip(self), err)]
     fn extract_controller_info(
         &self,
-        cid: &str,
+        cid: &ClientId,
         record: csv::StringRecord,
     ) -> Result<Option<ControllerInfo>> {
         let facility_type = record
@@ -305,7 +310,7 @@ impl SlurperClient {
             "Found controller info for CID"
         );
         Ok(Some(ControllerInfo {
-            cid: cid.to_string(),
+            cid: cid.clone(),
             callsign: callsign.to_string(),
             frequency: frequency.to_string(),
             facility_type,
@@ -348,7 +353,7 @@ mod tests {
         let client = SlurperClient::new(&server.uri())?;
 
         let controller_info = client
-            .get_controller_info("1234567")
+            .get_controller_info(&ClientId::from("1234567"))
             .await?
             .expect("No controller info found");
 
@@ -374,7 +379,7 @@ mod tests {
         let client = SlurperClient::new(&server.uri())?;
 
         let controller_info = client
-            .get_controller_info("1234567")
+            .get_controller_info(&ClientId::from("1234567"))
             .await?
             .expect("No controller info found");
 
@@ -400,7 +405,7 @@ mod tests {
         let client = SlurperClient::new(&server.uri())?;
 
         let controller_info = client
-            .get_controller_info("1234567")
+            .get_controller_info(&ClientId::from("1234567"))
             .await?
             .expect("No controller info found");
 
@@ -424,7 +429,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -445,7 +452,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -466,7 +475,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -484,7 +495,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -494,7 +507,7 @@ mod tests {
     async fn get_controller_info_empty_cid() -> Result<()> {
         let client = SlurperClient::new("http://localhost")?;
 
-        let controller_info = client.get_controller_info("").await?;
+        let controller_info = client.get_controller_info(&ClientId::from("")).await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -512,7 +525,7 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?;
 
-        let result = client.get_controller_info("1234567").await;
+        let result = client.get_controller_info(&ClientId::from("1234567")).await;
 
         matches!(result, Err(crate::Error::Slurper(SlurperError::Request(err)))
             if err.is_status() && err.status().is_some_and(|status| status == StatusCode::NOT_FOUND));
@@ -531,7 +544,7 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let result = client.get_controller_info("1234567").await;
+        let result = client.get_controller_info(&ClientId::from("1234567")).await;
 
         assert_matches!(result, Err(crate::Error::Slurper(SlurperError::Request(err))) if err.is_timeout());
         Ok(())
@@ -549,7 +562,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -567,7 +582,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -585,7 +602,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -603,7 +622,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -621,7 +642,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())
@@ -639,7 +662,9 @@ mod tests {
 
         let client = SlurperClient::new(&server.uri())?.with_timeout(Duration::from_millis(50))?;
 
-        let controller_info = client.get_controller_info("1234567").await?;
+        let controller_info = client
+            .get_controller_info(&ClientId::from("1234567"))
+            .await?;
 
         assert_eq!(controller_info, None);
         Ok(())

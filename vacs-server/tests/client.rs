@@ -3,6 +3,7 @@ use std::time::Duration;
 use test_log::test;
 use tokio_tungstenite::tungstenite;
 use tokio_tungstenite::tungstenite::Bytes;
+use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::SignalingMessage;
 use vacs_server::test_utils::{TestApp, TestClient, setup_n_test_clients};
 
@@ -24,7 +25,7 @@ async fn client_connected() -> anyhow::Result<()> {
         );
 
         let expected_ids: Vec<_> = (i + 2..=client_count)
-            .map(|i| format!("client{i}"))
+            .map(|i| ClientId::from(format!("client{i}")))
             .collect();
 
         for message in messages {
@@ -74,7 +75,7 @@ async fn client_disconnected() -> anyhow::Result<()> {
         );
 
         let expected_ids: Vec<_> = (i + 2..=initial_client_count)
-            .map(|i| format!("client{i}"))
+            .map(|i| ClientId::from(format!("client{i}")))
             .collect();
 
         for message in messages {
@@ -90,7 +91,7 @@ async fn client_disconnected() -> anyhow::Result<()> {
                 SignalingMessage::ClientDisconnected { id } => {
                     assert_eq!(
                         id,
-                        format!("client{initial_client_count}"),
+                        ClientId::from(format!("client{initial_client_count}")),
                         "Unexpected client ID: {:?}",
                         id
                     );
@@ -124,7 +125,7 @@ async fn client_dropped() -> anyhow::Result<()> {
         );
 
         let expected_ids: Vec<_> = (i + 2..=initial_client_count)
-            .map(|i| format!("client{i}"))
+            .map(|i| ClientId::from(format!("client{i}")))
             .collect();
 
         for message in messages {
@@ -140,7 +141,7 @@ async fn client_dropped() -> anyhow::Result<()> {
                 SignalingMessage::ClientDisconnected { id } => {
                     assert_eq!(
                         id,
-                        format!("client{initial_client_count}"),
+                        ClientId::from(format!("client{initial_client_count}")),
                         "Unexpected client ID: {:?}",
                         id
                     );

@@ -1,12 +1,13 @@
 use crate::metrics::guards::{CallAttemptGuard, CallAttemptOutcome, CallGuard};
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use vacs_protocol::vatsim::ClientId;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct Call(String, String);
+pub struct Call(ClientId, ClientId);
 
 impl Call {
-    pub fn new(peer1_id: impl Into<String>, peer2_id: impl Into<String>) -> Self {
+    pub fn new(peer1_id: impl Into<ClientId>, peer2_id: impl Into<ClientId>) -> Self {
         let peer1_id = peer1_id.into();
         let peer2_id = peer2_id.into();
 
@@ -18,8 +19,8 @@ impl Call {
     }
 }
 
-impl From<(String, String)> for Call {
-    fn from((peer1_id, peer2_id): (String, String)) -> Self {
+impl From<(ClientId, ClientId)> for Call {
+    fn from((peer1_id, peer2_id): (ClientId, ClientId)) -> Self {
         Self::new(peer1_id, peer2_id)
     }
 }
@@ -34,7 +35,7 @@ impl CallStateManager {
         Self::default()
     }
 
-    pub fn start_call_attempt(&self, peer1_id: impl Into<String>, peer2_id: impl Into<String>) {
+    pub fn start_call_attempt(&self, peer1_id: impl Into<ClientId>, peer2_id: impl Into<ClientId>) {
         self.call_attempts
             .write()
             .insert(Call::new(peer1_id, peer2_id), CallAttemptGuard::new());
@@ -42,8 +43,8 @@ impl CallStateManager {
 
     pub fn complete_call_attempt(
         &self,
-        peer1_id: impl Into<String>,
-        peer2_id: impl Into<String>,
+        peer1_id: impl Into<ClientId>,
+        peer2_id: impl Into<ClientId>,
         outcome: CallAttemptOutcome,
     ) {
         if let Some(mut guard) = self
@@ -55,23 +56,21 @@ impl CallStateManager {
         }
     }
 
-    pub fn start_call(&self, peer1_id: impl Into<String>, peer2_id: impl Into<String>) {
+    pub fn start_call(&self, peer1_id: impl Into<ClientId>, peer2_id: impl Into<ClientId>) {
         self.active_calls
             .write()
             .insert(Call::new(peer1_id, peer2_id), CallGuard::new());
     }
 
-    pub fn end_call(&self, peer1_id: impl Into<String>, peer2_id: impl Into<String>) {
+    pub fn end_call(&self, peer1_id: impl Into<ClientId>, peer2_id: impl Into<ClientId>) {
         self.active_calls
             .write()
             .remove(&Call::new(peer1_id, peer2_id));
     }
 
-    pub fn cleanup_client_calls(&self, peer_id: impl Into<String>) {
-        let peer_id = peer_id.into();
-
+    pub fn cleanup_client_calls(&self, peer_id: &ClientId) {
         self.call_attempts.write().retain(|call, guard| {
-            if call.0 == peer_id || call.1 == peer_id {
+            if call.0 == *peer_id || call.1 == *peer_id {
                 guard.set_outcome(CallAttemptOutcome::Aborted);
                 false
             } else {
@@ -81,7 +80,7 @@ impl CallStateManager {
 
         self.active_calls
             .write()
-            .retain(|call, _| call.0 != peer_id && call.1 != peer_id);
+            .retain(|call, _| call.0 != *peer_id && call.1 != *peer_id);
     }
 }
 

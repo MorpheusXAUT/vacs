@@ -5,12 +5,9 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::LazyLock;
+use vacs_protocol::vatsim::PositionId;
 
 static FREQUENCY_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{3}\.\d{3}$").unwrap());
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
-#[repr(transparent)]
-pub struct PositionId(String);
 
 #[derive(Debug, Clone)]
 pub struct Position {
@@ -87,42 +84,6 @@ impl Validator for PositionRaw {
             );
         }
         Ok(())
-    }
-}
-
-impl PositionId {
-    #[inline]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl std::fmt::Display for PositionId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl From<String> for PositionId {
-    fn from(value: String) -> Self {
-        PositionId(value.to_ascii_uppercase())
-    }
-}
-
-impl From<&str> for PositionId {
-    fn from(value: &str) -> Self {
-        PositionId(value.to_ascii_uppercase())
-    }
-}
-
-impl std::borrow::Borrow<str> for PositionId {
-    fn borrow(&self) -> &str {
-        &self.0
     }
 }
 

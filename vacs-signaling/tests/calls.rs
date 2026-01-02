@@ -1,5 +1,6 @@
 use std::time::Duration;
 use test_log::test;
+use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::SignalingMessage;
 use vacs_signaling::client::SignalingEvent;
 use vacs_signaling::test_utils::TestRig;
@@ -13,7 +14,7 @@ async fn call_offer_answer() {
     clients[0]
         .client
         .send(SignalingMessage::CallOffer {
-            peer_id: "client1".to_string(),
+            peer_id: ClientId::from("client1"),
             sdp: "sdp0".to_string(),
         })
         .await
@@ -24,7 +25,7 @@ async fn call_offer_answer() {
             matches!(e, SignalingEvent::Message(SignalingMessage::CallOffer {
                 peer_id,
                 sdp
-            }) if peer_id == "client0" && sdp == "sdp0")
+            }) if *peer_id == ClientId::from("client0") && sdp == "sdp0")
         })
         .await;
     assert!(event.is_some());
@@ -32,7 +33,7 @@ async fn call_offer_answer() {
     clients[1]
         .client
         .send(SignalingMessage::CallAnswer {
-            peer_id: "client0".to_string(),
+            peer_id: ClientId::from("client0"),
             sdp: "sdp1".to_string(),
         })
         .await
@@ -43,7 +44,7 @@ async fn call_offer_answer() {
             matches!(e, SignalingEvent::Message(SignalingMessage::CallAnswer {
                 peer_id,
                 sdp
-            }) if peer_id == "client1" && sdp == "sdp1")
+            }) if *peer_id == ClientId::from("client1") && sdp == "sdp1")
         })
         .await;
     assert!(event.is_some());
