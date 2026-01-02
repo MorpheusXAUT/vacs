@@ -25,21 +25,21 @@ repos:
       - id: npm-lint
         name: eslint
         entry: npm
-        args: [ 'run', '-w', 'frontend', 'lint', '--prefix', 'vacs-client' ]
+        args: ["run", "-w", "frontend", "lint", "--prefix", "vacs-client"]
         language: system
         files: '^vacs-client/frontend/.*\.(ts|tsx|js|jsx)$'
         pass_filenames: false
       - id: npm-typecheck
         name: TypeScript type check
         entry: npm
-        args: [ 'run', '-w', 'frontend', 'typecheck', '--prefix', 'vacs-client' ]
+        args: ["run", "-w", "frontend", "typecheck", "--prefix", "vacs-client"]
         language: system
         files: '^vacs-client/frontend/.*\.(ts|tsx)$'
         pass_filenames: false
       - id: npm-format
         name: prettier
         entry: npm
-        args: [ 'run', 'format', '--prefix', 'vacs-client' ]
+        args: ["run", "format", "--prefix", "vacs-client"]
         language: system
         files: '^vacs-client/.*\.(ts|tsx|js|jsx|json|css|md)$'
         pass_filenames: false
