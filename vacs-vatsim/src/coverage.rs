@@ -1,6 +1,7 @@
 pub mod flight_information_region;
 pub mod network;
 pub mod position;
+pub mod profile;
 pub mod station;
 
 use thiserror::Error;
@@ -19,15 +20,33 @@ pub enum CoverageError {
 
 #[derive(Debug, Clone, Error)]
 pub enum ValidationError {
-    #[error("missing field `{0}`")]
-    MissingField(String),
-
     #[error("invalid format for `{field}`: {reason}")]
     InvalidFormat {
         field: String,
         value: String,
         reason: String,
     },
+
+    #[error("invalid value for `{field}`: {reason} (got `{value}`)")]
+    InvalidValue {
+        field: String,
+        value: String,
+        reason: String,
+    },
+
+    #[error("value for `{field}` is out of range: {min}..={max} (got `{value}`)")]
+    OutOfRange {
+        field: String,
+        value: String,
+        min: String,
+        max: String,
+    },
+
+    #[error("`{field}` must not be empty")]
+    Empty { field: String },
+
+    #[error("referenced {field} `{ref_id}` does not exist")]
+    MissingReference { field: String, ref_id: String },
 
     #[error("{0}")]
     Custom(String),
