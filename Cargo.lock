@@ -8273,7 +8273,7 @@ dependencies = [
  "test-log",
  "thiserror 2.0.17",
  "tokio",
- "toml 0.9.9+spec-1.0.0",
+ "toml 0.9.10+spec-1.1.0",
  "tracing",
  "vacs-protocol",
  "wiremock",

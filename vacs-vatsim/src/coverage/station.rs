@@ -47,7 +47,7 @@ impl Station {
         station_raw.validate()?;
 
         let controlled_by = station_raw.resolve_controlled_by(all_stations);
-        Ok(Station {
+        Ok(Self {
             id: station_raw.id,
             parent_id: station_raw.parent_id,
             controlled_by,
@@ -59,7 +59,10 @@ impl Station {
 impl Validator for StationRaw {
     fn validate(&self) -> Result<(), CoverageError> {
         if self.id.is_empty() {
-            return Err(ValidationError::MissingField("id".to_string()).into());
+            return Err(ValidationError::Empty {
+                field: "id".to_string(),
+            }
+            .into());
         }
         Ok(())
     }
@@ -154,7 +157,7 @@ mod tests {
         };
         assert_matches!(
             raw.validate(),
-            Err(CoverageError::Validation(ValidationError::MissingField(f))) if f == "id"
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "id"
         );
     }
 
