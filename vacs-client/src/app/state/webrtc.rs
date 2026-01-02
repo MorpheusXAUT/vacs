@@ -11,19 +11,20 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
+use vacs_signaling::protocol::vatsim::ClientId;
 use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
 use vacs_webrtc::error::WebrtcError;
 use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
 
 #[derive(Debug)]
 pub struct UnansweredCallGuard {
-    pub peer_id: String,
+    pub peer_id: ClientId,
     pub cancel: CancellationToken,
     pub handle: JoinHandle<()>,
 }
 
 pub struct Call {
-    pub(super) peer_id: String,
+    pub(super) peer_id: ClientId,
     peer: Peer,
 }
 
@@ -39,21 +40,22 @@ pub trait AppStateWebrtcExt: sealed::Sealed {
     async fn init_call(
         &mut self,
         app: AppHandle,
-        peer_id: String,
+        peer_id: ClientId,
         offer_sdp: Option<String>,
     ) -> Result<String, Error>;
-    async fn accept_call_answer(&self, peer_id: &str, answer_sdp: String) -> Result<(), Error>;
-    async fn set_remote_ice_candidate(&self, peer_id: &str, candidate: String);
-    async fn cleanup_call(&mut self, peer_id: &str) -> bool;
+    async fn accept_call_answer(&self, peer_id: &ClientId, answer_sdp: String)
+    -> Result<(), Error>;
+    async fn set_remote_ice_candidate(&self, peer_id: &ClientId, candidate: String);
+    async fn cleanup_call(&mut self, peer_id: &ClientId) -> bool;
     fn emit_call_error(
         &self,
         app: &AppHandle,
-        peer_id: String,
+        peer_id: ClientId,
         is_local: bool,
         reason: CallErrorReason,
     );
-    fn active_call_peer_id(&self) -> Option<&String>;
-    fn outgoing_call_peer_id(&self) -> Option<&String>;
+    fn active_call_peer_id(&self) -> Option<&ClientId>;
+    fn outgoing_call_peer_id(&self) -> Option<&ClientId>;
     fn set_ice_config(&mut self, config: IceConfig);
     fn is_ice_config_expired(&self) -> bool;
 }
@@ -62,7 +64,7 @@ impl AppStateWebrtcExt for AppStateInner {
     async fn init_call(
         &mut self,
         app: AppHandle,
-        peer_id: String,
+        peer_id: ClientId,
         offer_sdp: Option<String>,
     ) -> Result<String, Error> {
         if self.active_call.is_some() {
@@ -195,9 +197,13 @@ impl AppStateWebrtcExt for AppStateInner {
         Ok(sdp)
     }
 
-    async fn accept_call_answer(&self, peer_id: &str, answer_sdp: String) -> Result<(), Error> {
+    async fn accept_call_answer(
+        &self,
+        peer_id: &ClientId,
+        answer_sdp: String,
+    ) -> Result<(), Error> {
         if let Some(call) = &self.active_call {
-            if call.peer_id == peer_id {
+            if call.peer_id == *peer_id {
                 call.peer.accept_answer(answer_sdp).await?;
                 return Ok(());
             } else {
@@ -210,9 +216,9 @@ impl AppStateWebrtcExt for AppStateInner {
         Err(WebrtcError::NoCallActive.into())
     }
 
-    async fn set_remote_ice_candidate(&self, peer_id: &str, candidate: String) {
+    async fn set_remote_ice_candidate(&self, peer_id: &ClientId, candidate: String) {
         let res = if let Some(call) = &self.active_call
-            && call.peer_id == peer_id
+            && call.peer_id == *peer_id
         {
             call.peer.add_remote_ice_candidate(candidate).await
         } else if let Some(call) = self.held_calls.get(peer_id) {
@@ -226,13 +232,13 @@ impl AppStateWebrtcExt for AppStateInner {
         }
     }
 
-    async fn cleanup_call(&mut self, peer_id: &str) -> bool {
+    async fn cleanup_call(&mut self, peer_id: &ClientId) -> bool {
         log::debug!(
             "Cleaning up call with peer {peer_id} (active: {:?})",
             self.active_call.as_ref()
         );
         let res = if let Some(call) = &mut self.active_call
-            && call.peer_id == peer_id
+            && call.peer_id == *peer_id
         {
             {
                 let mut audio_manager = self.audio_manager.write();
@@ -262,7 +268,7 @@ impl AppStateWebrtcExt for AppStateInner {
     fn emit_call_error(
         &self,
         app: &AppHandle,
-        peer_id: String,
+        peer_id: ClientId,
         is_local: bool,
         reason: CallErrorReason,
     ) {
@@ -273,11 +279,11 @@ impl AppStateWebrtcExt for AppStateInner {
         .ok();
     }
 
-    fn active_call_peer_id(&self) -> Option<&String> {
+    fn active_call_peer_id(&self) -> Option<&ClientId> {
         self.active_call.as_ref().map(|call| &call.peer_id)
     }
 
-    fn outgoing_call_peer_id(&self) -> Option<&String> {
+    fn outgoing_call_peer_id(&self) -> Option<&ClientId> {
         self.outgoing_call_peer_id.as_ref()
     }
 
@@ -315,9 +321,13 @@ impl AppStateWebrtcExt for AppStateInner {
 }
 
 impl AppStateInner {
-    async fn on_peer_connected(&mut self, app: &AppHandle, peer_id: &str) -> Result<(), Error> {
+    async fn on_peer_connected(
+        &mut self,
+        app: &AppHandle,
+        peer_id: &ClientId,
+    ) -> Result<(), Error> {
         if let Some(call) = &mut self.active_call
-            && call.peer_id == peer_id
+            && call.peer_id == *peer_id
         {
             let (output_tx, output_rx) = mpsc::channel(ENCODED_AUDIO_FRAME_BUFFER_SIZE);
             let (input_tx, input_rx) = mpsc::channel(ENCODED_AUDIO_FRAME_BUFFER_SIZE);

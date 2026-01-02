@@ -1,8 +1,9 @@
-use crate::coverage::position::{PositionConfigFile, PositionId, PositionRaw};
-use crate::coverage::station::{StationConfigFile, StationId, StationRaw};
+use crate::coverage::position::{PositionConfigFile, PositionRaw};
+use crate::coverage::station::{StationConfigFile, StationRaw};
 use crate::coverage::{CoverageError, IoError, ValidationError, Validator};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use vacs_protocol::vatsim::{PositionId, ProfileId, StationId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[repr(transparent)]

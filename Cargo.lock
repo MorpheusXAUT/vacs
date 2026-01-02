@@ -8198,6 +8198,7 @@ dependencies = [
  "tokio",
  "toml 0.9.9+spec-1.0.0",
  "tracing",
+ "vacs-protocol",
  "wiremock",
 ]
 

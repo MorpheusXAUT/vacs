@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
+use vacs_signaling::protocol::vatsim::ClientId;
 use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
 use vacs_signaling::transport::tokio::TokioTransport;
 
@@ -23,26 +24,27 @@ pub trait AppStateSignalingExt: sealed::Sealed {
     async fn disconnect_signaling(&mut self, app: &AppHandle);
     async fn handle_signaling_connection_closed(&mut self, app: &AppHandle);
     async fn send_signaling_message(&mut self, msg: SignalingMessage) -> Result<(), Error>;
-    fn set_outgoing_call_peer_id(&mut self, peer_id: Option<String>);
-    fn remove_outgoing_call_peer_id(&mut self, peer_id: &str) -> bool;
+    fn set_outgoing_call_peer_id(&mut self, peer_id: Option<ClientId>);
+    fn remove_outgoing_call_peer_id(&mut self, peer_id: &ClientId) -> bool;
     fn incoming_call_peer_ids_len(&self) -> usize;
-    fn add_incoming_call_peer_id(&mut self, peer_id: &str);
-    fn remove_incoming_call_peer_id(&mut self, peer_id: &str) -> bool;
-    fn add_call_to_call_list(&mut self, app: &AppHandle, peer_id: &str, incoming: bool);
+    fn add_incoming_call_peer_id(&mut self, peer_id: &ClientId);
+    fn remove_incoming_call_peer_id(&mut self, peer_id: &ClientId) -> bool;
+    fn add_call_to_call_list(&mut self, app: &AppHandle, peer_id: &ClientId, incoming: bool);
     fn new_signaling_client(
         app: AppHandle,
         ws_url: &str,
         shutdown_token: CancellationToken,
         max_reconnect_attempts: u8,
     ) -> SignalingClient<TokioTransport, TauriTokenProvider>;
-    fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &str);
-    fn cancel_unanswered_call_timer(&mut self, peer_id: &str);
+    fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &ClientId);
+    fn cancel_unanswered_call_timer(&mut self, peer_id: &ClientId);
     async fn accept_call(
         &mut self,
         app: &AppHandle,
-        peer_id: Option<String>,
+        peer_id: Option<ClientId>,
     ) -> Result<bool, Error>;
-    async fn end_call(&mut self, app: &AppHandle, peer_id: Option<String>) -> Result<bool, Error>;
+    async fn end_call(&mut self, app: &AppHandle, peer_id: Option<ClientId>)
+    -> Result<bool, Error>;
 }
 
 impl AppStateSignalingExt for AppStateInner {
@@ -94,11 +96,11 @@ impl AppStateSignalingExt for AppStateInner {
         Ok(())
     }
 
-    fn set_outgoing_call_peer_id(&mut self, peer_id: Option<String>) {
+    fn set_outgoing_call_peer_id(&mut self, peer_id: Option<ClientId>) {
         self.outgoing_call_peer_id = peer_id;
     }
 
-    fn remove_outgoing_call_peer_id(&mut self, peer_id: &str) -> bool {
+    fn remove_outgoing_call_peer_id(&mut self, peer_id: &ClientId) -> bool {
         if let Some(id) = &self.outgoing_call_peer_id
             && id == peer_id
         {
@@ -114,11 +116,11 @@ impl AppStateSignalingExt for AppStateInner {
         self.incoming_call_peer_ids.len()
     }
 
-    fn add_incoming_call_peer_id(&mut self, peer_id: &str) {
-        self.incoming_call_peer_ids.insert(peer_id.to_string());
+    fn add_incoming_call_peer_id(&mut self, peer_id: &ClientId) {
+        self.incoming_call_peer_ids.insert(peer_id.clone());
     }
 
-    fn remove_incoming_call_peer_id(&mut self, peer_id: &str) -> bool {
+    fn remove_incoming_call_peer_id(&mut self, peer_id: &ClientId) -> bool {
         let found = self.incoming_call_peer_ids.remove(peer_id);
         if self.incoming_call_peer_ids.is_empty() {
             self.audio_manager.read().stop(SourceType::Ring);
@@ -126,11 +128,11 @@ impl AppStateSignalingExt for AppStateInner {
         found
     }
 
-    fn add_call_to_call_list(&mut self, app: &AppHandle, peer_id: &str, incoming: bool) {
+    fn add_call_to_call_list(&mut self, app: &AppHandle, peer_id: &ClientId, incoming: bool) {
         #[derive(Clone, Serialize)]
         #[serde(rename_all = "camelCase")]
         struct CallListEntry<'a> {
-            peer_id: &'a str,
+            peer_id: &'a ClientId,
             incoming: bool,
         }
 
@@ -163,7 +165,7 @@ impl AppStateSignalingExt for AppStateInner {
         )
     }
 
-    fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &str) {
+    fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &ClientId) {
         self.cancel_unanswered_call_timer(peer_id);
 
         let timeout = Duration::from_secs(self.config.client.auto_hangup_seconds);
@@ -175,7 +177,7 @@ impl AppStateSignalingExt for AppStateInner {
 
         let handle = tauri::async_runtime::spawn({
             let app = app.clone();
-            let peer_id = peer_id.to_string();
+            let peer_id = peer_id.clone();
             let cancel = cancel.clone();
             async move {
                 log::debug!("Starting unanswered call timer of {timeout:?} for peer {peer_id}");
@@ -207,14 +209,17 @@ impl AppStateSignalingExt for AppStateInner {
         });
 
         self.unanswered_call_guard = Some(UnansweredCallGuard {
-            peer_id: peer_id.to_string(),
+            peer_id: peer_id.clone(),
             cancel,
             handle,
         });
     }
 
-    fn cancel_unanswered_call_timer(&mut self, peer_id: &str) {
-        if let Some(guard) = self.unanswered_call_guard.take_if(|g| g.peer_id == peer_id) {
+    fn cancel_unanswered_call_timer(&mut self, peer_id: &ClientId) {
+        if let Some(guard) = self
+            .unanswered_call_guard
+            .take_if(|g| g.peer_id == *peer_id)
+        {
             log::trace!(
                 "Cancelling unanswered call timer for peer {}",
                 guard.peer_id
@@ -227,7 +232,7 @@ impl AppStateSignalingExt for AppStateInner {
     async fn accept_call(
         &mut self,
         app: &AppHandle,
-        peer_id: Option<String>,
+        peer_id: Option<ClientId>,
     ) -> Result<bool, Error> {
         let peer_id = match peer_id.or_else(|| self.incoming_call_peer_ids.iter().next().cloned()) {
             Some(id) => id,
@@ -263,7 +268,11 @@ impl AppStateSignalingExt for AppStateInner {
         Ok(true)
     }
 
-    async fn end_call(&mut self, app: &AppHandle, peer_id: Option<String>) -> Result<bool, Error> {
+    async fn end_call(
+        &mut self,
+        app: &AppHandle,
+        peer_id: Option<ClientId>,
+    ) -> Result<bool, Error> {
         let Some(peer_id) = peer_id.or_else(|| {
             self.active_call_peer_id()
                 .or(self.outgoing_call_peer_id.as_ref())

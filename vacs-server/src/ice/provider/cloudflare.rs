@@ -6,6 +6,7 @@ use std::fmt::{Debug, Formatter};
 use std::time::{Duration, UNIX_EPOCH};
 use tracing::instrument;
 use vacs_protocol::http::webrtc::{IceConfig, IceServer};
+use vacs_protocol::vatsim::ClientId;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,7 +68,7 @@ impl CloudflareIceProvider {
 #[async_trait::async_trait]
 impl IceConfigProvider for CloudflareIceProvider {
     #[instrument(level = "debug", err)]
-    async fn get_ice_config(&self, user_id: &str) -> Result<IceConfig, IceError> {
+    async fn get_ice_config(&self, user_id: &ClientId) -> Result<IceConfig, IceError> {
         tracing::debug!("Providing Cloudflare ICE config");
 
         let expiry = self.calculate_expiry();

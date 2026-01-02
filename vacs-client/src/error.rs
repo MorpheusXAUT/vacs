@@ -6,6 +6,7 @@ use std::fmt::{Debug, Display, Formatter};
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
+use vacs_signaling::protocol::vatsim::ClientId;
 use vacs_signaling::protocol::ws::{
     CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason,
 };
@@ -261,12 +262,12 @@ impl From<Error> for CallErrorReason {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CallError {
-    peer_id: String,
+    peer_id: ClientId,
     reason: String,
 }
 
 impl CallError {
-    pub fn new(peer_id: String, is_local: bool, reason: CallErrorReason) -> Self {
+    pub fn new(peer_id: ClientId, is_local: bool, reason: CallErrorReason) -> Self {
         Self {
             peer_id,
             reason: format!(
