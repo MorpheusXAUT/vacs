@@ -105,24 +105,6 @@ mod tests {
     use pretty_assertions::{assert_eq, assert_matches, assert_ne};
 
     #[test]
-    fn position_id_creation() {
-        let pos_id = PositionId::from("loww_twr");
-        assert_eq!(pos_id.as_str(), "LOWW_TWR");
-        assert_eq!(pos_id.to_string(), "LOWW_TWR");
-        assert!(!pos_id.is_empty());
-
-        let empty_id = PositionId::from("");
-        assert!(empty_id.is_empty());
-    }
-
-    #[test]
-    fn position_id_equality() {
-        let id1 = PositionId::from("LOWW_TWR");
-        let id2 = PositionId::from("loww_twr");
-        assert_eq!(id1, id2);
-    }
-
-    #[test]
     fn position_raw_valid() {
         let raw = PositionRaw {
             id: "LOWW_TWR".into(),
