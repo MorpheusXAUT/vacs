@@ -20,14 +20,188 @@ pub struct Network {
 }
 
 impl Network {
-    pub fn load_from_dir(dir: impl AsRef<std::path::Path>) -> Result<Self, CoverageError> {
-        Self::parse_dir(dir, true).map(|(net, _)| net)
-    }
+    #[tracing::instrument(level = "trace", skip(dir), fields(dir = tracing::field::Empty))]
+    pub fn load_from_dir(dir: impl AsRef<std::path::Path>) -> Result<Self, Vec<CoverageError>> {
+        let dir = dir.as_ref();
+        tracing::Span::current().record("dir", tracing::field::debug(dir));
 
-    pub fn validate_dir(
-        dir: impl AsRef<std::path::Path>,
-    ) -> Result<(Self, Vec<CoverageError>), CoverageError> {
-        Self::parse_dir(dir, false)
+        let entries = match fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(err) => {
+                return Err(vec![
+                    IoError::Read {
+                        path: dir.to_path_buf(),
+                        reason: err.to_string(),
+                    }
+                    .into(),
+                ]);
+            }
+        };
+
+        let mut errors = Vec::new();
+        let mut raw_firs = Vec::new();
+
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    let err: CoverageError = IoError::ReadEntry(err.to_string()).into();
+                    tracing::warn!(?err, "Failed to read directory entry");
+                    errors.push(err);
+                    continue;
+                }
+            };
+            let path = entry.path();
+            if !path.is_dir() {
+                tracing::trace!(?path, "Skipping non-directory entry");
+                continue;
+            }
+
+            let fir = match FlightInformationRegionRaw::load_from_dir(&path) {
+                Ok(fir) => fir,
+                Err(err) => {
+                    let err: CoverageError = StructureError::Load {
+                        entity: "FIR".to_string(),
+                        id: path.display().to_string(),
+                        reason: err.to_string(),
+                    }
+                    .into();
+                    tracing::warn!(?err, ?path, "Failed to load FIR");
+                    errors.push(err);
+                    continue;
+                }
+            };
+
+            raw_firs.push(fir);
+        }
+
+        let mut firs = HashMap::new();
+        let mut stations = HashMap::new();
+        let mut positions = HashMap::new();
+
+        // TODO ensure stations IDs are globally unique
+        let all_stations = raw_firs
+            .iter()
+            .flat_map(|fir| fir.stations.iter().map(|s| (s.id.clone(), s)))
+            .collect::<HashMap<_, _>>();
+
+        let all_station_ids = all_stations.keys().collect::<HashSet<_>>();
+
+        for fir_raw in &raw_firs {
+            for profile in fir_raw.profiles.values() {
+                if let Err(err) = profile.validate_references(&all_station_ids) {
+                    tracing::warn!(?err, ?profile.id, "Invalid reference in profile");
+                    errors.push(err);
+                }
+            }
+        }
+
+        for fir_raw in &raw_firs {
+            match FlightInformationRegion::try_from(fir_raw.clone()) {
+                Ok(fir) => {
+                    if firs.contains_key(&fir.id) {
+                        let err: CoverageError = StructureError::Duplicate {
+                            entity: "FIR".to_string(),
+                            id: fir.id.to_string(),
+                        }
+                        .into();
+                        tracing::warn!(?fir, "Duplicate FIR ID");
+                        errors.push(err);
+                        continue;
+                    }
+                    firs.insert(fir.id.clone(), fir);
+                }
+                Err(err) => {
+                    let err: CoverageError = StructureError::Load {
+                        entity: "FIR".to_string(),
+                        id: fir_raw.id.to_string(),
+                        reason: err.to_string(),
+                    }
+                    .into();
+                    tracing::warn!(?err, ?fir_raw, "Failed to parse FIR");
+                    errors.push(err);
+                    continue;
+                }
+            };
+
+            for station_raw in &fir_raw.stations {
+                if stations.contains_key(&station_raw.id) {
+                    let err: CoverageError = StructureError::Duplicate {
+                        entity: "Station".to_string(),
+                        id: station_raw.id.to_string(),
+                    }
+                    .into();
+                    tracing::warn!(?station_raw, "Duplicate station ID");
+                    errors.push(err);
+                    continue;
+                }
+
+                let station =
+                    match Station::from_raw(station_raw.clone(), fir_raw.id.clone(), &all_stations)
+                    {
+                        Ok(station) => station,
+                        Err(err) => {
+                            let err: CoverageError = StructureError::Load {
+                                entity: "Station".to_string(),
+                                id: station_raw.id.to_string(),
+                                reason: err.to_string(),
+                            }
+                            .into();
+                            tracing::warn!(?err, ?station_raw, "Failed to parse station");
+                            errors.push(err);
+                            continue;
+                        }
+                    };
+
+                if station.controlled_by.is_empty() {
+                    let err: CoverageError =
+                        StructureError::EmptyCoverage(station.id.to_string()).into();
+                    tracing::warn!(?station, "Station has no coverage");
+                    errors.push(err);
+                    continue;
+                }
+                stations.insert(station.id.clone(), station);
+            }
+
+            for position_raw in &fir_raw.positions {
+                match Position::from_raw(position_raw.clone(), fir_raw.id.clone()) {
+                    Ok(position) => {
+                        if positions.contains_key(&position.id) {
+                            let err: CoverageError = StructureError::Duplicate {
+                                entity: "Position".to_string(),
+                                id: position.id.to_string(),
+                            }
+                            .into();
+                            tracing::warn!(?position, "Duplicate position ID");
+                            errors.push(err);
+                            continue;
+                        }
+                        positions.insert(position.id.clone(), position);
+                    }
+                    Err(err) => {
+                        let err: CoverageError = StructureError::Load {
+                            entity: "Position".to_string(),
+                            id: position_raw.id.to_string(),
+                            reason: err.to_string(),
+                        }
+                        .into();
+                        tracing::warn!(?err, ?position_raw, "Failed to parse position");
+                        errors.push(err);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok(Self {
+            firs,
+            positions,
+            stations,
+        })
     }
 
     pub fn has_position(&self, id: &PositionId) -> bool {
@@ -192,214 +366,6 @@ impl Network {
 
         changes.sort();
         changes
-    }
-
-    #[tracing::instrument(level = "trace", skip(dir), err, fields(dir = tracing::field::Empty))]
-    fn parse_dir(
-        dir: impl AsRef<std::path::Path>,
-        strict: bool,
-    ) -> Result<(Self, Vec<CoverageError>), CoverageError> {
-        let dir = dir.as_ref();
-        tracing::Span::current().record("dir", tracing::field::debug(dir));
-
-        let entries = fs::read_dir(dir).map_err(|err| IoError::Read {
-            path: dir.to_path_buf(),
-            reason: err.to_string(),
-        })?;
-
-        let mut errors = Vec::new();
-        let mut raw_firs = Vec::new();
-
-        for entry in entries {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    let err: CoverageError = IoError::ReadEntry(err.to_string()).into();
-                    if strict {
-                        return Err(err);
-                    }
-                    tracing::warn!(?err, "Failed to read directory entry");
-                    errors.push(err);
-                    continue;
-                }
-            };
-            let path = entry.path();
-            if !path.is_dir() {
-                tracing::trace!(?path, "Skipping non-directory entry");
-                continue;
-            }
-
-            let fir = match FlightInformationRegionRaw::load_from_dir(&path) {
-                Ok(fir) => fir,
-                Err(err) => {
-                    let err: CoverageError = StructureError::Load {
-                        entity: "FIR".to_string(),
-                        id: path.display().to_string(),
-                        reason: err.to_string(),
-                    }
-                    .into();
-                    if strict {
-                        return Err(err);
-                    }
-                    tracing::warn!(?err, ?path, "Failed to load FIR");
-                    errors.push(err);
-                    continue;
-                }
-            };
-
-            raw_firs.push(fir);
-        }
-
-        let mut firs = HashMap::new();
-        let mut stations = HashMap::new();
-        let mut positions = HashMap::new();
-
-        // TODO ensure stations IDs are globally unique
-        let all_stations = raw_firs
-            .iter()
-            .flat_map(|fir| fir.stations.iter().map(|s| (s.id.clone(), s)))
-            .collect::<HashMap<_, _>>();
-
-        let all_station_ids = all_stations.keys().collect::<HashSet<_>>();
-
-        for fir_raw in &raw_firs {
-            for profile in fir_raw.profiles.values() {
-                if let Err(err) = profile.validate_references(&all_station_ids) {
-                    if strict {
-                        return Err(err);
-                    }
-                    tracing::warn!(?err, ?profile.id, "Invalid reference in profile");
-                    errors.push(err);
-                }
-            }
-        }
-
-        for fir_raw in &raw_firs {
-            match FlightInformationRegion::try_from(fir_raw.clone()) {
-                Ok(fir) => {
-                    if firs.contains_key(&fir.id) {
-                        let err: CoverageError = StructureError::Duplicate {
-                            entity: "FIR".to_string(),
-                            id: fir.id.to_string(),
-                        }
-                        .into();
-                        if strict {
-                            return Err(err);
-                        }
-                        tracing::warn!(?fir, "Duplicate FIR ID");
-                        errors.push(err);
-                        continue;
-                    }
-                    firs.insert(fir.id.clone(), fir);
-                }
-                Err(err) => {
-                    let err: CoverageError = StructureError::Load {
-                        entity: "FIR".to_string(),
-                        id: fir_raw.id.to_string(),
-                        reason: err.to_string(),
-                    }
-                    .into();
-                    if strict {
-                        return Err(err);
-                    }
-                    tracing::warn!(?err, ?fir_raw, "Failed to parse FIR");
-                    errors.push(err);
-                    continue;
-                }
-            };
-
-            for station_raw in &fir_raw.stations {
-                if stations.contains_key(&station_raw.id) {
-                    let err: CoverageError = StructureError::Duplicate {
-                        entity: "Station".to_string(),
-                        id: station_raw.id.to_string(),
-                    }
-                    .into();
-                    if strict {
-                        return Err(err);
-                    }
-                    tracing::warn!(?station_raw, "Duplicate station ID");
-                    errors.push(err);
-                    continue;
-                }
-
-                let station =
-                    match Station::from_raw(station_raw.clone(), fir_raw.id.clone(), &all_stations)
-                    {
-                        Ok(station) => station,
-                        Err(err) => {
-                            let err: CoverageError = StructureError::Load {
-                                entity: "Station".to_string(),
-                                id: station_raw.id.to_string(),
-                                reason: err.to_string(),
-                            }
-                            .into();
-                            if strict {
-                                return Err(err);
-                            }
-                            tracing::warn!(?err, ?station_raw, "Failed to parse station");
-                            errors.push(err);
-                            continue;
-                        }
-                    };
-
-                if station.controlled_by.is_empty() {
-                    let err: CoverageError =
-                        StructureError::EmptyCoverage(station.id.to_string()).into();
-                    if strict {
-                        return Err(err);
-                    }
-                    tracing::warn!(?station, "Station has no coverage");
-                    errors.push(err);
-                    continue;
-                }
-                stations.insert(station.id.clone(), station);
-            }
-
-            for position_raw in &fir_raw.positions {
-                match Position::from_raw(position_raw.clone(), fir_raw.id.clone()) {
-                    Ok(position) => {
-                        if positions.contains_key(&position.id) {
-                            let err: CoverageError = StructureError::Duplicate {
-                                entity: "Position".to_string(),
-                                id: position.id.to_string(),
-                            }
-                            .into();
-                            if strict {
-                                return Err(err);
-                            }
-                            tracing::warn!(?position, "Duplicate position ID");
-                            errors.push(err);
-                            continue;
-                        }
-                        positions.insert(position.id.clone(), position);
-                    }
-                    Err(err) => {
-                        let err: CoverageError = StructureError::Load {
-                            entity: "Position".to_string(),
-                            id: position_raw.id.to_string(),
-                            reason: err.to_string(),
-                        }
-                        .into();
-                        if strict {
-                            return Err(err);
-                        }
-                        tracing::warn!(?err, ?position_raw, "Failed to parse position");
-                        errors.push(err);
-                        continue;
-                    }
-                }
-            }
-        }
-
-        Ok((
-            Self {
-                firs,
-                positions,
-                stations,
-            },
-            errors,
-        ))
     }
 }
 
@@ -566,49 +532,44 @@ mod tests {
     }
 
     #[test]
-    fn parse_dir_valid_single() {
+    fn load_from_dir_valid_single() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");
 
-        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
+        let network = Network::load_from_dir(dir.path()).unwrap();
         assert_eq!(network.firs.len(), 1);
         assert!(network.firs.contains_key("LOVV"));
         assert_eq!(network.stations.len(), 1);
         assert_eq!(network.positions.len(), 1);
-        assert!(errors.is_empty());
     }
 
     #[test]
-    fn parse_dir_valid_multiple() {
+    fn load_from_dir_valid_multiple() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");
         create_minimal_valid_fir(dir.path(), "EDMM");
 
-        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
+        let network = Network::load_from_dir(dir.path()).unwrap();
         assert_eq!(network.firs.len(), 2);
         assert!(network.firs.contains_key("LOVV"));
         assert!(network.firs.contains_key("EDMM"));
         assert_eq!(network.stations.len(), 2);
         assert_eq!(network.positions.len(), 2);
-        assert!(errors.is_empty());
     }
 
     #[test]
-    fn parse_dir_duplicate_fir_id() {
+    fn load_from_dir_duplicate_fir_id() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");
         create_minimal_valid_fir(dir.path(), "lovv");
 
-        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
-        assert_eq!(network.firs.len(), 1);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 1);
+        let errors = Network::load_from_dir(dir.path()).unwrap_err();
         assert_eq!(errors.len(), 1);
         assert_matches!(&errors[0], CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "FIR");
     }
 
     #[test]
-    fn parse_dir_duplicate_station_id_same_fir() {
+    fn load_from_dir_duplicate_station_id_same_fir() {
         let dir = tempfile::tempdir().unwrap();
         TestFirBuilder::new("LOVV")
             .station("LOWW_TWR", &["LOWW_TWR"])
@@ -616,16 +577,13 @@ mod tests {
             .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
             .create(dir.path());
 
-        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
-        assert_eq!(network.firs.len(), 1);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 1);
+        let errors = Network::load_from_dir(dir.path()).unwrap_err();
         assert!(!errors.is_empty());
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Station")));
     }
 
     #[test]
-    fn parse_dir_duplicate_station_id_different_fir() {
+    fn load_from_dir_duplicate_station_id_different_fir() {
         let dir = tempfile::tempdir().unwrap();
         TestFirBuilder::new("LOVV")
             .station("LOWW_TWR", &["LOWW_TWR"])
@@ -637,16 +595,13 @@ mod tests {
             .position("EDDM_S_TWR", &["EDDM"], "120.505", "Tower")
             .create(dir.path());
 
-        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
-        assert_eq!(network.firs.len(), 2);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 2);
+        let errors = Network::load_from_dir(dir.path()).unwrap_err();
         assert!(!errors.is_empty());
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Station")));
     }
 
     #[test]
-    fn parse_dir_duplicate_position_id_same_fir() {
+    fn load_from_dir_duplicate_position_id_same_fir() {
         let dir = tempfile::tempdir().unwrap();
         TestFirBuilder::new("LOVV")
             .station("LOWW_TWR", &["LOWW_TWR"])
@@ -654,16 +609,13 @@ mod tests {
             .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
             .create(dir.path());
 
-        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
-        assert_eq!(network.firs.len(), 1);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 1);
+        let errors = Network::load_from_dir(dir.path()).unwrap_err();
         assert!(!errors.is_empty());
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Position")));
     }
 
     #[test]
-    fn parse_dir_duplicate_position_id_different_fir() {
+    fn load_from_dir_duplicate_position_id_different_fir() {
         let dir = tempfile::tempdir().unwrap();
         TestFirBuilder::new("LOVV")
             .station("LOWW_TWR", &["LOWW_TWR"])
@@ -675,109 +627,22 @@ mod tests {
             .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
             .create(dir.path());
 
-        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
-        assert_eq!(network.firs.len(), 2);
-        assert_eq!(network.stations.len(), 2);
-        assert_eq!(network.positions.len(), 1);
+        let errors = Network::load_from_dir(dir.path()).unwrap_err();
         assert!(!errors.is_empty());
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, .. }) if entity == "Position")));
     }
 
     #[test]
-    fn parse_dir_empty_coverage() {
+    fn load_from_dir_empty_coverage() {
         let dir = tempfile::tempdir().unwrap();
         TestFirBuilder::new("LOVV")
             .station("LOWW_TWR", &[])
             .position("LOWW_TWR", &["LOWW"], "119.400", "Tower")
             .create(dir.path());
 
-        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
-        assert_eq!(network.firs.len(), 1);
-        assert_eq!(network.stations.len(), 0);
-        assert_eq!(network.positions.len(), 1);
+        let errors = Network::load_from_dir(dir.path()).unwrap_err();
         assert_eq!(errors.len(), 1);
         assert_matches!(&errors[0], CoverageError::Structure(StructureError::EmptyCoverage(station)) if station == "LOWW_TWR");
-    }
-
-    #[test]
-    fn parse_dir_multiple_errors() {
-        let dir = tempfile::tempdir().unwrap();
-
-        // FIR 1: Malformed TOML
-        let fir1 = dir.path().join("FIR1");
-        fs::create_dir(&fir1).unwrap();
-        fs::write(fir1.join("stations.toml"), "invalid").unwrap();
-        fs::write(fir1.join("positions.toml"), "").unwrap();
-
-        // FIR 2: Duplicate station within same FIR file
-        TestFirBuilder::new("FIR2")
-            .station("A", &["A"])
-            .station("A", &["A"])
-            .position("B", &["B"], "199.998", "Center")
-            .create(dir.path());
-
-        let (network, errors) = Network::parse_dir(dir.path(), false).unwrap();
-        assert_eq!(network.firs.len(), 1);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 1);
-        assert!(errors.len() >= 2);
-        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"))));
-        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Station" && id == "A")));
-    }
-
-    #[test]
-    fn validate_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        create_minimal_valid_fir(dir.path(), "LOVV");
-        create_minimal_valid_fir(dir.path(), "EDMM");
-
-        let (network, errors) = Network::validate_dir(dir.path()).unwrap();
-        assert_eq!(network.firs.len(), 2);
-        assert!(network.firs.contains_key("LOVV"));
-        assert!(network.firs.contains_key("EDMM"));
-        assert_eq!(network.stations.len(), 2);
-        assert_eq!(network.positions.len(), 2);
-        assert!(errors.is_empty());
-    }
-
-    #[test]
-    fn validate_dir_error() {
-        let dir = tempfile::tempdir().unwrap();
-
-        // FIR 1: Malformed TOML
-        let fir1 = dir.path().join("FIR1");
-        fs::create_dir(&fir1).unwrap();
-        fs::write(fir1.join("stations.toml"), "invalid").unwrap();
-        fs::write(fir1.join("positions.toml"), "").unwrap();
-
-        // FIR 2: Duplicate station within same FIR file
-        TestFirBuilder::new("FIR2")
-            .station("A", &["A"])
-            .station("A", &["A"])
-            .position("B", &["B"], "199.998", "Center")
-            .create(dir.path());
-
-        let (network, errors) = Network::validate_dir(dir.path()).unwrap();
-        assert_eq!(network.firs.len(), 1);
-        assert_eq!(network.stations.len(), 1);
-        assert_eq!(network.positions.len(), 1);
-        assert!(errors.len() >= 2);
-        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"))));
-        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Station" && id == "A")));
-    }
-
-    #[test]
-    fn load_from_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        create_minimal_valid_fir(dir.path(), "LOVV");
-        create_minimal_valid_fir(dir.path(), "EDMM");
-
-        let network = Network::load_from_dir(dir.path()).expect("should load from dir");
-        assert_eq!(network.firs.len(), 2);
-        assert!(network.firs.contains_key("LOVV"));
-        assert!(network.firs.contains_key("EDMM"));
-        assert_eq!(network.stations.len(), 2);
-        assert_eq!(network.positions.len(), 2);
     }
 
     #[test]
@@ -797,8 +662,10 @@ mod tests {
             .position("B", &["B"], "199.998", "Center")
             .create(dir.path());
 
-        let err = Network::load_from_dir(dir.path()).expect_err("should not load from dir");
-        assert_matches!(err, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"));
+        let errors = Network::load_from_dir(dir.path()).expect_err("should not load from dir");
+        assert!(errors.len() >= 2);
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"))));
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Station" && id == "A")));
     }
 
     #[test]
@@ -1456,43 +1323,25 @@ mod tests {
     }
 
     #[test]
-    fn validate_dir_cross_fir_references() {
+    fn load_from_dir_cross_fir_references() {
         let dir = tempfile::tempdir().unwrap();
 
         // FIR 1: Defines station S
-        let fir1 = dir.path().join("FIR1");
-        fs::create_dir(&fir1).unwrap();
-        // Station S controlled by P1 to avoid EmptyCoverage error
-        fs::write(
-            fir1.join("stations.toml"),
-            "[[stations]]\nid=\"S\"\ncontrolled_by=[\"P1\"]",
-        )
-        .unwrap();
-        // P1 with valid prefixes
-        fs::write(
-            fir1.join("positions.toml"),
-            "[[positions]]\nid=\"P1\"\nprefixes=[\"P\"]\nfrequency=\"118.000\"\nfacility_type=\"Tower\"",
-        )
-        .unwrap();
+        TestFirBuilder::new("FIR1")
+            .station("S", &["P1"])
+            .position("P1", &["P"], "118.000", "Tower")
+            .create(dir.path());
 
-        // FIR 2: References station S in a profile
+        // FIR 2: Has Profile 'P' referencing 'S'
+        // Needs at least one station to be valid
+        TestFirBuilder::new("FIR2")
+            .station("DUMMY", &["DUMMY"])
+            .position("DUMMY", &["D"], "199.998", "Tower")
+            .create(dir.path());
+
         let fir2 = dir.path().join("FIR2");
-        fs::create_dir(&fir2).unwrap();
-        // FIR2 has no stations (empty list)
-        fs::write(
-            fir2.join("stations.toml"),
-            "[[stations]]\nid=\"DUMMY\"\ncontrolled_by=[\"P2\"]",
-        )
-        .unwrap();
-        // P2 with valid prefixes
-        fs::write(
-            fir2.join("positions.toml"),
-            "[[positions]]\nid=\"P2\"\nprefixes=[\"P\"]\nfrequency=\"119.000\"\nfacility_type=\"Tower\"",
-        )
-        .unwrap();
-
         let profile = r#"
-            id = "CrossReference"
+            id = "P"
             type = "Geo"
             [[buttons]]
             label = ["A"]
@@ -1506,12 +1355,8 @@ mod tests {
         fs::write(fir2.join("profile.toml"), profile).unwrap();
 
         // Should succeed because S exists in FIR1
-        let (_, errors) = Network::validate_dir(dir.path()).unwrap();
-        assert!(
-            errors.is_empty(),
-            "Validation failed with errors: {:#?}",
-            errors
-        );
+        let res = Network::load_from_dir(dir.path());
+        res.expect("should load from dir");
 
         // Now verify invalid reference fails
         let profile_invalid = r#"
@@ -1528,8 +1373,7 @@ mod tests {
         "#;
         fs::write(fir2.join("profile.toml"), profile_invalid).unwrap();
 
-        // Use strict mode (load_from_dir) to verify it fails
         let res = Network::load_from_dir(dir.path());
-        assert_matches!(res, Err(CoverageError::Validation(ValidationError::MissingReference { field, ref_id })) if field == "station_id" && ref_id == "NON_EXISTENT");
+        assert_matches!(res, Err(errors) if errors.iter().any(|e| matches!(e, CoverageError::Validation(ValidationError::MissingReference { field, ref_id }) if field == "station_id" && ref_id == "NON_EXISTENT")));
     }
 }
