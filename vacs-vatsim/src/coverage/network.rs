@@ -9,11 +9,10 @@ use crate::coverage::station::Station;
 use crate::coverage::{CoverageError, IoError, StructureError};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use vacs_protocol::vatsim::{PositionId, StationChange, StationId};
+use vacs_protocol::vatsim::{PositionId, ProfileId, StationChange, StationId};
 
 #[derive(Debug, Clone, Default)]
 pub struct Network {
-    #[allow(dead_code)]
     firs: HashMap<FlightInformationRegionId, FlightInformationRegion>,
     positions: HashMap<PositionId, Position>,
     stations: HashMap<StationId, Station>,
@@ -204,10 +203,6 @@ impl Network {
         })
     }
 
-    pub fn has_position(&self, id: &PositionId) -> bool {
-        self.positions.contains_key(id)
-    }
-
     #[tracing::instrument(level = "trace", skip_all, fields(callsign = tracing::field::Empty, frequency = tracing::field::Empty, facility_type = tracing::field::Empty))]
     pub fn find_positions(
         &self,
@@ -367,6 +362,25 @@ impl Network {
         changes.sort();
         changes
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn relevant_stations(&self, selection: ProfileSelection) -> RelevantStations<'_> {
+        match selection {
+            ProfileSelection::Specific(profile_id) => {
+                let Some(profile) = self
+                    .firs
+                    .iter()
+                    .find_map(|(_, fir)| fir.profiles.get(&profile_id))
+                else {
+                    tracing::trace!("Profile not found");
+                    return RelevantStations::None;
+                };
+                RelevantStations::Subset(&profile.relevant_station_ids)
+            }
+            ProfileSelection::Custom => RelevantStations::All,
+            ProfileSelection::None => RelevantStations::None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
@@ -374,6 +388,29 @@ pub enum PositionChange {
     #[default]
     Disconnected,
     Connected,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProfileSelection {
+    Specific(ProfileId),
+    Custom,
+    None,
+}
+
+impl From<Option<ProfileId>> for ProfileSelection {
+    fn from(profile_id: Option<ProfileId>) -> Self {
+        match profile_id {
+            Some(profile_id) => ProfileSelection::Specific(profile_id),
+            None => ProfileSelection::None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RelevantStations<'a> {
+    All,
+    Subset(&'a HashSet<StationId>),
+    None,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -783,6 +820,72 @@ mod tests {
         let positions = network.find_positions("LOWI_S_APP", "128.975", FacilityType::Approach);
         assert_eq!(positions.len(), 1);
         assert_eq!(positions[0].id.as_str(), "LOWI_S_APP");
+    }
+
+    #[test]
+    fn relevant_stations_specific_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        std::fs::write(
+            fir_path.join("stations.toml"),
+            "[[stations]]\nid=\"S1\"\ncontrolled_by=[\"S1\"]",
+        )
+        .unwrap();
+        std::fs::write(
+            fir_path.join("positions.toml"),
+            "[[positions]]\nid=\"P1\"\nprefixes=[\"P1\"]\nfrequency=\"118.000\"\nfacility_type=\"Tower\"",
+        )
+        .unwrap();
+
+        let profile = r#"
+            id = "P"
+            type = "Geo"
+            [[buttons]]
+            label = ["B"]
+            x = 0
+            y = 0
+            size = 10
+            page.keys = [{ label = ["K"], station_id = "S1" }]
+        "#;
+        std::fs::write(fir_path.join("profile.toml"), profile).unwrap();
+
+        let network = Network::load_from_dir(dir.path()).unwrap();
+        let result = network.relevant_stations(ProfileSelection::Specific(ProfileId::from("P")));
+
+        assert_matches!(result, RelevantStations::Subset(ids) if ids.contains(&StationId::from("S1")));
+    }
+
+    #[test]
+    fn relevant_stations_specific_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let result =
+            network.relevant_stations(ProfileSelection::Specific(ProfileId::from("Missing")));
+        assert_eq!(result, RelevantStations::None);
+    }
+
+    #[test]
+    fn relevant_stations_custom() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let result = network.relevant_stations(ProfileSelection::Custom);
+        assert_eq!(result, RelevantStations::All);
+    }
+
+    #[test]
+    fn relevant_stations_none() {
+        let dir = tempfile::tempdir().unwrap();
+        create_minimal_valid_fir(dir.path(), "LOVV");
+        let network = Network::load_from_dir(dir.path()).unwrap();
+
+        let result = network.relevant_stations(ProfileSelection::None);
+        assert_eq!(result, RelevantStations::None);
     }
 
     #[test]
