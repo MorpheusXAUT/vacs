@@ -7,6 +7,7 @@ use vacs_protocol::vatsim::{ProfileId, StationId};
 pub struct Profile {
     pub id: ProfileId,
     pub profile_type: ProfileType,
+    pub relevant_station_ids: HashSet<StationId>,
 }
 
 #[derive(Debug, Clone)]
@@ -110,9 +111,13 @@ impl Profile {
             ),
         };
 
+        let mut relevant_station_ids = HashSet::new();
+        profile_type.collect_station_ids(&mut relevant_station_ids);
+
         Ok(Self {
             id: profile_raw.id,
             profile_type,
+            relevant_station_ids,
         })
     }
 
@@ -137,6 +142,21 @@ impl ProfileType {
         }
         Ok(())
     }
+
+    fn collect_station_ids(&self, ids: &mut HashSet<StationId>) {
+        match self {
+            ProfileType::Geo(buttons) => {
+                for button in buttons {
+                    button.page.collect_station_ids(ids);
+                }
+            }
+            ProfileType::Tabbed(tabs) => {
+                for page in tabs.values() {
+                    page.collect_station_ids(ids);
+                }
+            }
+        }
+    }
 }
 
 impl GeoPageButton {
@@ -151,6 +171,14 @@ impl DirectAccessPage {
             key.validate_references(stations)?;
         }
         Ok(())
+    }
+
+    fn collect_station_ids(&self, ids: &mut HashSet<StationId>) {
+        for key in &self.keys {
+            if let Some(station_id) = &key.station_id {
+                ids.insert(station_id.clone());
+            }
+        }
     }
 }
 
@@ -610,5 +638,58 @@ mod tests {
             long_label.validate(),
             Err(CoverageError::Validation(ValidationError::InvalidValue { field, .. })) if field == "label"
         );
+    }
+
+    #[test]
+    fn profile_relevant_stations() {
+        let raw = ProfileRaw {
+            id: ProfileId::from("test"),
+            profile_type: ProfileTypeRaw::Geo {
+                buttons: vec![
+                    GeoPageButtonRaw {
+                        label: vec!["B1".to_string()],
+                        x: 0,
+                        y: 0,
+                        size: 10,
+                        page: DirectAccessPageRaw {
+                            keys: vec![DirectAccessKeyRaw {
+                                label: vec!["K1".to_string()],
+                                station_id: Some(StationId::from("S1")),
+                            }],
+                            rows: None,
+                            columns: None,
+                        },
+                    },
+                    GeoPageButtonRaw {
+                        label: vec!["B2".to_string()],
+                        x: 10,
+                        y: 10,
+                        size: 10,
+                        page: DirectAccessPageRaw {
+                            keys: vec![
+                                DirectAccessKeyRaw {
+                                    label: vec!["K2".to_string()],
+                                    station_id: Some(StationId::from("S2")),
+                                },
+                                DirectAccessKeyRaw {
+                                    label: vec!["K3".to_string()],
+                                    station_id: Some(StationId::from("S1")), // Duplicate
+                                },
+                                DirectAccessKeyRaw {
+                                    label: vec!["K4".to_string()],
+                                    station_id: None,
+                                },
+                            ],
+                            rows: None,
+                            columns: None,
+                        },
+                    },
+                ],
+            },
+        };
+
+        let profile = Profile::from_raw(raw).expect("Should be valid");
+        let expected = HashSet::from([StationId::from("S1"), StationId::from("S2")]);
+        assert_eq!(profile.relevant_station_ids, expected);
     }
 }
