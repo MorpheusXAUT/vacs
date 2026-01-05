@@ -9,7 +9,7 @@ use vacs_protocol::vatsim::PositionId;
 
 static FREQUENCY_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{3}\.\d{3}$").unwrap());
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Position {
     pub id: PositionId,
     pub prefixes: HashSet<String>,
@@ -18,7 +18,7 @@ pub struct Position {
     pub fir_id: FlightInformationRegionId,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct PositionRaw {
     pub id: PositionId,
     pub prefixes: HashSet<String>,
@@ -29,6 +29,18 @@ pub(super) struct PositionRaw {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct PositionConfigFile {
     pub positions: Vec<PositionRaw>,
+}
+
+impl std::fmt::Debug for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Position")
+            .field("id", &self.id)
+            .field("prefixes", &self.prefixes.len())
+            .field("frequency", &self.frequency)
+            .field("facility_type", &self.facility_type)
+            .field("fir_id", &self.fir_id)
+            .finish()
+    }
 }
 
 impl PartialEq for Position {
@@ -57,6 +69,17 @@ impl Position {
             facility_type: position_raw.facility_type,
             fir_id: fir_id.into(),
         })
+    }
+}
+
+impl std::fmt::Debug for PositionRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PositionRaw")
+            .field("id", &self.id)
+            .field("prefixes", &self.prefixes.len())
+            .field("frequency", &self.frequency)
+            .field("facility_type", &self.facility_type)
+            .finish()
     }
 }
 

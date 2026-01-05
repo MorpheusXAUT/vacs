@@ -9,11 +9,21 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use vacs_protocol::vatsim::{PositionId, ProfileId, StationChange, StationId};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Network {
     firs: HashMap<FlightInformationRegionId, FlightInformationRegion>,
     positions: HashMap<PositionId, Position>,
     stations: HashMap<StationId, Station>,
+}
+
+impl std::fmt::Debug for Network {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Network")
+            .field("firs", &self.firs.len())
+            .field("positions", &self.positions.len())
+            .field("stations", &self.stations.len())
+            .finish()
+    }
 }
 
 impl Network {

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use vacs_protocol::vatsim::{PositionId, StationId};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Station {
     pub id: StationId,
     pub parent_id: Option<StationId>,
@@ -12,10 +12,10 @@ pub struct Station {
     pub fir_id: FlightInformationRegionId,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct StationRaw {
     pub id: StationId,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<StationId>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub controlled_by: Vec<PositionId>,
@@ -24,6 +24,17 @@ pub(super) struct StationRaw {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct StationConfigFile {
     pub stations: Vec<StationRaw>,
+}
+
+impl std::fmt::Debug for Station {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Station")
+            .field("id", &self.id)
+            .field("parent_id", &self.parent_id)
+            .field("controlled_by", &self.controlled_by.len())
+            .field("fir_id", &self.fir_id)
+            .finish()
+    }
 }
 
 impl PartialEq for Station {
@@ -53,6 +64,16 @@ impl Station {
             controlled_by,
             fir_id: fir_id.into(),
         })
+    }
+}
+
+impl std::fmt::Debug for StationRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StationRaw")
+            .field("id", &self.id)
+            .field("parent_id", &self.parent_id)
+            .field("controlled_by", &self.controlled_by.len())
+            .finish()
     }
 }
 
