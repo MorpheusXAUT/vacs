@@ -3,20 +3,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use vacs_protocol::vatsim::{ProfileId, StationId};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Profile {
     pub id: ProfileId,
     pub profile_type: ProfileType,
     pub relevant_station_ids: HashSet<StationId>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum ProfileType {
     Geo(Vec<GeoPageButton>),                   // len > 0
     Tabbed(HashMap<String, DirectAccessPage>), // len > 0
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GeoPageButton {
     pub label: Vec<String>, // len 0..=3
     pub x: u8,              // 0..=100
@@ -25,27 +25,27 @@ pub struct GeoPageButton {
     pub page: DirectAccessPage,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DirectAccessPage {
     pub keys: Vec<DirectAccessKey>, // len > 0
     pub rows: Option<u8>,           // XOR columns
     pub columns: Option<u8>,        // XOR rows
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DirectAccessKey {
     pub label: Vec<String>, // len 0..=3
     pub station_id: Option<StationId>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct ProfileRaw {
     pub id: ProfileId,
     #[serde(flatten)]
     pub profile_type: ProfileTypeRaw,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub(super) enum ProfileTypeRaw {
     Geo {
@@ -56,7 +56,7 @@ pub(super) enum ProfileTypeRaw {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct GeoPageButtonRaw {
     pub label: Vec<String>,
     pub x: u8,
@@ -65,20 +65,30 @@ pub(super) struct GeoPageButtonRaw {
     pub page: DirectAccessPageRaw,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct DirectAccessPageRaw {
     pub keys: Vec<DirectAccessKeyRaw>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rows: Option<u8>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub columns: Option<u8>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct DirectAccessKeyRaw {
     pub label: Vec<String>,
     #[serde(default)]
     pub station_id: Option<StationId>,
+}
+
+impl std::fmt::Debug for Profile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Profile")
+            .field("id", &self.id)
+            .field("profile_type", &self.profile_type)
+            .field("relevant_stations", &self.relevant_station_ids.len())
+            .finish()
+    }
 }
 
 impl PartialEq for Profile {
@@ -126,6 +136,15 @@ impl Profile {
     }
 }
 
+impl std::fmt::Debug for ProfileType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Geo(buttons) => f.debug_tuple("Geo").field(&buttons.len()).finish(),
+            Self::Tabbed(tabs) => f.debug_tuple("Tabbed").field(&tabs.len()).finish(),
+        }
+    }
+}
+
 impl ProfileType {
     fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
         match self {
@@ -165,6 +184,28 @@ impl GeoPageButton {
     }
 }
 
+impl std::fmt::Debug for GeoPageButton {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeoPageButton")
+            .field("label", &self.label.len())
+            .field("x", &self.x)
+            .field("y", &self.y)
+            .field("size", &self.size)
+            .field("page", &self.page)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for DirectAccessPage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DirectAccessPage")
+            .field("keys", &self.keys.len())
+            .field("rows", &self.rows)
+            .field("columns", &self.columns)
+            .finish()
+    }
+}
+
 impl DirectAccessPage {
     fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
         for key in &self.keys {
@@ -179,6 +220,15 @@ impl DirectAccessPage {
                 ids.insert(station_id.clone());
             }
         }
+    }
+}
+
+impl std::fmt::Debug for DirectAccessKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DirectAccessKey")
+            .field("label", &self.label.len())
+            .field("station_id", &self.station_id)
+            .finish()
     }
 }
 
@@ -279,6 +329,46 @@ impl Validator for ProfileTypeRaw {
     }
 }
 
+impl std::fmt::Debug for ProfileRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProfileRaw")
+            .field("id", &self.id)
+            .field("profile_type", &self.profile_type)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for ProfileTypeRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Geo { buttons } => f.debug_tuple("Geo").field(&buttons.len()).finish(),
+            Self::Tabbed { tabs } => f.debug_tuple("Tabbed").field(&tabs.len()).finish(),
+        }
+    }
+}
+
+impl std::fmt::Debug for DirectAccessPageRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DirectAccessPageRaw")
+            .field("keys", &self.keys.len())
+            .field("rows", &self.rows)
+            .field("columns", &self.columns)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for GeoPageButtonRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeoPageButtonRaw")
+            .field("label", &self.label.len())
+            .field("x", &self.x)
+            .field("y", &self.y)
+            .field("size", &self.size)
+            .field("page", &self.page)
+            .finish()
+    }
+}
+
 impl Validator for GeoPageButtonRaw {
     fn validate(&self) -> Result<(), CoverageError> {
         if self.label.is_empty() {
@@ -339,6 +429,15 @@ impl Validator for DirectAccessPageRaw {
             key.validate()?;
         }
         Ok(())
+    }
+}
+
+impl std::fmt::Debug for DirectAccessKeyRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DirectAccessKeyRaw")
+            .field("label", &self.label.len())
+            .field("station_id", &self.station_id)
+            .finish()
     }
 }
 

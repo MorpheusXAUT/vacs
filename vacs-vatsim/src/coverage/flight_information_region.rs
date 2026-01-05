@@ -10,7 +10,7 @@ use vacs_protocol::vatsim::{PositionId, ProfileId, StationId};
 #[repr(transparent)]
 pub struct FlightInformationRegionId(String);
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FlightInformationRegion {
     pub id: FlightInformationRegionId,
     pub stations: HashSet<StationId>,
@@ -18,12 +18,23 @@ pub struct FlightInformationRegion {
     pub profiles: HashMap<ProfileId, Profile>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(super) struct FlightInformationRegionRaw {
     pub id: FlightInformationRegionId,
     pub stations: Vec<StationRaw>,
     pub positions: Vec<PositionRaw>,
     pub profiles: HashMap<ProfileId, Profile>,
+}
+
+impl std::fmt::Debug for FlightInformationRegion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FlightInformationRegion")
+            .field("id", &self.id)
+            .field("stations", &self.stations.len())
+            .field("positions", &self.positions.len())
+            .field("profiles", &self.profiles.len())
+            .finish()
+    }
 }
 
 impl PartialEq for FlightInformationRegion {
@@ -35,6 +46,17 @@ impl PartialEq for FlightInformationRegion {
 impl PartialOrd for FlightInformationRegion {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.id.partial_cmp(&other.id)
+    }
+}
+
+impl std::fmt::Debug for FlightInformationRegionRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FlightInformationRegionRaw")
+            .field("id", &self.id)
+            .field("stations", &self.stations.len())
+            .field("positions", &self.positions.len())
+            .field("profiles", &self.profiles.len())
+            .finish()
     }
 }
 
