@@ -31,6 +31,7 @@ impl Network {
     pub fn load_from_dir(dir: impl AsRef<std::path::Path>) -> Result<Self, Vec<CoverageError>> {
         let dir = dir.as_ref();
         tracing::Span::current().record("dir", tracing::field::debug(dir));
+        tracing::trace!("Loading network");
 
         let entries = match fs::read_dir(dir) {
             Ok(entries) => entries,
@@ -97,7 +98,7 @@ impl Network {
         for fir_raw in &raw_firs {
             for profile in fir_raw.profiles.values() {
                 if let Err(err) = profile.validate_references(&all_station_ids) {
-                    tracing::warn!(?err, ?profile.id, "Invalid reference in profile");
+                    tracing::warn!(?err, ?profile.id, ?fir_raw.id, "Invalid reference in profile");
                     errors.push(err);
                 }
             }
@@ -201,14 +202,18 @@ impl Network {
         }
 
         if !errors.is_empty() {
+            tracing::warn!(?errors, "Failed to load network");
             return Err(errors);
         }
 
-        Ok(Self {
+        let network = Self {
             firs,
             positions,
             stations,
-        })
+        };
+
+        tracing::info!(?network, "Successfully loaded network");
+        Ok(network)
     }
 
     #[tracing::instrument(level = "trace", skip_all, fields(callsign = tracing::field::Empty, frequency = tracing::field::Empty, facility_type = tracing::field::Empty))]
