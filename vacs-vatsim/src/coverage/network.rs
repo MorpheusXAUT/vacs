@@ -325,15 +325,23 @@ impl Network {
             return Vec::new();
         }
 
+        self.coverage_diff(
+            online_positions,
+            &updated_positions.iter().copied().collect(),
+        )
+    }
+
+    #[tracing::instrument(level = "trace", skip(self, from_online_positions, to_online_positions), fields(from_online_positions = from_online_positions.len(), to_online_positions = to_online_positions.len()))]
+    pub fn coverage_diff(
+        &self,
+        from_online_positions: &HashSet<&PositionId>,
+        to_online_positions: &HashSet<&PositionId>,
+    ) -> Vec<StationChange> {
         let mut changes: Vec<StationChange> = Vec::new();
 
         for station in self.stations.values() {
-            let before = self
-                .controlling_position(&station.id, online_positions)
-                .map(|p| p.id.clone());
-            let after = self
-                .controlling_position(&station.id, &updated_positions)
-                .map(|p| p.id.clone());
+            let before = self.controlling_position(&station.id, from_online_positions);
+            let after = self.controlling_position(&station.id, to_online_positions);
 
             if before == after {
                 continue;
@@ -344,7 +352,7 @@ impl Network {
                     tracing::trace!(?station, ?new_pos, "Station is now online");
                     changes.push(StationChange::Online {
                         station_id: station.id.clone(),
-                        position_id: new_pos.clone(),
+                        position_id: new_pos.id.clone(),
                     });
                 }
                 (Some(old_pos), None) => {
@@ -357,8 +365,8 @@ impl Network {
                     tracing::trace!(?station, ?old_pos, ?new_pos, "Station coverage changed");
                     changes.push(StationChange::Handoff {
                         station_id: station.id.clone(),
-                        from_position_id: old_pos.clone(),
-                        to_position_id: new_pos.clone(),
+                        from_position_id: old_pos.id.clone(),
+                        to_position_id: new_pos.id.clone(),
                     });
                 }
                 (None, None) => {}
@@ -389,10 +397,11 @@ impl Network {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum ProfileSelection {
     Specific(ProfileId),
     Custom,
+    #[default]
     None,
 }
 
@@ -405,10 +414,11 @@ impl From<Option<ProfileId>> for ProfileSelection {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum RelevantStations<'a> {
     All,
     Subset(&'a HashSet<StationId>),
+    #[default]
     None,
 }
 
