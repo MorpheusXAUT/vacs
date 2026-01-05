@@ -74,29 +74,29 @@ As we're making changes to our service, we may occasionally introduce breaking/n
 
 ## Screenshots
 
-![Main radio page displaying DA keys of stations to call](docs/screenshots/radio_page.png "radio page")
+![Main radio page displaying DA keys of stations to call](https://raw.githubusercontent.com/MorpheusXAUT/vacs/refs/heads/main/docs/screenshots/radio_page.png "radio page")
 Main radio page displaying DA keys of stations to call
 
-![Settings page for audio and radio configuration](docs/screenshots/settings.png "settings page")
+![Settings page for audio and radio configuration](https://raw.githubusercontent.com/MorpheusXAUT/vacs/refs/heads/main/docs/screenshots/settings.png "settings page")
 Settings page for audio and radio configuration
 
-![Mission page for stations profile selection](docs/screenshots/mission_page.png "mission page")
+![Mission page for stations profile selection](https://raw.githubusercontent.com/MorpheusXAUT/vacs/refs/heads/main/docs/screenshots/mission_page.png "mission page")
 Mission page for stations profile selection
 
-![Outgoing call initiated by user before being picked up](docs/screenshots/outgoing_call.png "outgoing call")
+![Outgoing call initiated by user before being picked up](https://raw.githubusercontent.com/MorpheusXAUT/vacs/refs/heads/main/docs/screenshots/outgoing_call.png "outgoing call")
 Outgoing call initiated by user before being picked up
 
-![Incoming call initiated by other user before being picked up](docs/screenshots/incoming_call.png "incoming call")
+![Incoming call initiated by other user before being picked up](https://raw.githubusercontent.com/MorpheusXAUT/vacs/refs/heads/main/docs/screenshots/incoming_call.png "incoming call")
 Incoming call initiated by other user before being picked up (DA key blinks between green and grey state)
 
-![Established call between two parties](docs/screenshots/active_call.png "active call")
+![Established call between two parties](https://raw.githubusercontent.com/MorpheusXAUT/vacs/refs/heads/main/docs/screenshots/active_call.png "active call")
 Established call between two parties (solid green DA key)
 
 ## Configuration
 
 Most settings can be modified on the client's settings page (screwdriver and wrench icon in the top right corner).
 
-Some (more advanced) settings require editing config files directly. See the [configuration docs](vacs-client/docs/config/README.md) for a detailed explanation.
+Some (more advanced) settings require editing config files directly. See the [configuration docs](https://github.com/MorpheusXAUT/vacs/blob/main/vacs-client/docs/config/README.md) for a detailed explanation.
 
 ## Support
 
@@ -176,8 +176,8 @@ While these crates were primarily developed to be used in our project's own clie
 
 The `vacs` project and all its crates and packages are dual-licensed as
 
--   **MIT License** ([LICENSE-MIT](LICENSE-MIT))
--   **Apache License, Version 2.0** ([LICENSE-APACHE](LICENSE-APACHE))
+-   **MIT License** ([LICENSE-MIT](https://github.com/MorpheusXAUT/vacs/blob/main/LICENSE-MIT))
+-   **Apache License, Version 2.0** ([LICENSE-APACHE](https://github.com/MorpheusXAUT/vacs/blob/main/LICENSE-APACHE))
 
 at your option.
 
