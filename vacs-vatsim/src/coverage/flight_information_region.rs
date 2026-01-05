@@ -86,9 +86,14 @@ impl Validator for FlightInformationRegionRaw {
 }
 
 impl FlightInformationRegionRaw {
+    #[tracing::instrument(level = "trace", skip(dir), err, fields(dir = tracing::field::Empty))]
     pub fn load_from_dir(dir: impl AsRef<std::path::Path>) -> Result<Self, CoverageError> {
         let path = dir.as_ref();
+        tracing::Span::current().record("dir", tracing::field::debug(path));
+        tracing::trace!("Loading FIR");
+
         let Some(dir_name) = path.file_name() else {
+            tracing::warn!("Missing dir name");
             return Err(IoError::Read {
                 path: path.into(),
                 reason: "missing dir name".to_string(),
@@ -96,6 +101,7 @@ impl FlightInformationRegionRaw {
             .into());
         };
         let Some(dir_name) = dir_name.to_str() else {
+            tracing::warn!("Invalid dir name");
             return Err(IoError::Read {
                 path: path.into(),
                 reason: "invalid dir name".to_string(),
@@ -103,12 +109,15 @@ impl FlightInformationRegionRaw {
             .into());
         };
 
-        Ok(Self {
+        let fir_raw = Self {
             id: FlightInformationRegionId::from(dir_name),
             stations: Self::read_file::<StationConfigFile>(path, "stations")?.stations,
             positions: Self::read_file::<PositionConfigFile>(path, "positions")?.positions,
             profiles: Self::read_profiles(path)?,
-        })
+        };
+
+        tracing::trace!(?fir_raw, "Successfully loaded FIR");
+        Ok(fir_raw)
     }
 
     const FILE_EXTENSIONS: &'static [&'static str] = &["toml", "json"];
@@ -130,15 +139,19 @@ impl FlightInformationRegionRaw {
         Self::parse_file(&path)
     }
 
+    #[tracing::instrument(level = "trace", err)]
     fn parse_file<T: for<'de> Deserialize<'de>>(
         path: &std::path::Path,
     ) -> Result<T, CoverageError> {
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        tracing::trace!(?ext, "Reading file");
+
         let bytes = std::fs::read(path).map_err(|err| IoError::Read {
             path: path.into(),
             reason: err.to_string(),
         })?;
 
+        tracing::trace!(?ext, length = bytes.len(), "Parsing file");
         match ext {
             "toml" => toml::from_slice(&bytes).map_err(|err| IoError::Parse {
                 path: path.into(),
@@ -148,20 +161,25 @@ impl FlightInformationRegionRaw {
                 path: path.into(),
                 reason: err.to_string(),
             }),
-            _ => Err(IoError::Read {
-                path: path.into(),
-                reason: format!("unsupported file extension: {ext}"),
-            }),
+            _ => {
+                tracing::warn!(?ext, "Unsupported file extension");
+                Err(IoError::Read {
+                    path: path.into(),
+                    reason: format!("unsupported file extension: {ext}"),
+                })
+            }
         }
         .map_err(Into::into)
     }
 
+    #[tracing::instrument(level = "trace", err)]
     fn read_profiles(
         base_dir: &std::path::Path,
     ) -> Result<HashMap<ProfileId, Profile>, CoverageError> {
         let mut profiles = HashMap::new();
 
         if let Ok(profile_raw) = Self::read_file::<ProfileRaw>(base_dir, "profile") {
+            tracing::trace!(?profile_raw.id, "Loaded profile from file");
             profiles.insert(profile_raw.id.clone(), Profile::from_raw(profile_raw)?);
         }
 
@@ -179,14 +197,17 @@ impl FlightInformationRegionRaw {
                 })?;
                 let path = entry.path();
                 if !path.is_file() {
+                    tracing::trace!(?path, "Skipping non-directory entry");
                     continue;
                 }
 
                 let profile_raw = Self::parse_file::<ProfileRaw>(&path)?;
+                tracing::trace!(?profile_raw.id, ?path, "Loaded profile from directory");
                 profiles.insert(profile_raw.id.clone(), Profile::from_raw(profile_raw)?);
             }
         }
 
+        tracing::trace!(profiles = profiles.len(), "Loaded profiles");
         Ok(profiles)
     }
 }
