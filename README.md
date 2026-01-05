@@ -36,7 +36,7 @@ Releases are provided for:
 
 The client is self-contained and does not require any additional prerequisites or manual dependency installation.
 
-All releases are signed - you can find instructions on how to verify these signatures in the [release verification docs](docs/release-verification.md).
+All releases are signed - you can find instructions on how to verify these signatures in the [release verification docs](https://github.com/MorpheusXAUT/vacs/blob/main/docs/release-verification.md).
 
 ## Updating
 
@@ -58,7 +58,7 @@ As we're making changes to our service, we may occasionally introduce breaking/n
 -   ALSA audio backend required (automatically provided by Pipewire and PulseAudio plugins installed as dependencies)
 
 > [!IMPORTANT]  
-> If you're running a Wayland-based display server, please see our [Wayland support doc](vacs-client/docs/wayland.md) for details on limitations and supported features.  
+> If you're running a Wayland-based display server, please see our [Wayland support doc](https://github.com/MorpheusXAUT/vacs/blob/main/vacs-client/docs/wayland.md) for details on limitations and supported features.  
 > At the moment, no X11 support is available, although plans are to add it in the future.
 
 ### macOS
