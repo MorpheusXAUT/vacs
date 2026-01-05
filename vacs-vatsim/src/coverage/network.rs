@@ -87,7 +87,6 @@ impl Network {
         let mut stations = HashMap::new();
         let mut positions = HashMap::new();
 
-        // TODO ensure stations IDs are globally unique
         let all_stations = raw_firs
             .iter()
             .flat_map(|fir| fir.stations.iter().map(|s| (s.id.clone(), s)))
@@ -720,13 +719,23 @@ mod tests {
         TestFirBuilder::new("FIR2")
             .station("A", &["A"])
             .station("A", &["A"])
+            .station("B", &["B"])
             .position("B", &["B"], "199.998", "Center")
             .create(dir.path());
 
+        // FIR 3: Duplicate station/position within FIR 2 file
+        TestFirBuilder::new("FIR3")
+            .station("B", &["B", "C"])
+            .position("B", &["B"], "199.998", "Tower")
+            .position("C", &["C"], "199.998", "Ground")
+            .create(dir.path());
+
         let errors = Network::load_from_dir(dir.path()).expect_err("should not load from dir");
-        assert!(errors.len() >= 2);
+        assert_eq!(errors.len(), 4);
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"))));
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Station" && id == "A")));
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Station" && id == "B")));
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Position" && id == "B")));
     }
 
     #[test]
