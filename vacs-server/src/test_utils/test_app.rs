@@ -11,11 +11,13 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::mock::MockDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
 pub struct TestApp {
     state: Arc<AppState>,
+    pub mock_data_feed: Arc<MockDataFeed>,
     addr: String,
     shutdown_tx: watch::Sender<()>,
     handle: JoinHandle<()>,
@@ -23,6 +25,10 @@ pub struct TestApp {
 
 impl TestApp {
     pub async fn new() -> Self {
+        Self::new_with_network(Network::default()).await
+    }
+
+    pub async fn new_with_network(network: Network) -> Self {
         let config = AppConfig {
             auth: AuthConfig {
                 login_flow_timeout_millis: 100,
@@ -34,11 +40,12 @@ impl TestApp {
                 slurper_base_url: Default::default(),
                 controller_update_interval: Default::default(),
                 data_feed_url: Default::default(),
+                coverage_dir: Default::default(),
             },
             ..Default::default()
         };
 
-        let mock_data_feed = MockDataFeed::default();
+        let mock_data_feed = Arc::new(MockDataFeed::default());
 
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let state = Arc::new(AppState::new(
@@ -46,7 +53,8 @@ impl TestApp {
             UpdateChecker::default(),
             Store::Memory(MemoryStore::default()),
             SlurperClient::new("http://localhost:12345").unwrap(),
-            Arc::new(mock_data_feed),
+            mock_data_feed.clone(),
+            network,
             RateLimiters::default(),
             shutdown_rx,
             Arc::new(StunOnlyProvider::default()),
@@ -70,6 +78,7 @@ impl TestApp {
 
         Self {
             state,
+            mock_data_feed,
             addr: format!("ws://{addr}/ws"),
             shutdown_tx,
             handle,

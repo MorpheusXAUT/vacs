@@ -14,6 +14,7 @@ impl AsMetricLabel for DisconnectReason {
         match self {
             DisconnectReason::Terminated => "terminated",
             DisconnectReason::NoActiveVatsimConnection => "no_active_vatsim_connection",
+            DisconnectReason::AmbiguousVatsimPosition(_) => "ambiguous_vatsim_position",
         }
     }
 }
@@ -102,6 +103,7 @@ impl AsMetricLabel for SignalingMessage {
             SignalingMessage::ClientList { .. } => "client_list",
             SignalingMessage::Error { .. } => "error",
             SignalingMessage::Disconnected { .. } => "disconnected",
+            SignalingMessage::StationChanges { .. } => "station_changes",
         }
     }
 }

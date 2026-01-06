@@ -14,6 +14,7 @@ use vacs_server::routes::{create_app, create_metrics_app};
 use vacs_server::state::AppState;
 use vacs_server::store::Store;
 use vacs_server::store::redis::RedisStore;
+use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::VatsimDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
@@ -54,12 +55,17 @@ async fn main() -> anyhow::Result<()> {
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
 
+    tracing::info!(path = ?config.vatsim.coverage_dir, "Loading network coverage data");
+    let network = Network::load_from_dir(&config.vatsim.coverage_dir)
+        .map_err(|err| anyhow::anyhow!("Failed to load network coverage data: {err:?}"))?;
+
     let app_state = Arc::new(AppState::new(
         config.clone(),
         updates,
         Store::Redis(redis_store),
         slurper,
         data_feed,
+        network,
         rate_limiters,
         shutdown_rx.clone(),
         ice_config_provider,

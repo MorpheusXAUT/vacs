@@ -45,10 +45,11 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 vacs-protocol = { workspace = true, features = ["http", "ws"] }
-vacs-vatsim = { workspace = true, features = ["data-feed", "slurper"] }
+vacs-vatsim = { workspace = true, features = ["data-feed", "slurper", "coverage"] }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true, features = ["unstable"] }
+tempfile = { workspace = true }
 test-log = { workspace = true }
 vacs-vatsim = { workspace = true, features = ["test-utils"] }
 

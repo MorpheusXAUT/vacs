@@ -4,9 +4,9 @@ use crate::metrics::guards::ClientConnectionGuard;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
 use crate::state::AppState;
+use crate::state::client::session::ClientSession;
 use crate::store::Store;
 use crate::store::memory::MemoryStore;
-use crate::ws::ClientSession;
 use axum::extract::ws;
 use futures_util::{Sink, Stream};
 use std::collections::HashMap;
@@ -14,8 +14,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::sync::{Mutex, broadcast, mpsc, watch};
-use vacs_protocol::vatsim::{ClientId, PositionId};
+use vacs_protocol::vatsim::{ClientId, PositionId, ProfileId};
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
+use vacs_vatsim::coverage::network::{Network, ProfileSelection};
 use vacs_vatsim::data_feed::mock::MockDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
@@ -81,10 +82,18 @@ pub struct TestSetup {
     pub rx: mpsc::Receiver<SignalingMessage>,
     pub broadcast_rx: broadcast::Receiver<SignalingMessage>,
     pub shutdown_tx: watch::Sender<()>,
+    pub coverage_dir: tempfile::TempDir,
+}
+
+impl Default for TestSetup {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestSetup {
     pub fn new() -> Self {
+        let coverage_dir = tempfile::tempdir().unwrap();
         let mut vatsim_users = HashMap::new();
         for i in 0..=5 {
             vatsim_users.insert(format!("token{i}"), format!("client{i}"));
@@ -97,6 +106,7 @@ impl TestSetup {
                 slurper_base_url: Default::default(),
                 controller_update_interval: Default::default(),
                 data_feed_url: Default::default(),
+                coverage_dir: coverage_dir.path().to_str().unwrap().to_string(),
             },
             ..Default::default()
         };
@@ -107,6 +117,7 @@ impl TestSetup {
             Store::Memory(MemoryStore::default()),
             SlurperClient::new("http://localhost:12345").unwrap(),
             mock_data_feed.clone(),
+            Network::load_from_dir(coverage_dir.path()).unwrap(),
             RateLimiters::default(),
             shutdown_rx,
             Arc::new(StunOnlyProvider::default()),
@@ -118,7 +129,12 @@ impl TestSetup {
             frequency: "100.000".to_string(),
         };
         let (tx, rx) = mpsc::channel(10);
-        let session = ClientSession::new(client_info, tx, ClientConnectionGuard::default());
+        let session = ClientSession::new(
+            client_info,
+            ProfileSelection::Specific(ProfileId::from("profile1")),
+            tx,
+            ClientConnectionGuard::default(),
+        );
         let (websocket_tx, websocket_rx) = mpsc::channel(100);
         let mock_stream = MockStream::new(vec![]);
         let mock_sink = MockSink::new(websocket_tx.clone());
@@ -134,6 +150,7 @@ impl TestSetup {
             rx,
             broadcast_rx,
             shutdown_tx,
+            coverage_dir,
         }
     }
 
@@ -147,7 +164,26 @@ impl TestSetup {
         client_info: ClientInfo,
     ) -> (ClientSession, mpsc::Receiver<SignalingMessage>) {
         self.app_state
-            .register_client(client_info, ClientConnectionGuard::default())
+            .register_client(
+                client_info,
+                ProfileSelection::Specific(ProfileId::from("profile1")),
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .expect("Failed to register client")
+    }
+
+    pub async fn register_client_with_profile(
+        &self,
+        client_info: ClientInfo,
+        profile_selection: ProfileSelection,
+    ) -> (ClientSession, mpsc::Receiver<SignalingMessage>) {
+        self.app_state
+            .register_client(
+                client_info,
+                profile_selection,
+                ClientConnectionGuard::default(),
+            )
             .await
             .expect("Failed to register client")
     }

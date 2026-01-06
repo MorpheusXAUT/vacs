@@ -1,4 +1,4 @@
-use crate::vatsim::{ClientId, PositionId};
+use crate::vatsim::{ClientId, PositionId, StationChange};
 use serde::{Deserialize, Serialize};
 
 /// Possible reasons for a login failure.
@@ -61,6 +61,8 @@ pub enum DisconnectReason {
     Terminated,
     /// No active VATSIM connection was found.
     NoActiveVatsimConnection,
+    /// VATSIM controller information matches multiple defined network positions, making it impossible to uniquely identify the position the client is in. The user must manually select the correct position.
+    AmbiguousVatsimPosition(Vec<PositionId>),
 }
 
 /// Represents a client as observed by the signaling server.
@@ -184,7 +186,9 @@ pub enum SignalingMessage {
     ///
     /// The signaling server will forward the message to the given peer, exchanging the [`SignalingMessage::CallEnd::peer_id`] with the other peer's ID.
     #[serde(rename_all = "camelCase")]
-    CallEnd { peer_id: ClientId },
+    CallEnd {
+        peer_id: ClientId,
+    },
     /// A call error message sent by either client to indicate an error during an active call or while trying to establish a call.
     ///
     /// The signaling server will forward the message to the given peer, exchanging the [`SignalingMessage::CallError::peer_id`] with the other peer's ID.
@@ -231,6 +235,9 @@ pub enum SignalingMessage {
     ClientList {
         /// List of all currently connected clients.
         clients: Vec<ClientInfo>,
+    },
+    StationChanges {
+        changes: Vec<StationChange>,
     },
     /// Generic error message sent by either a client or the signaling server.
     /// This could indicate an error processing the last received message or signals a failure with the last request.
@@ -482,6 +489,36 @@ mod tests {
                 assert_eq!(id, ClientId::from("client1"));
             }
             _ => panic!("Expected ClientDisconnected message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_deserialize_disconnected_ambiguous() {
+        let message = SignalingMessage::Disconnected {
+            reason: DisconnectReason::AmbiguousVatsimPosition(vec![
+                PositionId::from("POS1"),
+                PositionId::from("POS2"),
+            ]),
+        };
+
+        let serialized = SignalingMessage::serialize(&message).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"type":"Disconnected","reason":{"AmbiguousVatsimPosition":["POS1","POS2"]}}"#
+        );
+
+        let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
+        match deserialized {
+            SignalingMessage::Disconnected { reason } => {
+                assert_eq!(
+                    reason,
+                    DisconnectReason::AmbiguousVatsimPosition(vec![
+                        PositionId::from("POS1"),
+                        PositionId::from("POS2")
+                    ])
+                );
+            }
+            _ => panic!("Expected Disconnected message"),
         }
     }
 

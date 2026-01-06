@@ -1,6 +1,7 @@
 use crate::config;
 use crate::metrics::guards::ClientConnectionGuard;
 use crate::state::AppState;
+use crate::state::client::{ClientManagerError, Result};
 use crate::ws::application_message::handle_application_message;
 use crate::ws::message::{MessageResult, receive_message, send_message};
 use crate::ws::traits::{WebSocketSink, WebSocketStream};
@@ -14,12 +15,15 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{Instrument, instrument};
-use vacs_protocol::vatsim::ClientId;
+use vacs_protocol::vatsim::{ClientId, PositionId};
 use vacs_protocol::ws::{ClientInfo, DisconnectReason, SignalingMessage};
+use vacs_vatsim::ControllerInfo;
+use vacs_vatsim::coverage::network::ProfileSelection;
 
 #[derive(Clone)]
 pub struct ClientSession {
-    pub client_info: ClientInfo,
+    client_info: ClientInfo,
+    profile_selection: ProfileSelection,
     tx: mpsc::Sender<SignalingMessage>,
     client_shutdown_tx: watch::Sender<Option<DisconnectReason>>,
     client_connection_guard: Arc<Mutex<ClientConnectionGuard>>,
@@ -28,12 +32,14 @@ pub struct ClientSession {
 impl ClientSession {
     pub fn new(
         client_info: ClientInfo,
+        profile_selection: ProfileSelection,
         tx: mpsc::Sender<SignalingMessage>,
         client_connection_guard: ClientConnectionGuard,
     ) -> Self {
         let (client_shutdown_tx, _) = watch::channel(None);
         Self {
             client_info,
+            profile_selection,
             tx,
             client_shutdown_tx,
             client_connection_guard: Arc::new(Mutex::new(client_connection_guard)),
@@ -45,8 +51,49 @@ impl ClientSession {
         &self.client_info.id
     }
 
-    pub fn get_client_info(&self) -> &ClientInfo {
+    #[inline]
+    pub fn position_id(&self) -> Option<&PositionId> {
+        self.client_info.position_id.as_ref()
+    }
+
+    #[inline]
+    pub fn profile_selection(&self) -> &ProfileSelection {
+        &self.profile_selection
+    }
+
+    #[inline]
+    pub fn client_info(&self) -> &ClientInfo {
         &self.client_info
+    }
+
+    #[tracing::instrument(level = "trace")]
+    pub fn update_client_info(&mut self, controller_info: &ControllerInfo) -> bool {
+        let mut changed = false;
+        if self.client_info.display_name != controller_info.callsign {
+            tracing::trace!(
+                cid = ?self.client_info.id,
+                old = ?self.client_info.display_name,
+                new = ?controller_info.callsign,
+                "Controller callsign changed, updating"
+            );
+            self.client_info.display_name = controller_info.callsign.clone();
+            changed = true;
+        }
+        if self.client_info.frequency != controller_info.frequency {
+            tracing::trace!(
+                cid = ?self.client_info.id,
+                old = ?self.client_info.frequency,
+                new = ?controller_info.frequency,
+                "Controller frequency changed, updating"
+            );
+            self.client_info.frequency = controller_info.frequency.clone();
+            changed = true;
+        }
+        changed
+    }
+
+    pub fn set_position_id(&mut self, position_id: Option<PositionId>) {
+        self.client_info.position_id = position_id;
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -61,11 +108,11 @@ impl ClientSession {
     }
 
     #[instrument(level = "trace", skip(self), err)]
-    pub async fn send_message(&self, message: SignalingMessage) -> anyhow::Result<()> {
+    pub async fn send_message(&self, message: SignalingMessage) -> Result<()> {
         self.tx
             .send(message)
             .await
-            .map_err(|err| anyhow::anyhow!(err).context("Failed to send message"))
+            .map_err(|err| ClientManagerError::MessageSendError(err.to_string()))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -114,7 +161,7 @@ impl ClientSession {
         }
 
         tracing::trace!("Sending initial client list");
-        let clients = app_state.list_clients_without_self(&client_info.id).await;
+        let clients = app_state.list_clients(Some(&client_info.id)).await;
         if let Err(err) =
             send_message(&ws_outbound_tx, SignalingMessage::ClientList { clients }).await
         {
@@ -199,7 +246,7 @@ impl ClientSession {
     }
 
     #[instrument(level = "debug", skip_all)]
-    pub async fn spawn_writer<T: WebSocketSink + 'static>(
+    async fn spawn_writer<T: WebSocketSink + 'static>(
         mut websocket_tx: T,
         mut app_shutdown_rx: watch::Receiver<()>,
         mut client_shutdown_rx: watch::Receiver<Option<DisconnectReason>>,
@@ -272,7 +319,7 @@ impl ClientSession {
     }
 
     #[instrument(level = "debug", skip_all)]
-    pub async fn spawn_reader<R: WebSocketStream + 'static>(
+    async fn spawn_reader<R: WebSocketStream + 'static>(
         mut websocket_rx: R,
         mut app_shutdown_rx: watch::Receiver<()>,
         mut client_shutdown_rx: watch::Receiver<Option<DisconnectReason>>,
@@ -332,7 +379,7 @@ impl ClientSession {
     }
 
     #[instrument(level = "debug", skip_all)]
-    pub fn spawn_ping_task(
+    fn spawn_ping_task(
         ws_outbound_tx: &mpsc::Sender<ws::Message>,
         pong_update_rx: watch::Receiver<Instant>,
     ) -> (JoinHandle<()>, oneshot::Receiver<()>) {
@@ -410,19 +457,31 @@ mod tests {
     #[test(tokio::test)]
     async fn new_client_session() {
         let client_info_1 = create_client_info(1);
-        let (tx, _rx) = mpsc::channel(10);
-        let session =
-            ClientSession::new(client_info_1.clone(), tx, ClientConnectionGuard::default());
+        let profile_selection = ProfileSelection::default();
+        let (tx, _rx) = mpsc::channel::<SignalingMessage>(10);
+        let session = ClientSession::new(
+            client_info_1.clone(),
+            profile_selection.clone(),
+            tx,
+            ClientConnectionGuard::default(),
+        );
 
         assert_eq!(session.id(), &ClientId::from("client1"));
-        assert_eq!(session.get_client_info(), &client_info_1);
+        assert_eq!(session.client_info(), &client_info_1);
+        assert_eq!(session.profile_selection(), &profile_selection);
     }
 
     #[test(tokio::test)]
     async fn send_message() {
         let client_info_1 = create_client_info(1);
+        let profile_selection = ProfileSelection::default();
         let (tx, mut rx) = mpsc::channel(10);
-        let session = ClientSession::new(client_info_1, tx, ClientConnectionGuard::default());
+        let session = ClientSession::new(
+            client_info_1,
+            profile_selection,
+            tx,
+            ClientConnectionGuard::default(),
+        );
 
         let client_info_2 = create_client_info(2);
         let message = SignalingMessage::ClientList {
@@ -438,9 +497,14 @@ mod tests {
     #[test(tokio::test)]
     async fn send_message_error() {
         let client_info_1 = create_client_info(1);
+        let profile_selection = ProfileSelection::default();
         let (tx, _) = mpsc::channel(10);
-        let session =
-            ClientSession::new(client_info_1, tx.clone(), ClientConnectionGuard::default());
+        let session = ClientSession::new(
+            client_info_1,
+            profile_selection,
+            tx.clone(),
+            ClientConnectionGuard::default(),
+        );
         drop(tx); // Drop the sender to simulate the client disconnecting
 
         let client_info_2 = create_client_info(2);
@@ -449,7 +513,7 @@ mod tests {
         };
         let result = session.send_message(message.clone()).await;
 
-        assert!(result.is_err_and(|err| err.to_string().contains("Failed to send message")));
+        assert!(result.is_err_and(|err| err.to_string().contains("failed to send message")));
     }
 
     #[test(tokio::test)]
@@ -491,7 +555,7 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"type":"ClientInfo","own":true,"info":{"id":"client1","displayName":"Client 1","frequency":"100.000"}}"#
+                        r#"{"type":"ClientInfo","own":true,"info":{"id":"client1","positionId":"POSITION1","displayName":"Client 1","frequency":"100.000"}}"#
                     )
                 );
             }
@@ -519,7 +583,7 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"type":"ClientList","clients":[{"id":"client1","displayName":"Client 1","frequency":"100.000"}]}"#
+                        r#"{"type":"ClientList","clients":[{"id":"client1","positionId":"POSITION1","displayName":"Client 1","frequency":"100.000"}]}"#
                     )
                 );
             }
@@ -548,7 +612,7 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"type":"ClientList","clients":[{"id":"client2","displayName":"Client 2","frequency":"200.000"}]}"#
+                        r#"{"type":"ClientList","clients":[{"id":"client2","positionId":"POSITION2","displayName":"Client 2","frequency":"200.000"}]}"#
                     )
                 );
             }

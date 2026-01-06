@@ -238,6 +238,10 @@ fn format_signaling_error(err: &SignalingError) -> String {
                 None => "Disconnected",
                 Some(DisconnectReason::Terminated) => "Disconnected: Your connection was terminated by another client.",
                 Some(DisconnectReason::NoActiveVatsimConnection) => "Disconnected: No active VATSIM connection was found.",
+                Some(DisconnectReason::AmbiguousVatsimPosition(_)) => {
+                    // TODO handle ambiguous position selection
+                    "Disconnected: Multiple VATSIM positions matched your current position. Please select the correct position manually."
+                }
             }.to_string(),
             _ => runtime_err.to_string(),
         },
