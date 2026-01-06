@@ -1,5 +1,5 @@
 use crate::coverage::position::{PositionConfigFile, PositionRaw};
-use crate::coverage::profile::{Profile, ProfileRaw};
+use crate::coverage::profile::{FromRaw, Profile, ProfileRaw};
 use crate::coverage::station::{StationConfigFile, StationRaw};
 use crate::coverage::{CoverageError, IoError, ValidationError, Validator};
 use serde::{Deserialize, Serialize};
@@ -299,6 +299,7 @@ mod tests {
                 prefixes: HashSet::from(["LOWW".to_string()]),
                 frequency: "119.400".to_string(),
                 facility_type: crate::FacilityType::Tower,
+                profile_id: Some(ProfileId::from("LOWW")),
             }],
             profiles: HashMap::new(),
         };
@@ -319,6 +320,7 @@ mod tests {
                 prefixes: HashSet::from(["LOWW".to_string()]),
                 frequency: "119.400".to_string(),
                 facility_type: crate::FacilityType::Tower,
+                profile_id: Some(ProfileId::from("LOWW")),
             }],
             profiles: HashMap::new(),
         };
@@ -338,6 +340,7 @@ mod tests {
                 prefixes: HashSet::from(["LOWW".to_string()]),
                 frequency: "119.400".to_string(),
                 facility_type: crate::FacilityType::Tower,
+                profile_id: Some(ProfileId::from("LOWW")),
             }],
             profiles: HashMap::new(),
         };
@@ -379,6 +382,7 @@ mod tests {
                 prefixes: HashSet::from(["LOWW".to_string()]),
                 frequency: "119.400".to_string(),
                 facility_type: crate::FacilityType::Tower,
+                profile_id: Some(ProfileId::from("LOWW")),
             }],
             profiles: HashMap::new(),
         };
@@ -423,6 +427,7 @@ mod tests {
             prefixes = ["LOWW"]
             frequency = "119.400"
             facility_type = "Tower"
+            profile_id = "LOWW"
         "#;
         std::fs::write(fir_path.join("positions.toml"), positions_toml).unwrap();
 
@@ -455,7 +460,8 @@ mod tests {
                     "id": "LOWW_TWR",
                     "prefixes": ["LOWW"],
                     "frequency": "119.400",
-                    "facility_type": "Tower"
+                    "facility_type": "Tower",
+                    "profile_id": "LOWW"
                 }
             ]
         }"#;
@@ -487,7 +493,8 @@ mod tests {
                     "id": "LOWW_TWR",
                     "prefixes": ["LOWW"],
                     "frequency": "119.400",
-                    "facility_type": "Tower"
+                    "facility_type": "Tower",
+                    "profile_id": "LOWW"
                 }
             ]
         }"#;
@@ -529,6 +536,7 @@ mod tests {
             prefixes = ["LOWW"]
             frequency = "119.400"
             facility_type = "Tower"
+            profile_id = "LOWW"
         "#;
         std::fs::write(fir_path.join("positions.toml"), positions_toml).unwrap();
         std::fs::remove_file(fir_path.join("stations.toml")).unwrap();
@@ -581,54 +589,63 @@ mod tests {
             prefixes = ["LOVV"]
             frequency = "135.200"
             facility_type = "Enroute"
+            profile_id = "LOVV"
 
             [[positions]]
             id = "LOWW_APP"
             prefixes = ["LOWW", "LOVV"]
             frequency = "119.400"
             facility_type = "Approach"
+            profile_id = "LOWW"
 
             [[positions]]
             id = "LOWW_B_APP"
             prefixes = ["LOWW"]
             frequency = "118.500"
             facility_type = "Approach"
+            profile_id = "LOWW"
 
             [[positions]]
             id = "LOWW_P_APP"
             prefixes = ["LOWW"]
             frequency = "128.950"
             facility_type = "Approach"
+            profile_id = "LOWW"
 
             [[positions]]
             id = "LOWW_TWR"
             prefixes = ["LOWW"]
             frequency = "119.400"
             facility_type = "Tower"
+            profile_id = "LOWW"
 
             [[positions]]
             id = "LOWW_E_TWR"
             prefixes = ["LOWW"]
             frequency = "118.775"
             facility_type = "Tower"
+            profile_id = "LOWW"
 
             [[positions]]
             id = "LOWW_GND"
             prefixes = ["LOWW"]
             frequency = "121.600"
             facility_type = "Ground"
+            profile_id = "LOWW"
 
             [[positions]]
             id = "LOWW_W_GND"
             prefixes = ["LOWW"]
             frequency = "121.775"
             facility_type = "Ground"
+            profile_id = "LOWW"
 
             [[positions]]
             id = "LOWW_DEL"
             prefixes = ["LOWW"]
             frequency = "122.950"
             facility_type = "Delivery"
+            profile_id = "LOWW"
         "#;
         std::fs::write(fir_path.join("positions.toml"), positions_toml).unwrap();
 
@@ -701,7 +718,7 @@ mod tests {
         .unwrap();
         std::fs::write(
             fir_path.join("positions.toml"),
-            "[[positions]]\nid=\"P\"\nprefixes=[]\nfrequency=\"118.0\"\nfacility_type=\"Tower\"",
+            "[[positions]]\nid=\"P\"\nprefixes=[]\nfrequency=\"118.0\"\nfacility_type=\"Tower\"\nprofile_id=\"Other\"",
         )
         .unwrap();
 

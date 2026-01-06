@@ -4,6 +4,7 @@ pub mod position;
 pub mod profile;
 pub mod station;
 
+use std::collections::HashSet;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -88,4 +89,8 @@ pub enum StructureError {
 
 pub trait Validator {
     fn validate(&self) -> Result<(), CoverageError>;
+}
+
+pub trait ReferenceValidator<T> {
+    fn validate_references(&self, entities: &HashSet<&T>) -> Result<(), CoverageError>;
 }
