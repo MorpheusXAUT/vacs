@@ -107,7 +107,7 @@ mod tests {
     use tokio::sync::{Mutex, mpsc};
     use tokio_tungstenite::tungstenite;
     use vacs_protocol::VACS_PROTOCOL_VERSION;
-    use vacs_protocol::vatsim::ClientId;
+    use vacs_protocol::vatsim::{ClientId, PositionId};
     use vacs_protocol::ws::ClientInfo;
 
     #[test(tokio::test)]
@@ -118,6 +118,7 @@ mod tests {
         let message = SignalingMessage::ClientConnected {
             client: ClientInfo {
                 id: ClientId::from("client1"),
+                position_id: Some(PositionId::from("position1")),
                 display_name: "Client 1".to_string(),
                 frequency: "100.000".to_string(),
             },
@@ -232,6 +233,7 @@ mod tests {
         let message = SignalingMessage::ClientConnected {
             client: ClientInfo {
                 id: ClientId::from("client1"),
+                position_id: Some(PositionId::from("position1")),
                 display_name: "Client 1".to_string(),
                 frequency: "100.000".to_string(),
             },

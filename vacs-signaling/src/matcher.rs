@@ -108,7 +108,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_matches;
     use test_log::test;
-    use vacs_protocol::vatsim::ClientId;
+    use vacs_protocol::vatsim::{ClientId, PositionId};
     use vacs_protocol::ws::ClientInfo;
 
     #[test(tokio::test)]
@@ -135,6 +135,7 @@ mod tests {
         let msg = SignalingMessage::ClientList {
             clients: vec![ClientInfo {
                 id: ClientId::from("client1"),
+                position_id: Some(PositionId::from("position1")),
                 display_name: "Client 1".to_string(),
                 frequency: "100.000".to_string(),
             }],
@@ -357,6 +358,7 @@ mod tests {
         matcher.try_match(&SignalingMessage::ClientList {
             clients: vec![ClientInfo {
                 id: ClientId::from("client1"),
+                position_id: Some(PositionId::from("position1")),
                 display_name: "Client 1".into(),
                 frequency: "100.000".into(),
             }],

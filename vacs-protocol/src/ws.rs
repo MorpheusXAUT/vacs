@@ -1,4 +1,4 @@
-use crate::vatsim::ClientId;
+use crate::vatsim::{ClientId, PositionId};
 use serde::{Deserialize, Serialize};
 
 /// Possible reasons for a login failure.
@@ -69,6 +69,8 @@ pub enum DisconnectReason {
 pub struct ClientInfo {
     /// ID of the client (VATSIM CID).
     pub id: ClientId,
+    /// ID of the position the client is currently controlling, if a match was found.
+    pub position_id: Option<PositionId>,
     /// The VATSIM callsign of the client.
     pub display_name: String,
     /// The primary VATSIM frequency of the client.
@@ -439,6 +441,7 @@ mod tests {
         let message = SignalingMessage::ClientConnected {
             client: ClientInfo {
                 id: ClientId::from("client1"),
+                position_id: Some(PositionId::from("position1")),
                 display_name: "station1".to_string(),
                 frequency: "100.000".to_string(),
             },
@@ -447,13 +450,14 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"ClientConnected\",\"client\":{\"id\":\"client1\",\"displayName\":\"station1\",\"frequency\":\"100.000\"}}"
+            "{\"type\":\"ClientConnected\",\"client\":{\"id\":\"client1\",\"positionId\":\"POSITION1\",\"displayName\":\"station1\",\"frequency\":\"100.000\"}}"
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         match deserialized {
             SignalingMessage::ClientConnected { client } => {
                 assert_eq!(client.id, ClientId::from("client1"));
+                assert_eq!(client.position_id, Some(PositionId::from("position1")));
                 assert_eq!(client.display_name, "station1");
             }
             _ => panic!("Expected ClientConnected message"),
@@ -498,11 +502,13 @@ mod tests {
             clients: vec![
                 ClientInfo {
                     id: ClientId::from("client1"),
+                    position_id: Some(PositionId::from("position1")),
                     display_name: "station1".to_string(),
                     frequency: "100.000".to_string(),
                 },
                 ClientInfo {
                     id: ClientId::from("client2"),
+                    position_id: Some(PositionId::from("position2")),
                     display_name: "station2".to_string(),
                     frequency: "200.000".to_string(),
                 },
@@ -512,7 +518,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"ClientList\",\"clients\":[{\"id\":\"client1\",\"displayName\":\"station1\",\"frequency\":\"100.000\"},{\"id\":\"client2\",\"displayName\":\"station2\",\"frequency\":\"200.000\"}]}"
+            "{\"type\":\"ClientList\",\"clients\":[{\"id\":\"client1\",\"positionId\":\"POSITION1\",\"displayName\":\"station1\",\"frequency\":\"100.000\"},{\"id\":\"client2\",\"positionId\":\"POSITION2\",\"displayName\":\"station2\",\"frequency\":\"200.000\"}]}"
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();

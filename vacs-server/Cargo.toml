@@ -8,7 +8,7 @@ publish.workspace = true
 
 [features]
 default = []
-test-utils = []
+test-utils = ["vacs-vatsim/test-utils"]
 
 [dependencies]
 anyhow = { workspace = true }

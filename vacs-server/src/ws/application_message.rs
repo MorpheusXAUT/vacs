@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(
             message,
             ws::Message::Text(Utf8Bytes::from_static(
-                r#"{"type":"ClientList","clients":[{"id":"client2","displayName":"Client 2","frequency":"200.000"}]}"#
+                r#"{"type":"ClientList","clients":[{"id":"client2","positionId":"POSITION2","displayName":"Client 2","frequency":"200.000"}]}"#
             ))
         );
     }
