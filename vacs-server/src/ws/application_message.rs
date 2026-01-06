@@ -1,7 +1,7 @@
 use crate::metrics::ErrorMetrics;
 use crate::metrics::guards::CallAttemptOutcome;
 use crate::state::AppState;
-use crate::ws::ClientSession;
+use crate::state::client::session::ClientSession;
 use crate::ws::message::send_message;
 use axum::extract::ws;
 use std::ops::ControlFlow;
@@ -21,7 +21,7 @@ pub async fn handle_application_message(
     match message {
         SignalingMessage::ListClients => {
             tracing::trace!("Returning list of clients");
-            let clients = state.list_clients_without_self(client.id()).await;
+            let clients = state.list_clients(Some(client.id())).await;
             if let Err(err) =
                 send_message(ws_outbound_tx, SignalingMessage::ClientList { clients }).await
             {

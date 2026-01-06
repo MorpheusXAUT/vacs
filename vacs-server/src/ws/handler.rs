@@ -48,7 +48,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     };
 
     let res = state
-        .register_client(client_info.clone(), client_connection_guard)
+        .register_client(
+            client_info.clone(),
+            vacs_vatsim::coverage::network::ProfileSelection::None, // TODO set profile selection
+            client_connection_guard,
+        )
         .await;
     let (mut client, mut rx) = match res {
         Ok(client) => client,
