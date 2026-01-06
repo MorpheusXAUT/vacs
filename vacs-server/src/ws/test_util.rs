@@ -14,7 +14,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::sync::{Mutex, broadcast, mpsc, watch};
-use vacs_protocol::vatsim::ClientId;
+use vacs_protocol::vatsim::{ClientId, PositionId};
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
 use vacs_vatsim::data_feed::mock::MockDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
@@ -113,6 +113,7 @@ impl TestSetup {
         ));
         let client_info = ClientInfo {
             id: ClientId::from("client1"),
+            position_id: Some(PositionId::from("position1")),
             display_name: "Client 1".to_string(),
             frequency: "100.000".to_string(),
         };
@@ -192,8 +193,9 @@ impl TestSetup {
 
 pub fn create_client_info(id: u8) -> ClientInfo {
     ClientInfo {
-        id: ClientId::from(format!("client{}", id)),
-        display_name: format!("Client {}", id),
-        frequency: format!("{}00.000", id),
+        id: ClientId::from(format!("client{id}")),
+        position_id: Some(PositionId::from(format!("position{id}"))),
+        display_name: format!("Client {id}"),
+        frequency: format!("{id}00.000"),
     }
 }

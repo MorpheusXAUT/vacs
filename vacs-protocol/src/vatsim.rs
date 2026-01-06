@@ -22,7 +22,7 @@ pub struct ProfileId(String);
 pub struct StationId(String);
 
 /// Represents a change in station status (online, offline, or handoff).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum StationChange {
     /// A station has come online.

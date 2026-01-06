@@ -42,6 +42,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
     let client_info = ClientInfo {
         id: controller_info.cid.clone(),
+        position_id: None, // TODO set position ID
         display_name: controller_info.callsign.clone(),
         frequency: controller_info.frequency.clone(),
     };

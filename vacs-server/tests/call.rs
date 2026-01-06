@@ -228,8 +228,8 @@ async fn peer_not_found() -> anyhow::Result<()> {
     match &peer_not_found_messages[0] {
         SignalingMessage::PeerNotFound { peer_id } => {
             assert_eq!(
-                peer_id,
-                &ClientId::from("client69"),
+                *peer_id,
+                ClientId::from("client69"),
                 "PeerNotFound targeted the wrong client"
             );
         }

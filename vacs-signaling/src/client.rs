@@ -810,7 +810,7 @@ mod tests {
     use pretty_assertions::{assert_eq, assert_matches};
     use test_log::test;
     use tokio::sync::Notify;
-    use vacs_protocol::vatsim::ClientId;
+    use vacs_protocol::vatsim::{ClientId, PositionId};
     use vacs_protocol::ws::{ErrorReason, LoginFailureReason};
 
     async fn setup_test_client(
@@ -833,6 +833,7 @@ mod tests {
                     own: true,
                     info: ClientInfo {
                         id: ClientId::from("client1"),
+                        position_id: Some(PositionId::from("position1")),
                         display_name: "client1".to_string(),
                         frequency: "".to_string(),
                     },
