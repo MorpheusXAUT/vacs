@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::collections::HashMap;
 
 /// Unique identifier for a VATSIM client (CID).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
@@ -16,10 +16,84 @@ pub struct PositionId(String);
 #[repr(transparent)]
 pub struct ProfileId(String);
 
-/// Unique identifier for a Vatsim station.
+/// Unique identifier for a VATSIM station.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct StationId(String);
+
+/// Representation of a VACS profile.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Profile {
+    /// The unique identifier for this profile.
+    pub id: ProfileId,
+    /// The type of profile and its associated configuration.
+    pub profile_type: ProfileType,
+}
+
+/// The specific configuration type of a profile.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProfileType {
+    /// A GEO profile with buttons placed on coordinates.
+    ///
+    /// The vector of buttons will always be non-empty.
+    Geo(Vec<GeoPageButton>),
+    /// A tabbed profile with pages accessible via tabs.
+    ///
+    /// The map of tabs will always be non-empty.
+    Tabbed(HashMap<String, DirectAccessPage>),
+}
+
+/// A button on a GEO profile page.
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct GeoPageButton {
+    /// The text label displayed on the button.
+    ///
+    /// Will always contain between 0 and 3 lines of text.
+    pub label: Vec<String>,
+    /// The X coordinate of the button (0-100, inclusive).
+    pub x: u8,
+    /// The Y coordinate of the button (0-100, inclusive).
+    pub y: u8,
+    /// The size of the button (0-100, inclusive).
+    pub size: u8,
+    /// The direct access page that opens when this button is clicked.
+    pub page: DirectAccessPage,
+}
+
+/// A page containing direct access keys.
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct DirectAccessPage {
+    /// The list of keys on this page.
+    ///
+    /// Will always be non-empty.
+    pub keys: Vec<DirectAccessKey>,
+    /// The number of rows in the grid.
+    ///
+    /// Mutually exclusive with `columns`. If `rows` is set, `columns` must be `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rows: Option<u8>,
+    /// The number of columns in the grid.
+    ///
+    /// Mutually exclusive with `rows`. If `columns` is set, `rows` must be `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub columns: Option<u8>,
+}
+
+/// A single key on a direct access page.
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectAccessKey {
+    /// The text label displayed on the key.
+    ///
+    /// Will always contain between 0 and 3 lines of text.
+    pub label: Vec<String>,
+    /// The optional station ID associated with this key.
+    ///
+    /// If `None`, the DA key will be displayed on the UI, but will be non-functional.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub station_id: Option<StationId>,
+}
 
 /// Represents a change in station status (online, offline, or handoff).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -69,8 +143,8 @@ impl ClientId {
     }
 }
 
-impl fmt::Display for ClientId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for ClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
 }
@@ -132,8 +206,8 @@ impl PositionId {
     }
 }
 
-impl fmt::Display for PositionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for PositionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
 }
@@ -189,8 +263,8 @@ impl ProfileId {
     }
 }
 
-impl fmt::Display for ProfileId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for ProfileId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
 }
@@ -246,8 +320,8 @@ impl StationId {
     }
 }
 
-impl fmt::Display for StationId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for StationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
 }
@@ -279,6 +353,61 @@ impl std::borrow::Borrow<str> for StationId {
 impl std::borrow::Borrow<String> for StationId {
     fn borrow(&self) -> &String {
         &self.0
+    }
+}
+
+impl std::fmt::Debug for Profile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Profile")
+            .field("id", &self.id)
+            .field("profile_type", &self.profile_type)
+            .finish()
+    }
+}
+
+impl PartialOrd for Profile {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
+impl std::fmt::Debug for ProfileType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Geo(buttons) => f.debug_tuple("Geo").field(&buttons.len()).finish(),
+            Self::Tabbed(tabs) => f.debug_tuple("Tabbed").field(&tabs.len()).finish(),
+        }
+    }
+}
+
+impl std::fmt::Debug for GeoPageButton {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeoPageButton")
+            .field("label", &self.label.len())
+            .field("x", &self.x)
+            .field("y", &self.y)
+            .field("size", &self.size)
+            .field("page", &self.page)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for DirectAccessPage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DirectAccessPage")
+            .field("keys", &self.keys.len())
+            .field("rows", &self.rows)
+            .field("columns", &self.columns)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for DirectAccessKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DirectAccessKey")
+            .field("label", &self.label.len())
+            .field("station_id", &self.station_id)
+            .finish()
     }
 }
 

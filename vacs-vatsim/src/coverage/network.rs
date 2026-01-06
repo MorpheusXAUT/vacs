@@ -4,7 +4,7 @@ use crate::coverage::flight_information_region::{
 };
 use crate::coverage::position::Position;
 use crate::coverage::station::Station;
-use crate::coverage::{CoverageError, IoError, StructureError};
+use crate::coverage::{CoverageError, IoError, ReferenceValidator, StructureError};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use vacs_protocol::vatsim::{PositionId, ProfileId, StationChange, StationId};
@@ -93,11 +93,21 @@ impl Network {
             .collect::<HashMap<_, _>>();
 
         let all_station_ids = all_stations.keys().collect::<HashSet<_>>();
+        let all_profile_ids = raw_firs
+            .iter()
+            .flat_map(|fir| fir.profiles.keys())
+            .collect::<HashSet<_>>();
 
         for fir_raw in &raw_firs {
+            for position in &fir_raw.positions {
+                if let Err(err) = position.validate_references(&all_profile_ids) {
+                    tracing::warn!(?err, ?position.id, ?fir_raw.id, "Invalid profile reference in position");
+                    errors.push(err);
+                }
+            }
             for profile in fir_raw.profiles.values() {
                 if let Err(err) = profile.validate_references(&all_station_ids) {
-                    tracing::warn!(?err, ?profile.id, ?fir_raw.id, "Invalid reference in profile");
+                    tracing::warn!(?err, ?profile.id, ?fir_raw.id, "Invalid station reference in profile");
                     errors.push(err);
                 }
             }

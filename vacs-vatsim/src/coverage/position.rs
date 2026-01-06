@@ -1,11 +1,11 @@
 use crate::FacilityType;
 use crate::coverage::flight_information_region::FlightInformationRegionId;
-use crate::coverage::{CoverageError, ValidationError, Validator};
+use crate::coverage::{CoverageError, ReferenceValidator, ValidationError, Validator};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::LazyLock;
-use vacs_protocol::vatsim::PositionId;
+use vacs_protocol::vatsim::{PositionId, ProfileId};
 
 static FREQUENCY_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{3}\.\d{3}$").unwrap());
 
@@ -15,6 +15,7 @@ pub struct Position {
     pub prefixes: HashSet<String>,
     pub frequency: String,
     pub facility_type: FacilityType,
+    pub profile_id: Option<ProfileId>,
     pub fir_id: FlightInformationRegionId,
 }
 
@@ -24,6 +25,8 @@ pub(super) struct PositionRaw {
     pub prefixes: HashSet<String>,
     pub frequency: String,
     pub facility_type: FacilityType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<ProfileId>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +41,7 @@ impl std::fmt::Debug for Position {
             .field("prefixes", &self.prefixes.len())
             .field("frequency", &self.frequency)
             .field("facility_type", &self.facility_type)
+            .field("profile_id", &self.profile_id)
             .field("fir_id", &self.fir_id)
             .finish()
     }
@@ -67,6 +71,7 @@ impl Position {
             prefixes: position_raw.prefixes,
             frequency: position_raw.frequency,
             facility_type: position_raw.facility_type,
+            profile_id: position_raw.profile_id,
             fir_id: fir_id.into(),
         })
     }
@@ -79,6 +84,7 @@ impl std::fmt::Debug for PositionRaw {
             .field("prefixes", &self.prefixes.len())
             .field("frequency", &self.frequency)
             .field("facility_type", &self.facility_type)
+            .field("profile_id", &self.profile_id)
             .finish()
     }
 }
@@ -118,6 +124,27 @@ impl Validator for PositionRaw {
             }
             .into());
         }
+        if self.profile_id.as_ref().is_some_and(|p| p.is_empty()) {
+            return Err(ValidationError::Empty {
+                field: "profile_id".to_string(),
+            }
+            .into());
+        }
+        Ok(())
+    }
+}
+
+impl ReferenceValidator<ProfileId> for PositionRaw {
+    fn validate_references(&self, profiles: &HashSet<&ProfileId>) -> Result<(), CoverageError> {
+        if let Some(profile_id) = &self.profile_id
+            && !profiles.contains(profile_id)
+        {
+            return Err(ValidationError::MissingReference {
+                field: "profile_id".to_string(),
+                ref_id: profile_id.to_string(),
+            }
+            .into());
+        }
         Ok(())
     }
 }
@@ -134,6 +161,7 @@ mod tests {
             prefixes: HashSet::from(["LOWW".to_string()]),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("LOWW")),
         };
         assert!(raw.validate().is_ok());
     }
@@ -145,6 +173,7 @@ mod tests {
             prefixes: HashSet::from(["LOWW".to_string()]),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("LOWW")),
         };
         assert_matches!(
             raw.validate(),
@@ -160,6 +189,7 @@ mod tests {
             prefixes: HashSet::new(),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("LOWW")),
         };
         assert_matches!(
             raw.validate(),
@@ -172,6 +202,7 @@ mod tests {
             prefixes: HashSet::from(["".to_string()]),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("LOWW")),
         };
         assert_matches!(
             raw.validate(),
@@ -187,6 +218,7 @@ mod tests {
             prefixes: HashSet::from(["LOWW".to_string()]),
             frequency: "".to_string(),
             facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("LOWW")),
         };
         assert_matches!(
             raw.validate(),
@@ -203,6 +235,7 @@ mod tests {
                 prefixes: HashSet::from(["LOWW".to_string()]),
                 frequency: freq.to_string(),
                 facility_type: FacilityType::Tower,
+                profile_id: Some(ProfileId::from("LOWW")),
             };
             assert_matches!(
                 raw.validate(),
@@ -219,11 +252,27 @@ mod tests {
             prefixes: HashSet::from(["LOWW".to_string()]),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Unknown,
+            profile_id: Some(ProfileId::from("LOWW")),
         };
         assert_matches!(
             raw.validate(),
             Err(CoverageError::Validation(ValidationError::InvalidValue { field, value, .. }))
                 if field == "facility_type" && value == "Unknown"
+        );
+    }
+
+    #[test]
+    fn position_raw_invalid_profile_id() {
+        let raw = PositionRaw {
+            id: "LOWW_TWR".into(),
+            prefixes: HashSet::from(["LOWW".to_string()]),
+            frequency: "119.400".to_string(),
+            facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("")),
+        };
+        assert_matches!(
+            raw.validate(),
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "profile_id"
         );
     }
 
@@ -234,9 +283,14 @@ mod tests {
             prefixes: HashSet::from(["LOWW".to_string()]),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("LOWW")),
         };
         let pos = Position::from_raw(raw, "LOVV").unwrap();
         assert_eq!(pos.id.as_str(), "LOWW_TWR");
+        assert!(
+            pos.profile_id
+                .is_some_and(|id| id == ProfileId::from("LOWW"))
+        );
         assert_eq!(pos.fir_id.as_str(), "LOVV");
     }
 
@@ -247,13 +301,15 @@ mod tests {
             prefixes: HashSet::from(["LOWW".to_string()]),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("LOWW")),
             fir_id: FlightInformationRegionId::from("LOVV"),
         };
         let p2 = Position {
             id: "LOWW_TWR".into(),
-            prefixes: HashSet::new(),            // Different content
-            frequency: "119.000".to_string(),    // Different content
-            facility_type: FacilityType::Ground, // Different content
+            prefixes: HashSet::new(),                  // Different content
+            frequency: "119.000".to_string(),          // Different content
+            facility_type: FacilityType::Ground,       // Different content
+            profile_id: Some(ProfileId::from("LOVV")), // Different content
             fir_id: FlightInformationRegionId::from("LOVV"),
         };
         assert_eq!(p1, p2); // Should be equal because IDs are equal
@@ -263,8 +319,47 @@ mod tests {
             prefixes: HashSet::from(["LOWW".to_string()]),
             frequency: "119.400".to_string(),
             facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("LOWW")),
             fir_id: FlightInformationRegionId::from("LOVV"),
         };
         assert_ne!(p1, p3);
+    }
+
+    #[test]
+    fn validate_references() {
+        let profile_id = ProfileId::from("LOWW");
+        let other_profile_id = ProfileId::from("EDMM");
+        let valid_profiles = HashSet::from([&profile_id, &other_profile_id]);
+
+        let raw = PositionRaw {
+            id: "LOWW_TWR".into(),
+            prefixes: HashSet::from(["LOWW".to_string()]),
+            frequency: "119.400".to_string(),
+            facility_type: FacilityType::Tower,
+            profile_id: Some(profile_id.clone()),
+        };
+        assert!(raw.validate_references(&valid_profiles).is_ok());
+
+        let raw_missing = PositionRaw {
+            id: "LOWW_TWR".into(),
+            prefixes: HashSet::from(["LOWW".to_string()]),
+            frequency: "119.400".to_string(),
+            facility_type: FacilityType::Tower,
+            profile_id: Some(ProfileId::from("UNKNOWN")),
+        };
+        assert_matches!(
+            raw_missing.validate_references(&valid_profiles),
+            Err(CoverageError::Validation(ValidationError::MissingReference { field, ref_id }))
+            if field == "profile_id" && ref_id == "UNKNOWN"
+        );
+
+        let raw_none = PositionRaw {
+            id: "LOWW_TWR".into(),
+            prefixes: HashSet::from(["LOWW".to_string()]),
+            frequency: "119.400".to_string(),
+            facility_type: FacilityType::Tower,
+            profile_id: None,
+        };
+        assert!(raw_none.validate_references(&valid_profiles).is_ok());
     }
 }
