@@ -21,7 +21,7 @@
     "@tauri-apps/plugin-log": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2",
     "clsx": "^2.1.1",
-    "preact": "^10.28.1",
+    "preact": "^10.28.2",
     "react": "npm:@preact/compat@^18.3.1",
     "react-dom": "npm:@preact/compat@^18.3.1",
     "tailwindcss": "^4.1.18",
