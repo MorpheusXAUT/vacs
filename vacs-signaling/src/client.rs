@@ -840,6 +840,7 @@ mod tests {
 
     async fn setup_test_client(
         transport: MockTransport,
+        custom_profile: bool,
         reconnect_max_tries: u8,
     ) -> (
         Arc<SignalingClient<MockTransport, MockTokenProvider>>,
@@ -854,14 +855,14 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::ClientInfo {
-                    own: true,
+                SignalingMessage::serialize(&SignalingMessage::SessionInfo {
                     info: ClientInfo {
                         id: ClientId::from("client1"),
                         position_id: Some(PositionId::from("position1")),
                         display_name: "client1".to_string(),
                         frequency: "".to_string(),
                     },
+                    profile: SessionProfile::Unchanged,
                 })
                 .unwrap()
                 .into(),
@@ -874,12 +875,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            custom_profile,
             Duration::from_millis(100),
             reconnect_max_tries,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_ok());
         assert_matches!(client.state(), State::LoggedIn);
 
@@ -888,12 +890,12 @@ mod tests {
 
     #[test(tokio::test)]
     async fn connect() {
-        setup_test_client(MockTransport::default(), 0).await;
+        setup_test_client(MockTransport::default(), false, 0).await;
     }
 
     #[test(tokio::test)]
     async fn shutdown() {
-        let (client, shutdown_token) = setup_test_client(MockTransport::default(), 0).await;
+        let (client, shutdown_token) = setup_test_client(MockTransport::default(), false, 0).await;
 
         shutdown_token.cancel();
 
@@ -904,7 +906,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn disconnect() {
-        let (client, _shutdown_token) = setup_test_client(MockTransport::default(), 0).await;
+        let (client, _shutdown_token) = setup_test_client(MockTransport::default(), false, 0).await;
 
         client.disconnect().await;
 
@@ -915,7 +917,7 @@ mod tests {
     async fn send() {
         let transport = MockTransport::default();
         let mut outgoing_rx = transport.outgoing_tx.subscribe();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
         let msg = SignalingMessage::CallInvite {
             peer_id: ClientId::from("client2"),
@@ -941,6 +943,7 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             8,
             &tokio::runtime::Handle::current(),
@@ -949,6 +952,8 @@ mod tests {
         let msg = SignalingMessage::Login {
             token: "test".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
+            custom_profile: false,
+            position_id: None,
         };
 
         let result = client.send(msg.clone()).await;
@@ -972,6 +977,7 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             8,
             &tokio::runtime::Handle::current(),
@@ -993,14 +999,14 @@ mod tests {
             );
         });
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(res.unwrap_err(), SignalingError::Timeout(_));
     }
 
     #[test(tokio::test)]
     async fn send_disconnected() {
-        let (client, _shutdown_token) = setup_test_client(MockTransport::default(), 0).await;
+        let (client, _shutdown_token) = setup_test_client(MockTransport::default(), false, 0).await;
 
         client.disconnect().await;
 
@@ -1009,6 +1015,8 @@ mod tests {
         let msg = SignalingMessage::Login {
             token: "test".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
+            custom_profile: false,
+            position_id: None,
         };
 
         let result = client.send(msg.clone()).await;
@@ -1022,7 +1030,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn send_shutdown() {
-        let (client, shutdown_token) = setup_test_client(MockTransport::default(), 0).await;
+        let (client, shutdown_token) = setup_test_client(MockTransport::default(), false, 0).await;
 
         shutdown_token.cancel();
 
@@ -1033,6 +1041,8 @@ mod tests {
         let msg = SignalingMessage::Login {
             token: "test".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
+            custom_profile: false,
+            position_id: None,
         };
 
         let result = client.send(msg.clone()).await;
@@ -1048,7 +1058,7 @@ mod tests {
     async fn recv() {
         let transport = MockTransport::default();
         let incoming_tx = transport.incoming_tx.clone();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
         let msg = SignalingMessage::CallInvite {
             peer_id: ClientId::from("client2"),
@@ -1069,7 +1079,7 @@ mod tests {
     #[test(tokio::test)]
     async fn recv_shutdown() {
         let transport = MockTransport::default();
-        let (client, shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, shutdown_token) = setup_test_client(transport, false, 0).await;
 
         let ready = Arc::new(Notify::new());
         let ready_clone = ready.clone();
@@ -1095,7 +1105,7 @@ mod tests {
     async fn recv_with_timeout() {
         let transport = MockTransport::default();
         let incoming_tx = transport.incoming_tx.clone();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
         let msg = SignalingMessage::CallInvite {
             peer_id: ClientId::from("client2"),
@@ -1117,7 +1127,7 @@ mod tests {
     async fn recv_with_timeout_expired() {
         let transport = MockTransport::default();
         let incoming_tx = transport.incoming_tx.clone();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
         let msg = SignalingMessage::CallInvite {
             peer_id: ClientId::from("client2"),
@@ -1149,7 +1159,7 @@ mod tests {
     async fn recv_connection_closed() {
         let transport = MockTransport::default();
         let transport_disconnect_token = transport.disconnect_token();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
         transport_disconnect_token.cancel();
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1191,12 +1201,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(
             res.unwrap_err(),
@@ -1216,12 +1227,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         ));
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(res.unwrap_err(), SignalingError::Timeout(_));
     }
@@ -1252,12 +1264,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(
             res.unwrap_err(),
@@ -1292,12 +1305,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(
             res.unwrap_err(),
@@ -1332,12 +1346,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(
             res.unwrap_err(),
@@ -1373,12 +1388,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(res.unwrap_err(), SignalingError::ProtocolError(reason) if reason == "Expected own client info after Login");
         assert_matches!(client.state(), State::Disconnected);
@@ -1411,12 +1427,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(res.unwrap_err(), SignalingError::Runtime(SignalingRuntimeError::ServerError(ErrorReason::Internal(reason))) if reason == "something failed");
         assert_matches!(client.state(), State::Disconnected);

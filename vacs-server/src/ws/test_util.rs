@@ -14,9 +14,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::sync::{Mutex, broadcast, mpsc, watch};
-use vacs_protocol::vatsim::{ClientId, PositionId, ProfileId};
+use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId};
 use vacs_protocol::ws::{ClientInfo, SignalingMessage};
-use vacs_vatsim::coverage::network::{Network, ProfileSelection};
+use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::mock::MockDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
@@ -131,7 +131,7 @@ impl TestSetup {
         let (tx, rx) = mpsc::channel(10);
         let session = ClientSession::new(
             client_info,
-            ProfileSelection::Specific(ProfileId::from("profile1")),
+            ActiveProfile::Specific(ProfileId::from("profile1")),
             tx,
             ClientConnectionGuard::default(),
         );
@@ -166,7 +166,7 @@ impl TestSetup {
         self.app_state
             .register_client(
                 client_info,
-                ProfileSelection::Specific(ProfileId::from("profile1")),
+                ActiveProfile::Specific(ProfileId::from("profile1")),
                 ClientConnectionGuard::default(),
             )
             .await
@@ -176,12 +176,12 @@ impl TestSetup {
     pub async fn register_client_with_profile(
         &self,
         client_info: ClientInfo,
-        profile_selection: ProfileSelection,
+        active_profile: ActiveProfile<ProfileId>,
     ) -> (ClientSession, mpsc::Receiver<SignalingMessage>) {
         self.app_state
             .register_client(
                 client_info,
-                profile_selection,
+                active_profile,
                 ClientConnectionGuard::default(),
             )
             .await
@@ -207,10 +207,7 @@ impl TestSetup {
         self.websocket_rx.lock().await.recv().await
     }
 
-    pub fn spawn_session_handle_interaction(
-        mut self,
-        client_info: ClientInfo,
-    ) -> tokio::task::JoinHandle<()> {
+    pub fn spawn_session_handle_interaction(mut self) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             self.session
                 .handle_interaction(
@@ -220,7 +217,6 @@ impl TestSetup {
                     &mut self.broadcast_rx,
                     &mut self.rx,
                     &mut self.shutdown_tx.subscribe(),
-                    client_info,
                 )
                 .await;
         })

@@ -495,34 +495,35 @@ mod tests {
     use crate::ws::test_util::{TestSetup, create_client_info};
     use axum::extract::ws;
     use axum::extract::ws::Utf8Bytes;
-    use pretty_assertions::assert_eq;
+    use pretty_assertions::{assert_eq, assert_matches};
     use test_log::test;
+    use vacs_protocol::vatsim::{ActiveProfile, ProfileId};
 
     #[test(tokio::test)]
     async fn new_client_session() {
         let client_info_1 = create_client_info(1);
-        let profile_selection = ProfileSelection::default();
+        let profile_id_1 = ProfileId::from("profile1");
+        let active_profile = ActiveProfile::Specific(profile_id_1.clone());
         let (tx, _rx) = mpsc::channel::<SignalingMessage>(10);
         let session = ClientSession::new(
             client_info_1.clone(),
-            profile_selection.clone(),
+            active_profile,
             tx,
             ClientConnectionGuard::default(),
         );
 
         assert_eq!(session.id(), &ClientId::from("client1"));
         assert_eq!(session.client_info(), &client_info_1);
-        assert_eq!(session.profile_selection(), &profile_selection);
+        assert_matches!(session.active_profile(), ActiveProfile::Specific(profile_id) if *profile_id == profile_id_1);
     }
 
     #[test(tokio::test)]
     async fn send_message() {
         let client_info_1 = create_client_info(1);
-        let profile_selection = ProfileSelection::default();
         let (tx, mut rx) = mpsc::channel(10);
         let session = ClientSession::new(
             client_info_1,
-            profile_selection,
+            ActiveProfile::None,
             tx,
             ClientConnectionGuard::default(),
         );
@@ -541,11 +542,10 @@ mod tests {
     #[test(tokio::test)]
     async fn send_message_error() {
         let client_info_1 = create_client_info(1);
-        let profile_selection = ProfileSelection::default();
         let (tx, _) = mpsc::channel(10);
         let session = ClientSession::new(
             client_info_1,
-            profile_selection,
+            ActiveProfile::None,
             tx.clone(),
             ClientConnectionGuard::default(),
         );
@@ -564,10 +564,10 @@ mod tests {
     async fn initial_client_list_without_self() {
         let setup = TestSetup::new();
         let client_info_1 = create_client_info(1);
-        setup.register_client(client_info_1.clone()).await;
+        setup.register_client(client_info_1).await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction(client_info_1);
+        let handle_task = setup.spawn_session_handle_interaction();
 
         let _ = websocket_rx.lock().await.recv().await; // skip client info message
         let message = websocket_rx.lock().await.recv().await;
@@ -588,10 +588,10 @@ mod tests {
     async fn initial_client_info() {
         let setup = TestSetup::new();
         let client_info_1 = create_client_info(1);
-        setup.register_client(client_info_1.clone()).await;
+        setup.register_client(client_info_1).await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction(client_info_1);
+        let handle_task = setup.spawn_session_handle_interaction();
 
         let message = websocket_rx.lock().await.recv().await;
         match message {
@@ -599,7 +599,7 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"type":"ClientInfo","own":true,"info":{"id":"client1","positionId":"POSITION1","displayName":"Client 1","frequency":"100.000"}}"#
+                        r#"{"type":"SessionInfo","info":{"id":"client1","positionId":"POSITION1","displayName":"Client 1","frequency":"100.000"},"profile":{"Changed":"None"}}"#
                     )
                 );
             }
@@ -615,10 +615,10 @@ mod tests {
         let client_info_1 = create_client_info(1);
         let client_info_2 = create_client_info(2);
         setup.register_client(client_info_1.clone()).await;
-        setup.register_client(client_info_2.clone()).await;
+        setup.register_client(client_info_2).await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction(client_info_2);
+        let handle_task = setup.spawn_session_handle_interaction();
 
         let _ = websocket_rx.lock().await.recv().await; // skip client info message
         let message = websocket_rx.lock().await.recv().await;
@@ -627,7 +627,7 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"type":"ClientList","clients":[{"id":"client1","positionId":"POSITION1","displayName":"Client 1","frequency":"100.000"}]}"#
+                        r#"{"type":"ClientList","clients":[{"id":"client2","positionId":"POSITION2","displayName":"Client 2","frequency":"200.000"}]}"#
                     )
                 );
             }
@@ -639,7 +639,6 @@ mod tests {
 
     #[test(tokio::test)]
     async fn handle_interaction() {
-        let client_info_1 = create_client_info(1);
         let client_info_2 = create_client_info(2);
         let setup = TestSetup::new().with_messages(vec![Ok(ws::Message::Text(
             Utf8Bytes::from_static(r#"{"type":"CallOffer","peerId":"client2","sdp":"sdp1"}"#),
@@ -647,7 +646,7 @@ mod tests {
         let (_, mut client2_rx) = setup.register_client(client_info_2).await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction(client_info_1);
+        let handle_task = setup.spawn_session_handle_interaction();
 
         let _ = websocket_rx.lock().await.recv().await; // skip client info message
         let message = websocket_rx.lock().await.recv().await;
@@ -677,11 +676,10 @@ mod tests {
 
     #[test(tokio::test)]
     async fn handle_interaction_websocket_error() {
-        let client_info_1 = create_client_info(1);
         let setup = TestSetup::new().with_messages(vec![Err(axum::Error::new("Test error"))]);
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction(client_info_1);
+        let handle_task = setup.spawn_session_handle_interaction();
 
         let _ = websocket_rx.lock().await.recv().await; // skip client info message
         let message = websocket_rx.lock().await.recv().await;
