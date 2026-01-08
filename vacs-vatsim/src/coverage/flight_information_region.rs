@@ -15,7 +15,7 @@ pub struct FlightInformationRegion {
     pub id: FlightInformationRegionId,
     pub stations: HashSet<StationId>,
     pub positions: HashSet<PositionId>,
-    pub profiles: HashMap<ProfileId, Profile>,
+    pub profiles: HashSet<ProfileId>,
 }
 
 #[derive(Clone)]
@@ -221,7 +221,7 @@ impl TryFrom<FlightInformationRegionRaw> for FlightInformationRegion {
             id: value.id,
             stations: value.stations.iter().map(|s| s.id.clone()).collect(),
             positions: value.positions.iter().map(|p| p.id.clone()).collect(),
-            profiles: value.profiles,
+            profiles: value.profiles.keys().cloned().collect(),
         })
     }
 }
@@ -398,13 +398,13 @@ mod tests {
             id: "LOVV".into(),
             stations: HashSet::new(),
             positions: HashSet::new(),
-            profiles: HashMap::new(),
+            profiles: HashSet::new(),
         };
         let f2 = FlightInformationRegion {
             id: "LOVV".into(),
             stations: HashSet::from(["LOWW_TWR".into()]),
             positions: HashSet::from(["LOWW_TWR".into()]),
-            profiles: HashMap::new(),
+            profiles: HashSet::new(),
         };
         assert_eq!(f1, f2); // Should be equal because only IDs check
     }
