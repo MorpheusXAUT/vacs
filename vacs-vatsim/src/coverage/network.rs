@@ -3,10 +3,10 @@ use crate::coverage::flight_information_region::{
     FlightInformationRegion, FlightInformationRegionId, FlightInformationRegionRaw,
 };
 use crate::coverage::position::Position;
+use crate::coverage::profile::Profile;
 use crate::coverage::station::Station;
 use crate::coverage::{CoverageError, IoError, ReferenceValidator, StructureError};
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use vacs_protocol::vatsim::{PositionId, ProfileId, StationChange, StationId};
 
 #[derive(Clone, Default)]
@@ -14,6 +14,7 @@ pub struct Network {
     firs: HashMap<FlightInformationRegionId, FlightInformationRegion>,
     positions: HashMap<PositionId, Position>,
     stations: HashMap<StationId, Station>,
+    profiles: HashMap<ProfileId, Profile>,
 }
 
 impl std::fmt::Debug for Network {
@@ -22,6 +23,7 @@ impl std::fmt::Debug for Network {
             .field("firs", &self.firs.len())
             .field("positions", &self.positions.len())
             .field("stations", &self.stations.len())
+            .field("profiles", &self.profiles.len())
             .finish()
     }
 }
@@ -33,7 +35,7 @@ impl Network {
         tracing::Span::current().record("dir", tracing::field::debug(dir));
         tracing::trace!("Loading network");
 
-        let entries = match fs::read_dir(dir) {
+        let entries = match std::fs::read_dir(dir) {
             Ok(entries) => entries,
             Err(err) => {
                 return Err(vec![
@@ -86,6 +88,7 @@ impl Network {
         let mut firs = HashMap::new();
         let mut stations = HashMap::new();
         let mut positions = HashMap::new();
+        let mut profiles = HashMap::new();
 
         let all_stations = raw_firs
             .iter()
@@ -208,6 +211,20 @@ impl Network {
                     }
                 }
             }
+
+            for (profile_id, profile) in &fir_raw.profiles {
+                if profiles.contains_key(profile_id) {
+                    let err: CoverageError = StructureError::Duplicate {
+                        entity: "Profile".to_string(),
+                        id: profile_id.to_string(),
+                    }
+                    .into();
+                    tracing::warn!(?profile, "Duplicate profile ID");
+                    errors.push(err);
+                    continue;
+                }
+                profiles.insert(profile_id.clone(), profile.clone());
+            }
         }
 
         if !errors.is_empty() {
@@ -219,10 +236,15 @@ impl Network {
             firs,
             positions,
             stations,
+            profiles,
         };
 
         tracing::info!(?network, "Successfully loaded network");
         Ok(network)
+    }
+
+    pub fn get_profile(&self, profile_id: &ProfileId) -> Option<&Profile> {
+        self.profiles.get(profile_id)
     }
 
     #[tracing::instrument(level = "trace", skip_all, fields(callsign = tracing::field::Empty, frequency = tracing::field::Empty, facility_type = tracing::field::Empty))]
@@ -405,11 +427,7 @@ impl Network {
     pub fn relevant_stations(&self, selection: &ProfileSelection) -> RelevantStations<'_> {
         match selection {
             ProfileSelection::Specific(profile_id) => {
-                let Some(profile) = self
-                    .firs
-                    .iter()
-                    .find_map(|(_, fir)| fir.profiles.get(profile_id))
-                else {
+                let Some(profile) = self.profiles.get(profile_id) else {
                     tracing::trace!("Profile not found");
                     return RelevantStations::None;
                 };
@@ -523,15 +541,15 @@ mod tests {
         fn create(self, dir: &std::path::Path) {
             let fir_path = dir.join(&self.name);
             if !fir_path.exists() {
-                fs::create_dir(&fir_path).unwrap();
+                std::fs::create_dir(&fir_path).unwrap();
             }
 
             if !self.stations.is_empty() {
-                fs::write(fir_path.join("stations.toml"), self.stations.join("\n")).unwrap();
+                std::fs::write(fir_path.join("stations.toml"), self.stations.join("\n")).unwrap();
             }
 
             if !self.positions.is_empty() {
-                fs::write(fir_path.join("positions.toml"), self.positions.join("\n")).unwrap();
+                std::fs::write(fir_path.join("positions.toml"), self.positions.join("\n")).unwrap();
             }
         }
     }
@@ -721,9 +739,9 @@ mod tests {
 
         // FIR 1: Malformed TOML
         let fir1 = dir.path().join("FIR1");
-        fs::create_dir(&fir1).unwrap();
-        fs::write(fir1.join("stations.toml"), "invalid").unwrap();
-        fs::write(fir1.join("positions.toml"), "").unwrap();
+        std::fs::create_dir(&fir1).unwrap();
+        std::fs::write(fir1.join("stations.toml"), "invalid").unwrap();
+        std::fs::write(fir1.join("positions.toml"), "").unwrap();
 
         // FIR 2: Duplicate station within same FIR file
         TestFirBuilder::new("FIR2")
@@ -829,7 +847,7 @@ mod tests {
         let network = Network::load_from_dir(dir.path()).unwrap();
 
         let positions = network.find_positions("LOVV_CTR", "199.998", FacilityType::Enroute);
-        assert_eq!(positions.len(), 0);
+        assert!(positions.is_empty());
     }
 
     #[test]
@@ -1481,7 +1499,7 @@ mod tests {
             label = ["K"]
             station_id = "S"
         "#;
-        fs::write(fir2.join("profile.toml"), profile).unwrap();
+        std::fs::write(fir2.join("profile.toml"), profile).unwrap();
 
         // Should succeed because S exists in FIR1
         let res = Network::load_from_dir(dir.path());
@@ -1500,7 +1518,7 @@ mod tests {
             label = ["K"]
             station_id = "NON_EXISTENT"
         "#;
-        fs::write(fir2.join("profile.toml"), profile_invalid).unwrap();
+        std::fs::write(fir2.join("profile.toml"), profile_invalid).unwrap();
 
         let res = Network::load_from_dir(dir.path());
         assert_matches!(res, Err(errors) if errors.iter().any(|e| matches!(e, CoverageError::Validation(ValidationError::MissingReference { field, ref_id }) if field == "station_id" && ref_id == "NON_EXISTENT")));
