@@ -168,6 +168,8 @@ async fn login_timeout() {
             SignalingMessage::serialize(&SignalingMessage::Login {
                 token: "token".to_string(),
                 protocol_version: VACS_PROTOCOL_VERSION.to_string(),
+                custom_profile: false,
+                position_id: None,
             })
             .unwrap(),
         ))
@@ -197,7 +199,7 @@ async fn client_connected() {
     )
     .await;
 
-    let client1 = clients.get_mut("client1").unwrap();
+    let client1 = clients.get_mut(&ClientId::from("client1")).unwrap();
     let client_connected = client1.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_connected, |message| match message {
         SignalingMessage::ClientConnected { client } => {
@@ -207,7 +209,7 @@ async fn client_connected() {
         _ => panic!("Unexpected message: {message:?}"),
     });
 
-    let client2 = clients.get_mut("client2").unwrap();
+    let client2 = clients.get_mut(&ClientId::from("client2")).unwrap();
     assert!(
         client2
             .recv_with_timeout(Duration::from_millis(100))
@@ -226,7 +228,7 @@ async fn client_disconnected() {
     )
     .await;
 
-    let client1 = clients.get_mut("client1").unwrap();
+    let client1 = clients.get_mut(&ClientId::from("client1")).unwrap();
     let client_connected = client1.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_connected, |message| match message {
         SignalingMessage::ClientConnected { client } => {
@@ -238,7 +240,7 @@ async fn client_disconnected() {
 
     client1.close().await;
 
-    let client2 = clients.get_mut("client2").unwrap();
+    let client2 = clients.get_mut(&ClientId::from("client2")).unwrap();
     let client_disconnected = client2.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_disconnected, |message| match message {
         SignalingMessage::ClientDisconnected { id } => assert_eq!(id, ClientId::from("client1")),
@@ -303,7 +305,7 @@ async fn logout() {
     )
     .await;
 
-    let client1 = clients.get_mut("client1").unwrap();
+    let client1 = clients.get_mut(&ClientId::from("client1")).unwrap();
     let client_connected = client1.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_connected, |message| match message {
         SignalingMessage::ClientConnected { client } => {
@@ -321,7 +323,7 @@ async fn logout() {
             .is_none()
     );
 
-    let client2 = clients.get_mut("client2").unwrap();
+    let client2 = clients.get_mut(&ClientId::from("client2")).unwrap();
     let client_disconnected = client2.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_disconnected, |message| match message {
         SignalingMessage::ClientDisconnected { id } => assert_eq!(id, ClientId::from("client1")),

@@ -59,9 +59,11 @@ impl TestClient {
         let login_msg = SignalingMessage::Login {
             token: self.token.to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
+            custom_profile: false,
+            position_id: None,
         };
         self.send_and_expect_with_timeout(login_msg, Duration::from_millis(100), |msg| match msg {
-            SignalingMessage::ClientInfo { own, info } => client_info_predicate(own, info),
+            SignalingMessage::SessionInfo { info, .. } => client_info_predicate(true, info),
             SignalingMessage::LoginFailure { reason } => {
                 Err(anyhow::anyhow!("Login failed: {:?}", reason))
             }

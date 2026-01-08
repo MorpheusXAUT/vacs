@@ -56,6 +56,7 @@ impl TestRig {
                 token_provider,
                 |_| async {},
                 shutdown_token.child_token(),
+                false,
                 Duration::from_millis(100),
                 8,
                 &tokio::runtime::Handle::current(),
@@ -63,7 +64,7 @@ impl TestRig {
 
             let broadcast_rx = client.subscribe();
             client
-                .connect()
+                .connect(None)
                 .await
                 .expect("Client failed to connect and login");
 
