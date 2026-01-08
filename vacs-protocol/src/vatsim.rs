@@ -28,17 +28,19 @@ pub struct Profile {
     /// The unique identifier for this profile.
     pub id: ProfileId,
     /// The type of profile and its associated configuration.
+    #[serde(flatten)]
     pub profile_type: ProfileType,
 }
 
 /// The specific configuration type of a profile.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum ProfileType {
     /// A GEO profile with buttons placed on coordinates.
     ///
     /// The vector of buttons will always be non-empty.
     Geo(Vec<GeoPageButton>),
-    /// A tabbed profile with pages accessible via tabs.
+    /// A tabbed profile with pages accessible via tabs, with the key displayed as the tab's label.
     ///
     /// The map of tabs will always be non-empty.
     Tabbed(HashMap<String, DirectAccessPage>),
@@ -93,6 +95,42 @@ pub struct DirectAccessKey {
     /// If `None`, the DA key will be displayed on the UI, but will be non-functional.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub station_id: Option<StationId>,
+}
+
+/// Trait alias for types that can be used as a profile reference in [`ActiveProfile`].
+///
+/// This trait is sealed, ensuring only the appropriate types can be passed.
+pub trait ProfileReference: crate::sealed::Sealed {}
+
+impl crate::sealed::Sealed for ProfileId {}
+impl ProfileReference for ProfileId {}
+
+impl crate::sealed::Sealed for Profile {}
+impl ProfileReference for Profile {}
+
+/// Represents the currently active profile for a user session.
+///
+/// The active profile determines which stations are considered "relevant" and thus which
+/// status updates (online/offline/handoff) are sent to the client.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum ActiveProfile<T: ProfileReference> {
+    /// A specific, pre-defined profile is active.
+    ///
+    /// The client is restricted to the view defined by this profile, meaning only
+    /// relevant stations and buttons configured in this profile are displayed and the
+    /// appropriate station updates are sent.
+    Specific(T),
+    /// A custom, client-side profile selection is active.
+    ///
+    /// This typically corresponds to a "Show All" or "Custom" view where the set of
+    /// relevant stations is determined dynamically by the client, or all stations are shown.
+    Custom,
+    /// No profile is currently active.
+    ///
+    /// In this state, the client will not receive any station updates, only general
+    /// client information updates.
+    #[default]
+    None,
 }
 
 /// Represents a change in station status (online, offline, or handoff).

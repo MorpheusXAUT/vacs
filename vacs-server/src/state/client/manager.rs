@@ -4,9 +4,11 @@ use crate::state::client::{ClientManagerError, Result};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::{RwLock, broadcast, mpsc};
 use tracing::instrument;
-use vacs_protocol::vatsim::{ClientId, PositionId, StationChange};
+use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId, StationChange};
 use vacs_protocol::ws::{ClientInfo, DisconnectReason, SignalingMessage};
-use vacs_vatsim::coverage::network::{Network, ProfileSelection, RelevantStations};
+use vacs_vatsim::coverage::network::{Network, RelevantStations};
+use vacs_vatsim::coverage::position::Position;
+use vacs_vatsim::coverage::profile::Profile;
 use vacs_vatsim::{ControllerInfo, FacilityType};
 
 #[derive(Debug)]
@@ -27,11 +29,28 @@ impl ClientManager {
         }
     }
 
+    #[instrument(level = "debug", skip(self))]
+    pub fn find_positions(&self, controller_info: &ControllerInfo) -> Vec<&Position> {
+        self.network.find_positions(
+            &controller_info.callsign,
+            &controller_info.frequency,
+            controller_info.facility_type,
+        )
+    }
+
+    pub fn get_profile(&self, profile_id: Option<&ProfileId>) -> Option<&Profile> {
+        profile_id.and_then(|profile_id| self.network.get_profile(profile_id))
+    }
+
+    pub fn network(&self) -> &Network {
+        &self.network
+    }
+
     #[instrument(level = "debug", skip(self, client_connection_guard), err)]
     pub async fn add_client(
         &self,
         client_info: ClientInfo,
-        profile_selection: ProfileSelection,
+        active_profile: ActiveProfile<ProfileId>,
         client_connection_guard: ClientConnectionGuard,
     ) -> Result<(ClientSession, mpsc::Receiver<SignalingMessage>)> {
         tracing::trace!("Adding client");
@@ -47,7 +66,7 @@ impl ClientManager {
 
         let client = ClientSession::new(
             client_info.clone(),
-            profile_selection,
+            active_profile,
             tx,
             client_connection_guard,
         );
@@ -208,9 +227,9 @@ impl ClientManager {
         &self,
         controllers: &HashMap<ClientId, ControllerInfo>,
         pending_disconnect: &mut HashSet<ClientId>,
-    ) -> Vec<ClientId> {
+    ) -> Vec<(ClientId, DisconnectReason)> {
         let mut updates: Vec<SignalingMessage> = Vec::new();
-        let mut disconnected_clients: Vec<ClientId> = Vec::new();
+        let mut disconnected_clients: Vec<(ClientId, DisconnectReason)> = Vec::new();
         let mut coverage_changes: Vec<StationChange> = Vec::new();
 
         {
@@ -219,24 +238,44 @@ impl ClientManager {
             let start_online_positions = online_positions.keys().cloned().collect::<HashSet<_>>();
             let mut positions_changed = false;
 
+            fn disconnect_or_mark_pending(
+                cid: &ClientId,
+                pending_disconnect: &mut HashSet<ClientId>,
+                disconnected_clients: &mut Vec<(ClientId, DisconnectReason)>,
+            ) {
+                if pending_disconnect.remove(cid) {
+                    tracing::trace!(
+                        ?cid,
+                        "No active VATSIM connection found after grace period, disconnecting client and sending broadcast"
+                    );
+                    disconnected_clients
+                        .push((cid.clone(), DisconnectReason::NoActiveVatsimConnection));
+                } else {
+                    tracing::trace!(
+                        ?cid,
+                        "Client not found in data feed, but active VATSIM connection is required, marking for disconnect"
+                    );
+                    pending_disconnect.insert(cid.clone());
+                }
+            }
+
             for (cid, session) in clients.iter_mut() {
                 tracing::trace!(?cid, ?session, "Checking session for client info update");
 
                 match controllers.get(cid) {
                     Some(controller) if controller.facility_type == FacilityType::Unknown => {
-                        if pending_disconnect.remove(cid) {
-                            tracing::trace!(
-                                ?cid,
-                                "No active VATSIM connection found after grace period, disconnecting client and sending broadcast"
-                            );
-                            disconnected_clients.push(cid.clone());
-                        } else {
-                            tracing::trace!(
-                                ?cid,
-                                "Client not found in data feed, but active VATSIM connection is required, marking for disconnect"
-                            );
-                            pending_disconnect.insert(cid.clone());
-                        }
+                        disconnect_or_mark_pending(
+                            cid,
+                            pending_disconnect,
+                            &mut disconnected_clients,
+                        );
+                    }
+                    None => {
+                        disconnect_or_mark_pending(
+                            cid,
+                            pending_disconnect,
+                            &mut disconnected_clients,
+                        );
                     }
                     Some(controller) => {
                         if pending_disconnect.remove(cid) {
@@ -246,88 +285,114 @@ impl ClientManager {
                             );
                         }
 
-                        let mut changed = session.update_client_info(controller);
-
-                        let old_position_id = session.position_id().cloned();
-                        let found_positions = self.network.find_positions(
-                            &controller.callsign,
-                            &controller.frequency,
-                            controller.facility_type,
-                        );
-
-                        if found_positions.len() > 1 && old_position_id.is_some() {
-                            tracing::info!(
+                        let mut updated = session.update_client_info(controller);
+                        if updated {
+                            tracing::trace!(
                                 ?cid,
-                                ?old_position_id,
-                                matches = ?found_positions.len(),
-                                "Ambiguous position match for existing client, disconnecting"
-                            );
-                            disconnected_clients.push(cid.clone());
-                            continue;
-                        }
-
-                        let new_position_id = if found_positions.len() == 1 {
-                            Some(found_positions[0].id.clone())
-                        } else {
-                            None
-                        };
-
-                        if old_position_id != new_position_id {
-                            tracing::info!(
-                                ?cid,
-                                ?new_position_id,
-                                ?old_position_id,
-                                "Client position changed"
+                                ?session,
+                                "Client info updated, updating position"
                             );
 
-                            if let Some(old_position_id) = &old_position_id {
-                                if online_positions
-                                    .get(old_position_id)
-                                    .map(|s| s.len() <= 1)
-                                    .unwrap_or(false)
-                                {
-                                    online_positions.remove(old_position_id);
-                                    positions_changed = true;
-                                } else if let Some(clients) =
-                                    online_positions.get_mut(old_position_id)
-                                {
-                                    clients.remove(cid);
+                            let old_position_id = session.position_id().cloned();
+                            let new_positions = self.network.find_positions(
+                                &controller.callsign,
+                                &controller.frequency,
+                                controller.facility_type,
+                            );
+
+                            let new_position = if new_positions.len() > 1 {
+                                tracing::info!(
+                                    ?cid,
+                                    ?old_position_id,
+                                    ?new_positions,
+                                    "Multiple positions found for updated client info, disconnecting as ambiguous"
+                                );
+                                pending_disconnect.remove(cid);
+                                disconnected_clients.push((
+                                    cid.clone(),
+                                    DisconnectReason::AmbiguousVatsimPosition(
+                                        new_positions.into_iter().map(|p| p.id.clone()).collect(),
+                                    ),
+                                ));
+                                continue;
+                            } else if new_positions.len() == 1 {
+                                Some(new_positions[0])
+                            } else {
+                                None
+                            };
+                            let new_position_id = new_position.map(|p| p.id.clone());
+
+                            if old_position_id != new_position_id {
+                                tracing::info!(
+                                    ?cid,
+                                    ?new_position_id,
+                                    ?old_position_id,
+                                    "Client position changed"
+                                );
+
+                                session.set_position_id(new_position_id.clone());
+
+                                if let Some(old_position_id) = &old_position_id {
+                                    if online_positions
+                                        .get(old_position_id)
+                                        .map(|s| s.len() <= 1)
+                                        .unwrap_or(false)
+                                    {
+                                        tracing::trace!(
+                                            ?cid,
+                                            ?old_position_id,
+                                            "Removing position from online positions list"
+                                        );
+                                        online_positions.remove(old_position_id);
+                                        positions_changed = true;
+                                    } else if let Some(clients) =
+                                        online_positions.get_mut(old_position_id)
+                                    {
+                                        tracing::trace!(
+                                            ?cid,
+                                            ?old_position_id,
+                                            "Removing client from position in online positions list"
+                                        );
+                                        clients.remove(cid);
+                                    }
                                 }
+
+                                if let Some(new_position_id) = &new_position_id {
+                                    let clients = online_positions
+                                        .entry(new_position_id.clone())
+                                        .or_default();
+                                    if clients.insert(cid.clone()) && clients.len() == 1 {
+                                        positions_changed = true;
+                                    }
+                                }
+
+                                let session_profile = session.update_active_profile(
+                                    new_position.and_then(|p| p.profile_id.clone()),
+                                    &self.network,
+                                );
+
+                                if let Err(err) = session
+                                    .send_message(SignalingMessage::SessionInfo {
+                                        info: session.client_info().clone(),
+                                        profile: session_profile,
+                                    })
+                                    .await
+                                {
+                                    tracing::warn!(
+                                        ?err,
+                                        ?session,
+                                        "Failed to send updated session info to client"
+                                    );
+                                }
+
+                                updated = true;
                             }
 
-                            if let Some(new_position_id) = &new_position_id {
-                                let clients =
-                                    online_positions.entry(new_position_id.clone()).or_default();
-                                if clients.insert(cid.clone()) && clients.len() == 1 {
-                                    positions_changed = true;
-                                }
-                            }
-
-                            session.set_position_id(new_position_id);
-                            changed = true;
-                        }
-
-                        if changed {
                             tracing::trace!(?cid, ?session, "Client info updated, broadcasting");
                             updates.push(SignalingMessage::ClientInfo {
                                 own: false,
                                 info: session.client_info().clone(),
                             });
-                        }
-                    }
-                    None => {
-                        if pending_disconnect.remove(cid) {
-                            tracing::trace!(
-                                ?cid,
-                                "No active VATSIM connection found, disconnecting client and sending broadcast"
-                            );
-                            disconnected_clients.push(cid.clone());
-                        } else {
-                            tracing::trace!(
-                                ?cid,
-                                "Client not found in data feed, but active VATSIM connection is required, marking for disconnect"
-                            );
-                            pending_disconnect.insert(cid.clone());
                         }
                     }
                 }
@@ -364,7 +429,7 @@ impl ClientManager {
         }
 
         tracing::trace!("Sending station changes to clients");
-        let mut filtered_changes_cache: HashMap<ProfileSelection, Vec<StationChange>> =
+        let mut filtered_changes_cache: HashMap<ActiveProfile<ProfileId>, Vec<StationChange>> =
             HashMap::new();
 
         let clients = self
@@ -376,14 +441,13 @@ impl ClientManager {
             .collect::<Vec<_>>();
 
         for client in clients {
-            let profile_selection = client.profile_selection();
+            let profile = client.active_profile();
 
-            let changes_to_send = if let Some(cached_changes) =
-                filtered_changes_cache.get(profile_selection)
+            let changes_to_send = if let Some(cached_changes) = filtered_changes_cache.get(profile)
             {
                 cached_changes.clone()
             } else {
-                let relevant_stations = self.network.relevant_stations(profile_selection);
+                let relevant_stations = self.network.relevant_stations(profile);
 
                 let filtered_changes = match relevant_stations {
                     RelevantStations::All => changes.to_vec(),
@@ -402,7 +466,7 @@ impl ClientManager {
                     RelevantStations::None => Vec::new(),
                 };
 
-                filtered_changes_cache.insert(profile_selection.clone(), filtered_changes.clone());
+                filtered_changes_cache.insert(profile.clone(), filtered_changes.clone());
                 filtered_changes
             };
 

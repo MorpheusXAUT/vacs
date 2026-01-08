@@ -11,17 +11,19 @@ use crate::error::{Error, HandleUnauthorizedExt};
 use std::collections::HashSet;
 use tauri::{AppHandle, Manager, State};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
-use vacs_signaling::protocol::vatsim::ClientId;
+use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
 use vacs_signaling::protocol::ws::SignalingMessage;
 
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn signaling_connect(
+    app: AppHandle,
     app_state: State<'_, AppState>,
     http_state: State<'_, HttpState>,
+    position_id: Option<PositionId>,
 ) -> Result<(), Error> {
     let mut app_state = app_state.lock().await;
-    app_state.connect_signaling().await?;
+    app_state.connect_signaling(&app, position_id).await?;
 
     if !app_state.config.ice.is_default() {
         log::info!("Modified ICE config detected, not fetching from server");

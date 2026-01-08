@@ -15,15 +15,15 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{Instrument, instrument};
-use vacs_protocol::vatsim::{ClientId, PositionId};
-use vacs_protocol::ws::{ClientInfo, DisconnectReason, SignalingMessage};
+use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId};
+use vacs_protocol::ws::{ClientInfo, DisconnectReason, SessionProfile, SignalingMessage};
 use vacs_vatsim::ControllerInfo;
-use vacs_vatsim::coverage::network::ProfileSelection;
+use vacs_vatsim::coverage::network::Network;
 
 #[derive(Clone)]
 pub struct ClientSession {
     client_info: ClientInfo,
-    profile_selection: ProfileSelection,
+    active_profile: ActiveProfile<ProfileId>,
     tx: mpsc::Sender<SignalingMessage>,
     client_shutdown_tx: watch::Sender<Option<DisconnectReason>>,
     client_connection_guard: Arc<Mutex<ClientConnectionGuard>>,
@@ -32,14 +32,14 @@ pub struct ClientSession {
 impl ClientSession {
     pub fn new(
         client_info: ClientInfo,
-        profile_selection: ProfileSelection,
+        active_profile: ActiveProfile<ProfileId>,
         tx: mpsc::Sender<SignalingMessage>,
         client_connection_guard: ClientConnectionGuard,
     ) -> Self {
         let (client_shutdown_tx, _) = watch::channel(None);
         Self {
             client_info,
-            profile_selection,
+            active_profile,
             tx,
             client_shutdown_tx,
             client_connection_guard: Arc::new(Mutex::new(client_connection_guard)),
@@ -57,13 +57,13 @@ impl ClientSession {
     }
 
     #[inline]
-    pub fn profile_selection(&self) -> &ProfileSelection {
-        &self.profile_selection
+    pub fn client_info(&self) -> &ClientInfo {
+        &self.client_info
     }
 
     #[inline]
-    pub fn client_info(&self) -> &ClientInfo {
-        &self.client_info
+    pub fn active_profile(&self) -> &ActiveProfile<ProfileId> {
+        &self.active_profile
     }
 
     #[tracing::instrument(level = "trace")]
@@ -92,8 +92,44 @@ impl ClientSession {
         changed
     }
 
+    #[inline]
     pub fn set_position_id(&mut self, position_id: Option<PositionId>) {
         self.client_info.position_id = position_id;
+    }
+
+    #[tracing::instrument(level = "trace")]
+    pub fn update_active_profile(
+        &mut self,
+        new_profile_id: Option<ProfileId>,
+        network: &Network,
+    ) -> SessionProfile {
+        match (&self.active_profile, new_profile_id) {
+            (ActiveProfile::Specific(old_profile_id), Some(new_profile_id))
+                if *old_profile_id == new_profile_id =>
+            {
+                SessionProfile::Unchanged
+            }
+            (ActiveProfile::None, None) | (ActiveProfile::Custom, _) => SessionProfile::Unchanged,
+            (_, Some(new_profile_id)) => {
+                if let Some(profile) = network.get_profile(&new_profile_id) {
+                    tracing::trace!(?profile, "Active profile changed, updating");
+                    self.active_profile = ActiveProfile::Specific(new_profile_id.clone());
+                    SessionProfile::Changed(ActiveProfile::Specific(profile.into()))
+                } else {
+                    tracing::warn!(
+                        ?new_profile_id,
+                        "Active profile does not exist, falling back to None"
+                    );
+                    self.active_profile = ActiveProfile::None;
+                    SessionProfile::Changed(ActiveProfile::None)
+                }
+            }
+            (_, None) => {
+                tracing::trace!("Active profile cleared, updating");
+                self.active_profile = ActiveProfile::None;
+                SessionProfile::Changed(ActiveProfile::None)
+            }
+        }
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -116,7 +152,7 @@ impl ClientSession {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[instrument(level = "debug", skip_all, fields(client_id = ?client_info.id))]
+    #[instrument(level = "debug", skip_all, fields(client_id = ?self.client_info.id))]
     pub async fn handle_interaction<R: WebSocketStream + 'static, T: WebSocketSink + 'static>(
         &mut self,
         app_state: &Arc<AppState>,
@@ -125,7 +161,6 @@ impl ClientSession {
         broadcast_rx: &mut broadcast::Receiver<SignalingMessage>,
         rx: &mut mpsc::Receiver<SignalingMessage>,
         app_shutdown_rx: &mut watch::Receiver<()>,
-        client_info: ClientInfo,
     ) {
         tracing::debug!("Starting to handle client interaction");
 
@@ -147,21 +182,30 @@ impl ClientSession {
         let (ping_handle, mut ping_shutdown_rx) =
             ClientSession::spawn_ping_task(&ws_outbound_tx, pong_update_rx);
 
-        tracing::trace!("Sending initial client info");
+        tracing::trace!("Sending initial session info");
         if let Err(err) = send_message(
             &ws_outbound_tx,
-            SignalingMessage::ClientInfo {
-                own: true,
-                info: client_info.clone(),
+            SignalingMessage::SessionInfo {
+                info: self.client_info.clone(),
+                profile: match &self.active_profile {
+                    ActiveProfile::Specific(profile_id) => {
+                        let profile = app_state.clients.get_profile(Some(profile_id));
+                        profile
+                            .map(|p| SessionProfile::Changed(ActiveProfile::Specific(p.into())))
+                            .unwrap_or(SessionProfile::Changed(ActiveProfile::None))
+                    }
+                    ActiveProfile::Custom => SessionProfile::Changed(ActiveProfile::Custom),
+                    ActiveProfile::None => SessionProfile::Changed(ActiveProfile::None),
+                },
             },
         )
         .await
         {
-            tracing::warn!(?err, "Failed to send initial client info");
+            tracing::warn!(?err, "Failed to send initial session info");
         }
 
         tracing::trace!("Sending initial client list");
-        let clients = app_state.list_clients(Some(&client_info.id)).await;
+        let clients = app_state.list_clients(Some(&self.client_info.id)).await;
         if let Err(err) =
             send_message(&ws_outbound_tx, SignalingMessage::ClientList { clients }).await
         {
@@ -221,9 +265,8 @@ impl ClientSession {
                             tracing::trace!("Received broadcast message");
                             if let SignalingMessage::ClientInfo {ref info, ref mut own} = msg
                                 && info.id == self.client_info.id {
-                                    tracing::trace!("Setting own flag for client info update broadcast");
-                                    *own = true;
-
+                                tracing::trace!("Setting own flag for client info update broadcast");
+                                *own = true;
                             }
 
                             if let Err(err) = send_message(&ws_outbound_tx, msg).await {
@@ -425,6 +468,7 @@ impl Debug for ClientSession {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ClientSession")
             .field("client_info", &self.client_info)
+            .field("active_profile", &self.active_profile)
             .finish_non_exhaustive()
     }
 }

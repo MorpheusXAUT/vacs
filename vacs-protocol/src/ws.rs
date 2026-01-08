@@ -1,4 +1,4 @@
-use crate::vatsim::{ClientId, PositionId, StationChange};
+use crate::vatsim::{ActiveProfile, ClientId, PositionId, Profile, StationChange};
 use serde::{Deserialize, Serialize};
 
 /// Possible reasons for a login failure.
@@ -12,6 +12,10 @@ pub enum LoginFailureReason {
     InvalidCredentials,
     /// No active VATSIM connection was found.
     NoActiveVatsimConnection,
+    /// VATSIM controller information matches multiple defined network positions, making it impossible to uniquely identify the position the client is in. The user must manually select the correct position.
+    AmbiguousVatsimPosition(Vec<PositionId>),
+    /// The position selected by the user is not included in the calculated list of matching network positions.
+    InvalidVatsimPosition,
     /// The login flow was not completed in time, the client should reconnect and authenticate immediately.
     Timeout,
     /// The client is using an unsupported protocol version.
@@ -79,6 +83,20 @@ pub struct ClientInfo {
     pub frequency: String,
 }
 
+/// Represents the state of the client's profile in a session update.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SessionProfile {
+    /// The profile has not changed during this update.
+    ///
+    /// This is returned when the client's position changes, but the profile for the new position is the same as the old one.
+    Unchanged,
+    /// An (updated) profile is available.
+    ///
+    /// This is returned upon initial connection if the client's position has a profile defined, or when the client's position changes
+    /// and the new position has a different profile defined.
+    Changed(ActiveProfile<Profile>),
+}
+
 /// Represents a message exchanged between the signaling server and clients.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(tag = "type")]
@@ -94,6 +112,12 @@ pub enum SignalingMessage {
         token: String,
         /// Version of the vacs protocol implemented by the client.
         protocol_version: String,
+        /// Whether the client is using a custom (local) profile.
+        custom_profile: bool,
+        /// The ID of the position the client is logged in as, as manually chosen by the user.
+        ///
+        /// This is required if the client's position cannot be uniquely determined from their VATSIM login (ambiguous position).
+        position_id: Option<PositionId>,
     },
     /// A login failure message sent by the signaling server after a failed login attempt.
     LoginFailure {
@@ -130,6 +154,15 @@ pub enum SignalingMessage {
         own: bool,
         /// Updated information about the client.
         info: ClientInfo,
+    },
+    /// A message containing the current session information for the connected client.
+    ///
+    /// This is returned upon successful login and whenever the client's own information or profile changes due to a VATSIM datafeed update (e.g., after a position change).
+    SessionInfo {
+        /// Information about the client itself.
+        info: ClientInfo,
+        /// The profile state for the current session.
+        profile: SessionProfile,
     },
     /// A call accept message sent by the target client to accept an incoming call.
     ///
@@ -280,13 +313,15 @@ mod tests {
         let message = SignalingMessage::Login {
             token: "token1".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
+            custom_profile: false,
+            position_id: None,
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
             format!(
-                "{{\"type\":\"Login\",\"token\":\"token1\",\"protocolVersion\":\"{VACS_PROTOCOL_VERSION}\"}}"
+                r#"{{"type":"Login","token":"token1","protocolVersion":"{VACS_PROTOCOL_VERSION}","customProfile":false,"positionId":null}}"#,
             )
         );
 
@@ -295,9 +330,13 @@ mod tests {
             SignalingMessage::Login {
                 token,
                 protocol_version,
+                custom_profile,
+                position_id,
             } => {
                 assert_eq!(token, "token1");
                 assert_eq!(protocol_version, VACS_PROTOCOL_VERSION);
+                assert_eq!(custom_profile, false);
+                assert_eq!(position_id, None);
             }
             _ => panic!("Expected Login message"),
         }

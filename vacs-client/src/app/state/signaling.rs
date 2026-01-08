@@ -13,14 +13,20 @@ use tokio_util::sync::CancellationToken;
 use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
-use vacs_signaling::protocol::vatsim::ClientId;
-use vacs_signaling::protocol::ws::{CallErrorReason, ErrorReason, SignalingMessage};
+use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
+use vacs_signaling::protocol::ws::{
+    CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason, SignalingMessage,
+};
 use vacs_signaling::transport::tokio::TokioTransport;
 
 const INCOMING_CALLS_LIMIT: usize = 5;
 
 pub trait AppStateSignalingExt: sealed::Sealed {
-    async fn connect_signaling(&self) -> Result<(), Error>;
+    async fn connect_signaling(
+        &self,
+        app: &AppHandle,
+        position_id: Option<PositionId>,
+    ) -> Result<(), Error>;
     async fn disconnect_signaling(&mut self, app: &AppHandle);
     async fn handle_signaling_connection_closed(&mut self, app: &AppHandle);
     async fn send_signaling_message(&mut self, msg: SignalingMessage) -> Result<(), Error>;
@@ -48,9 +54,11 @@ pub trait AppStateSignalingExt: sealed::Sealed {
 }
 
 impl AppStateSignalingExt for AppStateInner {
-    async fn connect_signaling(&self) -> Result<(), Error> {
-        log::info!("Connecting to signaling server");
-
+    async fn connect_signaling(
+        &self,
+        app: &AppHandle,
+        position_id: Option<PositionId>,
+    ) -> Result<(), Error> {
         if self.signaling_client.state() != State::Disconnected {
             log::info!("Already connected and logged in with signaling server");
             return Err(Error::Signaling(Box::from(SignalingError::Other(
@@ -58,8 +66,23 @@ impl AppStateSignalingExt for AppStateInner {
             ))));
         }
 
-        log::debug!("Connecting to signaling server");
-        self.signaling_client.connect().await?;
+        log::info!("Connecting to signaling server with position ID: {position_id:?}");
+        match self.signaling_client.connect(position_id).await {
+            Ok(()) => {}
+            Err(SignalingError::LoginError(LoginFailureReason::AmbiguousVatsimPosition(
+                positions,
+            ))) => {
+                log::warn!(
+                    "Connection to signaling server failed, ambiguous VATSIM position: {positions:?}"
+                );
+                app.emit("signaling:ambiguous-position", &positions).ok();
+                return Err(SignalingError::LoginError(
+                    LoginFailureReason::AmbiguousVatsimPosition(positions),
+                )
+                .into());
+            }
+            Err(err) => return Err(err.into()),
+        }
 
         log::info!("Successfully connected to signaling server");
         Ok(())
@@ -159,6 +182,7 @@ impl AppStateSignalingExt for AppStateInner {
                 }
             },
             shutdown_token,
+            false, // TODO custom profile
             WS_LOGIN_TIMEOUT,
             max_reconnect_attempts,
             tauri::async_runtime::handle().inner(),
@@ -303,9 +327,12 @@ impl AppStateSignalingExt for AppStateInner {
 impl AppStateInner {
     async fn handle_signaling_event(app: &AppHandle, event: SignalingEvent) {
         match event {
-            SignalingEvent::Connected { client_info } => {
+            SignalingEvent::Connected {
+                client_info,
+                profile,
+            } => {
                 log::debug!(
-                    "Successfully connected to signaling server. Display name: {}, frequency: {}",
+                    "Successfully connected to signaling server. Display name: {}, frequency: {}, profile: {profile:?}",
                     &client_info.display_name,
                     &client_info.frequency,
                 );
@@ -319,7 +346,16 @@ impl AppStateInner {
                     let mut state = state.lock().await;
                     state.handle_signaling_connection_closed(app).await;
 
-                    if error.can_reconnect() {
+                    if let SignalingRuntimeError::Disconnected(Some(
+                        DisconnectReason::AmbiguousVatsimPosition(positions),
+                    )) = error
+                    {
+                        log::warn!(
+                            "Disconnected from signaling server, ambiguous VATSIM position: {positions:?}"
+                        );
+
+                        app.emit("signaling:ambiguous-position", &positions).ok();
+                    } else if error.can_reconnect() {
                         app.emit("signaling:reconnecting", Value::Null).ok();
                     } else {
                         app.emit::<FrontendError>("error", Error::from(error).into())
@@ -568,6 +604,11 @@ impl AppStateInner {
                     "signaling:client-connected"
                 };
                 app.emit(event, info).ok();
+            }
+            SignalingMessage::SessionInfo { info, profile } => {
+                log::trace!("Received session info: {info:?}, profile: {profile:?}");
+                // TODO: handle profile update (SessionProfile to Profile translation)
+                app.emit("signaling:connected", info).ok();
             }
             SignalingMessage::Error { reason, peer_id } => match reason {
                 ErrorReason::MalformedMessage => {
