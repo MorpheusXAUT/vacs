@@ -2,7 +2,7 @@ use crate::auth::TokenProvider;
 use crate::error::{SignalingError, SignalingRuntimeError, UntilInstant};
 use crate::matcher::ResponseMatcher;
 use crate::transport::{SignalingReceiver, SignalingSender, SignalingTransport};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use rand::{Rng, SeedableRng};
 use std::collections::VecDeque;
 use std::pin::Pin;
@@ -14,7 +14,8 @@ use tokio_tungstenite::tungstenite;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, instrument};
 use vacs_protocol::VACS_PROTOCOL_VERSION;
-use vacs_protocol::ws::{ClientInfo, SignalingMessage};
+use vacs_protocol::vatsim::PositionId;
+use vacs_protocol::ws::{ClientInfo, SessionProfile, SignalingMessage};
 
 const BROADCAST_CHANNEL_SIZE: usize = 100;
 const SEND_CHANNEL_SIZE: usize = 100;
@@ -42,10 +43,15 @@ pub enum State {
 pub enum SignalingEvent {
     /// Emitted after the [`SignalingClient`] successfully connected to the server, including authentication.
     /// The client is ready to send and receive messages.
-    Connected { client_info: ClientInfo },
-    /// Emitted for every [`SignalingMessage`] received by a connected and authenticated [`SignalingClientInner`].
+    Connected {
+        /// Information about the connected client.
+        client_info: ClientInfo,
+        /// The profile associated with the current session.
+        profile: SessionProfile,
+    },
+    /// Emitted for every [`SignalingMessage`] received by a connected and authenticated [`SignalingClient`].
     Message(SignalingMessage),
-    /// Emitted for every [`SignalingRuntimeError`] handled by the [`SignalingClientInner`].
+    /// Emitted for every [`SignalingRuntimeError`] handled by the [`SignalingClient`].
     /// This includes issues during transmission or other errors received from the server.
     Error(SignalingRuntimeError),
 }
@@ -60,11 +66,13 @@ pub struct SignalingClient<ST: SignalingTransport, TP: TokenProvider> {
 }
 
 impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new<F, Fut>(
         transport: ST,
         token_provider: TP,
         on_event: F,
         shutdown_token: CancellationToken,
+        custom_profile: bool,
         login_timeout: Duration,
         reconnect_max_tries: u8,
         handle: &tokio::runtime::Handle,
@@ -78,6 +86,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
             token_provider,
             Arc::new(move |e| Box::pin(on_event(e))),
             shutdown_token,
+            custom_profile,
             login_timeout,
             reconnect_max_tries,
         ));
@@ -107,7 +116,8 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
         self.inner.state()
     }
 
-    pub async fn connect(&self) -> Result<(), SignalingError> {
+    pub async fn connect(&self, position_id: Option<PositionId>) -> Result<(), SignalingError> {
+        self.inner.set_position_id(position_id);
         self.inner.connect().await
     }
 
@@ -160,6 +170,9 @@ struct SignalingClientInner<ST: SignalingTransport, TP: TokenProvider> {
 
     send_tx: Arc<Mutex<Option<mpsc::Sender<tungstenite::Message>>>>,
 
+    custom_profile: bool,
+    position_id: Arc<RwLock<Option<PositionId>>>,
+
     login_timeout: Duration,
     reconnect_max_tries: u8,
     reconnect_gate: Arc<Mutex<ReconnectGate>>,
@@ -174,6 +187,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         token_provider: TP,
         on_event: OnEventCb,
         shutdown_token: CancellationToken,
+        custom_profile: bool,
         login_timeout: Duration,
         reconnect_max_tries: u8,
     ) -> Self {
@@ -194,6 +208,9 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
             broadcast_tx: broadcast::channel(BROADCAST_CHANNEL_SIZE).0,
 
             send_tx: Arc::new(Mutex::new(None)),
+
+            custom_profile,
+            position_id: Arc::new(RwLock::new(None)),
 
             login_timeout,
             reconnect_max_tries,
@@ -325,22 +342,30 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         }
     }
 
+    fn set_position_id(&self, position_id: Option<PositionId>) {
+        *self.position_id.write() = position_id;
+    }
+
     #[instrument(level = "debug", skip(self), err)]
-    async fn login(&self) -> Result<ClientInfo, SignalingError> {
+    async fn login(&self) -> Result<(ClientInfo, SessionProfile), SignalingError> {
         tracing::trace!("Retrieving auth token from token provider");
         let token = self.token_provider.get_token().await?;
+
+        let position_id = self.position_id.read().clone();
         tracing::debug!("Sending Login message to server");
         self.send(SignalingMessage::Login {
             token: token.to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
+            custom_profile: self.custom_profile,
+            position_id,
         })
         .await?;
 
         tracing::debug!("Awaiting authentication response from server");
         match self.recv_with_timeout(self.login_timeout).await? {
-            SignalingMessage::ClientInfo { own, info } if own => {
-                tracing::info!(?info, "Login successful, received own client info");
-                Ok(info)
+            SignalingMessage::SessionInfo { info, profile } => {
+                tracing::info!(?info, ?profile, "Login successful, received session info");
+                Ok((info, profile))
             }
             SignalingMessage::LoginFailure { reason } => {
                 tracing::warn!(?reason, "Login failed");
@@ -404,14 +429,14 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
         tracing::trace!("Successfully started worker tasks, logging in");
         match self.login().await {
-            Ok(client_info) => {
+            Ok((client_info, profile)) => {
                 tracing::trace!("Successfully logged in to server");
 
                 self.set_state(State::LoggedIn);
-                if let Err(err) = self
-                    .broadcast_tx
-                    .send(SignalingEvent::Connected { client_info })
-                {
+                if let Err(err) = self.broadcast_tx.send(SignalingEvent::Connected {
+                    client_info,
+                    profile,
+                }) {
                     tracing::warn!(?err, "Failed to broadcast connected event");
                 }
 

@@ -20,10 +20,10 @@ use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::{Instrument, instrument};
 use uuid::Uuid;
-use vacs_protocol::vatsim::ClientId;
+use vacs_protocol::vatsim::{ActiveProfile, ClientId, ProfileId};
 use vacs_protocol::ws::{ClientInfo, DisconnectReason, ErrorReason, SignalingMessage};
 use vacs_vatsim::ControllerInfo;
-use vacs_vatsim::coverage::network::{Network, ProfileSelection};
+use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::DataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
@@ -80,14 +80,14 @@ impl AppState {
     pub async fn register_client(
         &self,
         client_info: ClientInfo,
-        profile_selection: ProfileSelection,
+        active_profile: ActiveProfile<ProfileId>,
         client_connection_guard: ClientConnectionGuard,
     ) -> anyhow::Result<(ClientSession, mpsc::Receiver<SignalingMessage>)> {
         tracing::trace!("Registering client");
 
         let (client, rx) = self
             .clients
-            .add_client(client_info, profile_selection, client_connection_guard)
+            .add_client(client_info, active_profile, client_connection_guard)
             .await?;
 
         tracing::trace!("Client registered");
@@ -273,10 +273,8 @@ impl AppState {
             .sync_vatsim_state(&current, pending_disconnect)
             .await;
 
-        for cid in &disconnected_clients {
-            state
-                .unregister_client(cid, Some(DisconnectReason::NoActiveVatsimConnection))
-                .await;
+        for (cid, disconnect_reason) in disconnected_clients {
+            state.unregister_client(&cid, Some(disconnect_reason)).await;
         }
 
         Ok(())

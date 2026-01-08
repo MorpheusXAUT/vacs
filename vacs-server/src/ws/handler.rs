@@ -11,7 +11,7 @@ use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode as TungsteniteCloseCode;
 use tracing::Instrument;
-use vacs_protocol::ws::{ClientInfo, LoginFailureReason, SignalingMessage};
+use vacs_protocol::ws::{LoginFailureReason, SignalingMessage};
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
@@ -32,27 +32,16 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
     let (mut websocket_tx, mut websocket_rx) = socket.split();
 
-    let controller_info =
-        match handle_websocket_login(state.clone(), &mut websocket_rx, &mut websocket_tx).await {
-            Some(id) => id,
-            None => return,
-        };
-
-    tracing::Span::current().record("client_id", tracing::field::display(&controller_info.cid));
-
-    let client_info = ClientInfo {
-        id: controller_info.cid.clone(),
-        position_id: None, // TODO set position ID
-        display_name: controller_info.callsign.clone(),
-        frequency: controller_info.frequency.clone(),
+    let Some((client_info, active_profile)) =
+        handle_websocket_login(state.clone(), &mut websocket_rx, &mut websocket_tx).await
+    else {
+        return;
     };
 
+    tracing::Span::current().record("client_id", tracing::field::display(&client_info.id));
+
     let res = state
-        .register_client(
-            client_info.clone(),
-            vacs_vatsim::coverage::network::ProfileSelection::None, // TODO set profile selection
-            client_connection_guard,
-        )
+        .register_client(client_info, active_profile, client_connection_guard)
         .await;
     let (mut client, mut rx) = match res {
         Ok(client) => client,
@@ -96,11 +85,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             &mut broadcast_rx,
             &mut rx,
             &mut shutdown_rx,
-            client_info,
         )
         .await;
 
-    state.unregister_client(&controller_info.cid, None).await;
+    state.unregister_client(client.id(), None).await;
 
     tracing::trace!("Finished handling websocket connection");
 }

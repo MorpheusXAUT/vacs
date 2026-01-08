@@ -2,7 +2,8 @@ use crate::coverage::{CoverageError, ReferenceValidator, ValidationError, Valida
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use vacs_protocol::vatsim::{
-    DirectAccessKey, DirectAccessPage, GeoPageButton, ProfileId, ProfileType, StationId,
+    DirectAccessKey, DirectAccessPage, GeoPageButton, Profile as ProtocolProfile, ProfileId,
+    ProfileType, StationId,
 };
 
 #[derive(Clone)]
@@ -113,6 +114,15 @@ impl FromRaw<ProfileRaw> for Profile {
             profile_type,
             relevant_station_ids,
         })
+    }
+}
+
+impl From<&Profile> for ProtocolProfile {
+    fn from(profile: &Profile) -> Self {
+        Self {
+            id: profile.id.clone(),
+            profile_type: profile.profile_type.clone(),
+        }
     }
 }
 

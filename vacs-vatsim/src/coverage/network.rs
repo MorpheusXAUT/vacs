@@ -7,7 +7,7 @@ use crate::coverage::profile::Profile;
 use crate::coverage::station::Station;
 use crate::coverage::{CoverageError, IoError, ReferenceValidator, StructureError};
 use std::collections::{HashMap, HashSet};
-use vacs_protocol::vatsim::{PositionId, ProfileId, StationChange, StationId};
+use vacs_protocol::vatsim::{ActiveProfile, PositionId, ProfileId, StationChange, StationId};
 
 #[derive(Clone, Default)]
 pub struct Network {
@@ -424,34 +424,17 @@ impl Network {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn relevant_stations(&self, selection: &ProfileSelection) -> RelevantStations<'_> {
+    pub fn relevant_stations(&self, selection: &ActiveProfile<ProfileId>) -> RelevantStations<'_> {
         match selection {
-            ProfileSelection::Specific(profile_id) => {
+            ActiveProfile::Specific(profile_id) => {
                 let Some(profile) = self.profiles.get(profile_id) else {
                     tracing::trace!("Profile not found");
                     return RelevantStations::None;
                 };
                 RelevantStations::Subset(&profile.relevant_station_ids)
             }
-            ProfileSelection::Custom => RelevantStations::All,
-            ProfileSelection::None => RelevantStations::None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub enum ProfileSelection {
-    Specific(ProfileId),
-    Custom,
-    #[default]
-    None,
-}
-
-impl From<Option<ProfileId>> for ProfileSelection {
-    fn from(profile_id: Option<ProfileId>) -> Self {
-        match profile_id {
-            Some(profile_id) => ProfileSelection::Specific(profile_id),
-            None => ProfileSelection::None,
+            ActiveProfile::Custom => RelevantStations::All,
+            ActiveProfile::None => RelevantStations::None,
         }
     }
 }
@@ -913,7 +896,7 @@ mod tests {
         std::fs::write(fir_path.join("profile.toml"), profile).unwrap();
 
         let network = Network::load_from_dir(dir.path()).unwrap();
-        let result = network.relevant_stations(&ProfileSelection::Specific(ProfileId::from("P")));
+        let result = network.relevant_stations(&ActiveProfile::Specific(ProfileId::from("P")));
 
         assert_matches!(result, RelevantStations::Subset(ids) if ids.contains(&StationId::from("S1")));
     }
@@ -925,7 +908,7 @@ mod tests {
         let network = Network::load_from_dir(dir.path()).unwrap();
 
         let result =
-            network.relevant_stations(&ProfileSelection::Specific(ProfileId::from("Missing")));
+            network.relevant_stations(&ActiveProfile::Specific(ProfileId::from("Missing")));
         assert_eq!(result, RelevantStations::None);
     }
 
@@ -935,7 +918,7 @@ mod tests {
         create_minimal_valid_fir(dir.path(), "LOVV");
         let network = Network::load_from_dir(dir.path()).unwrap();
 
-        let result = network.relevant_stations(&ProfileSelection::Custom);
+        let result = network.relevant_stations(&ActiveProfile::Custom);
         assert_eq!(result, RelevantStations::All);
     }
 
@@ -945,7 +928,7 @@ mod tests {
         create_minimal_valid_fir(dir.path(), "LOVV");
         let network = Network::load_from_dir(dir.path()).unwrap();
 
-        let result = network.relevant_stations(&ProfileSelection::None);
+        let result = network.relevant_stations(&ActiveProfile::None);
         assert_eq!(result, RelevantStations::None);
     }
 

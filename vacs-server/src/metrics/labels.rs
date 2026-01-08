@@ -35,6 +35,8 @@ impl AsMetricLabel for LoginFailureReason {
             LoginFailureReason::DuplicateId => "duplicate_id",
             LoginFailureReason::InvalidCredentials => "invalid_credentials",
             LoginFailureReason::NoActiveVatsimConnection => "no_active_vatsim_connection",
+            LoginFailureReason::AmbiguousVatsimPosition(_) => "ambiguous_vatsim_position",
+            LoginFailureReason::InvalidVatsimPosition => "invalid_vatsim_position",
             LoginFailureReason::Timeout => "timeout",
             LoginFailureReason::IncompatibleProtocolVersion => "incompatible_protocol_version",
         }
@@ -89,6 +91,7 @@ impl AsMetricLabel for SignalingMessage {
             SignalingMessage::Logout => "logout",
             SignalingMessage::CallInvite { .. } => "call_invite",
             SignalingMessage::ClientInfo { .. } => "client_info",
+            SignalingMessage::SessionInfo { .. } => "session_info",
             SignalingMessage::CallAccept { .. } => "call_accept",
             SignalingMessage::CallReject { .. } => "call_reject",
             SignalingMessage::CallOffer { .. } => "call_offer",

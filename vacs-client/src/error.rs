@@ -214,6 +214,12 @@ fn format_signaling_error(err: &SignalingError) -> String {
             LoginFailureReason::NoActiveVatsimConnection => {
                 "Login failed: No active VATSIM connection. Wait a few seconds after connecting to VATSIM and try again."
             }
+            LoginFailureReason::AmbiguousVatsimPosition(_) => {
+                "Login failed: Multiple VATSIM positions matched your current position. Please select the correct position manually."
+            }
+            LoginFailureReason::InvalidVatsimPosition => {
+                "Login failed: Selected VATSIM position is not covered by your active VATSIM connection. Wait a few seconds after connecting to VATSIM and try again."
+            }
             LoginFailureReason::Timeout => {
                 "Login failed: Login did not complete in time. Please try again."
             }
@@ -239,7 +245,6 @@ fn format_signaling_error(err: &SignalingError) -> String {
                 Some(DisconnectReason::Terminated) => "Disconnected: Your connection was terminated by another client.",
                 Some(DisconnectReason::NoActiveVatsimConnection) => "Disconnected: No active VATSIM connection was found.",
                 Some(DisconnectReason::AmbiguousVatsimPosition(_)) => {
-                    // TODO handle ambiguous position selection
                     "Disconnected: Multiple VATSIM positions matched your current position. Please select the correct position manually."
                 }
             }.to_string(),
