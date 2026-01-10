@@ -44,14 +44,14 @@ const ActiveButtonColors: Record<ButtonColor, string> = {
 };
 
 export const ForceDisabledButtonColors: Record<ButtonColor, string> = {
-    cyan: "!border-cyan-900 !border",
-    green: "!border-green-950 !border",
-    gray: "!border-gray-700 !border !shadow-none",
-    blue: "!border-blue-950 !border",
-    cornflower: "!border-blue-950 !border",
-    emerald: "!border-emerald-950 !border",
-    red: "!border-red-950 !border",
-    salmon: "!border-red-950 !border",
+    cyan: "border-cyan-900! border!",
+    green: "border-green-950! border!",
+    gray: "border-gray-700! border! shadow-none!",
+    blue: "border-blue-950! border!",
+    cornflower: "border-blue-950! border!",
+    emerald: "border-emerald-950! border!",
+    red: "border-red-950! border!",
+    salmon: "border-red-950! border!",
 };
 
 const ButtonHighlightColors: Record<ButtonHighlightColor, string> = {

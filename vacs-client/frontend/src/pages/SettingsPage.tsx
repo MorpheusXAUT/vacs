@@ -300,7 +300,7 @@ function WindowStateButtons() {
 
 export function CloseButton() {
     return (
-        <Button color="gray" className="!w-18" onClick={() => navigate("/settings")}>
+        <Button color="gray" className="w-18!" onClick={() => navigate("/settings")}>
             <svg
                 width="26"
                 height="26"

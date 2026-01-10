@@ -113,7 +113,7 @@ function DANavKey({group, setFilter}: {group: string; setFilter: (filter: string
                         : "gray"
             }
             highlight={beingCalled || isRejected ? "green" : undefined}
-            className="w-25 h-full rounded !leading-4.5 p-1.5"
+            className="w-25 h-full rounded leading-4.5! p-1.5"
             onClick={() => setFilter(group)}
         >
             <p className="w-full truncate leading-3.5" title={group}>

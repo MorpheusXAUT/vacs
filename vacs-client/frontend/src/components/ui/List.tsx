@@ -44,7 +44,7 @@ function List(props: ListProps) {
                     {headerItem.title}
                 </div>
             ))}
-            <div className="!outline-0"></div>
+            <div className="outline-0!"></div>
 
             {visibleItemIndices.map((itemIndex, idx) => {
                 const rowSpan = visibleItemIndices.length - 2;
