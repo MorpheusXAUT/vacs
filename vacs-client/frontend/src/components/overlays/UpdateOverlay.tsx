@@ -1,11 +1,11 @@
 import {clsx} from "clsx";
-import {useUpdateStore} from "../stores/update-store.ts";
-import Button from "./ui/Button.tsx";
+import {useUpdateStore} from "../../stores/update-store.ts";
+import Button from "../ui/Button.tsx";
 import {useEffect, useRef, useState} from "preact/hooks";
 import {getCurrentWindow} from "@tauri-apps/api/window";
-import {useAsyncDebounceState} from "../hooks/debounce-hook.ts";
+import {useAsyncDebounceState} from "../../hooks/debounce-hook.ts";
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
-import {invokeStrict} from "../error.ts";
+import {invokeStrict} from "../../error.ts";
 import {getVersion} from "@tauri-apps/api/app";
 
 function UpdateOverlay() {
