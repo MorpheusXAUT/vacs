@@ -17,7 +17,7 @@ import HotkeysConfigPage from "../components/settings/HotkeysConfigPage.tsx";
 
 function SettingsPage() {
     return (
-        <div className="h-full w-full relative">
+        <>
             <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col">
                 <p className="w-full text-white bg-blue-700 font-semibold text-center">Settings</p>
                 <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col overflow-auto">
@@ -94,7 +94,7 @@ function SettingsPage() {
                 <Route path="/transmit" component={TransmitModePage} />
                 <Route path="/hotkeys" component={HotkeysConfigPage} />
             </Switch>
-        </div>
+        </>
     );
 }
 

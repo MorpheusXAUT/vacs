@@ -13,7 +13,7 @@ import DAKeyArea from "./components/DAKeyArea.tsx";
 import ConnectPage from "./pages/ConnectPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import telephone from "./assets/telephone.svg";
-import ErrorOverlay from "./components/ErrorOverlay.tsx";
+import ErrorOverlay from "./components/overlays/ErrorOverlay.tsx";
 import {invokeSafe} from "./error.ts";
 import {setupErrorListeners} from "./listeners/error-listener.ts";
 import MissionPage from "./pages/MissionPage.tsx";
@@ -25,9 +25,10 @@ import PhoneButton from "./components/ui/PhoneButton.tsx";
 import RadioPrioButton from "./components/ui/RadioPrioButton.tsx";
 import EndButton from "./components/ui/EndButton.tsx";
 import {setupWebrtcListeners} from "./listeners/webrtc-listener.ts";
-import UpdateOverlay from "./components/UpdateOverlay.tsx";
+import UpdateOverlay from "./components/overlays/UpdateOverlay.tsx";
 import {fetchCapabilities} from "./stores/capabilities-store.ts";
 import RadioButton from "./components/ui/RadioButton.tsx";
+import TerminateOverlay from "./components/overlays/TerminateOverlay.tsx";
 
 function App() {
     const connected = useSignalingStore(state => state.connectionState === "connected");
@@ -64,7 +65,7 @@ function App() {
                 <FunctionKeys />
                 <div className="flex flex-row w-full h-[calc(100%-10rem)] pl-1">
                     {/* Main Area */}
-                    <div className="relative h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l-1 border-t-1 border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
+                    <div className="relative h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l border-t border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
                         <Switch>
                             <Route path="/settings" component={SettingsPage} nest />
                             <Route path="/mission" component={MissionPage} />
@@ -110,6 +111,7 @@ function App() {
             </div>
             <ErrorOverlay />
             <UpdateOverlay />
+            <TerminateOverlay />
         </div>
     );
 }
