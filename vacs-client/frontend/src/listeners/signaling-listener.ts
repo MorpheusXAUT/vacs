@@ -8,7 +8,7 @@ import {StationsConfig} from "../types/stations.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
 
 export function setupSignalingListeners() {
-    const {setClientInfo, setClients, addClient, getClientInfo, removeClient, setStationsConfig} =
+    const {setClients, addClient, getClientInfo, removeClient, setStationsConfig} =
         useSignalingStore.getState();
     const {
         addIncomingCall,
@@ -19,7 +19,7 @@ export function setupSignalingListeners() {
     } = useCallStore.getState().actions;
     const {open: openErrorOverlay} = useErrorOverlayStore.getState();
     const {addCall: addCallToCallList, clearCallList} = useCallListStore.getState().actions;
-    const {setConnectionState} = useConnectionStore.getState();
+    const {setConnectionState, setConnectionInfo} = useConnectionStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 
@@ -27,14 +27,14 @@ export function setupSignalingListeners() {
         unlistenFns.push(
             listen<ClientInfo>("signaling:connected", event => {
                 setConnectionState("connected");
-                setClientInfo(event.payload);
+                setConnectionInfo(event.payload);
             }),
             listen("signaling:reconnecting", () => {
                 setConnectionState("connecting");
             }),
             listen("signaling:disconnected", () => {
                 setConnectionState("disconnected");
-                setClientInfo({displayName: "", frequency: ""});
+                setConnectionInfo({displayName: "", frequency: ""});
                 setClients([]);
                 resetCallStore();
                 clearCallList();
