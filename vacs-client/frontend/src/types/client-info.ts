@@ -1,5 +1,8 @@
+import {PositionId} from "./generic.ts";
+
 export type ClientInfo = {
     id: string;
+    positionId: PositionId | undefined;
     displayName: string;
     frequency: string;
 };

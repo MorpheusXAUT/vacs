@@ -2,26 +2,22 @@ import {useAsyncDebounceState} from "../../hooks/debounce-hook.ts";
 import {invokeStrict} from "../../error.ts";
 import Button from "../ui/Button.tsx";
 import {clsx} from "clsx";
-import {useSignalingStore} from "../../stores/signaling-store.ts";
-import {connect} from "../../stores/connection-store.ts";
+import {connect, useConnectionStore} from "../../stores/connection-store.ts";
 
-function TerminateOverlay() {
-    const terminateOverlayOpen = useSignalingStore(state => state.terminateOverlayOpen);
-    const setTerminateOverlayOpen = useSignalingStore(state => state.setTerminateOverlayOpen);
+function ConnectionTerminateOverlay() {
+    const visible = useConnectionStore(state => state.terminateOverlayVisible);
+    const setVisible = useConnectionStore(state => state.setTerminateOverlayVisible);
 
     const [handleTerminateClick, terminateLoading] = useAsyncDebounceState(async () => {
         try {
             await invokeStrict("signaling_terminate");
-            setTerminateOverlayOpen(false);
+            setVisible(false);
             await connect();
         } catch {}
     });
 
-    return (
-        <div
-            style={{display: terminateOverlayOpen ? "flex" : "none"}}
-            className="z-50 absolute top-0 left-0 w-full h-full justify-center items-center bg-[rgba(0,0,0,0.5)]"
-        >
+    return visible ? (
+        <div className="z-50 absolute top-0 left-0 w-full h-full flex justify-center items-center bg-[rgba(0,0,0,0.5)]">
             <div className="bg-gray-300 border-4 border-t-red-500 border-l-red-500 border-b-red-700 border-r-red-700 rounded w-100 py-2">
                 <p className="w-full text-center text-lg font-semibold wrap-break-word">
                     Already connected
@@ -39,7 +35,7 @@ function TerminateOverlay() {
                     <Button
                         color="red"
                         className="px-3 py-1"
-                        onClick={() => setTerminateOverlayOpen(false)}
+                        onClick={() => setVisible(false)}
                         disabled={terminateLoading}
                     >
                         No
@@ -58,7 +54,9 @@ function TerminateOverlay() {
                 )}
             </div>
         </div>
+    ) : (
+        <></>
     );
 }
 
-export default TerminateOverlay;
+export default ConnectionTerminateOverlay;

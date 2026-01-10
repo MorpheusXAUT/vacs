@@ -44,7 +44,7 @@ pub async fn handle_websocket_login(
                         Ok(cid) => {
                             if !state.config.vatsim.require_active_connection {
                                 tracing::trace!(?cid, "Websocket token verified, no active VATSIM connection required, websocket login flow completed");
-                                let client_info = ClientInfo{
+                                let client_info = ClientInfo {
                                     id: cid.clone(),
                                     position_id: None,
                                     display_name: cid.to_string(),
@@ -74,6 +74,7 @@ pub async fn handle_websocket_login(
 
                                     let positions = state.clients.find_positions(&controller_info);
                                     let position = if positions.is_empty() {
+                                        // TODO: Allow connection with no profile if no position could be found
                                         tracing::trace!(?cid, ?controller_info, "No matching position found");
                                         None
                                     } else if positions.len() == 1 {

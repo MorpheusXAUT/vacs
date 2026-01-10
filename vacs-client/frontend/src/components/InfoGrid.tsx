@@ -10,8 +10,10 @@ import {useConnectionStore} from "../stores/connection-store.ts";
 
 function InfoGrid() {
     const cid = useAuthStore(state => state.cid);
-    const clientInfo = useConnectionStore(
-        state => `${state.displayName}${state.frequency !== "" ? ` (${state.frequency})` : ""}`,
+    const clientInfo = useConnectionStore(state =>
+        state.connectionState === "connected"
+            ? `${state.info.positionId || cid}${state.info.frequency !== "" ? ` (${state.info.frequency})` : ""}`
+            : "",
     );
     const callErrorReason = useCallStore(state => state.callDisplay?.errorReason);
     const currentVersion = useUpdateStore(state => state.currentVersion);
