@@ -3,7 +3,6 @@ import {navigate} from "wouter/use-browser-location";
 import {useAuthStore} from "../stores/auth-store.ts";
 import {invokeSafe, invokeStrict} from "../error.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
-import {useSignalingStore} from "../stores/signaling-store.ts";
 import DeviceSelector from "../components/settings/DeviceSelector.tsx";
 import VolumeSettings from "../components/settings/VolumeSettings.tsx";
 import AudioHostSelector from "../components/settings/AudioHostSelector.tsx";
@@ -14,6 +13,7 @@ import {Route, Switch} from "wouter";
 import TransmitModePage from "../components/settings/TransmitModePage.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 import HotkeysConfigPage from "../components/settings/HotkeysConfigPage.tsx";
+import {useConnectionStore} from "../stores/connection-store.ts";
 
 function SettingsPage() {
     return (
@@ -99,7 +99,7 @@ function SettingsPage() {
 }
 
 function AppControlButtons() {
-    const connected = useSignalingStore(state => state.connectionState === "connected");
+    const connected = useConnectionStore(state => state.connectionState === "connected");
     const isAuthenticated = useAuthStore(state => state.status === "authenticated");
 
     const handleLogoutClick = useAsyncDebounce(async () => {
