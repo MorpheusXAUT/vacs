@@ -390,7 +390,6 @@ impl ClientManager {
 
                             tracing::trace!(?cid, ?session, "Client info updated, broadcasting");
                             updates.push(SignalingMessage::ClientInfo {
-                                own: false,
                                 info: session.client_info().clone(),
                             });
                         }

@@ -147,11 +147,8 @@ pub enum SignalingMessage {
     },
     /// A message containing the (updated) info for a connected client.
     ///
-    /// This message is also returned after a successful login attempt, containing the authenticated client's
-    /// own information.
+    /// A client will never receive a [`ClientInfo`] message about itself, as changes are propagated using [`SessionInfo`] messages containing the updated [`ClientInfo`].
     ClientInfo {
-        /// Indicates whether the message contains an update for the client's own info.
-        own: bool,
         /// Updated information about the client.
         info: ClientInfo,
     },
