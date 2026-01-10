@@ -115,7 +115,7 @@ function KeyCapture(props: KeyCaptureProps) {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 className={clsx(
-                    "shrink-0 p-1 !pr-0",
+                    "shrink-0 p-1 pr-0!",
                     isRemoveDisabled
                         ? "stroke-gray-500 cursor-not-allowed"
                         : "stroke-gray-700 hover:stroke-red-500 transition-colors cursor-pointer",

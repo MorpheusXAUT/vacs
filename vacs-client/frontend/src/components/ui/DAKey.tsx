@@ -63,7 +63,7 @@ function DAKey({client}: DAKeyProps) {
                         ? "red"
                         : "gray"
             }
-            className="w-25 h-full rounded !leading-4.5 p-1.5"
+            className="w-25 h-full rounded leading-4.5! p-1.5"
             highlight={beingCalled || isRejected ? "green" : undefined}
             onClick={handleClick}
         >

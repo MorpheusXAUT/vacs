@@ -264,7 +264,7 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
     return (
         <>
             <Select
-                className="!w-[21ch] h-full"
+                className="w-[21ch]! h-full"
                 name="keybind-mode"
                 options={[
                     {value: "VoiceActivation", text: "Voice activation"},
