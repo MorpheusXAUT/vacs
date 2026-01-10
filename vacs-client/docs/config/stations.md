@@ -1,5 +1,9 @@
 # Stations configuration reference
 
+> [!IMPORTANT]
+> This functionality was implemented as a stop-gap measure to allow people to customize their vacs client a little bit while we work on our "proper" layout featuring a GEO/tabbed main page. It is provided as-is and will not be extended further as the major rework currently in progress will remove most, if not all of the current functionality again.  
+> Some limitations apply, such as aliasing only considering frequencies for now, meaning two stations with an identical frequency cannot be aliased independently from each other.
+
 This reference explains how to configure station filtering, prioritization, and display using the `StationsConfig` settings, read from the (optional) `stations.toml` config file.
 
 For general information on the configuration file format, file locations, and recommended editors, please refer to the [main configuration reference](README.md).
