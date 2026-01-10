@@ -5,17 +5,11 @@ import {useCallStore} from "../stores/call-store.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 import {useCallListStore} from "../stores/call-list-store.ts";
 import {StationsConfig} from "../types/stations.ts";
+import {useConnectionStore} from "../stores/connection-store.ts";
 
 export function setupSignalingListeners() {
-    const {
-        setConnectionState,
-        setClientInfo,
-        setClients,
-        addClient,
-        getClientInfo,
-        removeClient,
-        setStationsConfig,
-    } = useSignalingStore.getState();
+    const {setClientInfo, setClients, addClient, getClientInfo, removeClient, setStationsConfig} =
+        useSignalingStore.getState();
     const {
         addIncomingCall,
         removePeer,
@@ -25,6 +19,7 @@ export function setupSignalingListeners() {
     } = useCallStore.getState().actions;
     const {open: openErrorOverlay} = useErrorOverlayStore.getState();
     const {addCall: addCallToCallList, clearCallList} = useCallListStore.getState().actions;
+    const {setConnectionState} = useConnectionStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 

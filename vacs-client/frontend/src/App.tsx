@@ -20,7 +20,7 @@ import MissionPage from "./pages/MissionPage.tsx";
 import TelephonePage from "./pages/TelephonePage.tsx";
 import LinkButton from "./components/ui/LinkButton.tsx";
 import {setupSignalingListeners} from "./listeners/signaling-listener.ts";
-import {fetchStationsConfig, useSignalingStore} from "./stores/signaling-store.ts";
+import {fetchStationsConfig} from "./stores/signaling-store.ts";
 import PhoneButton from "./components/ui/PhoneButton.tsx";
 import RadioPrioButton from "./components/ui/RadioPrioButton.tsx";
 import EndButton from "./components/ui/EndButton.tsx";
@@ -29,9 +29,10 @@ import UpdateOverlay from "./components/overlays/UpdateOverlay.tsx";
 import {fetchCapabilities} from "./stores/capabilities-store.ts";
 import RadioButton from "./components/ui/RadioButton.tsx";
 import TerminateOverlay from "./components/overlays/TerminateOverlay.tsx";
+import {useConnectionStore} from "./stores/connection-store.ts";
 
 function App() {
-    const connected = useSignalingStore(state => state.connectionState === "connected");
+    const connected = useConnectionStore(state => state.connectionState === "connected");
     const authStatus = useAuthStore(state => state.status);
 
     useEffect(() => {

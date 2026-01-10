@@ -6,13 +6,9 @@ import {
     StationsConfig,
     StationsProfileConfig,
 } from "../types/stations.ts";
-import {invokeStrict, isError, openErrorOverlayFromUnknown} from "../error.ts";
-import {invoke} from "@tauri-apps/api/core";
-
-type ConnectionState = "connecting" | "connected" | "disconnected";
+import {invokeStrict} from "../error.ts";
 
 type SignalingState = {
-    connectionState: ConnectionState;
     displayName: string;
     alias: string | undefined;
     frequency: string;
@@ -21,7 +17,6 @@ type SignalingState = {
     stationsConfigProfiles: StationsConfigProfiles;
     activeStationsProfileConfig: string;
     terminateOverlayOpen: boolean;
-    setConnectionState: (state: ConnectionState) => void;
     setClientInfo: (info: Omit<ClientInfo, "id">) => void;
     setClients: (clients: ClientInfo[]) => void;
     addClient: (client: ClientInfo) => void;
@@ -34,7 +29,6 @@ type SignalingState = {
 };
 
 export const useSignalingStore = create<SignalingState>()((set, get) => ({
-    connectionState: "disconnected",
     displayName: "",
     alias: undefined,
     frequency: "",
@@ -43,7 +37,6 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
     stationsConfigProfiles: {},
     activeStationsProfileConfig: "Default",
     terminateOverlayOpen: false,
-    setConnectionState: connectionState => set({connectionState}),
     setClientInfo: info => {
         set({
             displayName: info.displayName,
@@ -132,26 +125,6 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
     },
     setTerminateOverlayOpen: open => set({terminateOverlayOpen: open}),
 }));
-
-export const connect = async () => {
-    const {setConnectionState, setTerminateOverlayOpen} = useSignalingStore.getState();
-
-    setConnectionState("connecting");
-    try {
-        await invoke("signaling_connect");
-    } catch (e) {
-        setConnectionState("disconnected");
-        if (
-            isError(e) &&
-            (e.message === "Login failed: Another client with your CID is already connected." ||
-                e.message === "Already connected")
-        ) {
-            setTerminateOverlayOpen(true);
-            return;
-        }
-        openErrorOverlayFromUnknown(e);
-    }
-};
 
 export const fetchStationsConfig = async () => {
     try {

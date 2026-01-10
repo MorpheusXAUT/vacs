@@ -1,10 +1,10 @@
 import Button from "../components/ui/Button.tsx";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {clsx} from "clsx";
-import {connect, useSignalingStore} from "../stores/signaling-store.ts";
+import {useConnectionStore, connect} from "../stores/connection-store.ts";
 
 function ConnectPage() {
-    const connecting = useSignalingStore(state => state.connectionState === "connecting");
+    const connecting = useConnectionStore(state => state.connectionState === "connecting");
 
     const handleConnectClick = useAsyncDebounce(connect);
 

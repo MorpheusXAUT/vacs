@@ -2,7 +2,8 @@ import {useAsyncDebounceState} from "../../hooks/debounce-hook.ts";
 import {invokeStrict} from "../../error.ts";
 import Button from "../ui/Button.tsx";
 import {clsx} from "clsx";
-import {connect, useSignalingStore} from "../../stores/signaling-store.ts";
+import {useSignalingStore} from "../../stores/signaling-store.ts";
+import {connect} from "../../stores/connection-store.ts";
 
 function TerminateOverlay() {
     const terminateOverlayOpen = useSignalingStore(state => state.terminateOverlayOpen);

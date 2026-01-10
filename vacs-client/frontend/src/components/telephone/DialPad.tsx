@@ -4,9 +4,9 @@ import {clsx} from "clsx";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {TargetedEvent} from "preact";
-import {useSignalingStore} from "../../stores/signaling-store.ts";
 import {useAuthStore} from "../../stores/auth-store.ts";
 import {useCallListStore} from "../../stores/call-list-store.ts";
+import {useConnectionStore} from "../../stores/connection-store.ts";
 
 const DIAL_BUTTONS: {digit: string; chars: string}[] = [
     {digit: "1", chars: ""},
@@ -28,7 +28,7 @@ function DialPad() {
     const ownId = useAuthStore(state => state.cid);
     const isDialInputEmpty = dialInput === "";
     const isDialInputOwnId = dialInput === ownId;
-    const isConnected = useSignalingStore(state => state.connectionState === "connected");
+    const isConnected = useConnectionStore(state => state.connectionState === "connected");
     const callDisplay = useCallStore(state => state.callDisplay);
     const lastDialledPeerId = useCallListStore(
         state => state.callList.find(item => item.type === "OUT")?.number,

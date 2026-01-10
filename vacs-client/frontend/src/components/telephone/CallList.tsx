@@ -4,9 +4,9 @@ import {clsx} from "clsx";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useState} from "preact/hooks";
 import List from "../ui/List.tsx";
-import {useSignalingStore} from "../../stores/signaling-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeSafe} from "../../error.ts";
+import {useConnectionStore} from "../../stores/connection-store.ts";
 
 function CallList() {
     const calls = useCallListStore(state => state.callList);
@@ -14,7 +14,7 @@ function CallList() {
     const callDisplay = useCallStore(state => state.callDisplay);
     const [selectedCall, setSelectedCall] = useState<number>(0);
 
-    const connected = useSignalingStore(state => state.connectionState === "connected");
+    const connected = useConnectionStore(state => state.connectionState === "connected");
 
     const handleIgnoreClick = useAsyncDebounce(async () => {
         const peerId: string | undefined = calls[selectedCall]?.number;
