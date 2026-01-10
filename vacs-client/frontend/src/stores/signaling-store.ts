@@ -9,15 +9,11 @@ import {
 import {invokeStrict} from "../error.ts";
 
 type SignalingState = {
-    displayName: string;
-    alias: string | undefined;
-    frequency: string;
     allClients: ClientInfoWithAlias[]; // all available clients, including those filtered out by stations config
     clients: ClientInfoWithAlias[]; // list of clients to be displayed in UI, pre-processed by stations config and priority/sorting
     stationsConfigProfiles: StationsConfigProfiles;
     activeStationsProfileConfig: string;
     terminateOverlayOpen: boolean;
-    setClientInfo: (info: Omit<ClientInfo, "id">) => void;
     setClients: (clients: ClientInfo[]) => void;
     addClient: (client: ClientInfo) => void;
     getClientInfo: (cid: string) => ClientInfoWithAlias;
@@ -29,21 +25,11 @@ type SignalingState = {
 };
 
 export const useSignalingStore = create<SignalingState>()((set, get) => ({
-    displayName: "",
-    alias: undefined,
-    frequency: "",
     allClients: [],
     clients: [],
     stationsConfigProfiles: {},
     activeStationsProfileConfig: "Default",
     terminateOverlayOpen: false,
-    setClientInfo: info => {
-        set({
-            displayName: info.displayName,
-            alias: get().getActiveStationsProfileConfig()?.aliases?.[info.frequency],
-            frequency: info.frequency,
-        });
-    },
     setClients: clients => {
         const aliases = get().getActiveStationsProfileConfig()?.aliases ?? {};
 
