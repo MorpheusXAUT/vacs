@@ -6,16 +6,16 @@ import {useConnectionStore, connect} from "../stores/connection-store.ts";
 function ConnectPage() {
     const connecting = useConnectionStore(state => state.connectionState === "connecting");
 
-    const handleConnectClick = useAsyncDebounce(connect);
+    const handleConnectClick = useAsyncDebounce(async () => {
+        if (connecting) return;
+        await connect();
+    });
 
     return (
         <div className="h-full w-full flex justify-center items-center p-4">
             <Button
                 color="green"
-                className={clsx(
-                    "w-50 px-5 py-3 text-xl",
-                    connecting && "brightness-90 cursor-not-allowed",
-                )}
+                className={clsx("w-50 px-5 py-3 text-xl")}
                 onClick={handleConnectClick}
             >
                 {!connecting ? "Connect" : "Connecting..."}

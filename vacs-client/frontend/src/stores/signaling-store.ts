@@ -13,7 +13,6 @@ type SignalingState = {
     clients: ClientInfoWithAlias[]; // list of clients to be displayed in UI, pre-processed by stations config and priority/sorting
     stationsConfigProfiles: StationsConfigProfiles;
     activeStationsProfileConfig: string;
-    terminateOverlayOpen: boolean;
     setClients: (clients: ClientInfo[]) => void;
     addClient: (client: ClientInfo) => void;
     getClientInfo: (cid: string) => ClientInfoWithAlias;
@@ -21,7 +20,6 @@ type SignalingState = {
     setStationsConfig: (config: StationsConfig) => void;
     setActiveStationsProfileConfig: (profile: string) => void;
     getActiveStationsProfileConfig: () => StationsProfileConfig | undefined;
-    setTerminateOverlayOpen: (open: boolean) => void;
 };
 
 export const useSignalingStore = create<SignalingState>()((set, get) => ({
@@ -62,7 +60,13 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
     getClientInfo: cid => {
         const client = get().allClients.find(c => c.id === cid);
         if (client === undefined) {
-            return {id: cid, displayName: cid, alias: undefined, frequency: ""};
+            return {
+                id: cid,
+                displayName: cid,
+                positionId: undefined,
+                alias: undefined,
+                frequency: "",
+            };
         }
         return client;
     },
@@ -109,7 +113,6 @@ export const useSignalingStore = create<SignalingState>()((set, get) => ({
         if (profiles === undefined) return undefined;
         return profiles[get().activeStationsProfileConfig] ?? profiles["Default"];
     },
-    setTerminateOverlayOpen: open => set({terminateOverlayOpen: open}),
 }));
 
 export const fetchStationsConfig = async () => {

@@ -6,6 +6,7 @@ import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 import {useCallListStore} from "../stores/call-list-store.ts";
 import {StationsConfig} from "../types/stations.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
+import {PositionId} from "../types/generic.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, getClientInfo, removeClient, setStationsConfig} =
@@ -19,7 +20,8 @@ export function setupSignalingListeners() {
     } = useCallStore.getState().actions;
     const {open: openErrorOverlay} = useErrorOverlayStore.getState();
     const {addCall: addCallToCallList, clearCallList} = useCallListStore.getState().actions;
-    const {setConnectionState, setConnectionInfo} = useConnectionStore.getState();
+    const {setConnectionState, setConnectionInfo, setPositionsToSelect} =
+        useConnectionStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 
@@ -34,14 +36,20 @@ export function setupSignalingListeners() {
             }),
             listen("signaling:disconnected", () => {
                 setConnectionState("disconnected");
-                setConnectionInfo({displayName: "", frequency: ""});
+                setConnectionInfo({displayName: "", positionId: undefined, frequency: ""});
                 setClients([]);
                 resetCallStore();
                 clearCallList();
             }),
+            listen<PositionId[]>("signaling:ambiguous-position", event => {
+                setConnectionState("connecting");
+                setPositionsToSelect(event.payload);
+            }),
             listen<ClientInfo[]>("signaling:client-list", event => {
                 setClients(event.payload);
             }),
+            // TODO: handle online stations list
+            // TODO: handle station change
             listen<ClientInfo>("signaling:client-connected", event => {
                 addClient(event.payload);
             }),
@@ -88,7 +96,6 @@ export function setupSignalingListeners() {
                 });
             }),
             listen<StationsConfig>("signaling:stations-config", event => {
-                console.log("Received stations config:", event.payload);
                 setStationsConfig(event.payload);
             }),
         );

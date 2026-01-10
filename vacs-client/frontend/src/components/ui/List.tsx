@@ -24,7 +24,7 @@ function List(props: ListProps) {
         <div
             ref={listContainer}
             className={clsx(
-                "h-full grid box-border gap-[1px] [&>div]:outline-1 [&>div]:outline-gray-500",
+                "h-full grid box-border gap-px [&>div]:outline-1 [&>div]:outline-gray-500",
                 props.className,
             )}
             style={{

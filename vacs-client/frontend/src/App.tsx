@@ -28,8 +28,9 @@ import {setupWebrtcListeners} from "./listeners/webrtc-listener.ts";
 import UpdateOverlay from "./components/overlays/UpdateOverlay.tsx";
 import {fetchCapabilities} from "./stores/capabilities-store.ts";
 import RadioButton from "./components/ui/RadioButton.tsx";
-import TerminateOverlay from "./components/overlays/TerminateOverlay.tsx";
+import ConnectionTerminateOverlay from "./components/overlays/ConnectionTerminateOverlay.tsx";
 import {useConnectionStore} from "./stores/connection-store.ts";
+import PositionSelectOverlay from "./components/overlays/PositionSelectOverlay.tsx";
 
 function App() {
     const connected = useConnectionStore(state => state.connectionState === "connected");
@@ -112,7 +113,8 @@ function App() {
             </div>
             <ErrorOverlay />
             <UpdateOverlay />
-            <TerminateOverlay />
+            <ConnectionTerminateOverlay />
+            <PositionSelectOverlay />
         </div>
     );
 }
