@@ -408,7 +408,28 @@ impl Network {
     ) -> Vec<StationChange> {
         let mut changes: Vec<StationChange> = Vec::new();
 
-        for station in self.stations.values() {
+        let changed_positions = from_online_positions
+            .symmetric_difference(to_online_positions)
+            .copied()
+            .collect::<Vec<_>>();
+
+        if changed_positions.is_empty() {
+            tracing::trace!("No change in online positions, returning empty coverage changes");
+            return Vec::new();
+        }
+
+        let candidate_stations: HashSet<&StationId> = changed_positions
+            .into_iter()
+            .filter_map(|position_id| self.positions.get(position_id))
+            .flat_map(|position| &position.controlled_stations)
+            .collect();
+
+        for station_id in candidate_stations {
+            let Some(station) = self.stations.get(station_id) else {
+                tracing::warn!(?station_id, "Candidate station not found");
+                continue;
+            };
+
             let before = self.controlling_position(&station.id, from_online_positions);
             let after = self.controlling_position(&station.id, to_online_positions);
 
