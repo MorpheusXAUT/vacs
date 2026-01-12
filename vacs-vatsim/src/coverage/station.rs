@@ -1,5 +1,5 @@
 use crate::coverage::flight_information_region::FlightInformationRegionId;
-use crate::coverage::{CoverageError, ValidationError, Validator};
+use crate::coverage::{CoverageError, ReferenceValidator, ValidationError, Validator};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use vacs_protocol::vatsim::{PositionId, StationId};
@@ -89,6 +89,19 @@ impl Validator for StationRaw {
     }
 }
 
+impl ReferenceValidator<PositionId> for StationRaw {
+    fn validate_references(&self, positions: &HashSet<&PositionId>) -> Result<(), CoverageError> {
+        if let Some(position_id) = self.controlled_by.iter().find(|p| !positions.contains(p)) {
+            return Err(ValidationError::MissingReference {
+                field: "position_id".to_string(),
+                ref_id: position_id.to_string(),
+            }
+            .into());
+        }
+        Ok(())
+    }
+}
+
 impl StationRaw {
     pub(super) fn resolve_controlled_by(
         &self,
@@ -139,14 +152,14 @@ mod tests {
         let raw1 = StationRaw {
             id: "LOWW_TWR".into(),
             parent_id: None,
-            controlled_by: vec![],
+            controlled_by: vec!["LOWW_TWR".into()],
         };
         assert!(raw1.validate().is_ok());
 
         let raw2 = StationRaw {
             id: "LOWW_TWR".into(),
             parent_id: Some("LOWW_APP".into()),
-            controlled_by: vec![],
+            controlled_by: vec!["LOWW_TWR".into()],
         };
         assert!(raw2.validate().is_ok());
     }
