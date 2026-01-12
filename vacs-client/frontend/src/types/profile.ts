@@ -24,7 +24,7 @@ export type GeoPageContainerDTO = {
 export type GeoPageButtonDTO = {
     label: string[];
     size: number; // size in rem, > 0
-    page: DirectAccessPageDTO;
+    page?: DirectAccessPageDTO;
 };
 
 export type GeoPageDividerDTO = {
@@ -77,6 +77,6 @@ export function isGeoPageButton(button: unknown): button is GeoPageButtonDTO {
     return (
         Array.isArray(maybeButton.label) &&
         typeof maybeButton.size === "number" &&
-        typeof maybeButton.page === "object"
+        (maybeButton.page === undefined || typeof maybeButton.page === "object")
     );
 }

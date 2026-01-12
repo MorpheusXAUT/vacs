@@ -2,11 +2,13 @@ import Button from "./Button.tsx";
 import {useCallStore} from "../../stores/call-store.ts";
 import {navigate} from "wouter/use-browser-location";
 import {useFilterStore} from "../../stores/filter-store.ts";
+import {useProfileStore} from "../../stores/profile-store.ts";
 
 function PhoneButton() {
     const blink = useCallStore(state => state.blink);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
     const setFilter = useFilterStore(state => state.setFilter);
+    const setSelectedPage = useProfileStore(state => state.setSelectedPage);
 
     return (
         <Button
@@ -29,6 +31,7 @@ function PhoneButton() {
             className="w-46 min-h-16 text-xl"
             onClick={() => {
                 setFilter("");
+                setSelectedPage(undefined);
                 navigate("/");
             }}
         >
