@@ -49,6 +49,9 @@ pub enum ValidationError {
     #[error("referenced {field} `{ref_id}` does not exist")]
     MissingReference { field: String, ref_id: String },
 
+    #[error("station `{0}` has no coverage")]
+    EmptyCoverage(String),
+
     #[error("{0}")]
     Custom(String),
 }
@@ -75,9 +78,6 @@ pub enum IoError {
 pub enum StructureError {
     #[error("duplicate {entity} `{id}`")]
     Duplicate { entity: String, id: String },
-
-    #[error("station `{0}` has no coverage")]
-    EmptyCoverage(String),
 
     #[error("failed to load {entity} from `{id}`: {reason}")]
     Load {

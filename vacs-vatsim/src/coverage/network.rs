@@ -5,7 +5,9 @@ use crate::coverage::flight_information_region::{
 use crate::coverage::position::Position;
 use crate::coverage::profile::Profile;
 use crate::coverage::station::Station;
-use crate::coverage::{CoverageError, IoError, ReferenceValidator, StructureError};
+use crate::coverage::{
+    CoverageError, IoError, ReferenceValidator, StructureError, ValidationError,
+};
 use std::collections::{HashMap, HashSet};
 use vacs_protocol::vatsim::{ActiveProfile, PositionId, ProfileId, StationChange, StationId};
 
@@ -96,12 +98,22 @@ impl Network {
             .collect::<HashMap<_, _>>();
 
         let all_station_ids = all_stations.keys().collect::<HashSet<_>>();
+        let all_position_ids = raw_firs
+            .iter()
+            .flat_map(|fir| fir.positions.iter().map(|p| &p.id))
+            .collect::<HashSet<_>>();
         let all_profile_ids = raw_firs
             .iter()
             .flat_map(|fir| fir.profiles.keys())
             .collect::<HashSet<_>>();
 
         for fir_raw in &raw_firs {
+            for station in &fir_raw.stations {
+                if let Err(err) = station.validate_references(&all_position_ids) {
+                    tracing::warn!(?err, ?station.id, ?fir_raw.id, "Invalid position reference in station");
+                    errors.push(err);
+                }
+            }
             for position in &fir_raw.positions {
                 if let Err(err) = position.validate_references(&all_profile_ids) {
                     tracing::warn!(?err, ?position.id, ?fir_raw.id, "Invalid profile reference in position");
@@ -114,23 +126,20 @@ impl Network {
                     errors.push(err);
                 }
             }
-        }
 
-        for fir_raw in &raw_firs {
-            match FlightInformationRegion::try_from(fir_raw.clone()) {
-                Ok(fir) => {
-                    if firs.contains_key(&fir.id) {
-                        let err: CoverageError = StructureError::Duplicate {
-                            entity: "FIR".to_string(),
-                            id: fir.id.to_string(),
-                        }
-                        .into();
-                        tracing::warn!(?fir, "Duplicate FIR ID");
-                        errors.push(err);
-                        continue;
-                    }
-                    firs.insert(fir.id.clone(), fir);
+            if firs.contains_key(&fir_raw.id) {
+                let err: CoverageError = StructureError::Duplicate {
+                    entity: "FIR".to_string(),
+                    id: fir_raw.id.to_string(),
                 }
+                .into();
+                tracing::warn!(?fir_raw, "Duplicate FIR ID");
+                errors.push(err);
+                continue;
+            }
+
+            match FlightInformationRegion::try_from(fir_raw.clone()) {
+                Ok(fir) => firs.insert(fir.id.clone(), fir),
                 Err(err) => {
                     let err: CoverageError = StructureError::Load {
                         entity: "FIR".to_string(),
@@ -143,6 +152,34 @@ impl Network {
                     continue;
                 }
             };
+
+            for position_raw in &fir_raw.positions {
+                if positions.contains_key(&position_raw.id) {
+                    let err: CoverageError = StructureError::Duplicate {
+                        entity: "Position".to_string(),
+                        id: position_raw.id.to_string(),
+                    }
+                    .into();
+                    tracing::warn!(?position_raw, "Duplicate position ID");
+                    errors.push(err);
+                    continue;
+                }
+
+                match Position::from_raw(position_raw.clone(), fir_raw.id.clone()) {
+                    Ok(position) => positions.insert(position.id.clone(), position),
+                    Err(err) => {
+                        let err: CoverageError = StructureError::Load {
+                            entity: "Position".to_string(),
+                            id: position_raw.id.to_string(),
+                            reason: err.to_string(),
+                        }
+                        .into();
+                        tracing::warn!(?err, ?position_raw, "Failed to parse position");
+                        errors.push(err);
+                        continue;
+                    }
+                };
+            }
 
             for station_raw in &fir_raw.stations {
                 if stations.contains_key(&station_raw.id) {
@@ -175,41 +212,13 @@ impl Network {
 
                 if station.controlled_by.is_empty() {
                     let err: CoverageError =
-                        StructureError::EmptyCoverage(station.id.to_string()).into();
-                    tracing::warn!(?station, "Station has no coverage");
+                        ValidationError::EmptyCoverage(station.id.to_string()).into();
+                    tracing::warn!(?err, ?station_raw, "Station has no coverage");
                     errors.push(err);
                     continue;
                 }
-                stations.insert(station.id.clone(), station);
-            }
 
-            for position_raw in &fir_raw.positions {
-                match Position::from_raw(position_raw.clone(), fir_raw.id.clone()) {
-                    Ok(position) => {
-                        if positions.contains_key(&position.id) {
-                            let err: CoverageError = StructureError::Duplicate {
-                                entity: "Position".to_string(),
-                                id: position.id.to_string(),
-                            }
-                            .into();
-                            tracing::warn!(?position, "Duplicate position ID");
-                            errors.push(err);
-                            continue;
-                        }
-                        positions.insert(position.id.clone(), position);
-                    }
-                    Err(err) => {
-                        let err: CoverageError = StructureError::Load {
-                            entity: "Position".to_string(),
-                            id: position_raw.id.to_string(),
-                            reason: err.to_string(),
-                        }
-                        .into();
-                        tracing::warn!(?err, ?position_raw, "Failed to parse position");
-                        errors.push(err);
-                        continue;
-                    }
-                }
+                stations.insert(station.id.clone(), station);
             }
 
             for (profile_id, profile) in &fir_raw.profiles {
@@ -591,8 +600,17 @@ mod tests {
             .station_with_parent("LOWW_GND", "LOWW_TWR", &["LOWW_GND", "LOWW_W_GND"])
             .station_with_parent("LOWW_W_GND", "LOWW_GND", &["LOWW_W_GND"])
             .station_with_parent("LOWW_DEL", "LOWW_GND", &["LOWW_DEL"])
+            .position("LOVV_EU_CTR", &["LOVV"], "135.635", "CTR")
+            .position("LOVV_NU_CTR", &["LOVV"], "119.880", "CTR")
+            .position("LOVV_U_CTR", &["LOVV"], "131.350", "CTR")
+            .position("LOVV_N_CTR", &["LOVV"], "134.350", "CTR")
+            .position("LOVV_C_CTR", &["LOVV"], "132.160", "CTR")
+            .position("LOVV_L_CTR", &["LOVV"], "129.200", "CTR")
             .position("LOVV_E_CTR", &["LOVV"], "134.440", "CTR")
             .position("LOVV_CTR", &["LOVV"], "132.600", "CTR")
+            .position("LOWW_P_APP", &["LOWW"], "129.050", "APP")
+            .position("LOWW_N_APP", &["LOWW"], "118.775", "APP")
+            .position("LOWW_M_APP", &["LOWW"], "125.175", "APP")
             .position("LOWW_APP", &["LOWW"], "134.675", "APP")
             .position("LOWW_TWR", &["LOWW"], "119.400", "TWR")
             .position("LOWW_E_TWR", &["LOWW"], "123.800", "TWR")
@@ -713,7 +731,7 @@ mod tests {
 
         let errors = Network::load_from_dir(dir.path()).unwrap_err();
         assert_eq!(errors.len(), 1);
-        assert_matches!(&errors[0], CoverageError::Structure(StructureError::EmptyCoverage(station)) if station == "LOWW_TWR");
+        assert_matches!(&errors[0], CoverageError::Validation(ValidationError::EmptyCoverage(station)) if station == "LOWW_TWR");
     }
 
     #[test]
@@ -742,11 +760,12 @@ mod tests {
             .create(dir.path());
 
         let errors = Network::load_from_dir(dir.path()).expect_err("should not load from dir");
-        assert_eq!(errors.len(), 4);
+        assert_eq!(errors.len(), 6);
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Load { entity, id, .. }) if entity == "FIR" && id.contains("FIR1"))));
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Station" && id == "A")));
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Station" && id == "B")));
         assert!(errors.iter().any(|e| matches!(e, CoverageError::Structure(StructureError::Duplicate { entity, id }) if entity == "Position" && id == "B")));
+        assert!(errors.iter().any(|e| matches!(e, CoverageError::Validation(ValidationError::MissingReference { field, ref_id }) if field == "position_id" && ref_id == "A")));
     }
 
     #[test]
@@ -874,7 +893,7 @@ mod tests {
 
         std::fs::write(
             fir_path.join("stations.toml"),
-            "[[stations]]\nid=\"S1\"\ncontrolled_by=[\"S1\"]",
+            "[[stations]]\nid=\"S1\"\ncontrolled_by=[\"P1\"]",
         )
         .unwrap();
         std::fs::write(
