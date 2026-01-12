@@ -1,5 +1,5 @@
 import {clsx} from "clsx";
-import {ComponentChildren} from "preact";
+import {ComponentChildren, CSSProperties} from "preact";
 import {invokeSafe} from "../../error.ts";
 
 type ButtonColor = "gray" | "cyan" | "green" | "blue" | "cornflower" | "emerald" | "red" | "salmon";
@@ -15,6 +15,7 @@ export type ButtonProps = {
     muted?: boolean;
     highlight?: ButtonHighlightColor;
     title?: string;
+    style?: CSSProperties;
 };
 
 const ButtonColors: Record<ButtonColor, string> = {
@@ -81,6 +82,7 @@ function Button(props: ButtonProps) {
                     !props.softDisabled &&
                     "active:[&>*]:translate-y-[1px] active:[&>*]:translate-x-[1px]",
             )}
+            style={props.style}
             onClick={event => {
                 if (props.muted !== true) {
                     void invokeSafe("audio_play_ui_click");
