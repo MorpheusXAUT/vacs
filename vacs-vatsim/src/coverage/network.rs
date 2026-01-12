@@ -236,6 +236,20 @@ impl Network {
             }
         }
 
+        for station in stations.values() {
+            for position_id in &station.controlled_by {
+                if let Some(position) = positions.get_mut(position_id) {
+                    position.controlled_stations.insert(station.id.clone());
+                } else {
+                    tracing::warn!(
+                        ?station,
+                        ?position_id,
+                        "Position referenced by station not found"
+                    );
+                }
+            }
+        }
+
         if !errors.is_empty() {
             tracing::warn!(?errors, "Failed to load network");
             return Err(errors);

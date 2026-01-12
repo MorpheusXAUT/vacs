@@ -5,7 +5,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::LazyLock;
-use vacs_protocol::vatsim::{PositionId, ProfileId};
+use vacs_protocol::vatsim::{PositionId, ProfileId, StationId};
 
 static FREQUENCY_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{3}\.\d{3}$").unwrap());
 
@@ -17,6 +17,7 @@ pub struct Position {
     pub facility_type: FacilityType,
     pub profile_id: Option<ProfileId>,
     pub fir_id: FlightInformationRegionId,
+    pub controlled_stations: HashSet<StationId>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -43,6 +44,7 @@ impl std::fmt::Debug for Position {
             .field("facility_type", &self.facility_type)
             .field("profile_id", &self.profile_id)
             .field("fir_id", &self.fir_id)
+            .field("controlled_stations", &self.controlled_stations.len())
             .finish()
     }
 }
@@ -73,6 +75,7 @@ impl Position {
             facility_type: position_raw.facility_type,
             profile_id: position_raw.profile_id,
             fir_id: fir_id.into(),
+            controlled_stations: HashSet::new(),
         })
     }
 }
@@ -303,6 +306,7 @@ mod tests {
             facility_type: FacilityType::Tower,
             profile_id: Some(ProfileId::from("LOWW")),
             fir_id: FlightInformationRegionId::from("LOVV"),
+            controlled_stations: HashSet::new(),
         };
         let p2 = Position {
             id: "LOWW_TWR".into(),
@@ -311,6 +315,7 @@ mod tests {
             facility_type: FacilityType::Ground,       // Different content
             profile_id: Some(ProfileId::from("LOVV")), // Different content
             fir_id: FlightInformationRegionId::from("LOVV"),
+            controlled_stations: HashSet::new(),
         };
         assert_eq!(p1, p2); // Should be equal because IDs are equal
 
@@ -321,6 +326,7 @@ mod tests {
             facility_type: FacilityType::Tower,
             profile_id: Some(ProfileId::from("LOWW")),
             fir_id: FlightInformationRegionId::from("LOVV"),
+            controlled_stations: HashSet::new(),
         };
         assert_ne!(p1, p3);
     }
