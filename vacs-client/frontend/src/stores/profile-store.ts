@@ -16,13 +16,25 @@ export const useProfileStore = create<ProfileState>()(set => ({
     setPage: page => set({page: page}),
 }));
 
+export const useProfileType = (): "geo" | "tabbed" | "unknown" | undefined => {
+    return useProfileStore(state => {
+        if (state.profile === undefined) return undefined;
+        if (state.profile.geo !== undefined) return "geo";
+        if (state.profile.tabbed !== undefined) return "tabbed";
+        return "unknown";
+    });
+};
+
 export const INVALID_PROFILE: Profile = {
     id: "INVALID" as ProfileId,
 };
 
 export const TABBED_PROFILE: Profile = {
     id: "TABBED" as ProfileId,
-    tabbed: {},
+    tabbed: {
+        "DA 1": {} as DirectAccessPage,
+        "DA 2": {} as DirectAccessPage,
+    },
 };
 
 export const LOVV_PROFILE: Profile = {
