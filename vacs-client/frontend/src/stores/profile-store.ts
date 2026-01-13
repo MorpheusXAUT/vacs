@@ -217,7 +217,7 @@ export const LOVV_PROFILE: Profile = {
                             {label: ["ZAG"], size: 6.25},
                         ],
                     },
-                    {orientation: "vertical", thickness: 2, color: "#364153"},
+                    {orientation: "vertical", thickness: 2, color: "#364153", oversize: 0.5},
                     {
                         direction: "col",
                         height: "100%",

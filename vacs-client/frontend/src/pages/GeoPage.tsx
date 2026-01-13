@@ -90,7 +90,6 @@ type GeoPageDividerProps = {
     divider: GeoPageDividerModel;
 };
 
-// TODO: Make good
 function GeoPageDivider({divider}: GeoPageDividerProps) {
     return (
         <div
@@ -101,8 +100,12 @@ function GeoPageDivider({divider}: GeoPageDividerProps) {
             }}
         >
             <div
-                className="absolute -top-2 h-[calc(100%+1rem)] w-full"
-                style={{backgroundColor: divider.color}}
+                className="absolute w-full"
+                style={{
+                    backgroundColor: divider.color,
+                    top: divider.oversize && `-${divider.oversize}rem`,
+                    height: divider.oversize ? `calc(100% + ${divider.oversize * 2}rem)` : "100%",
+                }}
             ></div>
         </div>
     );
