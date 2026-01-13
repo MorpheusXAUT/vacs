@@ -80,7 +80,7 @@ function Button(props: ButtonProps) {
                 props.highlight !== undefined && "p-1.5",
                 !props.disabled &&
                     !props.softDisabled &&
-                    "active:[&>*]:translate-y-[1px] active:[&>*]:translate-x-[1px]",
+                    "active:*:translate-y-px active:*:translate-x-px",
             )}
             style={props.style}
             onClick={event => {

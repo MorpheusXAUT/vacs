@@ -1,11 +1,14 @@
 import Button from "./Button.tsx";
 import {clsx} from "clsx";
 import {useRadioState} from "../../hooks/radio-state-hook.ts";
+import {useProfileType} from "../../stores/profile-store.ts";
 
 function RadioButton() {
     const {state, handleButtonClick} = useRadioState();
     const disabled = state === "NotConfigured" || state === "Disconnected";
     const textMuted = state === "NotConfigured";
+
+    const collapsed = useProfileType() === "tabbed";
 
     const buttonColor = () => {
         switch (state) {
@@ -34,7 +37,7 @@ function RadioButton() {
             disabled={state === "NotConfigured"}
             softDisabled={disabled}
             onClick={handleButtonClick}
-            className={clsx("text-xl w-46", textMuted && "text-gray-500")}
+            className={clsx("text-lg", textMuted && "text-gray-500", collapsed ? "w-24" : "w-46")}
         >
             Radio
         </Button>

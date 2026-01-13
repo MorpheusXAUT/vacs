@@ -2,13 +2,16 @@ import Button from "./Button.tsx";
 import {useCallStore} from "../../stores/call-store.ts";
 import {navigate} from "wouter/use-browser-location";
 import {useFilterStore} from "../../stores/filter-store.ts";
-import {useProfileStore} from "../../stores/profile-store.ts";
+import {useProfileStore, useProfileType} from "../../stores/profile-store.ts";
+import {clsx} from "clsx";
 
 function PhoneButton() {
     const blink = useCallStore(state => state.blink);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
+
+    const collapsed = useProfileType() === "tabbed";
 
     return (
         <Button
@@ -28,7 +31,7 @@ function PhoneButton() {
                     ? "green"
                     : undefined
             }
-            className="w-46 min-h-16 text-xl"
+            className={clsx("min-h-16 text-lg", collapsed ? "w-24" : "w-46")}
             onClick={() => {
                 setFilter("");
                 setSelectedPage(undefined);
