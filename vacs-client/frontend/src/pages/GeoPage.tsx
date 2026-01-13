@@ -42,13 +42,24 @@ function GeoPageContainer({
         flexDirection: container.direction === "row" ? "row" : "column",
         justifyContent: container.justifyContent,
         alignItems: container.alignItems,
-        paddingLeft: container.paddingLeft && `${container.paddingLeft}rem`,
-        paddingRight: container.paddingRight && `${container.paddingRight}rem`,
-        paddingTop: container.paddingTop && `${container.paddingTop}rem`,
-        paddingBottom: container.paddingBottom && `${container.paddingBottom}rem`,
-        padding: container.padding && `${container.padding}rem`,
         gap: container.gap && `${container.gap}rem`,
     };
+
+    if (container.padding !== undefined) {
+        style.padding = `${container.padding}rem`;
+    }
+    if (container.paddingLeft !== undefined) {
+        style.paddingLeft = `${container.paddingLeft}rem`;
+    }
+    if (container.paddingRight !== undefined) {
+        style.paddingRight = `${container.paddingRight}rem`;
+    }
+    if (container.paddingTop !== undefined) {
+        style.paddingTop = `${container.paddingTop}rem`;
+    }
+    if (container.paddingBottom !== undefined) {
+        style.paddingBottom = `${container.paddingBottom}rem`;
+    }
 
     return (
         <div className={className} style={style}>
