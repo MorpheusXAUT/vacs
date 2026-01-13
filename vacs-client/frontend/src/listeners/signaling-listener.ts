@@ -7,6 +7,7 @@ import {useCallListStore} from "../stores/call-list-store.ts";
 import {StationsConfig} from "../types/stations.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
 import {PositionId} from "../types/generic.ts";
+import {LOVV_PROFILE, useProfileStore} from "../stores/profile-store.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, getClientInfo, removeClient, setStationsConfig} =
@@ -22,6 +23,7 @@ export function setupSignalingListeners() {
     const {addCall: addCallToCallList, clearCallList} = useCallListStore.getState().actions;
     const {setConnectionState, setConnectionInfo, setPositionsToSelect} =
         useConnectionStore.getState();
+    const {setProfile} = useProfileStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 
@@ -30,6 +32,7 @@ export function setupSignalingListeners() {
             listen<ClientInfo>("signaling:connected", event => {
                 setConnectionState("connected");
                 setConnectionInfo(event.payload);
+                setProfile(LOVV_PROFILE); // TODO replace with actual profile
             }),
             listen("signaling:reconnecting", () => {
                 setConnectionState("connecting");
@@ -40,16 +43,17 @@ export function setupSignalingListeners() {
                 setClients([]);
                 resetCallStore();
                 clearCallList();
+                setProfile(undefined);
             }),
             listen<PositionId[]>("signaling:ambiguous-position", event => {
                 setConnectionState("connecting");
                 setPositionsToSelect(event.payload);
             }),
+            // TODO: handle online stations list
+            // TODO: handle station change
             listen<ClientInfo[]>("signaling:client-list", event => {
                 setClients(event.payload);
             }),
-            // TODO: handle online stations list
-            // TODO: handle station change
             listen<ClientInfo>("signaling:client-connected", event => {
                 addClient(event.payload);
             }),

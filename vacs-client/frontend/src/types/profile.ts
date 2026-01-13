@@ -2,11 +2,11 @@ import {ProfileId, StationId} from "./generic.ts";
 
 export type Profile = {
     id: ProfileId;
-    geo?: GeoPageContainerDTO;
-    tabbed?: Record<string, DirectAccessPageDTO>;
+    geo?: GeoPageContainer;
+    tabbed?: Record<string, DirectAccessPage>;
 };
 
-export type GeoPageContainerDTO = {
+export type GeoPageContainer = {
     height?: string; // "<number>['%' | 'em']"
     width?: string; // "<number>['%' | 'em']"
     padding?: number; // in rem
@@ -18,22 +18,22 @@ export type GeoPageContainerDTO = {
     justifyContent?: "start" | "end" | "space-between" | "space-around" | "space-evenly" | "center";
     alignItems?: "start" | "end" | "between" | "around" | "evenly" | "center";
     direction: "row" | "col";
-    children: (GeoPageContainerDTO | GeoPageButtonDTO | GeoPageDividerDTO)[];
+    children: (GeoPageContainer | GeoPageButton | GeoPageDivider)[];
 };
 
-export type GeoPageButtonDTO = {
+export type GeoPageButton = {
     label: string[];
     size: number; // size in rem, > 0
-    page?: DirectAccessPageDTO;
+    page?: DirectAccessPage;
 };
 
-export type GeoPageDividerDTO = {
+export type GeoPageDivider = {
     orientation: "horizontal" | "vertical";
     thickness: number; // size in px, > 0
     color: string;
 };
 
-export type DirectAccessPageDTO = {
+export type DirectAccessPage = {
     keys: DirectAccessKey[];
     rows: number; // > 0
 };
@@ -43,7 +43,7 @@ export type DirectAccessKey = {
     stationId?: StationId;
 };
 
-export function isGeoPageContainer(container: unknown): container is GeoPageContainerDTO {
+export function isGeoPageContainer(container: unknown): container is GeoPageContainer {
     if (typeof container !== "object" || container === null) {
         return false;
     }
@@ -53,7 +53,7 @@ export function isGeoPageContainer(container: unknown): container is GeoPageCont
     return typeof maybeContainer.direction === "string" && Array.isArray(maybeContainer.children);
 }
 
-export function isGeoPageDivider(divider: unknown): divider is GeoPageDividerDTO {
+export function isGeoPageDivider(divider: unknown): divider is GeoPageDivider {
     if (typeof divider !== "object" || divider === null) {
         return false;
     }
@@ -67,7 +67,7 @@ export function isGeoPageDivider(divider: unknown): divider is GeoPageDividerDTO
     );
 }
 
-export function isGeoPageButton(button: unknown): button is GeoPageButtonDTO {
+export function isGeoPageButton(button: unknown): button is GeoPageButton {
     if (typeof button !== "object" || button === null) {
         return false;
     }
