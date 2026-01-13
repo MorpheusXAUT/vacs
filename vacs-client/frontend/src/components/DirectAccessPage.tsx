@@ -1,10 +1,10 @@
-import {DirectAccessPageDTO} from "../types/profile.ts";
+import {DirectAccessPage as DirectAccessPageModel} from "../types/profile.ts";
 import Button from "./ui/Button.tsx";
 import {CSSProperties} from "preact";
 import {clsx} from "clsx";
 
 type DirectAccessPageProps = {
-    data: DirectAccessPageDTO;
+    data: DirectAccessPageModel;
 };
 
 function DirectAccessPage({data}: DirectAccessPageProps) {

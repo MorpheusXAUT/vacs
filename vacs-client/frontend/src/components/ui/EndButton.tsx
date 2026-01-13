@@ -10,7 +10,7 @@ function EndButton() {
     const callDisplay = useCallStore(state => state.callDisplay);
     const {endCall, dismissRejectedPeer, dismissErrorPeer} = useCallStore(state => state.actions);
     const setFilter = useFilterStore(state => state.setFilter);
-    const setSelectedPage = useProfileStore(state => state.setSelectedPage);
+    const setSelectedPage = useProfileStore(state => state.setPage);
 
     const endAnyCall = useAsyncDebounce(async () => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {

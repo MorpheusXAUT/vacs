@@ -364,6 +364,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         tracing::debug!("Awaiting authentication response from server");
         match self.recv_with_timeout(self.login_timeout).await? {
             SignalingMessage::SessionInfo { info, profile } => {
+                // TODO: Assert SessionProfile::Changed and only return ActiveProfile
                 tracing::info!(?info, ?profile, "Login successful, received session info");
                 Ok((info, profile))
             }

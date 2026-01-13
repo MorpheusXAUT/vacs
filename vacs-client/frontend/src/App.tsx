@@ -9,7 +9,6 @@ import {Route, Switch} from "wouter";
 import LoginPage from "./pages/LoginPage.tsx";
 import {useAuthStore} from "./stores/auth-store.ts";
 import {setupAuthListeners} from "./listeners/auth-listener.ts";
-import DAKeyArea from "./components/DAKeyArea.tsx";
 import ConnectPage from "./pages/ConnectPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import telephone from "./assets/telephone.svg";
@@ -31,6 +30,7 @@ import RadioButton from "./components/ui/RadioButton.tsx";
 import ConnectionTerminateOverlay from "./components/overlays/ConnectionTerminateOverlay.tsx";
 import {useConnectionStore} from "./stores/connection-store.ts";
 import PositionSelectOverlay from "./components/overlays/PositionSelectOverlay.tsx";
+import MainPage from "./pages/MainPage.tsx";
 
 function App() {
     const connected = useConnectionStore(state => state.connectionState === "connected");
@@ -77,7 +77,7 @@ function App() {
                                 ) : authStatus === "unauthenticated" ? (
                                     <LoginPage />
                                 ) : connected ? (
-                                    <DAKeyArea />
+                                    <MainPage />
                                 ) : (
                                     <ConnectPage />
                                 )}

@@ -8,7 +8,7 @@ function PhoneButton() {
     const blink = useCallStore(state => state.blink);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
     const setFilter = useFilterStore(state => state.setFilter);
-    const setSelectedPage = useProfileStore(state => state.setSelectedPage);
+    const setSelectedPage = useProfileStore(state => state.setPage);
 
     return (
         <Button
