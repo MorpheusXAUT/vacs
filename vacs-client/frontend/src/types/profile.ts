@@ -31,6 +31,7 @@ export type GeoPageDivider = {
     orientation: "horizontal" | "vertical";
     thickness: number; // size in px, > 0
     color: string;
+    oversize?: number; // in rem, > 0
 };
 
 export type DirectAccessPage = {
