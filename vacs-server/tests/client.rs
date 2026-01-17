@@ -165,6 +165,7 @@ async fn control_messages() -> anyhow::Result<()> {
         "token1",
         |_, _| Ok(()),
         |_| Ok(()),
+        |_| Ok(()),
     )
     .await
     .expect("Failed to create client");

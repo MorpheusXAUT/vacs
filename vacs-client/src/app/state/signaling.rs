@@ -15,7 +15,8 @@ use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
 use vacs_signaling::protocol::ws::{
-    CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason, SignalingMessage,
+    CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason, SessionProfile,
+    SignalingMessage,
 };
 use vacs_signaling::transport::tokio::TokioTransport;
 
@@ -601,9 +602,27 @@ impl AppStateInner {
                 app.emit("signaling:client-connected", info).ok();
             }
             SignalingMessage::SessionInfo { info, profile } => {
-                log::trace!("Received session info: {info:?}, profile: {profile:?}");
-                // TODO: handle profile update (SessionProfile to Profile translation)
+                log::trace!("Received session info: {info:?}");
+
+                if let SessionProfile::Changed(profile) = profile {
+                    log::trace!("Active profile changed: {profile:?}");
+                    // TODO: correct event
+                    // TODO: store in state?
+                    app.emit("profile:changed", profile).ok();
+                } else {
+                    log::trace!("Active profile unchanged");
+                }
+
                 app.emit("signaling:connected", info).ok();
+            }
+            SignalingMessage::StationList { stations } => {
+                log::trace!(
+                    "Received station list: {} stations covered ({} by self)",
+                    stations.len(),
+                    stations.iter().filter(|s| s.own).count()
+                );
+
+                app.emit("signaling:station-list", stations).ok();
             }
             SignalingMessage::Error { reason, peer_id } => match reason {
                 ErrorReason::MalformedMessage => {

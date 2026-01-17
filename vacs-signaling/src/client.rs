@@ -873,7 +873,7 @@ mod tests {
                         display_name: "client1".to_string(),
                         frequency: "".to_string(),
                     },
-                    profile: SessionProfile::Unchanged,
+                    profile: SessionProfile::Changed(ActiveProfile::None),
                 })
                 .unwrap()
                 .into(),
@@ -1407,7 +1407,7 @@ mod tests {
 
         let res = client.connect(None).await;
         assert!(res.is_err());
-        assert_matches!(res.unwrap_err(), SignalingError::ProtocolError(reason) if reason == "Expected own client info after Login");
+        assert_matches!(res.unwrap_err(), SignalingError::ProtocolError(reason) if reason == "Expected own session info after Login");
         assert_matches!(client.state(), State::Disconnected);
     }
 

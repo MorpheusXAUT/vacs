@@ -4,8 +4,10 @@ use crate::state::client::{ClientManagerError, Result};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::{RwLock, broadcast, mpsc};
 use tracing::instrument;
-use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId, StationChange};
-use vacs_protocol::ws::{ClientInfo, DisconnectReason, SignalingMessage};
+use vacs_protocol::vatsim::{
+    ActiveProfile, ClientId, PositionId, ProfileId, StationChange, StationId,
+};
+use vacs_protocol::ws::{ClientInfo, DisconnectReason, SignalingMessage, StationInfo};
 use vacs_vatsim::coverage::network::{Network, RelevantStations};
 use vacs_vatsim::coverage::position::Position;
 use vacs_vatsim::coverage::profile::Profile;
@@ -17,6 +19,7 @@ pub struct ClientManager {
     network: Network,
     clients: RwLock<HashMap<ClientId, ClientSession>>,
     online_positions: RwLock<HashMap<PositionId, HashSet<ClientId>>>,
+    online_stations: RwLock<HashMap<StationId, PositionId>>,
 }
 
 impl ClientManager {
@@ -26,6 +29,7 @@ impl ClientManager {
             network,
             clients: RwLock::new(HashMap::new()),
             online_positions: RwLock::new(HashMap::new()),
+            online_stations: RwLock::new(HashMap::new()),
         }
     }
 
@@ -101,6 +105,13 @@ impl ClientManager {
                         .coverage_changes(None, Some(position_id), &current_positions);
                 online_positions
                     .insert(position_id.clone(), HashSet::from([client_info.id.clone()]));
+
+                tracing::trace!(
+                    ?position_id,
+                    "Updating online stations list after position addition"
+                );
+                self.update_online_stations(&changes).await;
+
                 changes
             }
         } else {
@@ -146,15 +157,25 @@ impl ClientManager {
             let mut online_positions = self.online_positions.write().await;
 
             if online_positions.contains_key(position_id) {
-                let changes = {
-                    let current_positions = online_positions.keys().collect::<HashSet<_>>();
-                    self.network
-                        .coverage_changes(Some(position_id), None, &current_positions)
-                };
+                let mut changes = Vec::new();
 
                 if online_positions.get(position_id).unwrap().len() == 1 {
                     tracing::trace!(?position_id, "Removing position from online positions list");
+
+                    let current_positions = online_positions.keys().collect::<HashSet<_>>();
+                    let changes_vec =
+                        self.network
+                            .coverage_changes(Some(position_id), None, &current_positions);
+
                     online_positions.remove(position_id);
+
+                    tracing::trace!(
+                        ?position_id,
+                        "Updating online stations list after position removal"
+                    );
+                    self.update_online_stations(&changes_vec).await;
+
+                    changes.extend(changes_vec);
                 } else {
                     tracing::trace!(
                         ?position_id,
@@ -213,6 +234,48 @@ impl ClientManager {
 
         clients.sort_by(|a, b| a.id.cmp(&b.id));
         clients
+    }
+
+    pub async fn list_stations(
+        &self,
+        profile: &ActiveProfile<ProfileId>,
+        self_position_id: Option<&PositionId>,
+    ) -> Vec<StationInfo> {
+        let relevant_stations = self.network.relevant_stations(profile);
+        let online_stations = self.online_stations.read().await;
+
+        let mut stations: Vec<StationInfo> = match relevant_stations {
+            RelevantStations::All => online_stations
+                .iter()
+                .map(|(id, controller)| {
+                    let own = self_position_id
+                        .map(|self_pos| controller == self_pos)
+                        .unwrap_or(false);
+                    StationInfo {
+                        id: id.clone(),
+                        own,
+                    }
+                })
+                .collect(),
+            RelevantStations::Subset(ids) => ids
+                .iter()
+                .filter_map(|id| {
+                    online_stations.get(id).map(|controller| {
+                        let own = self_position_id
+                            .map(|self_pos| controller == self_pos)
+                            .unwrap_or(false);
+                        StationInfo {
+                            id: id.clone(),
+                            own,
+                        }
+                    })
+                })
+                .collect(),
+            RelevantStations::None => Vec::new(),
+        };
+
+        stations.sort_by(|a, b| a.id.cmp(&b.id));
+        stations
     }
 
     pub async fn get_client(&self, client_id: &ClientId) -> Option<ClientSession> {
@@ -405,6 +468,7 @@ impl ClientManager {
                 let changes = self
                     .network
                     .coverage_diff(&start_online_positions, &end_online_positions);
+                self.update_online_stations(&changes).await;
                 coverage_changes.extend(changes);
             }
         }
@@ -420,6 +484,34 @@ impl ClientManager {
         self.broadcast_station_changes(&coverage_changes).await;
 
         disconnected_clients
+    }
+
+    async fn update_online_stations(&self, changes: &[StationChange]) {
+        if changes.is_empty() {
+            return;
+        }
+
+        let mut online_stations = self.online_stations.write().await;
+        for change in changes {
+            match change {
+                StationChange::Online {
+                    station_id,
+                    position_id,
+                } => {
+                    online_stations.insert(station_id.clone(), position_id.clone());
+                }
+                StationChange::Offline { station_id } => {
+                    online_stations.remove(station_id);
+                }
+                StationChange::Handoff {
+                    station_id,
+                    to_position_id,
+                    ..
+                } => {
+                    online_stations.insert(station_id.clone(), to_position_id.clone());
+                }
+            }
+        }
     }
 
     async fn broadcast_station_changes(&self, changes: &[StationChange]) {

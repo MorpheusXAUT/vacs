@@ -20,8 +20,8 @@ use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::{Instrument, instrument};
 use uuid::Uuid;
-use vacs_protocol::vatsim::{ActiveProfile, ClientId, ProfileId};
-use vacs_protocol::ws::{ClientInfo, DisconnectReason, ErrorReason, SignalingMessage};
+use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId};
+use vacs_protocol::ws::{ClientInfo, DisconnectReason, ErrorReason, SignalingMessage, StationInfo};
 use vacs_vatsim::ControllerInfo;
 use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::DataFeed;
@@ -113,6 +113,16 @@ impl AppState {
 
     pub async fn list_clients(&self, self_client_id: Option<&ClientId>) -> Vec<ClientInfo> {
         self.clients.list_clients(self_client_id).await
+    }
+
+    pub async fn list_stations(
+        &self,
+        active_profile: &ActiveProfile<ProfileId>,
+        self_position_id: Option<&PositionId>,
+    ) -> Vec<StationInfo> {
+        self.clients
+            .list_stations(active_profile, self_position_id)
+            .await
     }
 
     pub async fn get_client(&self, client_id: &ClientId) -> Option<ClientSession> {

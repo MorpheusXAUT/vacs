@@ -7,7 +7,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use vacs_protocol::VACS_PROTOCOL_VERSION;
 use vacs_protocol::vatsim::ClientId;
-use vacs_protocol::ws::{ClientInfo, SignalingMessage};
+use vacs_protocol::ws::{ClientInfo, SignalingMessage, StationInfo};
 
 pub struct TestClient {
     id: ClientId,
@@ -25,20 +25,26 @@ impl TestClient {
         })
     }
 
-    pub async fn new_with_login<FI, FC>(
+    pub async fn new_with_login<FI, FC, FS>(
         ws_addr: &str,
         id: impl Into<ClientId>,
         token: &str,
         client_info_predicate: FI,
         client_list_predicate: FC,
+        station_list_predicate: FS,
     ) -> anyhow::Result<Self>
     where
         FI: FnOnce(bool, ClientInfo) -> anyhow::Result<()>,
         FC: FnOnce(&[ClientInfo]) -> anyhow::Result<()> + Copy,
+        FS: FnOnce(&[StationInfo]) -> anyhow::Result<()> + Copy,
     {
         let mut client = Self::new(ws_addr, id, token).await?;
         client
-            .login(client_info_predicate, client_list_predicate)
+            .login(
+                client_info_predicate,
+                client_list_predicate,
+                station_list_predicate,
+            )
             .await?;
         Ok(client)
     }
@@ -47,14 +53,16 @@ impl TestClient {
         &self.id
     }
 
-    pub async fn login<FI, FC>(
+    pub async fn login<FI, FC, FS>(
         &mut self,
         client_info_predicate: FI,
         client_list_predicate: FC,
+        station_list_predicate: FS,
     ) -> anyhow::Result<()>
     where
         FI: FnOnce(bool, ClientInfo) -> anyhow::Result<()>,
         FC: FnOnce(&[ClientInfo]) -> anyhow::Result<()> + Copy,
+        FS: FnOnce(&[StationInfo]) -> anyhow::Result<()> + Copy,
     {
         let login_msg = SignalingMessage::Login {
             token: self.token.to_string(),
@@ -71,10 +79,17 @@ impl TestClient {
         })
         .await?;
 
-        self.recv_with_timeout_and_filter(
-            Duration::from_millis(100),
-            |msg| matches!(msg, SignalingMessage::ClientList { clients } if client_list_predicate(clients).is_ok()))
-        .await.ok_or_else(|| anyhow::anyhow!("Client list not received"))?;
+        self.recv_with_timeout_and_filter(Duration::from_millis(100), |msg| {
+            matches!(msg, SignalingMessage::ClientList { clients } if client_list_predicate(clients).is_ok())
+        })
+        .await
+        .ok_or_else(|| anyhow::anyhow!("Client list not received"))?;
+
+        self.recv_with_timeout_and_filter(Duration::from_millis(100), |msg| {
+            matches!(msg, SignalingMessage::StationList { stations } if station_list_predicate(stations).is_ok())
+        })
+        .await
+        .ok_or_else(|| anyhow::anyhow!("Station list not received"))?;
 
         Ok(())
     }
@@ -236,9 +251,10 @@ pub async fn setup_test_clients(
 ) -> HashMap<ClientId, TestClient> {
     let mut test_clients = HashMap::new();
     for (id, token) in clients {
-        let client = TestClient::new_with_login(addr, *id, token, |_, _| Ok(()), |_| Ok(()))
-            .await
-            .expect("Failed to create test client");
+        let client =
+            TestClient::new_with_login(addr, *id, token, |_, _| Ok(()), |_| Ok(()), |_| Ok(()))
+                .await
+                .expect("Failed to create test client");
         test_clients.insert(client.id.clone(), client);
     }
     test_clients
@@ -253,6 +269,7 @@ pub async fn setup_n_test_clients(addr: &str, num_clients: usize) -> Vec<TestCli
             format!("client{n}"),
             &format!("token{n}"),
             |_, _| Ok(()),
+            |_| Ok(()),
             |_| Ok(()),
         )
         .await

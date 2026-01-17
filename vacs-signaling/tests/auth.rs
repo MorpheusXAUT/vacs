@@ -281,7 +281,10 @@ async fn client_connected_broadcast() {
     let mut client3 = TestClient::new(test_rig.server().addr(), "client3", "token3")
         .await
         .unwrap();
-    client3.login(|_, _| Ok(()), |_| Ok(())).await.unwrap();
+    client3
+        .login(|_, _| Ok(()), |_| Ok(()), |_| Ok(()))
+        .await
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
