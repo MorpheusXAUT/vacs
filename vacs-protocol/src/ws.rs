@@ -1,4 +1,4 @@
-use crate::vatsim::{ActiveProfile, ClientId, PositionId, Profile, StationChange};
+use crate::vatsim::{ActiveProfile, ClientId, PositionId, Profile, StationChange, StationId};
 use serde::{Deserialize, Serialize};
 
 /// Possible reasons for a login failure.
@@ -95,6 +95,16 @@ pub enum SessionProfile {
     /// This is returned upon initial connection if the client's position has a profile defined, or when the client's position changes
     /// and the new position has a different profile defined.
     Changed(ActiveProfile<Profile>),
+}
+
+/// Represents information about a station.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StationInfo {
+    /// ID of the station.
+    pub id: StationId,
+    /// Whether the client receiving this station info currently covers the station.
+    pub own: bool,
 }
 
 /// Represents a message exchanged between the signaling server and clients.
@@ -217,6 +227,8 @@ pub enum SignalingMessage {
     /// The signaling server will forward the message to the given peer, exchanging the [`SignalingMessage::CallEnd::peer_id`] with the other peer's ID.
     #[serde(rename_all = "camelCase")]
     CallEnd {
+        /// When sent to the signaling server by the caller, this is the ID of the target client.
+        /// When received from the signaling server (by the callee), this is the ID of the source client ending the call.
         peer_id: ClientId,
     },
     /// A call error message sent by either client to indicate an error during an active call or while trying to establish a call.
@@ -266,7 +278,21 @@ pub enum SignalingMessage {
         /// List of all currently connected clients.
         clients: Vec<ClientInfo>,
     },
+    /// A message sent by a client to request a list of all currently relevant stations.
+    ListStations,
+    /// A message sent by the signaling server, containing a list of all currently relevant stations.
+    ///
+    /// This message is sent as a response to [`SignalingMessage::ListStations`] requests.
+    StationList {
+        /// List of all currently relevant stations.
+        stations: Vec<StationInfo>,
+    },
+    /// A message containing a list of changes to the station coverage.
+    ///
+    /// This message is sent by the signaling server whenever the set of relevant stations changes,
+    /// e.g., when a station comes online, goes offline, or is handed off to another controller.
     StationChanges {
+        /// List of changes to the station coverage.
         changes: Vec<StationChange>,
     },
     /// Generic error message sent by either a client or the signaling server.
@@ -348,7 +374,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"LoginFailure\",\"reason\":\"DuplicateId\"}"
+            r#"{"type":"LoginFailure","reason":"DuplicateId"}"#
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -365,7 +391,7 @@ mod tests {
         let message = SignalingMessage::Logout {};
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
-        assert_eq!(serialized, "{\"type\":\"Logout\"}");
+        assert_eq!(serialized, r#"{"type":"Logout"}"#);
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         assert!(matches!(deserialized, SignalingMessage::Logout));
@@ -381,7 +407,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"CallOffer\",\"sdp\":\"sdp1\",\"peerId\":\"client1\"}"
+            r#"{"type":"CallOffer","sdp":"sdp1","peerId":"client1"}"#
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -404,7 +430,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"CallAnswer\",\"sdp\":\"sdp1\",\"peerId\":\"client1\"}"
+            r#"{"type":"CallAnswer","sdp":"sdp1","peerId":"client1"}"#
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -424,10 +450,7 @@ mod tests {
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
-        assert_eq!(
-            serialized,
-            "{\"type\":\"CallReject\",\"peerId\":\"client1\"}"
-        );
+        assert_eq!(serialized, r#"{"type":"CallReject","peerId":"client1"}"#);
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         match deserialized {
@@ -445,7 +468,7 @@ mod tests {
         };
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
-        assert_eq!(serialized, "{\"type\":\"CallEnd\",\"peerId\":\"client1\"}");
+        assert_eq!(serialized, r#"{"type":"CallEnd","peerId":"client1"}"#);
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         match deserialized {
@@ -466,7 +489,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"CallIceCandidate\",\"candidate\":\"candidate1\",\"peerId\":\"client1\"}"
+            r#"{"type":"CallIceCandidate","candidate":"candidate1","peerId":"client1"}"#
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -493,7 +516,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"ClientConnected\",\"client\":{\"id\":\"client1\",\"positionId\":\"POSITION1\",\"displayName\":\"station1\",\"frequency\":\"100.000\"}}"
+            r#"{"type":"ClientConnected","client":{"id":"client1","positionId":"POSITION1","displayName":"station1","frequency":"100.000"}}"#
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -516,7 +539,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"ClientDisconnected\",\"id\":\"client1\"}"
+            r#"{"type":"ClientDisconnected","id":"client1"}"#
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -563,7 +586,7 @@ mod tests {
         let message = SignalingMessage::ListClients {};
 
         let serialized = SignalingMessage::serialize(&message).unwrap();
-        assert_eq!(serialized, "{\"type\":\"ListClients\"}");
+        assert_eq!(serialized, r#"{"type":"ListClients"}"#);
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
         assert!(matches!(deserialized, SignalingMessage::ListClients));
@@ -591,7 +614,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"ClientList\",\"clients\":[{\"id\":\"client1\",\"positionId\":\"POSITION1\",\"displayName\":\"station1\",\"frequency\":\"100.000\"},{\"id\":\"client2\",\"positionId\":\"POSITION2\",\"displayName\":\"station2\",\"frequency\":\"200.000\"}]}"
+            r#"{"type":"ClientList","clients":[{"id":"client1","positionId":"POSITION1","displayName":"station1","frequency":"100.000"},{"id":"client2","positionId":"POSITION2","displayName":"station2","frequency":"200.000"}]}"#
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -606,6 +629,51 @@ mod tests {
     }
 
     #[test]
+    fn test_serialize_deserialize_list_stations() {
+        let message = SignalingMessage::ListStations {};
+
+        let serialized = SignalingMessage::serialize(&message).unwrap();
+        assert_eq!(serialized, r#"{"type":"ListStations"}"#);
+
+        let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
+        assert!(matches!(deserialized, SignalingMessage::ListStations));
+    }
+
+    #[test]
+    fn test_serialize_deserialize_station_list() {
+        let message = SignalingMessage::StationList {
+            stations: vec![
+                StationInfo {
+                    id: StationId::from("station1"),
+                    own: true,
+                },
+                StationInfo {
+                    id: StationId::from("station2"),
+                    own: false,
+                },
+            ],
+        };
+
+        let serialized = SignalingMessage::serialize(&message).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"type":"StationList","stations":[{"id":"STATION1","own":true},{"id":"STATION2","own":false}]}"#
+        );
+
+        let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
+        match deserialized {
+            SignalingMessage::StationList { stations } => {
+                assert_eq!(stations.len(), 2);
+                assert_eq!(stations[0].id, StationId::from("station1"));
+                assert_eq!(stations[0].own, true);
+                assert_eq!(stations[1].id, StationId::from("station2"));
+                assert_eq!(stations[1].own, false);
+            }
+            _ => panic!("Expected StationList message"),
+        }
+    }
+
+    #[test]
     fn test_serialize_deserialize_error() {
         let message = SignalingMessage::Error {
             reason: ErrorReason::MalformedMessage,
@@ -615,7 +683,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"Error\",\"reason\":\"MalformedMessage\",\"peerId\":null}"
+            r#"{"type":"Error","reason":"MalformedMessage","peerId":null}"#
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();
@@ -638,7 +706,7 @@ mod tests {
         let serialized = SignalingMessage::serialize(&message).unwrap();
         assert_eq!(
             serialized,
-            "{\"type\":\"Error\",\"reason\":{\"UnexpectedMessage\":\"error1\"},\"peerId\":\"client1\"}"
+            r#"{"type":"Error","reason":{"UnexpectedMessage":"error1"},"peerId":"client1"}"#
         );
 
         let deserialized = SignalingMessage::deserialize(&serialized).unwrap();

@@ -29,6 +29,19 @@ pub async fn handle_application_message(
             }
             ControlFlow::Continue(())
         }
+        SignalingMessage::ListStations => {
+            tracing::trace!("Returning list of stations");
+            let stations = state
+                .clients
+                .list_stations(client.active_profile(), client.position_id())
+                .await;
+            if let Err(err) =
+                send_message(ws_outbound_tx, SignalingMessage::StationList { stations }).await
+            {
+                tracing::warn!(?err, "Failed to send station list");
+            }
+            ControlFlow::Continue(())
+        }
         SignalingMessage::Logout => {
             tracing::trace!("Logging out client");
             ControlFlow::Break(())
@@ -337,6 +350,32 @@ mod tests {
             message,
             ws::Message::Text(Utf8Bytes::from_static(
                 r#"{"type":"ClientList","clients":[]}"#
+            ))
+        );
+    }
+
+    #[test(tokio::test)]
+    async fn handle_application_message_list_stations() {
+        let mut setup = TestSetup::new();
+        setup.register_client(create_client_info(1)).await;
+
+        let control_flow = handle_application_message(
+            &setup.app_state,
+            &setup.session,
+            setup.websocket_tx.lock().await.deref(),
+            SignalingMessage::ListStations,
+        )
+        .await;
+        assert_eq!(control_flow, ControlFlow::Continue(()));
+
+        let message = setup
+            .take_last_websocket_message()
+            .await
+            .expect("No message received");
+        assert_eq!(
+            message,
+            ws::Message::Text(Utf8Bytes::from_static(
+                r#"{"type":"StationList","stations":[]}"#
             ))
         );
     }

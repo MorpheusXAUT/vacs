@@ -107,6 +107,8 @@ impl AsMetricLabel for SignalingMessage {
             SignalingMessage::Error { .. } => "error",
             SignalingMessage::Disconnected { .. } => "disconnected",
             SignalingMessage::StationChanges { .. } => "station_changes",
+            SignalingMessage::ListStations => "list_stations",
+            SignalingMessage::StationList { .. } => "station_list",
         }
     }
 }

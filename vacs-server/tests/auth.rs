@@ -28,6 +28,10 @@ async fn login() {
             assert_eq!(clients.len(), 0);
             Ok(())
         },
+        |stations| {
+            assert_eq!(stations.len(), 0);
+            Ok(())
+        },
     )
     .await
     .expect("Failed to log in first client");
@@ -45,6 +49,10 @@ async fn login() {
             assert_eq!(clients.len(), 1);
             assert_eq!(clients[0].id, ClientId::from("client1"));
             assert_eq!(clients[0].display_name, "client1");
+            Ok(())
+        },
+        |stations| {
+            assert_eq!(stations.len(), 0);
             Ok(())
         },
     )
@@ -69,6 +77,10 @@ async fn duplicate_login() {
             assert_eq!(clients.len(), 0);
             Ok(())
         },
+        |stations| {
+            assert_eq!(stations.len(), 0);
+            Ok(())
+        },
     )
     .await
     .expect("Failed to log in first client");
@@ -79,6 +91,7 @@ async fn duplicate_login() {
             "client1",
             "token1",
             |_, _| Ok(()),
+            |_| Ok(()),
             |_| Ok(())
         )
         .await
@@ -91,9 +104,16 @@ async fn invalid_login() {
     let test_app = TestApp::new().await;
 
     assert!(
-        TestClient::new_with_login(test_app.addr(), "client1", "", |_, _| Ok(()), |_| Ok(()))
-            .await
-            .is_err_and(|err| { err.to_string() == "Login failed: InvalidCredentials" })
+        TestClient::new_with_login(
+            test_app.addr(),
+            "client1",
+            "",
+            |_, _| Ok(()),
+            |_| Ok(()),
+            |_| Ok(())
+        )
+        .await
+        .is_err_and(|err| { err.to_string() == "Login failed: InvalidCredentials" })
     );
 }
 
@@ -133,12 +153,14 @@ async fn simultaneous_login_attempts() {
         "token1",
         |_, _| Ok(()),
         |_| Ok(()),
+        |_| Ok(()),
     );
     let attempt2 = TestClient::new_with_login(
         test_app.addr(),
         "client1",
         "token1",
         |_, _| Ok(()),
+        |_| Ok(()),
         |_| Ok(()),
     );
 
@@ -288,6 +310,10 @@ async fn login_client_list() {
                     .iter()
                     .any(|client| client.id == ClientId::from("client3"))
             );
+            Ok(())
+        },
+        |stations| {
+            assert_eq!(stations.len(), 0);
             Ok(())
         },
     )

@@ -209,7 +209,17 @@ impl ClientSession {
         if let Err(err) =
             send_message(&ws_outbound_tx, SignalingMessage::ClientList { clients }).await
         {
-            tracing::warn!(?err, "Failed to send initial client info");
+            tracing::warn!(?err, "Failed to send initial client list");
+        }
+
+        tracing::trace!("Sending initial stations list");
+        let stations = app_state
+            .list_stations(&self.active_profile, self.client_info.position_id.as_ref())
+            .await;
+        if let Err(err) =
+            send_message(&ws_outbound_tx, SignalingMessage::StationList { stations }).await
+        {
+            tracing::warn!(?err, "Failed to send initial stations list");
         }
 
         loop {
