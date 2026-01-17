@@ -14,7 +14,7 @@ use tokio_tungstenite::tungstenite;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, instrument};
 use vacs_protocol::VACS_PROTOCOL_VERSION;
-use vacs_protocol::vatsim::PositionId;
+use vacs_protocol::vatsim::{ActiveProfile, PositionId, Profile};
 use vacs_protocol::ws::{ClientInfo, SessionProfile, SignalingMessage};
 
 const BROADCAST_CHANNEL_SIZE: usize = 100;
@@ -47,7 +47,7 @@ pub enum SignalingEvent {
         /// Information about the connected client.
         client_info: ClientInfo,
         /// The profile associated with the current session.
-        profile: SessionProfile,
+        profile: ActiveProfile<Profile>,
     },
     /// Emitted for every [`SignalingMessage`] received by a connected and authenticated [`SignalingClient`].
     Message(SignalingMessage),
@@ -347,7 +347,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    async fn login(&self) -> Result<(ClientInfo, SessionProfile), SignalingError> {
+    async fn login(&self) -> Result<(ClientInfo, ActiveProfile<Profile>), SignalingError> {
         tracing::trace!("Retrieving auth token from token provider");
         let token = self.token_provider.get_token().await?;
 
@@ -364,9 +364,19 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         tracing::debug!("Awaiting authentication response from server");
         match self.recv_with_timeout(self.login_timeout).await? {
             SignalingMessage::SessionInfo { info, profile } => {
-                // TODO: Assert SessionProfile::Changed and only return ActiveProfile
-                tracing::info!(?info, ?profile, "Login successful, received session info");
-                Ok((info, profile))
+                if let SessionProfile::Changed(profile) = profile {
+                    tracing::info!(?info, ?profile, "Login successful, received session info");
+                    Ok((info, profile))
+                } else {
+                    tracing::error!(
+                        ?info,
+                        ?profile,
+                        "Login successful, but received unexpected session profile"
+                    );
+                    Err(SignalingError::ProtocolError(
+                        "Expected active profile after Login".to_string(),
+                    ))
+                }
             }
             SignalingMessage::LoginFailure { reason } => {
                 tracing::warn!(?reason, "Login failed");
@@ -381,7 +391,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
             other => {
                 tracing::error!(?other, "Received unexpected message from server");
                 Err(SignalingError::ProtocolError(
-                    "Expected own client info after Login".to_string(),
+                    "Expected own session info after Login".to_string(),
                 ))
             }
         }
