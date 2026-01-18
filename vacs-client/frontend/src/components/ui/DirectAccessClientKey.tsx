@@ -8,7 +8,7 @@ type DAKeyProps = {
     client: ClientInfo;
 };
 
-function DAKey({client}: DAKeyProps) {
+function DirectAccessClientKey({client}: DAKeyProps) {
     const blink = useCallStore(state => state.blink);
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
@@ -71,4 +71,4 @@ function DAKey({client}: DAKeyProps) {
     );
 }
 
-export default DAKey;
+export default DirectAccessClientKey;

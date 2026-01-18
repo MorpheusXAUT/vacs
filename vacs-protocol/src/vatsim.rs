@@ -253,6 +253,7 @@ pub enum ActiveProfile<T: ProfileReference> {
 #[serde(rename_all = "camelCase")]
 pub enum StationChange {
     /// A station has come online.
+    #[serde(rename_all = "camelCase")]
     Online {
         /// The ID of the station that came online.
         station_id: StationId,
@@ -260,6 +261,7 @@ pub enum StationChange {
         position_id: PositionId,
     },
     /// A station has been handed off from one position to another.
+    #[serde(rename_all = "camelCase")]
     Handoff {
         /// The ID of the station being handed off.
         station_id: StationId,
@@ -269,6 +271,7 @@ pub enum StationChange {
         to_position_id: PositionId,
     },
     /// A station has gone offline.
+    #[serde(rename_all = "camelCase")]
     Offline {
         /// The ID of the station that went offline.
         station_id: StationId,
