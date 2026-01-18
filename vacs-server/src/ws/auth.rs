@@ -95,13 +95,27 @@ async fn process_login_request(
             ?cid,
             "Websocket token verified, no active VATSIM connection required, websocket login flow completed"
         );
+
+        let position = state.clients.get_position(position_id.as_ref());
+        let active_profile = if custom_profile {
+            ActiveProfile::Custom
+        } else {
+            position
+                .and_then(|p| {
+                    p.profile_id
+                        .as_ref()
+                        .map(|p| ActiveProfile::Specific(p.clone()))
+                })
+                .unwrap_or(ActiveProfile::None)
+        };
+
         let client_info = ClientInfo {
             id: cid.clone(),
-            position_id: None,
+            position_id: position.map(|p| p.id.clone()),
             display_name: cid.to_string(),
             frequency: "".to_string(),
         };
-        return Ok((client_info, ActiveProfile::None));
+        return Ok((client_info, active_profile));
     }
 
     tracing::trace!(
