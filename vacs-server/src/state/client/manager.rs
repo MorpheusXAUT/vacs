@@ -46,6 +46,10 @@ impl ClientManager {
         profile_id.and_then(|profile_id| self.network.get_profile(profile_id))
     }
 
+    pub fn get_position(&self, position_id: Option<&PositionId>) -> Option<&Position> {
+        position_id.and_then(|position_id| self.network.get_position(position_id))
+    }
+
     pub fn network(&self) -> &Network {
         &self.network
     }

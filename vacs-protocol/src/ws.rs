@@ -85,6 +85,7 @@ pub struct ClientInfo {
 
 /// Represents the state of the client's profile in a session update.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type", content = "activeProfile")]
 pub enum SessionProfile {
     /// The profile has not changed during this update.
     ///

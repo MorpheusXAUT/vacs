@@ -1,10 +1,15 @@
 use crate::coverage::{CoverageError, ReferenceValidator, ValidationError, Validator};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 use vacs_protocol::vatsim::{
-    DirectAccessKey, DirectAccessPage, GeoPageButton, Profile as ProtocolProfile, ProfileId,
-    ProfileType, StationId,
+    DirectAccessKey, DirectAccessPage, GeoNode, GeoPageButton, GeoPageContainer, GeoPageDivider,
+    Profile as ProtocolProfile, ProfileId, ProfileType, StationId,
 };
+
+static GEO_PAGE_CONTAINER_SIZE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\d+(%|rem)$").unwrap());
 
 #[derive(Clone)]
 pub struct Profile {
@@ -23,30 +28,65 @@ pub(super) struct ProfileRaw {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub(super) enum ProfileTypeRaw {
-    Geo {
-        buttons: Vec<GeoPageButtonRaw>,
-    },
+    Geo(GeoPageContainerRaw),
     Tabbed {
         tabs: HashMap<String, DirectAccessPageRaw>,
     },
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub(super) struct GeoPageContainerRaw {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding_left: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding_right: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding_top: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding_bottom: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gap: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub justify_content: Option<vacs_protocol::vatsim::JustifyContent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub align_items: Option<vacs_protocol::vatsim::AlignItems>,
+    pub direction: vacs_protocol::vatsim::FlexDirection,
+    pub children: Vec<GeoNodeRaw>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub(super) enum GeoNodeRaw {
+    Container(GeoPageContainerRaw),
+    Button(GeoPageButtonRaw),
+    Divider(GeoPageDividerRaw),
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct GeoPageButtonRaw {
     pub label: Vec<String>,
-    pub x: u8,
-    pub y: u8,
-    pub size: u8,
-    pub page: DirectAccessPageRaw,
+    pub size: f64,
+    pub page: Option<DirectAccessPageRaw>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(super) struct GeoPageDividerRaw {
+    pub orientation: vacs_protocol::vatsim::GeoPageDividerOrientation,
+    pub thickness: f64,
+    pub color: String,
+    pub oversize: Option<f64>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct DirectAccessPageRaw {
     pub keys: Vec<DirectAccessKeyRaw>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rows: Option<u8>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub columns: Option<u8>,
+    pub rows: u8,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -93,12 +133,9 @@ impl FromRaw<ProfileRaw> for Profile {
         profile_raw.validate()?;
 
         let profile_type = match profile_raw.profile_type {
-            ProfileTypeRaw::Geo { buttons } => ProfileType::Geo(
-                buttons
-                    .into_iter()
-                    .map(GeoPageButton::from_raw)
-                    .collect::<Result<_, _>>()?,
-            ),
+            ProfileTypeRaw::Geo(container) => {
+                ProfileType::Geo(GeoPageContainer::from_raw(container)?)
+            }
             ProfileTypeRaw::Tabbed { tabs } => ProfileType::Tabbed(
                 tabs.into_iter()
                     .map(|(k, v)| Ok((k, DirectAccessPage::from_raw(v)?)))
@@ -135,29 +172,21 @@ impl ReferenceValidator<StationId> for Profile {
 impl ReferenceValidator<StationId> for ProfileType {
     fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
         match self {
-            ProfileType::Geo(buttons) => {
-                for button in buttons {
-                    button.validate_references(stations)?;
-                }
-            }
+            ProfileType::Geo(container) => container.validate_references(stations),
             ProfileType::Tabbed(tabs) => {
                 for tab in tabs.values() {
                     tab.validate_references(stations)?;
                 }
+                Ok(())
             }
         }
-        Ok(())
     }
 }
 
 impl StationIdCollector for ProfileType {
     fn collect_station_ids(&self, ids: &mut HashSet<StationId>) {
         match self {
-            ProfileType::Geo(buttons) => {
-                for button in buttons {
-                    button.page.collect_station_ids(ids);
-                }
-            }
+            ProfileType::Geo(container) => container.collect_station_ids(ids),
             ProfileType::Tabbed(tabs) => {
                 for page in tabs.values() {
                     page.collect_station_ids(ids);
@@ -167,9 +196,57 @@ impl StationIdCollector for ProfileType {
     }
 }
 
+impl ReferenceValidator<StationId> for GeoPageContainer {
+    fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
+        for child in &self.children {
+            child.validate_references(stations)?;
+        }
+        Ok(())
+    }
+}
+
+impl StationIdCollector for GeoPageContainer {
+    fn collect_station_ids(&self, ids: &mut HashSet<StationId>) {
+        for child in &self.children {
+            child.collect_station_ids(ids);
+        }
+    }
+}
+
+impl ReferenceValidator<StationId> for GeoNode {
+    fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
+        match self {
+            GeoNode::Container(c) => c.validate_references(stations),
+            GeoNode::Button(b) => b.validate_references(stations),
+            GeoNode::Divider(_) => Ok(()),
+        }
+    }
+}
+
+impl StationIdCollector for GeoNode {
+    fn collect_station_ids(&self, ids: &mut HashSet<StationId>) {
+        match self {
+            GeoNode::Container(c) => c.collect_station_ids(ids),
+            GeoNode::Button(b) => b.collect_station_ids(ids),
+            GeoNode::Divider(_) => {}
+        }
+    }
+}
+
 impl ReferenceValidator<StationId> for GeoPageButton {
     fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
-        self.page.validate_references(stations)
+        if let Some(page) = &self.page {
+            page.validate_references(stations)?;
+        }
+        Ok(())
+    }
+}
+
+impl StationIdCollector for GeoPageButton {
+    fn collect_station_ids(&self, ids: &mut HashSet<StationId>) {
+        if let Some(page) = &self.page {
+            page.collect_station_ids(ids);
+        }
     }
 }
 
@@ -207,15 +284,59 @@ impl ReferenceValidator<StationId> for DirectAccessKey {
     }
 }
 
+impl FromRaw<GeoPageContainerRaw> for GeoPageContainer {
+    fn from_raw(raw: GeoPageContainerRaw) -> Result<Self, CoverageError> {
+        raw.validate()?;
+        Ok(Self {
+            height: raw.height,
+            width: raw.width,
+            padding: raw.padding,
+            padding_left: raw.padding_left,
+            padding_right: raw.padding_right,
+            padding_top: raw.padding_top,
+            padding_bottom: raw.padding_bottom,
+            gap: raw.gap,
+            justify_content: raw.justify_content,
+            align_items: raw.align_items,
+            direction: raw.direction,
+            children: raw
+                .children
+                .into_iter()
+                .map(GeoNode::from_raw)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl FromRaw<GeoNodeRaw> for GeoNode {
+    fn from_raw(raw: GeoNodeRaw) -> Result<Self, CoverageError> {
+        match raw {
+            GeoNodeRaw::Container(c) => Ok(GeoNode::Container(GeoPageContainer::from_raw(c)?)),
+            GeoNodeRaw::Button(b) => Ok(GeoNode::Button(GeoPageButton::from_raw(b)?)),
+            GeoNodeRaw::Divider(d) => Ok(GeoNode::Divider(GeoPageDivider::from_raw(d)?)),
+        }
+    }
+}
+
 impl FromRaw<GeoPageButtonRaw> for GeoPageButton {
     fn from_raw(raw: GeoPageButtonRaw) -> Result<Self, CoverageError> {
         raw.validate()?;
         Ok(Self {
             label: raw.label,
-            x: raw.x,
-            y: raw.y,
             size: raw.size,
-            page: DirectAccessPage::from_raw(raw.page)?,
+            page: raw.page.map(DirectAccessPage::from_raw).transpose()?,
+        })
+    }
+}
+
+impl FromRaw<GeoPageDividerRaw> for GeoPageDivider {
+    fn from_raw(raw: GeoPageDividerRaw) -> Result<Self, CoverageError> {
+        raw.validate()?;
+        Ok(Self {
+            orientation: raw.orientation,
+            thickness: raw.thickness,
+            color: raw.color,
+            oversize: raw.oversize,
         })
     }
 }
@@ -230,7 +351,6 @@ impl FromRaw<DirectAccessPageRaw> for DirectAccessPage {
                 .map(DirectAccessKey::try_from)
                 .collect::<Result<_, _>>()?,
             rows: raw.rows,
-            columns: raw.columns,
         })
     }
 }
@@ -262,17 +382,7 @@ impl Validator for ProfileRaw {
 impl Validator for ProfileTypeRaw {
     fn validate(&self) -> Result<(), CoverageError> {
         match self {
-            ProfileTypeRaw::Geo { buttons } => {
-                if buttons.is_empty() {
-                    return Err(ValidationError::Empty {
-                        field: "buttons".to_string(),
-                    }
-                    .into());
-                }
-                for button in buttons {
-                    button.validate()?;
-                }
-            }
+            ProfileTypeRaw::Geo(container) => container.validate(),
             ProfileTypeRaw::Tabbed { tabs } => {
                 if tabs.is_empty() {
                     return Err(ValidationError::Empty {
@@ -283,49 +393,120 @@ impl Validator for ProfileTypeRaw {
                 for tab in tabs.values() {
                     tab.validate()?;
                 }
+                Ok(())
             }
+        }
+    }
+}
+
+impl Validator for GeoPageContainerRaw {
+    fn validate(&self) -> Result<(), CoverageError> {
+        if let Some(height) = &self.height
+            && !GEO_PAGE_CONTAINER_SIZE_REGEX.is_match(height)
+        {
+            return Err(ValidationError::InvalidFormat {
+                field: "height".to_string(),
+                value: height.clone(),
+                reason: "must either be provided as percentage or rem".to_string(),
+            }
+            .into());
+        }
+        if let Some(width) = &self.width
+            && !GEO_PAGE_CONTAINER_SIZE_REGEX.is_match(width)
+        {
+            return Err(ValidationError::InvalidFormat {
+                field: "width".to_string(),
+                value: width.clone(),
+                reason: "must either be provided as percentage or rem".to_string(),
+            }
+            .into());
+        }
+        if let Some(padding) = self.padding
+            && padding < 0.0f64
+        {
+            return Err(ValidationError::OutOfRange {
+                field: "padding".to_string(),
+                value: padding.to_string(),
+                min: 0.0f64.to_string(),
+                max: None,
+            }
+            .into());
+        }
+        if let Some(padding_left) = self.padding_left
+            && padding_left < 0.0f64
+        {
+            return Err(ValidationError::OutOfRange {
+                field: "padding_left".to_string(),
+                value: padding_left.to_string(),
+                min: 0.0f64.to_string(),
+                max: None,
+            }
+            .into());
+        }
+        if let Some(padding_right) = self.padding_right
+            && padding_right < 0.0f64
+        {
+            return Err(ValidationError::OutOfRange {
+                field: "padding_right".to_string(),
+                value: padding_right.to_string(),
+                min: 0.0f64.to_string(),
+                max: None,
+            }
+            .into());
+        }
+        if let Some(padding_top) = self.padding_top
+            && padding_top < 0.0f64
+        {
+            return Err(ValidationError::OutOfRange {
+                field: "padding_top".to_string(),
+                value: padding_top.to_string(),
+                min: 0.0f64.to_string(),
+                max: None,
+            }
+            .into());
+        }
+        if let Some(padding_bottom) = self.padding_bottom
+            && padding_bottom < 0.0f64
+        {
+            return Err(ValidationError::OutOfRange {
+                field: "padding_bottom".to_string(),
+                value: padding_bottom.to_string(),
+                min: 0.0f64.to_string(),
+                max: None,
+            }
+            .into());
+        }
+        if let Some(gap) = self.gap
+            && gap < 0.0f64
+        {
+            return Err(ValidationError::OutOfRange {
+                field: "gap".to_string(),
+                value: gap.to_string(),
+                min: 0.0f64.to_string(),
+                max: None,
+            }
+            .into());
+        }
+        if self.children.is_empty() {
+            return Err(ValidationError::Empty {
+                field: "children".to_string(),
+            }
+            .into());
+        }
+        for child in &self.children {
+            child.validate()?;
         }
         Ok(())
     }
 }
 
-impl std::fmt::Debug for ProfileRaw {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ProfileRaw")
-            .field("id", &self.id)
-            .field("profile_type", &self.profile_type)
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for ProfileTypeRaw {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Validator for GeoNodeRaw {
+    fn validate(&self) -> Result<(), CoverageError> {
         match self {
-            Self::Geo { buttons } => f.debug_tuple("Geo").field(&buttons.len()).finish(),
-            Self::Tabbed { tabs } => f.debug_tuple("Tabbed").field(&tabs.len()).finish(),
+            GeoNodeRaw::Container(c) => c.validate(),
+            GeoNodeRaw::Button(b) => b.validate(),
+            GeoNodeRaw::Divider(d) => d.validate(),
         }
-    }
-}
-
-impl std::fmt::Debug for DirectAccessPageRaw {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DirectAccessPageRaw")
-            .field("keys", &self.keys.len())
-            .field("rows", &self.rows)
-            .field("columns", &self.columns)
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for GeoPageButtonRaw {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GeoPageButtonRaw")
-            .field("label", &self.label.len())
-            .field("x", &self.x)
-            .field("y", &self.y)
-            .field("size", &self.size)
-            .field("page", &self.page)
-            .finish()
     }
 }
 
@@ -345,44 +526,52 @@ impl Validator for GeoPageButtonRaw {
             }
             .into());
         }
-        if self.x > 100 {
-            return Err(ValidationError::OutOfRange {
-                field: "x".to_string(),
-                value: self.x.to_string(),
-                min: "0".to_string(),
-                max: "100".to_string(),
-            }
-            .into());
-        }
-        if self.y > 100 {
-            return Err(ValidationError::OutOfRange {
-                field: "y".to_string(),
-                value: self.y.to_string(),
-                min: "0".to_string(),
-                max: "100".to_string(),
-            }
-            .into());
-        }
-        if self.size == 0 || self.size > 100 {
+        if self.size < 0.0f64 {
             return Err(ValidationError::OutOfRange {
                 field: "size".to_string(),
                 value: self.size.to_string(),
-                min: "1".to_string(),
-                max: "100".to_string(),
+                min: 0.0f64.to_string(),
+                max: None,
             }
             .into());
         }
-        self.page.validate()?;
+        if let Some(page) = &self.page {
+            page.validate()?;
+        }
+        Ok(())
+    }
+}
+
+impl Validator for GeoPageDividerRaw {
+    fn validate(&self) -> Result<(), CoverageError> {
+        if self.thickness <= 0.0f64 {
+            return Err(ValidationError::OutOfRange {
+                field: "thickness".to_string(),
+                value: self.thickness.to_string(),
+                min: 0.0f64.to_string(),
+                max: None,
+            }
+            .into());
+        }
+        if self.color.is_empty() {
+            return Err(ValidationError::Empty {
+                field: "color".to_string(),
+            }
+            .into());
+        }
         Ok(())
     }
 }
 
 impl Validator for DirectAccessPageRaw {
     fn validate(&self) -> Result<(), CoverageError> {
-        if self.columns.is_some() && self.rows.is_some() {
-            return Err(ValidationError::Custom(
-                "cannot specify both `rows` and `columns`".to_string(),
-            )
+        if self.rows == 0 {
+            return Err(ValidationError::OutOfRange {
+                field: "rows".to_string(),
+                value: self.rows.to_string(),
+                min: 1.to_string(),
+                max: None,
+            }
             .into());
         }
         for key in &self.keys {
@@ -392,23 +581,8 @@ impl Validator for DirectAccessPageRaw {
     }
 }
 
-impl std::fmt::Debug for DirectAccessKeyRaw {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DirectAccessKeyRaw")
-            .field("label", &self.label.len())
-            .field("station_id", &self.station_id)
-            .finish()
-    }
-}
-
 impl Validator for DirectAccessKeyRaw {
     fn validate(&self) -> Result<(), CoverageError> {
-        if self.label.is_empty() {
-            return Err(ValidationError::Empty {
-                field: "label".to_string(),
-            }
-            .into());
-        }
         if self.label.len() > 3 {
             return Err(ValidationError::InvalidValue {
                 field: "label".to_string(),
@@ -418,6 +592,80 @@ impl Validator for DirectAccessKeyRaw {
             .into());
         }
         Ok(())
+    }
+}
+
+impl std::fmt::Debug for ProfileRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProfileRaw")
+            .field("id", &self.id)
+            .field("profile_type", &self.profile_type)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for ProfileTypeRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Geo(container) => f.debug_tuple("Geo").field(container).finish(),
+            Self::Tabbed { tabs } => f.debug_tuple("Tabbed").field(&tabs.len()).finish(),
+        }
+    }
+}
+
+impl std::fmt::Debug for GeoPageContainerRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeoPageContainerRaw")
+            .field("direction", &self.direction)
+            .field("children", &self.children.len())
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for GeoNodeRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GeoNodeRaw::Container(c) => c.fmt(f),
+            GeoNodeRaw::Button(b) => b.fmt(f),
+            GeoNodeRaw::Divider(d) => d.fmt(f),
+        }
+    }
+}
+
+impl std::fmt::Debug for DirectAccessPageRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DirectAccessPageRaw")
+            .field("keys", &self.keys.len())
+            .field("rows", &self.rows)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for GeoPageButtonRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeoPageButtonRaw")
+            .field("label", &self.label.len())
+            .field("size", &self.size)
+            .field("page", &self.page)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for GeoPageDividerRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeoPageDividerRaw")
+            .field("orientation", &self.orientation)
+            .field("thickness", &self.thickness)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for DirectAccessKeyRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DirectAccessKeyRaw")
+            .field("label", &self.label.len())
+            .field("station_id", &self.station_id)
+            .finish()
     }
 }
 
@@ -431,37 +679,30 @@ mod tests {
     fn profile_raw_validation() {
         let valid_geo = ProfileRaw {
             id: ProfileId::from("geo"),
-            profile_type: ProfileTypeRaw::Geo {
-                buttons: vec![GeoPageButtonRaw {
+            profile_type: ProfileTypeRaw::Geo(GeoPageContainerRaw {
+                height: None,
+                width: None,
+                padding: None,
+                padding_left: None,
+                padding_right: None,
+                padding_top: None,
+                padding_bottom: None,
+                gap: None,
+                justify_content: None,
+                align_items: None,
+                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                children: vec![GeoNodeRaw::Button(GeoPageButtonRaw {
                     label: vec!["L".to_string()],
-                    x: 0,
-                    y: 0,
-                    size: 10,
-                    page: DirectAccessPageRaw {
-                        keys: vec![],
-                        rows: None,
-                        columns: None,
-                    },
-                }],
-            },
+                    size: 1.0,
+                    page: None,
+                })],
+            }),
         };
         assert!(valid_geo.validate().is_ok());
 
         let empty_id = ProfileRaw {
             id: ProfileId::from(""),
-            profile_type: ProfileTypeRaw::Geo {
-                buttons: vec![GeoPageButtonRaw {
-                    label: vec!["L".to_string()],
-                    x: 0,
-                    y: 0,
-                    size: 10,
-                    page: DirectAccessPageRaw {
-                        keys: vec![],
-                        rows: None,
-                        columns: None,
-                    },
-                }],
-            },
+            profile_type: valid_geo.profile_type.clone(),
         };
         assert_matches!(
             empty_id.validate(),
@@ -471,25 +712,23 @@ mod tests {
 
     #[test]
     fn profile_type_geo_validation() {
-        let valid = ProfileTypeRaw::Geo {
-            buttons: vec![GeoPageButtonRaw {
-                label: vec!["L".to_string()],
-                x: 0,
-                y: 0,
-                size: 10,
-                page: DirectAccessPageRaw {
-                    keys: vec![],
-                    rows: None,
-                    columns: None,
-                },
-            }],
-        };
-        assert!(valid.validate().is_ok());
-
-        let empty = ProfileTypeRaw::Geo { buttons: vec![] };
+        let empty = ProfileTypeRaw::Geo(GeoPageContainerRaw {
+            height: None,
+            width: None,
+            padding: None,
+            padding_left: None,
+            padding_right: None,
+            padding_top: None,
+            padding_bottom: None,
+            gap: None,
+            justify_content: None,
+            align_items: None,
+            direction: vacs_protocol::vatsim::FlexDirection::Row,
+            children: vec![],
+        });
         assert_matches!(
             empty.validate(),
-            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "buttons"
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "children"
         );
     }
 
@@ -500,8 +739,7 @@ mod tests {
                 "tab1".to_string(),
                 DirectAccessPageRaw {
                     keys: vec![],
-                    rows: None,
-                    columns: None,
+                    rows: 1,
                 },
             )]),
         };
@@ -520,27 +758,21 @@ mod tests {
     fn geo_page_button_validation() {
         let valid = GeoPageButtonRaw {
             label: vec!["L".to_string()],
-            x: 0,
-            y: 0,
-            size: 10,
-            page: DirectAccessPageRaw {
+            size: 10.0f64,
+            page: Some(DirectAccessPageRaw {
                 keys: vec![],
-                rows: None,
-                columns: None,
-            },
+                rows: 1,
+            }),
         };
         assert!(valid.validate().is_ok());
 
         let empty_label = GeoPageButtonRaw {
             label: vec![],
-            x: 0,
-            y: 0,
-            size: 10,
-            page: DirectAccessPageRaw {
+            size: 10.0f64,
+            page: Some(DirectAccessPageRaw {
                 keys: vec![],
-                rows: None,
-                columns: None,
-            },
+                rows: 1,
+            }),
         };
         assert_matches!(
             empty_label.validate(),
@@ -554,148 +786,46 @@ mod tests {
                 "3".to_string(),
                 "4".to_string(),
             ],
-            x: 0,
-            y: 0,
-            size: 10,
-            page: DirectAccessPageRaw {
+            size: 10.0f64,
+            page: Some(DirectAccessPageRaw {
                 keys: vec![],
-                rows: None,
-                columns: None,
-            },
+                rows: 1,
+            }),
         };
         assert_matches!(
             long_label.validate(),
             Err(CoverageError::Validation(ValidationError::InvalidValue { field, .. })) if field == "label"
         );
 
-        let invalid_x = GeoPageButtonRaw {
+        let negative_size = GeoPageButtonRaw {
             label: vec!["L".to_string()],
-            x: 101,
-            y: 0,
-            size: 10,
-            page: DirectAccessPageRaw {
+            size: -10.0f64,
+            page: Some(DirectAccessPageRaw {
                 keys: vec![],
-                rows: None,
-                columns: None,
-            },
+                rows: 1,
+            }),
         };
         assert_matches!(
-            invalid_x.validate(),
-            Err(CoverageError::Validation(ValidationError::OutOfRange { field, .. })) if field == "x"
-        );
-
-        let invalid_y = GeoPageButtonRaw {
-            label: vec!["L".to_string()],
-            x: 0,
-            y: 101,
-            size: 10,
-            page: DirectAccessPageRaw {
-                keys: vec![],
-                rows: None,
-                columns: None,
-            },
-        };
-        assert_matches!(
-            invalid_y.validate(),
-            Err(CoverageError::Validation(ValidationError::OutOfRange { field, .. })) if field == "y"
-        );
-
-        let zero_size = GeoPageButtonRaw {
-            label: vec!["L".to_string()],
-            x: 0,
-            y: 0,
-            size: 0,
-            page: DirectAccessPageRaw {
-                keys: vec![],
-                rows: None,
-                columns: None,
-            },
-        };
-        assert_matches!(
-            zero_size.validate(),
-            Err(CoverageError::Validation(ValidationError::OutOfRange { field, .. })) if field == "size"
-        );
-
-        let large_size = GeoPageButtonRaw {
-            label: vec!["L".to_string()],
-            x: 0,
-            y: 0,
-            size: 101,
-            page: DirectAccessPageRaw {
-                keys: vec![],
-                rows: None,
-                columns: None,
-            },
-        };
-        assert_matches!(
-            large_size.validate(),
+            negative_size.validate(),
             Err(CoverageError::Validation(ValidationError::OutOfRange { field, .. })) if field == "size"
         );
     }
 
     #[test]
     fn direct_access_page_validation() {
-        let valid_none = DirectAccessPageRaw {
+        let valid = DirectAccessPageRaw {
             keys: vec![],
-            rows: None,
-            columns: None,
-        };
-        assert!(valid_none.validate().is_ok());
-
-        let valid_rows = DirectAccessPageRaw {
-            keys: vec![],
-            rows: Some(1),
-            columns: None,
-        };
-        assert!(valid_rows.validate().is_ok());
-
-        let valid_columns = DirectAccessPageRaw {
-            keys: vec![],
-            rows: None,
-            columns: Some(1),
-        };
-        assert!(valid_columns.validate().is_ok());
-
-        let invalid = DirectAccessPageRaw {
-            keys: vec![],
-            rows: Some(1),
-            columns: Some(1),
-        };
-        assert_matches!(
-            invalid.validate(),
-            Err(CoverageError::Validation(ValidationError::Custom(msg))) if msg == "cannot specify both `rows` and `columns`"
-        );
-    }
-
-    #[test]
-    fn direct_access_key_validation() {
-        let valid = DirectAccessKeyRaw {
-            label: vec!["L".to_string()],
-            station_id: None,
+            rows: 1,
         };
         assert!(valid.validate().is_ok());
 
-        let empty_label = DirectAccessKeyRaw {
-            label: vec![],
-            station_id: None,
+        let invalid_rows = DirectAccessPageRaw {
+            keys: vec![],
+            rows: 0,
         };
         assert_matches!(
-            empty_label.validate(),
-            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "label"
-        );
-
-        let long_label = DirectAccessKeyRaw {
-            label: vec![
-                "1".to_string(),
-                "2".to_string(),
-                "3".to_string(),
-                "4".to_string(),
-            ],
-            station_id: None,
-        };
-        assert_matches!(
-            long_label.validate(),
-            Err(CoverageError::Validation(ValidationError::InvalidValue { field, .. })) if field == "label"
+            invalid_rows.validate(),
+            Err(CoverageError::Validation(ValidationError::OutOfRange{field, ..})) if field == "rows"
         );
     }
 
@@ -703,28 +833,34 @@ mod tests {
     fn profile_relevant_stations() {
         let raw = ProfileRaw {
             id: ProfileId::from("test"),
-            profile_type: ProfileTypeRaw::Geo {
-                buttons: vec![
-                    GeoPageButtonRaw {
+            profile_type: ProfileTypeRaw::Geo(GeoPageContainerRaw {
+                height: None,
+                width: None,
+                padding: None,
+                padding_left: None,
+                padding_right: None,
+                padding_top: None,
+                padding_bottom: None,
+                gap: None,
+                justify_content: None,
+                align_items: None,
+                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                children: vec![
+                    GeoNodeRaw::Button(GeoPageButtonRaw {
                         label: vec!["B1".to_string()],
-                        x: 0,
-                        y: 0,
-                        size: 10,
-                        page: DirectAccessPageRaw {
+                        size: 10.0,
+                        page: Some(DirectAccessPageRaw {
                             keys: vec![DirectAccessKeyRaw {
                                 label: vec!["K1".to_string()],
                                 station_id: Some(StationId::from("S1")),
                             }],
-                            rows: None,
-                            columns: None,
-                        },
-                    },
-                    GeoPageButtonRaw {
+                            rows: 1,
+                        }),
+                    }),
+                    GeoNodeRaw::Button(GeoPageButtonRaw {
                         label: vec!["B2".to_string()],
-                        x: 10,
-                        y: 10,
-                        size: 10,
-                        page: DirectAccessPageRaw {
+                        size: 10.0,
+                        page: Some(DirectAccessPageRaw {
                             keys: vec![
                                 DirectAccessKeyRaw {
                                     label: vec!["K2".to_string()],
@@ -739,12 +875,11 @@ mod tests {
                                     station_id: None,
                                 },
                             ],
-                            rows: None,
-                            columns: None,
-                        },
-                    },
+                            rows: 1,
+                        }),
+                    }),
                 ],
-            },
+            }),
         };
 
         let profile = Profile::from_raw(raw).expect("Should be valid");
@@ -760,44 +895,60 @@ mod tests {
 
         let raw = ProfileRaw {
             id: ProfileId::from("test"),
-            profile_type: ProfileTypeRaw::Geo {
-                buttons: vec![GeoPageButtonRaw {
+            profile_type: ProfileTypeRaw::Geo(GeoPageContainerRaw {
+                height: None,
+                width: None,
+                padding: None,
+                padding_left: None,
+                padding_right: None,
+                padding_top: None,
+                padding_bottom: None,
+                gap: None,
+                justify_content: None,
+                align_items: None,
+                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                children: vec![GeoNodeRaw::Button(GeoPageButtonRaw {
                     label: vec!["L".to_string()],
-                    x: 0,
-                    y: 0,
-                    size: 10,
-                    page: DirectAccessPageRaw {
+                    size: 10.0,
+                    page: Some(DirectAccessPageRaw {
                         keys: vec![DirectAccessKeyRaw {
                             label: vec!["K1".to_string()],
                             station_id: Some(station_id.clone()),
                         }],
-                        rows: None,
-                        columns: None,
-                    },
-                }],
-            },
+                        rows: 1,
+                    }),
+                })],
+            }),
         };
         let profile = Profile::from_raw(raw).expect("Should be valid");
         assert!(profile.validate_references(&valid_stations).is_ok());
 
         let raw_missing = ProfileRaw {
             id: ProfileId::from("test3"),
-            profile_type: ProfileTypeRaw::Geo {
-                buttons: vec![GeoPageButtonRaw {
+            profile_type: ProfileTypeRaw::Geo(GeoPageContainerRaw {
+                height: None,
+                width: None,
+                padding: None,
+                padding_left: None,
+                padding_right: None,
+                padding_top: None,
+                padding_bottom: None,
+                gap: None,
+                justify_content: None,
+                align_items: None,
+                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                children: vec![GeoNodeRaw::Button(GeoPageButtonRaw {
                     label: vec!["L".to_string()],
-                    x: 0,
-                    y: 0,
-                    size: 10,
-                    page: DirectAccessPageRaw {
+                    size: 10.0,
+                    page: Some(DirectAccessPageRaw {
                         keys: vec![DirectAccessKeyRaw {
                             label: vec!["K3".to_string()],
                             station_id: Some(StationId::from("MISSING")),
                         }],
-                        rows: None,
-                        columns: None,
-                    },
-                }],
-            },
+                        rows: 1,
+                    }),
+                })],
+            }),
         };
         let profile_missing = Profile::from_raw(raw_missing).expect("Should be valid");
         assert_matches!(
@@ -808,22 +959,30 @@ mod tests {
 
         let raw_none = ProfileRaw {
             id: ProfileId::from("test4"),
-            profile_type: ProfileTypeRaw::Geo {
-                buttons: vec![GeoPageButtonRaw {
+            profile_type: ProfileTypeRaw::Geo(GeoPageContainerRaw {
+                height: None,
+                width: None,
+                padding: None,
+                padding_left: None,
+                padding_right: None,
+                padding_top: None,
+                padding_bottom: None,
+                gap: None,
+                justify_content: None,
+                align_items: None,
+                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                children: vec![GeoNodeRaw::Button(GeoPageButtonRaw {
                     label: vec!["L".to_string()],
-                    x: 0,
-                    y: 0,
-                    size: 10,
-                    page: DirectAccessPageRaw {
+                    size: 10.0,
+                    page: Some(DirectAccessPageRaw {
                         keys: vec![DirectAccessKeyRaw {
                             label: vec!["K4".to_string()],
                             station_id: None,
                         }],
-                        rows: None,
-                        columns: None,
-                    },
-                }],
-            },
+                        rows: 1,
+                    }),
+                })],
+            }),
         };
         let profile_none = Profile::from_raw(raw_none).expect("Should be valid");
         assert!(profile_none.validate_references(&valid_stations).is_ok());

@@ -270,6 +270,10 @@ impl Network {
         self.profiles.get(profile_id)
     }
 
+    pub fn get_position(&self, position_id: &PositionId) -> Option<&Position> {
+        self.positions.get(position_id)
+    }
+
     #[tracing::instrument(level = "trace", skip_all, fields(callsign = tracing::field::Empty, frequency = tracing::field::Empty, facility_type = tracing::field::Empty))]
     pub fn find_positions(
         &self,
@@ -940,12 +944,12 @@ mod tests {
         let profile = r#"
             id = "P"
             type = "Geo"
-            [[buttons]]
+            direction = "row"
+            [[children]]
             label = ["B"]
-            x = 0
-            y = 0
-            size = 10
+            size = 10.0
             page.keys = [{ label = ["K"], station_id = "S1" }]
+            page.rows = 1
         "#;
         std::fs::write(fir_path.join("profile.toml"), profile).unwrap();
 
@@ -1527,12 +1531,13 @@ mod tests {
         let profile = r#"
             id = "P"
             type = "Geo"
-            [[buttons]]
+            direction = "row"
+            [[children]]
             label = ["A"]
-            x = 10
-            y = 10
-            size = 10
-            [[buttons.page.keys]]
+            size = 10.0
+            [children.page]
+            rows = 1
+            [[children.page.keys]]
             label = ["K"]
             station_id = "S"
         "#;
@@ -1546,12 +1551,13 @@ mod tests {
         let profile_invalid = r#"
             id = "InvalidReference"
             type = "Geo"
-            [[buttons]]
+            direction = "row"
+            [[children]]
             label = ["A"]
-            x = 10
-            y = 10
-            size = 10
-            [[buttons.page.keys]]
+            size = 10.0
+            [children.page]
+            rows = 1
+            [[children.page.keys]]
             label = ["K"]
             station_id = "NON_EXISTENT"
         "#;

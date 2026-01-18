@@ -1,5 +1,15 @@
 import {ProfileId, StationId} from "./generic.ts";
 
+export type SessionProfile = {
+    type: "changed" | "unchanged";
+    activeProfile?: ActiveProfile;
+};
+
+export type ActiveProfile = {
+    type: "specific" | "custom" | "none";
+    profile?: Profile;
+};
+
 export type Profile = {
     id: ProfileId;
     geo?: GeoPageContainer;
@@ -7,15 +17,15 @@ export type Profile = {
 };
 
 export type GeoPageContainer = {
-    height?: string; // "<number>['%' | 'em']"
-    width?: string; // "<number>['%' | 'em']"
+    height?: string; // "<number>['%' | 'rem']"
+    width?: string; // "<number>['%' | 'rem']"
     padding?: number; // in rem
     paddingLeft?: number; // in rem
     paddingRight?: number; // in rem
     paddingTop?: number; // in rem
     paddingBottom?: number; // in rem
     gap?: number; // in rem
-    justifyContent?: "start" | "end" | "space-between" | "space-around" | "space-evenly" | "center";
+    justifyContent?: "start" | "end" | "center";
     alignItems?: "start" | "end" | "between" | "around" | "evenly" | "center";
     direction: "row" | "col";
     children: (GeoPageContainer | GeoPageButton | GeoPageDivider)[];
