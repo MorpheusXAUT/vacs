@@ -1,5 +1,5 @@
 import {create} from "zustand/react";
-import {ClientInfoWithAlias} from "../types/client-info.ts";
+import {ClientInfo} from "../types/client-info.ts";
 import {useSignalingStore} from "./signaling-store.ts";
 import {invokeSafe} from "../error.ts";
 import {useErrorOverlayStore} from "./error-overlay-store.ts";
@@ -9,7 +9,7 @@ type ConnectionState = "connecting" | "connected" | "disconnected";
 
 type CallDisplay = {
     type: "outgoing" | "accepted" | "rejected" | "error";
-    peer: ClientInfoWithAlias;
+    peer: ClientInfo;
     errorReason?: string;
     connectionState?: ConnectionState;
 };
@@ -18,12 +18,12 @@ type CallState = {
     blink: boolean;
     blinkTimeoutId: number | undefined;
     callDisplay?: CallDisplay;
-    incomingCalls: ClientInfoWithAlias[];
+    incomingCalls: ClientInfo[];
     actions: {
-        setOutgoingCall: (peer: ClientInfoWithAlias) => void;
-        acceptCall: (peer: ClientInfoWithAlias) => void;
+        setOutgoingCall: (peer: ClientInfo) => void;
+        acceptCall: (peer: ClientInfo) => void;
         endCall: () => void;
-        addIncomingCall: (peer: ClientInfoWithAlias) => void;
+        addIncomingCall: (peer: ClientInfo) => void;
         removePeer: (peerId: string, callEnd?: boolean) => void;
         rejectPeer: (peerId: string) => void;
         dismissRejectedPeer: () => void;
@@ -198,7 +198,7 @@ type StateSetter = {
     (state: CallState | ((state: CallState) => CallState), replace: true): void;
 };
 
-export const startCall = async (peerOrPeerId: ClientInfoWithAlias | string) => {
+export const startCall = async (peerOrPeerId: ClientInfo | string) => {
     const {setOutgoingCall} = useCallStore.getState().actions;
     const openErrorOverlay = useErrorOverlayStore.getState().open;
     const {getClientInfo} = useSignalingStore.getState();
