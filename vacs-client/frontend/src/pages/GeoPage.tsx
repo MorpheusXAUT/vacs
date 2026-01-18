@@ -61,6 +61,18 @@ function GeoPageContainer({
         style.paddingBottom = `${container.paddingBottom}rem`;
     }
 
+    if (container.alignItems !== undefined) {
+        let alignItems: string = container.alignItems;
+
+        if (container.alignItems === "start") {
+            alignItems = "flex-start";
+        } else if (container.alignItems === "end") {
+            alignItems = "flex-end";
+        }
+
+        style.alignItems = alignItems;
+    }
+
     return (
         <div className={className} style={style}>
             {container.children.map((child, index) => {

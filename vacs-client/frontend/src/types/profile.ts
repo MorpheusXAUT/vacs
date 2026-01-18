@@ -25,8 +25,8 @@ export type GeoPageContainer = {
     paddingTop?: number; // in rem
     paddingBottom?: number; // in rem
     gap?: number; // in rem
-    justifyContent?: "start" | "end" | "center";
-    alignItems?: "start" | "end" | "between" | "around" | "evenly" | "center";
+    justifyContent?: "start" | "end" | "space-between" | "space-around" | "space-evenly" | "center";
+    alignItems?: "start" | "end" | "center";
     direction: "row" | "col";
     children: (GeoPageContainer | GeoPageButton | GeoPageDivider)[];
 };
