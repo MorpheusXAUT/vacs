@@ -1,7 +1,7 @@
 import {ClientInfo} from "../types/client-info.ts";
 import {create} from "zustand/react";
 
-type SignalingState = {
+type ClientsState = {
     clients: ClientInfo[];
     setClients: (clients: ClientInfo[]) => void;
     addClient: (client: ClientInfo) => void;
@@ -9,7 +9,7 @@ type SignalingState = {
     removeClient: (cid: string) => void;
 };
 
-export const useSignalingStore = create<SignalingState>()((set, get) => ({
+export const useClientsStore = create<ClientsState>()((set, get) => ({
     clients: [],
     setClients: clients => set({clients}),
     addClient: client => set({clients: [...get().clients, client]}),

@@ -631,6 +631,14 @@ impl AppStateInner {
 
                 app.emit("signaling:station-list", stations).ok();
             }
+            SignalingMessage::StationChanges { changes } => {
+                log::trace!(
+                    "Received station changes: {} stations changed",
+                    changes.len()
+                );
+
+                app.emit("signaling:station-changes", changes).ok();
+            }
             SignalingMessage::Error { reason, peer_id } => match reason {
                 ErrorReason::MalformedMessage => {
                     log::warn!("Received malformed error message from signaling server");

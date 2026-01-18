@@ -1,5 +1,5 @@
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
-import {useSignalingStore} from "../stores/signaling-store.ts";
+import {useClientsStore} from "../stores/clients-store.ts";
 import {ClientInfo, SessionInfo} from "../types/client-info.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
@@ -7,9 +7,12 @@ import {useCallListStore} from "../stores/call-list-store.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
 import {PositionId} from "../types/generic.ts";
 import {useProfileStore} from "../stores/profile-store.ts";
+import {StationChange, StationInfo} from "../types/station.ts";
+import {useStationsStore} from "../stores/stations-store.ts";
 
 export function setupSignalingListeners() {
-    const {setClients, addClient, getClientInfo, removeClient} = useSignalingStore.getState();
+    const {setClients, addClient, getClientInfo, removeClient} = useClientsStore.getState();
+    const {setStations, addStationChanges} = useStationsStore.getState();
     const {
         addIncomingCall,
         removePeer,
@@ -45,6 +48,7 @@ export function setupSignalingListeners() {
                 setConnectionState("disconnected");
                 setConnectionInfo({displayName: "", positionId: undefined, frequency: ""});
                 setClients([]);
+                setStations([]);
                 resetCallStore();
                 clearCallList();
                 setProfile(undefined);
@@ -53,8 +57,12 @@ export function setupSignalingListeners() {
                 setConnectionState("connecting");
                 setPositionsToSelect(event.payload);
             }),
-            // TODO: handle online stations list
-            // TODO: handle station change
+            listen<StationInfo[]>("signaling:station-list", event => {
+                setStations(event.payload);
+            }),
+            listen<StationChange[]>("signaling:station-changes", event => {
+                addStationChanges(event.payload);
+            }),
             listen<ClientInfo[]>("signaling:client-list", event => {
                 setClients(event.payload);
             }),

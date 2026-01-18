@@ -1,6 +1,6 @@
 import {create} from "zustand/react";
 import {ClientInfo} from "../types/client-info.ts";
-import {useSignalingStore} from "./signaling-store.ts";
+import {useClientsStore} from "./clients-store.ts";
 import {invokeSafe} from "../error.ts";
 import {useErrorOverlayStore} from "./error-overlay-store.ts";
 import {useAuthStore} from "./auth-store.ts";
@@ -201,7 +201,7 @@ type StateSetter = {
 export const startCall = async (peerOrPeerId: ClientInfo | string) => {
     const {setOutgoingCall} = useCallStore.getState().actions;
     const openErrorOverlay = useErrorOverlayStore.getState().open;
-    const {getClientInfo} = useSignalingStore.getState();
+    const {getClientInfo} = useClientsStore.getState();
     const {cid} = useAuthStore.getState();
 
     const peerId = typeof peerOrPeerId === "string" ? peerOrPeerId : peerOrPeerId.id;
