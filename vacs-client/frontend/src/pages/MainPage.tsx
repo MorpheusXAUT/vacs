@@ -11,10 +11,8 @@ function MainPage() {
             <DirectAccessPage data={page} />
         ) : profile.geo !== undefined ? (
             <GeoPage page={profile.geo} />
-        ) : profile.tabbed !== undefined ? (
-            <p>TODO Tabbed Layout</p>
         ) : (
-            <p>Unknown Profile</p>
+            <></>
         )
     ) : (
         <p>No Profile</p>

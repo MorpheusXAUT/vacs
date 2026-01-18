@@ -11,7 +11,7 @@ function PhoneButton() {
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
 
-    const collapsed = useProfileType() === "tabbed";
+    const isTabbedProfile = useProfileType() === "tabbed";
 
     return (
         <Button
@@ -31,10 +31,15 @@ function PhoneButton() {
                     ? "green"
                     : undefined
             }
-            className={clsx("min-h-16 text-lg", collapsed ? "w-24" : "w-46")}
+            className={clsx(
+                "min-h-16 text-lg transition-[width]",
+                isTabbedProfile ? "w-24" : "w-46",
+            )}
             onClick={() => {
                 setFilter("");
-                setSelectedPage(undefined);
+                if (!isTabbedProfile) {
+                    setSelectedPage(undefined);
+                }
                 navigate("/");
             }}
         >

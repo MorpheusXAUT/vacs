@@ -13,7 +13,7 @@ function EndButton() {
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
 
-    const collapsed = useProfileType() === "tabbed";
+    const isTabbedProfile = useProfileType() === "tabbed";
 
     const endAnyCall = useAsyncDebounce(async () => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {
@@ -30,7 +30,9 @@ function EndButton() {
 
     const handleOnClick = async () => {
         setFilter("");
-        setSelectedPage(undefined);
+        if (!isTabbedProfile) {
+            setSelectedPage(undefined);
+        }
         navigate("/");
 
         void endAnyCall();
@@ -39,7 +41,7 @@ function EndButton() {
     return (
         <Button
             color="cyan"
-            className={clsx("text-xl transition-[width]", collapsed ? "w-20" : "w-44 px-10")}
+            className={clsx("text-xl transition-[width]", isTabbedProfile ? "w-20" : "w-44 px-10")}
             onClick={handleOnClick}
         >
             END

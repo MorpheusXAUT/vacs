@@ -13,7 +13,12 @@ export type ActiveProfile = {
 export type Profile = {
     id: ProfileId;
     geo?: GeoPageContainer;
-    tabbed?: Record<string, DirectAccessPage>;
+    tabbed?: Tab[];
+};
+
+export type Tab = {
+    label: string;
+    page: DirectAccessPage;
 };
 
 export type GeoPageContainer = {

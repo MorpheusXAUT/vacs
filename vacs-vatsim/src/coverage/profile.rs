@@ -1,11 +1,11 @@
 use crate::coverage::{CoverageError, ReferenceValidator, ValidationError, Validator};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::LazyLock;
 use vacs_protocol::vatsim::{
     DirectAccessKey, DirectAccessPage, GeoNode, GeoPageButton, GeoPageContainer, GeoPageDivider,
-    Profile as ProtocolProfile, ProfileId, ProfileType, StationId,
+    Profile as ProtocolProfile, ProfileId, ProfileType, StationId, Tab,
 };
 
 static GEO_PAGE_CONTAINER_SIZE_REGEX: LazyLock<Regex> =
@@ -29,9 +29,13 @@ pub(super) struct ProfileRaw {
 #[serde(tag = "type")]
 pub(super) enum ProfileTypeRaw {
     Geo(GeoPageContainerRaw),
-    Tabbed {
-        tabs: HashMap<String, DirectAccessPageRaw>,
-    },
+    Tabbed { tabs: Vec<TabRaw> },
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(super) struct TabRaw {
+    pub label: String,
+    pub page: DirectAccessPageRaw,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -138,8 +142,8 @@ impl FromRaw<ProfileRaw> for Profile {
             }
             ProfileTypeRaw::Tabbed { tabs } => ProfileType::Tabbed(
                 tabs.into_iter()
-                    .map(|(k, v)| Ok((k, DirectAccessPage::from_raw(v)?)))
-                    .collect::<Result<HashMap<_, _>, CoverageError>>()?,
+                    .map(Tab::from_raw)
+                    .collect::<Result<Vec<_>, CoverageError>>()?,
             ),
         };
 
@@ -174,7 +178,7 @@ impl ReferenceValidator<StationId> for ProfileType {
         match self {
             ProfileType::Geo(container) => container.validate_references(stations),
             ProfileType::Tabbed(tabs) => {
-                for tab in tabs.values() {
+                for tab in tabs {
                     tab.validate_references(stations)?;
                 }
                 Ok(())
@@ -188,7 +192,7 @@ impl StationIdCollector for ProfileType {
         match self {
             ProfileType::Geo(container) => container.collect_station_ids(ids),
             ProfileType::Tabbed(tabs) => {
-                for page in tabs.values() {
+                for page in tabs {
                     page.collect_station_ids(ids);
                 }
             }
@@ -281,6 +285,44 @@ impl ReferenceValidator<StationId> for DirectAccessKey {
             .into());
         }
         Ok(())
+    }
+}
+
+impl Validator for TabRaw {
+    fn validate(&self) -> Result<(), CoverageError> {
+        if self.label.is_empty() {
+            return Err(ValidationError::Empty {
+                field: "label".to_string(),
+            }
+            .into());
+        }
+        self.page.validate()?;
+        Ok(())
+    }
+}
+
+impl ReferenceValidator<StationId> for Tab {
+    fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
+        for key in &self.page.keys {
+            key.validate_references(stations)?;
+        }
+        Ok(())
+    }
+}
+
+impl StationIdCollector for Tab {
+    fn collect_station_ids(&self, ids: &mut HashSet<StationId>) {
+        self.page.collect_station_ids(ids);
+    }
+}
+
+impl FromRaw<TabRaw> for Tab {
+    fn from_raw(raw: TabRaw) -> Result<Self, CoverageError> {
+        raw.validate()?;
+        Ok(Self {
+            label: raw.label,
+            page: DirectAccessPage::from_raw(raw.page)?,
+        })
     }
 }
 
@@ -390,7 +432,7 @@ impl Validator for ProfileTypeRaw {
                     }
                     .into());
                 }
-                for tab in tabs.values() {
+                for tab in tabs {
                     tab.validate()?;
                 }
                 Ok(())
@@ -735,19 +777,17 @@ mod tests {
     #[test]
     fn profile_type_tabbed_validation() {
         let valid = ProfileTypeRaw::Tabbed {
-            tabs: HashMap::from([(
-                "tab1".to_string(),
-                DirectAccessPageRaw {
+            tabs: vec![TabRaw {
+                label: "tab1".to_string(),
+                page: DirectAccessPageRaw {
                     keys: vec![],
                     rows: 1,
                 },
-            )]),
+            }],
         };
         assert!(valid.validate().is_ok());
 
-        let empty = ProfileTypeRaw::Tabbed {
-            tabs: HashMap::new(),
-        };
+        let empty = ProfileTypeRaw::Tabbed { tabs: vec![] };
         assert_matches!(
             empty.validate(),
             Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "tabs"

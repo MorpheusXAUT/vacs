@@ -1,6 +1,5 @@
 import {DirectAccessPage, Profile} from "../types/profile.ts";
 import {create} from "zustand/react";
-import {ProfileId} from "../types/generic.ts";
 
 type ProfileState = {
     profile: Profile | undefined;
@@ -23,16 +22,4 @@ export const useProfileType = (): "geo" | "tabbed" | "unknown" | undefined => {
         if (state.profile.tabbed !== undefined) return "tabbed";
         return "unknown";
     });
-};
-
-export const INVALID_PROFILE: Profile = {
-    id: "INVALID" as ProfileId,
-};
-
-export const TABBED_PROFILE: Profile = {
-    id: "TABBED" as ProfileId,
-    tabbed: {
-        "DA 1": {} as DirectAccessPage,
-        "DA 2": {} as DirectAccessPage,
-    },
 };
