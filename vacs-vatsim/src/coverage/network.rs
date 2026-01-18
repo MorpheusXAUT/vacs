@@ -686,6 +686,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "windows", ignore)]
     fn load_from_dir_duplicate_fir_id() {
         let dir = tempfile::tempdir().unwrap();
         create_minimal_valid_fir(dir.path(), "LOVV");

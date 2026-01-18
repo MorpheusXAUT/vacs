@@ -37,7 +37,11 @@ function RadioButton() {
             disabled={state === "NotConfigured"}
             softDisabled={disabled}
             onClick={handleButtonClick}
-            className={clsx("text-lg", textMuted && "text-gray-500", collapsed ? "w-24" : "w-46")}
+            className={clsx(
+                "text-lg transition-[width]",
+                textMuted && "text-gray-500",
+                collapsed ? "w-24" : "w-46",
+            )}
         >
             Radio
         </Button>

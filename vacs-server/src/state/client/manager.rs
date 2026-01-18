@@ -352,7 +352,7 @@ impl ClientManager {
                             );
                         }
 
-                        let mut updated = session.update_client_info(controller);
+                        let updated = session.update_client_info(controller);
                         if updated {
                             tracing::trace!(
                                 ?cid,
@@ -451,8 +451,6 @@ impl ClientManager {
                                         "Failed to send updated session info to client"
                                     );
                                 }
-
-                                updated = true;
                             }
 
                             tracing::trace!(?cid, ?session, "Client info updated, broadcasting");

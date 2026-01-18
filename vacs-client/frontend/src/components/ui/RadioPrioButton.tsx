@@ -35,7 +35,7 @@ function RadioPrioButton() {
     return (
         <Button
             color={implicitRadioPrio || prio ? "blue" : "cyan"}
-            className={clsx("text-lg", collapsed ? "w-38" : "w-46")}
+            className={clsx("text-lg transition-[width]", collapsed ? "w-38" : "w-46")}
             disabled={callDisplayType !== "accepted"}
             onClick={handleOnClick}
         >

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Unique identifier for a VATSIM client (CID).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
@@ -38,10 +37,19 @@ pub struct Profile {
 pub enum ProfileType {
     /// A GEO profile with a container-based layout.
     Geo(GeoPageContainer),
-    /// A tabbed profile with pages accessible via tabs, with the key displayed as the tab's label.
+    /// A tabbed profile with pages accessible via tabs.
     ///
-    /// The map of tabs will always be non-empty.
-    Tabbed(HashMap<String, DirectAccessPage>),
+    /// The list of tabs will always be non-empty.
+    Tabbed(Vec<Tab>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tab {
+    /// The label of the tab.
+    pub label: String,
+    /// The direct access page that opens when this tab is clicked.
+    pub page: DirectAccessPage,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
