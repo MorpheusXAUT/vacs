@@ -616,7 +616,6 @@ impl AppStateInner {
 
                 if let SessionProfile::Changed(profile) = profile {
                     log::trace!("Active profile changed: {profile:?}");
-                    // TODO: store in state?
                 } else {
                     log::trace!("Active profile unchanged");
                 }
