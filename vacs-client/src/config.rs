@@ -15,7 +15,7 @@ use std::time::Duration;
 use tauri::{AppHandle, LogicalSize, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
-use vacs_signaling::protocol::vatsim::ClientId;
+use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
 
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -130,6 +130,8 @@ pub struct BackendConfig {
     pub ws_url: String,
     pub endpoints: BackendEndpointsConfigs,
     pub timeout_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dev_position_id: Option<PositionId>,
 }
 
 impl Default for BackendConfig {
@@ -149,6 +151,7 @@ impl Default for BackendConfig {
             .to_string(),
             endpoints: BackendEndpointsConfigs::default(),
             timeout_ms: 2000,
+            dev_position_id: None,
         }
     }
 }

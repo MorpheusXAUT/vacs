@@ -23,6 +23,10 @@ pub async fn signaling_connect(
     position_id: Option<PositionId>,
 ) -> Result<(), Error> {
     let mut app_state = app_state.lock().await;
+
+    #[cfg(debug_assertions)]
+    let position_id = position_id.or_else(|| app_state.config.backend.dev_position_id.clone());
+
     app_state.connect_signaling(&app, position_id).await?;
 
     if !app_state.config.ice.is_default() {
