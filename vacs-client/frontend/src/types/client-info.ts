@@ -1,4 +1,5 @@
 import {PositionId} from "./generic.ts";
+import {SessionProfile} from "./profile.ts";
 
 export type ClientInfo = {
     id: string;
@@ -9,6 +10,11 @@ export type ClientInfo = {
 
 export type ClientInfoWithAlias = ClientInfo & {
     alias: string | undefined;
+};
+
+export type SessionInfo = {
+    info: ClientInfo;
+    profile: SessionProfile;
 };
 
 export function splitDisplayName(client: ClientInfoWithAlias): [string, string] {

@@ -22,7 +22,7 @@ pub struct ProfileId(String);
 pub struct StationId(String);
 
 /// Representation of a VACS profile.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     /// The unique identifier for this profile.
@@ -33,34 +33,144 @@ pub struct Profile {
 }
 
 /// The specific configuration type of a profile.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProfileType {
-    /// A GEO profile with buttons placed on coordinates.
-    ///
-    /// The vector of buttons will always be non-empty.
-    Geo(Vec<GeoPageButton>),
+    /// A GEO profile with a container-based layout.
+    Geo(GeoPageContainer),
     /// A tabbed profile with pages accessible via tabs, with the key displayed as the tab's label.
     ///
     /// The map of tabs will always be non-empty.
     Tabbed(HashMap<String, DirectAccessPage>),
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeoPageContainer {
+    /// The height of the container.
+    ///
+    /// Must either be defined as a percentage or a rem value (e.g. "100%", "5rem").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<String>,
+    /// The width of the container.
+    ///
+    /// Must either be defined as a percentage or a rem value (e.g. "100%", "5rem").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<String>,
+    /// The padding for all sides (in rem).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding: Option<f64>,
+    /// The left padding (in rem).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding_left: Option<f64>,
+    /// The right padding (in rem).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding_right: Option<f64>,
+    /// The top padding (in rem).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding_top: Option<f64>,
+    /// The bottom padding (in rem).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub padding_bottom: Option<f64>,
+    /// The gap between children (in rem).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gap: Option<f64>,
+    /// The justification of the content along the main axis.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub justify_content: Option<JustifyContent>,
+    /// The alignment of items along the cross-axis.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub align_items: Option<AlignItems>,
+    /// The direction of the flex container.
+    pub direction: FlexDirection,
+    /// The children of this container.
+    pub children: Vec<GeoNode>,
+}
+
+// TODO split file and place geo page container specific enums in submodule
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum JustifyContent {
+    /// The items are packed flush to each other toward the start edge of the alignment container in the main axis.
+    Start,
+    /// The items are packed flush to each other toward the end edge of the alignment container in the main axis.
+    End,
+    /// The items are evenly distributed within the alignment container along the main axis. The spacing between each pair of adjacent items is the same. The first item is flush with the main-start edge, and the last item is flush with the main-end edge.
+    SpaceBetween,
+    /// The items are evenly distributed within the alignment container along the main axis. The spacing between each pair of adjacent items is the same. The empty space before the first and after the last item equals half of the space between each pair of adjacent items. If there is only one item, it will be centered.
+    SpaceAround,
+    /// The items are evenly distributed within the alignment container along the main axis. The spacing between each pair of adjacent items, the main-start edge and the first item, and the main-end edge and the last item, are all exactly the same.
+    SpaceEvenly,
+    /// The items are packed flush to each other toward the center of the alignment container along the main axis.
+    Center,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AlignItems {
+    /// The items are packed flush to each other toward the start edge of the alignment container in the appropriate axis.
+    Start,
+    /// The items are packed flush to each other toward the end edge of the alignment container in the appropriate axis.
+    End,
+    /// The flex items' margin boxes are centered within the line on the cross-axis. If the cross-size of an item is larger than the flex container, it will overflow equally in both directions.
+    Center,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FlexDirection {
+    /// The flex container's main axis is the same as the text direction.
+    Row,
+    /// The flex container's main axis is the same as the block axis.
+    Col,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GeoNode {
+    /// A recursive container for grouping other nodes.
+    Container(GeoPageContainer),
+    /// A clickable button with a label and action.
+    Button(GeoPageButton),
+    /// A visual divider between elements.
+    Divider(GeoPageDivider),
+}
+
 /// A button on a GEO profile page.
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeoPageButton {
     /// The text label displayed on the button.
     ///
     /// Will always contain between 0 and 3 lines of text.
     pub label: Vec<String>,
-    /// The X coordinate of the button (0-100, inclusive).
-    pub x: u8,
-    /// The Y coordinate of the button (0-100, inclusive).
-    pub y: u8,
-    /// The size of the button (0-100, inclusive).
-    pub size: u8,
+    /// The size of the button (> 0, in rem).
+    pub size: f64,
     /// The direct access page that opens when this button is clicked.
-    pub page: DirectAccessPage,
+    /// If `None`, the button will be displayed and clickable on the UI, but will otherwise be non-functional.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<DirectAccessPage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeoPageDivider {
+    /// The orientation of the divider.
+    pub orientation: GeoPageDividerOrientation,
+    /// The thickness of the divider (> 0, in px).
+    pub thickness: f64,
+    /// The color of the divider (CSS color).
+    pub color: String,
+    /// The oversize of the divider (> 0, in rem).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oversize: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeoPageDividerOrientation {
+    /// The divider runs horizontally.
+    Horizontal,
+    /// The divider runs vertically.
+    Vertical,
 }
 
 /// A page containing direct access keys.
@@ -70,16 +180,12 @@ pub struct DirectAccessPage {
     ///
     /// Will always be non-empty.
     pub keys: Vec<DirectAccessKey>,
-    /// The number of rows in the grid.
+    /// The number of rows in the grid (> 0).
     ///
-    /// Mutually exclusive with `columns`. If `rows` is set, `columns` must be `None`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rows: Option<u8>,
-    /// The number of columns in the grid.
-    ///
-    /// Mutually exclusive with `rows`. If `columns` is set, `rows` must be `None`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub columns: Option<u8>,
+    /// The default layout is optimized for 6 rows. After a seventh row is added,
+    /// the space in between the rows is slightly reduced and a scrollbar might
+    /// appear automatically.
+    pub rows: u8,
 }
 
 /// A single key on a direct access page.
@@ -113,6 +219,7 @@ impl ProfileReference for Profile {}
 /// The active profile determines which stations are considered "relevant" and thus which
 /// status updates (online/offline/handoff) are sent to the client.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type", content = "profile")]
 pub enum ActiveProfile<T: ProfileReference> {
     /// A specific, pre-defined profile is active.
     ///
@@ -412,18 +519,35 @@ impl PartialOrd for Profile {
 impl std::fmt::Debug for ProfileType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Geo(buttons) => f.debug_tuple("Geo").field(&buttons.len()).finish(),
+            Self::Geo(container) => f.debug_tuple("Geo").field(container).finish(),
             Self::Tabbed(tabs) => f.debug_tuple("Tabbed").field(&tabs.len()).finish(),
         }
     }
 }
 
+// impl std::fmt::Debug for GeoPageContainer {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("GeoPageContainer")
+//             .field("height", &self.height)
+//             .field("width", &self.width)
+//             .field("padding", &self.padding)
+//             .field("padding_left", &self.padding_left)
+//             .field("padding_right", &self.padding_right)
+//             .field("padding_top", &self.padding_top)
+//             .field("padding_bottom", &self.padding_bottom)
+//             .field("gap", &self.gap)
+//             .field("justify_content", &self.justify_content)
+//             .field("align_items", &self.align_items)
+//             .field("direction", &self.direction)
+//             .field("children", &self.children.len())
+//             .finish()
+//     }
+// }
+
 impl std::fmt::Debug for GeoPageButton {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GeoPageButton")
             .field("label", &self.label.len())
-            .field("x", &self.x)
-            .field("y", &self.y)
             .field("size", &self.size)
             .field("page", &self.page)
             .finish()
@@ -435,7 +559,6 @@ impl std::fmt::Debug for DirectAccessPage {
         f.debug_struct("DirectAccessPage")
             .field("keys", &self.keys.len())
             .field("rows", &self.rows)
-            .field("columns", &self.columns)
             .finish()
     }
 }

@@ -35,12 +35,12 @@ pub enum ValidationError {
         reason: String,
     },
 
-    #[error("value for `{field}` is out of range: {min}..={max} (got `{value}`)")]
+    #[error("value for `{field}` is out of range: {min}..={max:?} (got `{value}`)")]
     OutOfRange {
         field: String,
         value: String,
         min: String,
-        max: String,
+        max: Option<String>,
     },
 
     #[error("`{field}` must not be empty")]

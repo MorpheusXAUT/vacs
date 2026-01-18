@@ -726,12 +726,12 @@ mod tests {
         let default_profile = r#"
             id = "Default"
             type = "Geo"
-            [[buttons]]
+            direction = "row"
+            [[children]]
             label = ["A"]
-            x = 10
-            y = 10
-            size = 10
+            size = 10.0
             page.keys = []
+            page.rows = 1
         "#;
         std::fs::write(fir_path.join("profile.toml"), default_profile).unwrap();
 
@@ -741,12 +741,12 @@ mod tests {
         let other_profile = r#"
             id = "Other"
             type = "Geo"
-            [[buttons]]
+            direction = "row"
+            [[children]]
             label = ["B"]
-            x = 20
-            y = 20
-            size = 20
+            size = 20.0
             page.keys = []
+            page.rows = 1
         "#;
         std::fs::write(profiles_dir.join("other.toml"), other_profile).unwrap();
 

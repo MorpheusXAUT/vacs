@@ -338,7 +338,14 @@ impl AppStateInner {
                     &client_info.frequency,
                 );
 
-                app.emit("signaling:connected", client_info).ok();
+                app.emit(
+                    "signaling:connected",
+                    SignalingMessage::SessionInfo {
+                        info: client_info,
+                        profile: SessionProfile::Changed(profile),
+                    },
+                )
+                .ok();
             }
             SignalingEvent::Message(msg) => Self::handle_signaling_message(msg, app).await,
             SignalingEvent::Error(error) => {
@@ -601,19 +608,20 @@ impl AppStateInner {
 
                 app.emit("signaling:client-connected", info).ok();
             }
-            SignalingMessage::SessionInfo { info, profile } => {
+            ref msg @ SignalingMessage::SessionInfo {
+                ref info,
+                ref profile,
+            } => {
                 log::trace!("Received session info: {info:?}");
 
                 if let SessionProfile::Changed(profile) = profile {
                     log::trace!("Active profile changed: {profile:?}");
-                    // TODO: correct event
                     // TODO: store in state?
-                    app.emit("profile:changed", profile).ok();
                 } else {
                     log::trace!("Active profile unchanged");
                 }
 
-                app.emit("signaling:connected", info).ok();
+                app.emit("signaling:connected", msg).ok();
             }
             SignalingMessage::StationList { stations } => {
                 log::trace!(

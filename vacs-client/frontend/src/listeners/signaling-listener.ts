@@ -1,13 +1,13 @@
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {useSignalingStore} from "../stores/signaling-store.ts";
-import {ClientInfo} from "../types/client-info.ts";
+import {ClientInfo, SessionInfo} from "../types/client-info.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 import {useCallListStore} from "../stores/call-list-store.ts";
 import {StationsConfig} from "../types/stations.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
 import {PositionId} from "../types/generic.ts";
-import {LOVV_PROFILE, useProfileStore} from "../stores/profile-store.ts";
+import {useProfileStore} from "../stores/profile-store.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, getClientInfo, removeClient, setStationsConfig} =
@@ -29,10 +29,16 @@ export function setupSignalingListeners() {
 
     const init = () => {
         unlistenFns.push(
-            listen<ClientInfo>("signaling:connected", event => {
+            listen<SessionInfo>("signaling:connected", event => {
                 setConnectionState("connected");
-                setConnectionInfo(event.payload);
-                setProfile(LOVV_PROFILE); // TODO replace with actual profile
+                setConnectionInfo(event.payload.info);
+                if (
+                    event.payload.profile.type === "changed" &&
+                    event.payload.profile.activeProfile !== undefined &&
+                    event.payload.profile.activeProfile.profile !== undefined
+                ) {
+                    setProfile(event.payload.profile.activeProfile.profile);
+                }
             }),
             listen("signaling:reconnecting", () => {
                 setConnectionState("connecting");

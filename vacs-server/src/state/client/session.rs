@@ -609,7 +609,7 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"type":"SessionInfo","info":{"id":"client1","positionId":"POSITION1","displayName":"Client 1","frequency":"100.000"},"profile":{"Changed":"None"}}"#
+                        r#"{"type":"SessionInfo","info":{"id":"client1","positionId":"POSITION1","displayName":"Client 1","frequency":"100.000"},"profile":{"type":"changed","activeProfile":{"type":"none"}}}"#
                     )
                 );
             }

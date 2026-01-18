@@ -5,8 +5,9 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use vacs_protocol::ws::SignalingMessage;
 
-/// Represents the outcome of [`receive_message`], indicating whether the message received should be handled, skipped or receiving errored.
+/// Represents the outcome of [`receive_message`], indicating whether the message received should be handled, skipped, or receiving errored.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)] // TODO fix?
 pub enum MessageResult {
     /// A valid application-message that can be processed.
     ApplicationMessage(SignalingMessage),
