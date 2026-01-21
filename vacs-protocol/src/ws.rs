@@ -108,6 +108,34 @@ pub struct StationInfo {
     pub own: bool,
 }
 
+/// Represents a target to call.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum CallTarget {
+    ///
+    Client(ClientId),
+    ///
+    Position(PositionId),
+    ///
+    Station(StationId),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CallSource {
+    pub client_id: ClientId,
+    /// A position id must be set if a station id is set.
+    pub position_id: Option<PositionId>,
+    /// If a station id is set, a position id must be set as well.
+    pub station_id: Option<StationId>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct Call {
+    pub source: CallSource,
+    pub target: CallTarget,
+}
+
 /// Represents a message exchanged between the signaling server and clients.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(tag = "type")]
@@ -150,11 +178,22 @@ pub enum SignalingMessage {
     /// the source client will create a WebRTC offer and transmit it via a [`SignalingMessage::CallOffer`] message containing the corresponding SDP.
     ///
     /// Upon rejection, the target client will reply with [`SignalingMessage::CallReject`].
-    #[serde(rename_all = "camelCase")]
     CallInvite {
-        /// When sent to the signaling server by the caller, this is the ID of the target client to call.
-        /// When received from the signaling server (by the callee), this is the ID of the source client initiating the call.
-        peer_id: ClientId,
+        /// Server:
+        /// TODO: Validate source (client id) against client (id) which sent the message
+        ///
+        /// Receiving client (target):
+        /// TODO: Check if station id is set
+        ///     TODO: Check if local profile contains station id -> display first label in CQ and every DA blinks
+        ///     TODO: Otherwise, display <TBD> (position id? client id? etc.)
+        /// TODO: Otherwise, check if position id is set -> display position id in CQ and no DA key blinks
+        /// TODO: Otherwise, display client id in CQ and no DA key blinks for a profile, but the client DA key may blink if the no-profile view is shown
+        // source: CallSource,
+        /// Server:
+        /// TODO: Check if target is available (either client id is online, or position/station is controlled)
+        /// TODO: Forward exact same message to every (resolved) target
+        // target: CallTarget
+        call: Call,
     },
     /// A message containing the (updated) info for a connected client.
     ///
@@ -177,10 +216,31 @@ pub enum SignalingMessage {
     /// The signaling server will forward the offer to the source client, exchanging the [`SignalingMessage::CallAccept::peer_id`] with the callee's ID.
     #[serde(rename_all = "camelCase")]
     CallAccept {
-        /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
-        /// When received from the signaling server (by the caller), this is the ID of the target client rejecting the call.
-        peer_id: ClientId,
+        /// Sending client (target):
+        /// TODO: Sets call source from CallInvite message.
+        // source: CallSource,
+        /// Sending client (target):
+        /// TODO: Sets call target from CallInvite message.
+        ///
+        /// Server:
+        /// TODO: If a position or station is targeted, send a CallEnd containing the client id in the CallSource to every client covering this position/station, which is not the sender of this message.
+        /// TODO: Forward the exact same CallAccept to the client id in the CallSource
+        ///
+        /// Receiving client (source):
+        /// TODO: Validate that the CalLTarget is the actual outgoing target
+        // target: CallTarget,
+        /// Sending client (target):
+        /// TODO: Set own client id
+        ///
+        /// Server:
+        /// TODO: Validate client id against client id which sent the message
+        ///
+        /// Receiving client (source):
+        /// TODO: Start call with this client id -> send CallOffer to this client id. From now on, everything is based on the client id.
+        client_id: ClientId,
+        call: Call,
     },
+    /// TODO: Cleverly reinvent call reject in the _new_ system
     /// A call reject message sent by the target client to reject an incoming call.
     ///
     /// The signaling server will forward the offer to the source client, exchanging the [`SignalingMessage::CallReject::peer_id`] with the callee's ID.
@@ -205,13 +265,13 @@ pub enum SignalingMessage {
         sdp: String,
         /// When sent to the signaling server by the caller, this is the ID of the target client to call.
         /// When received from the signaling server (by the callee), this is the ID of the source client initiating the call.
-        peer_id: ClientId,
+        client_id: ClientId,
     },
     /// A call answer message sent by the target client to accept an incoming call.
     ///
     /// The SDP provided should contain the WebRTC answer created by the callee.
     ///
-    /// The signaling server will forward the answer to the source client, exchanging the [`SignalingMessage::CallAnswer::peer_id`] with the callee's ID.
+    /// The signaling server will forward the answer to the source client, exchanging the [`SignalingMessage::CallAnswer::client_id`] with the callee's ID.
     ///
     /// After the [`SignalingMessage::CallAnswer`] message has been processed, both clients can start ICE candidate gathering
     /// and trickle them to their peer using [`SignalingMessage::CallIceCandidate`].
@@ -221,17 +281,14 @@ pub enum SignalingMessage {
         sdp: String,
         /// When sent to the signaling server by the callee, this is the ID of the source client initiating the call.
         /// When received from the signaling server (by the caller), this is the ID of the target client accepting the call.
-        peer_id: ClientId,
+        client_id: ClientId,
     },
     /// A call end message sent by either client to indicate the gracious end of a call.
     ///
-    /// The signaling server will forward the message to the given peer, exchanging the [`SignalingMessage::CallEnd::peer_id`] with the other peer's ID.
+    /// The signaling server will forward the message to the given peer, exchanging the [`SignalingMessage::CallEnd::client_id`] with the other peer's ID.
     #[serde(rename_all = "camelCase")]
-    CallEnd {
-        /// When sent to the signaling server by the caller, this is the ID of the target client.
-        /// When received from the signaling server (by the callee), this is the ID of the source client ending the call.
-        peer_id: ClientId,
-    },
+    CallEnd { client_id: ClientId, call: Call },
+    /// TODO: Cleverly reinvent call error in the _new_ system
     /// A call error message sent by either client to indicate an error during an active call or while trying to establish a call.
     ///
     /// The signaling server will forward the message to the given peer, exchanging the [`SignalingMessage::CallError::peer_id`] with the other peer's ID.
@@ -245,19 +302,18 @@ pub enum SignalingMessage {
     },
     /// A call ICE candidate message sent by either client to trickle ICE candidates to the other peer during call setup.
     ///
-    /// The signaling server will forward the candidate to the given peer, exchanging the [`SignalingMessage::CallIceCandidate::peer_id`] with the other peer's ID.
+    /// The signaling server will forward the candidate to the given peer, exchanging the [`SignalingMessage::CallIceCandidate::client_id`] with the other peer's ID.
     #[serde(rename_all = "camelCase")]
     CallIceCandidate {
         /// ICE candidate to be trickled to the other peer.
         candidate: String,
         /// Contains the ID of the respective other peer during call setup.
-        peer_id: ClientId,
+        client_id: ClientId,
     },
     /// A message sent by the signaling server if no peer with the given ID was found.
-    #[serde(rename_all = "camelCase")]
-    PeerNotFound {
+    TargetNotFound {
         /// ID of the peer that was not found.
-        peer_id: ClientId,
+        target: CallTarget,
     },
     /// A message broadcasted by the signaling server when a new client connects.
     ClientConnected {
@@ -302,8 +358,8 @@ pub enum SignalingMessage {
     Error {
         /// Reason for the error.
         reason: ErrorReason,
-        /// Optional ID of the peer that caused the error.
-        peer_id: Option<ClientId>,
+        /// Optional ID of the client that caused the error.
+        client_id: Option<ClientId>,
     },
     /// A message sent by the signaling server before (forcefully) disconnecting a client.
     Disconnected {
