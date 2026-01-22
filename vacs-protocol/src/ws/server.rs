@@ -1,0 +1,50 @@
+pub mod auth;
+pub mod calls;
+pub mod network;
+
+pub use auth::*;
+pub use calls::*;
+pub use network::*;
+
+use crate::ws::shared::{
+    CallAccept, CallEnd, CallError, CallInvite, Error, WebrtcAnswer, WebrtcIceCandidate,
+    WebrtcOffer,
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum ServerMessage {
+    LoginFailure(LoginFailure),
+    CallInvite(CallInvite),
+    CallAccept(CallAccept),
+    CallEnd(CallEnd),
+    CallCancelled(CallCancelled),
+    CallError(CallError),
+    WebrtcOffer(WebrtcOffer),
+    WebrtcAnswer(WebrtcAnswer),
+    WebrtcIceCandidate(WebrtcIceCandidate),
+    ClientInfo(ClientInfo),
+    SessionInfo(SessionInfo),
+    ClientConnected(ClientConnected),
+    ClientDisconnected(ClientDisconnected),
+    ClientList(ClientList),
+    StationList(StationList),
+    StationChanges(StationChanges),
+    Terminated(Terminated),
+    Error(Error),
+}
+
+impl ServerMessage {
+    pub fn serialize(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
+    }
+
+    pub fn into_json(self) -> serde_json::Result<String> {
+        self.serialize()
+    }
+
+    pub fn deserialize(s: &str) -> serde_json::Result<Self> {
+        serde_json::from_str(s)
+    }
+}
