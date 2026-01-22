@@ -175,7 +175,7 @@ impl AppState {
     pub async fn generate_ws_auth_token(&self, cid: &str) -> anyhow::Result<String> {
         tracing::debug!("Generating web socket auth token");
 
-        let token = Uuid::new_v4().to_string();
+        let token = Uuid::now_v7().to_string();
 
         tracing::trace!("Storing web socket auth token");
         self.store
