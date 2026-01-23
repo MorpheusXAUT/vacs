@@ -1,4 +1,4 @@
-FROM rust:1.92.0-trixie AS chef
+FROM rust:1.93.0-trixie AS chef
 
 WORKDIR /usr/src/vacs
 RUN cargo install cargo-chef --locked
