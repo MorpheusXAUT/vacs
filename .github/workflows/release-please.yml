@@ -54,7 +54,7 @@ jobs:
           permission-contents: write
 
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
         with:
           ref: ${{ matrix.pr.headBranchName }}
           fetch-depth: 0
