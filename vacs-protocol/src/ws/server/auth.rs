@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub enum LoginFailureReason {
     Unauthorized,
     DuplicateId,
@@ -18,7 +17,8 @@ pub enum LoginFailureReason {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum TerminationReason {
+pub enum DisconnectReason {
+    Terminated,
     NoActiveVatsimConnection,
     AmbiguousVatsimPosition(Vec<PositionId>),
 }
@@ -26,13 +26,13 @@ pub enum TerminationReason {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginFailure {
-    reason: LoginFailureReason,
+    pub reason: LoginFailureReason,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Terminated {
-    reason: TerminationReason,
+pub struct Disconnected {
+    pub reason: DisconnectReason,
 }
 
 impl From<LoginFailureReason> for LoginFailure {
@@ -53,20 +53,20 @@ impl From<LoginFailureReason> for ServerMessage {
     }
 }
 
-impl From<TerminationReason> for Terminated {
-    fn from(reason: TerminationReason) -> Self {
+impl From<DisconnectReason> for Disconnected {
+    fn from(reason: DisconnectReason) -> Self {
         Self { reason }
     }
 }
 
-impl From<Terminated> for ServerMessage {
-    fn from(value: Terminated) -> Self {
-        Self::Terminated(value)
+impl From<Disconnected> for ServerMessage {
+    fn from(value: Disconnected) -> Self {
+        Self::Disconnected(value)
     }
 }
 
-impl From<TerminationReason> for ServerMessage {
-    fn from(value: TerminationReason) -> Self {
-        Self::Terminated(value.into())
+impl From<DisconnectReason> for ServerMessage {
+    fn from(value: DisconnectReason) -> Self {
+        Self::Disconnected(value.into())
     }
 }

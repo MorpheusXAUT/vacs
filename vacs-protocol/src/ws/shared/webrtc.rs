@@ -4,7 +4,7 @@ use crate::ws::server::ServerMessage;
 use crate::ws::shared::CallId;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebrtcOffer {
     pub call_id: CallId,
@@ -13,7 +13,7 @@ pub struct WebrtcOffer {
     pub sdp: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebrtcAnswer {
     pub call_id: CallId,
@@ -29,10 +29,28 @@ pub struct WebrtcIceCandidate {
     pub from_client_id: ClientId,
     pub to_client_id: ClientId,
     pub candidate: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sdp_mid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sdp_m_line_index: Option<u16>,
+}
+
+impl std::fmt::Debug for WebrtcOffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebrtcOffer")
+            .field("call_id", &self.call_id)
+            .field("from_client_id", &self.from_client_id)
+            .field("to_client_id", &self.to_client_id)
+            .field("sdp_len", &self.sdp.len())
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for WebrtcAnswer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebrtcAnswer")
+            .field("call_id", &self.call_id)
+            .field("from_client_id", &self.from_client_id)
+            .field("to_client_id", &self.to_client_id)
+            .field("sdp_len", &self.sdp.len())
+            .finish()
+    }
 }
 
 impl From<WebrtcOffer> for ClientMessage {

@@ -31,7 +31,7 @@ pub enum ServerMessage {
     ClientList(ClientList),
     StationList(StationList),
     StationChanges(StationChanges),
-    Terminated(Terminated),
+    Disconnected(Disconnected),
     Error(Error),
 }
 
@@ -46,5 +46,28 @@ impl ServerMessage {
 
     pub fn deserialize(s: &str) -> serde_json::Result<Self> {
         serde_json::from_str(s)
+    }
+
+    pub const fn variant(&self) -> &'static str {
+        match self {
+            ServerMessage::LoginFailure(_) => "LoginFailure",
+            ServerMessage::CallInvite(_) => "CallInvite",
+            ServerMessage::CallAccept(_) => "CallAccept",
+            ServerMessage::CallEnd(_) => "CallEnd",
+            ServerMessage::CallCancelled(_) => "CallCancelled",
+            ServerMessage::CallError(_) => "CallError",
+            ServerMessage::WebrtcOffer(_) => "WebrtcOffer",
+            ServerMessage::WebrtcAnswer(_) => "WebrtcAnswer",
+            ServerMessage::WebrtcIceCandidate(_) => "WebrtcIceCandidate",
+            ServerMessage::ClientInfo(_) => "ClientInfo",
+            ServerMessage::SessionInfo(_) => "SessionInfo",
+            ServerMessage::ClientConnected(_) => "ClientConnected",
+            ServerMessage::ClientDisconnected(_) => "ClientDisconnected",
+            ServerMessage::ClientList(_) => "ClientList",
+            ServerMessage::StationList(_) => "StationList",
+            ServerMessage::StationChanges(_) => "StationChanges",
+            ServerMessage::Disconnected(_) => "Disconnected",
+            ServerMessage::Error(_) => "Error",
+        }
     }
 }
