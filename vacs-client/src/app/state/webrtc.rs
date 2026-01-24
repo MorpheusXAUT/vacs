@@ -12,7 +12,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::vatsim::ClientId;
-use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
+use vacs_signaling::protocol::ws::shared;
+use vacs_signaling::protocol::ws::shared::{CallErrorReason, CallId};
 use vacs_webrtc::error::WebrtcError;
 use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
 
@@ -103,9 +104,10 @@ impl AppStateWebrtcExt for AppStateInner {
                                     let reason: CallErrorReason = err.into();
                                     state.cleanup_call(&peer_id_clone).await;
                                     if let Err(err) = state
-                                        .send_signaling_message(SignalingMessage::CallError {
-                                            peer_id: peer_id_clone.clone(),
-                                            reason: reason.clone(),
+                                        .send_signaling_message(shared::CallError {
+                                            call_id: CallId::new(), // TODO set actual call ID
+                                            reason,
+                                            message: None,
                                         })
                                         .await
                                     {
@@ -167,8 +169,10 @@ impl AppStateWebrtcExt for AppStateInner {
                             let app_state = app.state::<AppState>();
                             let mut state = app_state.lock().await;
                             if let Err(err) = state
-                                .send_signaling_message(SignalingMessage::CallIceCandidate {
-                                    peer_id: peer_id_clone.clone(),
+                                .send_signaling_message(shared::WebrtcIceCandidate {
+                                    call_id: CallId::new(),            // TODO set actual call ID
+                                    from_client_id: ClientId::new(""), // TODO set actual client ID
+                                    to_client_id: peer_id_clone.clone(),
                                     candidate,
                                 })
                                 .await

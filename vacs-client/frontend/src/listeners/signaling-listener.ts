@@ -32,7 +32,7 @@ export function setupSignalingListeners() {
         unlistenFns.push(
             listen<SessionInfo>("signaling:connected", event => {
                 setConnectionState("connected");
-                setConnectionInfo(event.payload.info);
+                setConnectionInfo(event.payload.client);
                 if (
                     event.payload.profile.type === "changed" &&
                     event.payload.profile.activeProfile !== undefined &&

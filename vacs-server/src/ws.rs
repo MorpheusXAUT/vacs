@@ -1,6 +1,5 @@
 pub mod application_message;
 mod auth;
-pub mod calls;
 mod handler;
 pub mod message;
 #[cfg(test)]

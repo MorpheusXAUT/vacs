@@ -1,7 +1,7 @@
 use crate::config;
 use crate::metrics::guards::ClientConnectionGuard;
 use crate::state::AppState;
-use crate::state::client::{ClientManagerError, Result};
+use crate::state::clients::{ClientManagerError, Result};
 use crate::ws::application_message::handle_application_message;
 use crate::ws::message::{MessageResult, receive_message, send_message};
 use crate::ws::traits::{WebSocketSink, WebSocketStream};
@@ -16,7 +16,9 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{Instrument, instrument};
 use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId};
-use vacs_protocol::ws::{ClientInfo, DisconnectReason, SessionProfile, SignalingMessage};
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::{ClientInfo, DisconnectReason, ServerMessage, SessionProfile};
+use vacs_protocol::ws::{server, shared};
 use vacs_vatsim::ControllerInfo;
 use vacs_vatsim::coverage::network::Network;
 
@@ -24,7 +26,7 @@ use vacs_vatsim::coverage::network::Network;
 pub struct ClientSession {
     client_info: ClientInfo,
     active_profile: ActiveProfile<ProfileId>,
-    tx: mpsc::Sender<SignalingMessage>,
+    tx: mpsc::Sender<ServerMessage>,
     client_shutdown_tx: watch::Sender<Option<DisconnectReason>>,
     client_connection_guard: Arc<Mutex<ClientConnectionGuard>>,
 }
@@ -33,7 +35,7 @@ impl ClientSession {
     pub fn new(
         client_info: ClientInfo,
         active_profile: ActiveProfile<ProfileId>,
-        tx: mpsc::Sender<SignalingMessage>,
+        tx: mpsc::Sender<ServerMessage>,
         client_connection_guard: ClientConnectionGuard,
     ) -> Self {
         let (client_shutdown_tx, _) = watch::channel(None);
@@ -143,12 +145,21 @@ impl ClientSession {
         let _ = self.client_shutdown_tx.send(disconnect_reason);
     }
 
-    #[instrument(level = "trace", skip(self), err)]
-    pub async fn send_message(&self, message: SignalingMessage) -> Result<()> {
+    #[instrument(level = "trace", skip(self, message), fields(message = tracing::field::Empty), err)]
+    pub async fn send_message(&self, message: impl Into<ServerMessage>) -> Result<()> {
+        let message = message.into();
+        tracing::span::Span::current().record("message", tracing::field::debug(&message));
         self.tx
             .send(message)
             .await
             .map_err(|err| ClientManagerError::MessageSendError(err.to_string()))
+    }
+
+    pub async fn send_error(&self, err: impl Into<shared::Error>) {
+        let err = err.into();
+        if let Err(err) = self.send_message(err).await {
+            tracing::warn!(?err, "Failed to send error message");
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -158,8 +169,8 @@ impl ClientSession {
         app_state: &Arc<AppState>,
         websocket_rx: R,
         websocket_tx: T,
-        broadcast_rx: &mut broadcast::Receiver<SignalingMessage>,
-        rx: &mut mpsc::Receiver<SignalingMessage>,
+        broadcast_rx: &mut broadcast::Receiver<ServerMessage>,
+        rx: &mut mpsc::Receiver<ServerMessage>,
         app_shutdown_rx: &mut watch::Receiver<()>,
     ) {
         tracing::debug!("Starting to handle client interaction");
@@ -185,8 +196,8 @@ impl ClientSession {
         tracing::trace!("Sending initial session info");
         if let Err(err) = send_message(
             &ws_outbound_tx,
-            SignalingMessage::SessionInfo {
-                info: self.client_info.clone(),
+            server::SessionInfo {
+                client: self.client_info.clone(),
                 profile: match &self.active_profile {
                     ActiveProfile::Specific(profile_id) => {
                         let profile = app_state.clients.get_profile(Some(profile_id));
@@ -206,9 +217,7 @@ impl ClientSession {
 
         tracing::trace!("Sending initial client list");
         let clients = app_state.list_clients(Some(&self.client_info.id)).await;
-        if let Err(err) =
-            send_message(&ws_outbound_tx, SignalingMessage::ClientList { clients }).await
-        {
+        if let Err(err) = send_message(&ws_outbound_tx, server::ClientList { clients }).await {
             tracing::warn!(?err, "Failed to send initial client list");
         }
 
@@ -216,9 +225,7 @@ impl ClientSession {
         let stations = app_state
             .list_stations(&self.active_profile, self.client_info.position_id.as_ref())
             .await;
-        if let Err(err) =
-            send_message(&ws_outbound_tx, SignalingMessage::StationList { stations }).await
-        {
+        if let Err(err) = send_message(&ws_outbound_tx, server::StationList { stations }).await {
             tracing::warn!(?err, "Failed to send initial stations list");
         }
 
@@ -239,7 +246,7 @@ impl ClientSession {
                 msg = ws_inbound_rx.recv() => {
                     match msg {
                         Some(msg) => {
-                            match handle_application_message(app_state, self, &ws_outbound_tx, msg).await {
+                            match handle_application_message(app_state, self, msg).await {
                                 ControlFlow::Continue(()) => continue,
                                 ControlFlow::Break(()) => {
                                     tracing::debug!("Breaking interaction loop");
@@ -273,7 +280,7 @@ impl ClientSession {
                     match msg {
                         Ok(msg) => {
                             tracing::trace!("Received broadcast message");
-                            if let SignalingMessage::ClientInfo {ref info} = msg
+                            if let ServerMessage::ClientInfo(info) = &msg
                                 && info.id == self.client_info.id {
                                 tracing::trace!("Dropping client info update broadcast for own client");
                                 continue;
@@ -327,7 +334,7 @@ impl ClientSession {
 
                         if let Some(reason) = reason_opt {
                             tracing::trace!(?reason, "Sending Disconnect message before stopping WebSocket writer task");
-                            match SignalingMessage::serialize(&SignalingMessage::Disconnected {reason}) {
+                            match ServerMessage::serialize(&ServerMessage::from(server::Disconnected {reason})) {
                                 Ok(msg) => {
                                     if let Err(err) = websocket_tx.send(ws::Message::from(msg)).await {
                                         tracing::warn!(?err, "Failed to send Disconnect message");
@@ -377,9 +384,9 @@ impl ClientSession {
         mut app_shutdown_rx: watch::Receiver<()>,
         mut client_shutdown_rx: watch::Receiver<Option<DisconnectReason>>,
         pong_update_tx: watch::Sender<Instant>,
-    ) -> (JoinHandle<()>, mpsc::Receiver<SignalingMessage>) {
+    ) -> (JoinHandle<()>, mpsc::Receiver<ClientMessage>) {
         let (ws_inbound_tx, ws_inbound_rx) =
-            mpsc::channel::<SignalingMessage>(config::CLIENT_WEBSOCKET_TASK_CHANNEL_CAPACITY);
+            mpsc::channel::<ClientMessage>(config::CLIENT_WEBSOCKET_TASK_CHANNEL_CAPACITY);
 
         let join_handle = tokio::spawn(async move {
             tracing::trace!("WebSocket reader task started");
@@ -676,7 +683,7 @@ mod tests {
         assert_eq!(
             call_offer,
             SignalingMessage::CallOffer {
-                peer_id: ClientId::from("client1"),
+                client_id: ClientId::from("client1"),
                 sdp: "sdp1".to_string()
             }
         );

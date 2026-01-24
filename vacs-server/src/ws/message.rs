@@ -3,14 +3,15 @@ use crate::ws::traits::{WebSocketSink, WebSocketStream};
 use axum::extract::ws;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::ServerMessage;
 
 /// Represents the outcome of [`receive_message`], indicating whether the message received should be handled, skipped, or receiving errored.
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)] // TODO fix?
 pub enum MessageResult {
     /// A valid application-message that can be processed.
-    ApplicationMessage(SignalingMessage),
+    ApplicationMessage(ClientMessage),
     /// A control message (e.g., Ping, Pong) that should be skipped.
     ControlMessage,
     /// The client has disconnected.
@@ -35,9 +36,10 @@ impl PartialEq for MessageResult {
 
 pub async fn send_message(
     ws_outbound_tx: &mpsc::Sender<ws::Message>,
-    message: SignalingMessage,
+    message: impl Into<ServerMessage>,
 ) -> anyhow::Result<()> {
-    let serialized_message = SignalingMessage::serialize(&message)
+    let message = message.into();
+    let serialized_message = ServerMessage::serialize(&message)
         .map_err(|e| anyhow::anyhow!(e).context("Failed to serialize message"))?;
     MessageMetrics::sent(&message, serialized_message.len());
     ws_outbound_tx
@@ -49,9 +51,10 @@ pub async fn send_message(
 
 pub async fn send_message_raw<T: WebSocketSink>(
     websocket_tx: &mut T,
-    message: SignalingMessage,
+    message: impl Into<ServerMessage>,
 ) -> anyhow::Result<()> {
-    let serialized_message = SignalingMessage::serialize(&message)
+    let message = message.into();
+    let serialized_message = ServerMessage::serialize(&message)
         .map_err(|e| anyhow::anyhow!(e).context("Failed to serialize message"))?;
     MessageMetrics::sent(&message, serialized_message.len());
     websocket_tx
@@ -64,7 +67,7 @@ pub async fn send_message_raw<T: WebSocketSink>(
 pub async fn receive_message<R: WebSocketStream>(websocket_rx: &mut R) -> MessageResult {
     match websocket_rx.next().await {
         Some(Ok(ws::Message::Text(raw_message))) => {
-            match SignalingMessage::deserialize(&raw_message) {
+            match ClientMessage::deserialize(&raw_message) {
                 Ok(message) => {
                     MessageMetrics::received(&message, raw_message.len());
                     MessageResult::ApplicationMessage(message)
@@ -298,7 +301,7 @@ mod tests {
         assert_eq!(
             receive_message(&mut mock_stream).await,
             MessageResult::ApplicationMessage(SignalingMessage::CallOffer {
-                peer_id: ClientId::from("client1"),
+                client_id: ClientId::from("client1"),
                 sdp: "sdp1".to_string()
             })
         );

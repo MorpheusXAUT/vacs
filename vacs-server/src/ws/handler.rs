@@ -11,7 +11,8 @@ use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode as TungsteniteCloseCode;
 use tracing::Instrument;
-use vacs_protocol::ws::{LoginFailureReason, SignalingMessage};
+use vacs_protocol::ws::server;
+use vacs_protocol::ws::server::LoginFailureReason;
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
@@ -51,7 +52,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
             if let Err(err) = send_message_raw(
                 &mut websocket_tx,
-                SignalingMessage::LoginFailure {
+                server::LoginFailure {
                     reason: LoginFailureReason::DuplicateId,
                 },
             )

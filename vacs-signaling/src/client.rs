@@ -15,7 +15,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, instrument};
 use vacs_protocol::VACS_PROTOCOL_VERSION;
 use vacs_protocol::vatsim::{ActiveProfile, PositionId, Profile};
-use vacs_protocol::ws::{ClientInfo, SessionProfile, SignalingMessage};
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::{ClientInfo, ServerMessage, SessionProfile};
+use vacs_protocol::ws::{client, server};
 
 const BROADCAST_CHANNEL_SIZE: usize = 100;
 const SEND_CHANNEL_SIZE: usize = 100;
@@ -49,8 +51,8 @@ pub enum SignalingEvent {
         /// The profile associated with the current session.
         profile: ActiveProfile<Profile>,
     },
-    /// Emitted for every [`SignalingMessage`] received by a connected and authenticated [`SignalingClient`].
-    Message(SignalingMessage),
+    /// Emitted for every [`ServerMessage`] received by a connected and authenticated [`SignalingClient`].
+    Message(ServerMessage),
     /// Emitted for every [`SignalingRuntimeError`] handled by the [`SignalingClient`].
     /// This includes issues during transmission or other errors received from the server.
     Error(SignalingRuntimeError),
@@ -125,11 +127,11 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
         self.inner.disconnect(true).await;
     }
 
-    pub async fn send(&self, msg: SignalingMessage) -> Result<(), SignalingError> {
+    pub async fn send(&self, msg: ClientMessage) -> Result<(), SignalingError> {
         self.inner.send(msg).await
     }
 
-    pub async fn recv(&self) -> Result<SignalingMessage, SignalingError> {
+    pub async fn recv(&self) -> Result<ServerMessage, SignalingError> {
         self.inner.recv().await
     }
 
@@ -140,7 +142,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
     pub async fn recv_with_timeout(
         &self,
         timeout: Duration,
-    ) -> Result<SignalingMessage, SignalingError> {
+    ) -> Result<ServerMessage, SignalingError> {
         self.inner.recv_with_timeout(timeout).await
     }
 }
@@ -242,7 +244,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
     async fn disconnect(&self, requested: bool) {
         if self.state() != State::Disconnected {
             tracing::trace!(?requested, "Sending logout message before disconnecting");
-            if let Err(err) = self.send(SignalingMessage::Logout).await {
+            if let Err(err) = self.send(ClientMessage::Logout).await {
                 tracing::warn!(?err, "Failed to send Logout message before disconnecting");
             }
         }
@@ -255,7 +257,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn send(&self, msg: SignalingMessage) -> Result<(), SignalingError> {
+    pub async fn send(&self, msg: ClientMessage) -> Result<(), SignalingError> {
         match self.state() {
             State::Disconnected => {
                 tracing::warn!("Tried to send message before signaling client was started");
@@ -263,7 +265,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
                     SignalingRuntimeError::Disconnected(None),
                 ));
             }
-            State::Connected if !matches!(msg, SignalingMessage::Login { .. }) => {
+            State::Connected if !matches!(msg, ClientMessage::Login { .. }) => {
                 tracing::warn!("Tried to send message before login");
                 return Err(SignalingError::Runtime(
                     SignalingRuntimeError::Disconnected(None),
@@ -280,7 +282,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         };
 
         tracing::debug!("Sending message to send channel");
-        let serialized = SignalingMessage::serialize(&msg).map_err(|err| {
+        let serialized = ClientMessage::serialize(&msg).map_err(|err| {
             tracing::warn!(?err, "Failed to serialize message");
             SignalingError::Runtime(SignalingRuntimeError::SerializationError(err.to_string()))
         })?;
@@ -292,16 +294,13 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    async fn recv(&self) -> Result<SignalingMessage, SignalingError> {
+    async fn recv(&self) -> Result<ServerMessage, SignalingError> {
         tracing::debug!("Waiting for message from server");
         self.recv_with_timeout(Duration::MAX).await
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    async fn recv_with_timeout(
-        &self,
-        timeout: Duration,
-    ) -> Result<SignalingMessage, SignalingError> {
+    async fn recv_with_timeout(&self, timeout: Duration) -> Result<ServerMessage, SignalingError> {
         tracing::debug!("Waiting for message from server with timeout");
         let mut broadcast_rx = self.subscribe();
 
@@ -353,23 +352,26 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
         let position_id = self.position_id.read().clone();
         tracing::debug!("Sending Login message to server");
-        self.send(SignalingMessage::Login {
-            token: token.to_string(),
-            protocol_version: VACS_PROTOCOL_VERSION.to_string(),
-            custom_profile: self.custom_profile,
-            position_id,
-        })
+        self.send(
+            client::Login {
+                token: token.to_string(),
+                protocol_version: VACS_PROTOCOL_VERSION.to_string(),
+                custom_profile: self.custom_profile,
+                position_id,
+            }
+            .into(),
+        )
         .await?;
 
         tracing::debug!("Awaiting authentication response from server");
         match self.recv_with_timeout(self.login_timeout).await? {
-            SignalingMessage::SessionInfo { info, profile } => {
+            ServerMessage::SessionInfo(server::SessionInfo { client, profile }) => {
                 if let SessionProfile::Changed(profile) = profile {
-                    tracing::info!(?info, ?profile, "Login successful, received session info");
-                    Ok((info, profile))
+                    tracing::info!(?client, ?profile, "Login successful, received session info");
+                    Ok((client, profile))
                 } else {
                     tracing::error!(
-                        ?info,
+                        ?client,
                         ?profile,
                         "Login successful, but received unexpected session profile"
                     );
@@ -378,14 +380,14 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
                     ))
                 }
             }
-            SignalingMessage::LoginFailure { reason } => {
-                tracing::warn!(?reason, "Login failed");
-                Err(SignalingError::LoginError(reason))
+            ServerMessage::LoginFailure(failure) => {
+                tracing::warn!(reason = ?failure.reason, "Login failed");
+                Err(SignalingError::LoginError(failure.reason))
             }
-            SignalingMessage::Error { reason, peer_id } => {
-                tracing::error!(?reason, ?peer_id, "Server returned error");
+            ServerMessage::Error(error) => {
+                tracing::error!(reason = ?error.reason, client_id = ?error.client_id, "Server returned error");
                 Err(SignalingError::Runtime(SignalingRuntimeError::ServerError(
-                    reason,
+                    error.reason,
                 )))
             }
             other => {

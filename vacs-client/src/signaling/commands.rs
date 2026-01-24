@@ -11,7 +11,6 @@ use std::collections::HashSet;
 use tauri::{AppHandle, Manager, State};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
-use vacs_signaling::protocol::ws::SignalingMessage;
 
 #[tauri::command]
 #[vacs_macros::log_err]
@@ -81,11 +80,12 @@ pub async fn signaling_start_call(
 
     let mut state = app_state.lock().await;
 
-    state
-        .send_signaling_message(SignalingMessage::CallInvite {
-            peer_id: peer_id.clone(),
-        })
-        .await?;
+    // TODO CallInvite with route
+    // state
+    //     .send_signaling_message(SignalingMessage::CallInvite {
+    //         peer_id: peer_id.clone(),
+    //     })
+    //     .await?;
 
     if state.is_ice_config_expired() {
         refresh_ice_config(&http_state, &mut state).await;

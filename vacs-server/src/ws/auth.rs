@@ -9,7 +9,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::instrument;
 use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId};
-use vacs_protocol::ws::{ClientInfo, ErrorReason, LoginFailureReason, SignalingMessage};
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::{ClientInfo, LoginFailureReason};
+use vacs_protocol::ws::shared::ErrorReason;
+use vacs_protocol::ws::{server, shared};
 use vacs_vatsim::{ControllerInfo, FacilityType};
 
 #[instrument(level = "debug", skip_all)]
@@ -23,8 +26,8 @@ pub async fn handle_websocket_login(
     let result = tokio::time::timeout(Duration::from_millis(state.config.auth.login_flow_timeout_millis), async {
         loop {
             match receive_message(websocket_receiver).await {
-                MessageResult::ApplicationMessage(SignalingMessage::Login { token, protocol_version, custom_profile, position_id }) => {
-                    return process_login_request(&state, &token, &protocol_version, custom_profile, position_id).await;
+                MessageResult::ApplicationMessage(ClientMessage::Login (login)) => {
+                    return process_login_request(&state, &login.token, &login.protocol_version, login.custom_profile, login.position_id).await;
                 }
                 MessageResult::ApplicationMessage(message) => {
                     tracing::debug!(msg = ?message, "Received unexpected message during websocket login flow");
@@ -235,7 +238,7 @@ async fn handle_login_outcome(
         LoginOutcome::Failure(reason) => {
             ClientMetrics::login_attempt(false);
             ClientMetrics::login_failure(reason.clone());
-            let message = SignalingMessage::LoginFailure { reason };
+            let message = server::LoginFailure { reason };
             if let Err(err) = send_message_raw(websocket_sender, message).await {
                 tracing::warn!(?err, "Failed to send websocket login failure message");
             }
@@ -243,9 +246,9 @@ async fn handle_login_outcome(
         LoginOutcome::Error(reason) => {
             ClientMetrics::login_attempt(false);
             ErrorMetrics::error(&reason);
-            let message = SignalingMessage::Error {
+            let message = shared::Error {
                 reason,
-                peer_id: None,
+                client_id: None,
             };
             if let Err(err) = send_message_raw(websocket_sender, message).await {
                 tracing::warn!(?err, "Failed to send websocket login error message");

@@ -13,7 +13,7 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 use tokio_util::sync::CancellationToken;
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::server::ServerMessage;
 
 const HEARTBEAT_PING_INTERVAL: Duration = Duration::from_secs(15);
 const HEARTBEAT_PONG_TIMEOUT: Duration = Duration::from_secs(5);
@@ -112,7 +112,7 @@ impl SignalingReceiver for TokioReceiver {
     async fn recv(
         &mut self,
         send_tx: &mpsc::Sender<tungstenite::Message>,
-    ) -> Result<SignalingMessage, SignalingRuntimeError> {
+    ) -> Result<ServerMessage, SignalingRuntimeError> {
         if self.heartbeat_handle.is_none() {
             self.spawn_heartbeat(send_tx);
         }
@@ -129,13 +129,13 @@ impl SignalingReceiver for TokioReceiver {
                         Ok(tungstenite::Message::Text(text)) => {
                             tracing::debug!("Received message");
                             self.heartbeat_state.mark_rx();
-                            return match SignalingMessage::deserialize(&text) {
-                                Ok(SignalingMessage::Disconnected { reason }) => {
+                            return match ServerMessage::deserialize(&text) {
+                                Ok(ServerMessage::Disconnected(disconnected)) => {
                                     tracing::debug!(
-                                        ?reason,
+                                        reason = ?disconnected.reason,
                                         "Received Disconnected message, returning disconnected error"
                                     );
-                                    Err(SignalingRuntimeError::Disconnected(Some(reason)))
+                                    Err(SignalingRuntimeError::Disconnected(Some(disconnected.reason)))
                                 }
                                 Ok(msg) => Ok(msg),
                                 Err(err) => {

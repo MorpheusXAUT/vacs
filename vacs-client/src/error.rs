@@ -7,9 +7,8 @@ use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
 use vacs_signaling::protocol::vatsim::ClientId;
-use vacs_signaling::protocol::ws::{
-    CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason,
-};
+use vacs_signaling::protocol::ws::server::{DisconnectReason, LoginFailureReason};
+use vacs_signaling::protocol::ws::shared::{CallErrorReason, ErrorReason};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -239,6 +238,9 @@ fn format_signaling_error(err: &SignalingError) -> String {
                 ErrorReason::RateLimited {retry_after_secs} => {
                     format!("Server error: Rate limited. Retry after {retry_after_secs}.")
                 },
+                ErrorReason::ClientNotFound => {
+                    "Server error: Client not found.".to_string() // TODO proper error message
+                }
             },
             SignalingRuntimeError::Disconnected(reason) => match reason {
                 None => "Disconnected",
@@ -286,9 +288,11 @@ impl CallError {
                     CallErrorReason::WebrtcFailure => "Connection failure",
                     CallErrorReason::AudioFailure => "Audio failure",
                     CallErrorReason::CallFailure => "Call failure",
+                    CallErrorReason::CallActive => "Call already active",
                     CallErrorReason::SignalingFailure => "Target not reachable",
                     CallErrorReason::AutoHangup => "Target did not answer",
                     CallErrorReason::Other => "Unknown failure",
+                    CallErrorReason::TargetNotFound => "Call target not found",
                 }
             ),
         }
