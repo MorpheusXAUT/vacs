@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub enum ErrorReason {
     MalformedMessage,
     Internal(String),
     PeerConnection,
     UnexpectedMessage(String),
     RateLimited { retry_after_secs: u64 },
+    ClientNotFound,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

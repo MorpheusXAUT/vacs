@@ -11,15 +11,6 @@ pub enum SessionProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
-pub enum DisconnectReason {
-    Terminated,
-    NoActiveVatsimConnection,
-    AmbiguousVatsimPosition(Vec<PositionId>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ClientInfo {
     pub id: ClientId,
     pub display_name: String,
@@ -81,6 +72,12 @@ impl From<ActiveProfile<Profile>> for SessionProfile {
 impl From<ClientInfo> for ServerMessage {
     fn from(value: ClientInfo) -> Self {
         Self::ClientInfo(value)
+    }
+}
+
+impl From<SessionInfo> for ServerMessage {
+    fn from(value: SessionInfo) -> Self {
+        Self::SessionInfo(value)
     }
 }
 

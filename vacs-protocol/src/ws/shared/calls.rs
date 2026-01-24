@@ -31,9 +31,9 @@ pub enum CallTarget {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub enum CallErrorReason {
     TargetNotFound,
+    CallActive,
     WebrtcFailure,
     AudioFailure,
     CallFailure,
@@ -159,6 +159,15 @@ impl CallSource {
     pub fn with_station(mut self, station_id: StationId) -> Self {
         self.station_id = Some(station_id);
         self
+    }
+}
+
+impl CallEnd {
+    pub fn new(call_id: CallId, ending_client_id: ClientId) -> Self {
+        Self {
+            call_id,
+            ending_client_id,
+        }
     }
 }
 

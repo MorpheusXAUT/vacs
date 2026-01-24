@@ -5,11 +5,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub enum CallCancelReason {
     AnsweredElsewhere(ClientId),
     CallerCancelled,
-    AllRejected,
+    AllFailed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,6 +16,12 @@ pub enum CallCancelReason {
 pub struct CallCancelled {
     pub call_id: CallId,
     pub reason: CallCancelReason,
+}
+
+impl CallCancelled {
+    pub fn new(call_id: CallId, reason: CallCancelReason) -> Self {
+        Self { call_id, reason }
+    }
 }
 
 impl From<CallCancelled> for ServerMessage {
