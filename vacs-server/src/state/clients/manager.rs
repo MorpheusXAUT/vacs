@@ -1,13 +1,15 @@
 use crate::metrics::guards::ClientConnectionGuard;
-use crate::state::client::session::ClientSession;
-use crate::state::client::{ClientManagerError, Result};
+use crate::state::clients::session::ClientSession;
+use crate::state::clients::{ClientManagerError, Result};
 use std::collections::{HashMap, HashSet};
+use tokio::sync::broadcast::error::SendError;
 use tokio::sync::{RwLock, broadcast, mpsc};
 use tracing::instrument;
 use vacs_protocol::vatsim::{
     ActiveProfile, ClientId, PositionId, ProfileId, StationChange, StationId,
 };
-use vacs_protocol::ws::{ClientInfo, DisconnectReason, SignalingMessage, StationInfo};
+use vacs_protocol::ws::server;
+use vacs_protocol::ws::server::{ClientInfo, DisconnectReason, ServerMessage, StationInfo};
 use vacs_vatsim::coverage::network::{Network, RelevantStations};
 use vacs_vatsim::coverage::position::Position;
 use vacs_vatsim::coverage::profile::Profile;
@@ -15,7 +17,7 @@ use vacs_vatsim::{ControllerInfo, FacilityType};
 
 #[derive(Debug)]
 pub struct ClientManager {
-    broadcast_tx: broadcast::Sender<SignalingMessage>,
+    broadcast_tx: broadcast::Sender<ServerMessage>,
     network: Network,
     clients: RwLock<HashMap<ClientId, ClientSession>>,
     online_positions: RwLock<HashMap<PositionId, HashSet<ClientId>>>,
@@ -23,7 +25,7 @@ pub struct ClientManager {
 }
 
 impl ClientManager {
-    pub fn new(broadcast_tx: broadcast::Sender<SignalingMessage>, network: Network) -> Self {
+    pub fn new(broadcast_tx: broadcast::Sender<ServerMessage>, network: Network) -> Self {
         Self {
             broadcast_tx,
             network,
@@ -50,6 +52,22 @@ impl ClientManager {
         position_id.and_then(|position_id| self.network.get_position(position_id))
     }
 
+    pub async fn clients_for_position(&self, position_id: &PositionId) -> HashSet<ClientId> {
+        self.online_positions
+            .read()
+            .await
+            .get(position_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub async fn clients_for_station(&self, station_id: &StationId) -> HashSet<ClientId> {
+        let Some(position_id) = self.online_stations.read().await.get(station_id).cloned() else {
+            return HashSet::new();
+        };
+        self.clients_for_position(&position_id).await
+    }
+
     pub fn network(&self) -> &Network {
         &self.network
     }
@@ -60,7 +78,7 @@ impl ClientManager {
         client_info: ClientInfo,
         active_profile: ActiveProfile<ProfileId>,
         client_connection_guard: ClientConnectionGuard,
-    ) -> Result<(ClientSession, mpsc::Receiver<SignalingMessage>)> {
+    ) -> Result<(ClientSession, mpsc::Receiver<ServerMessage>)> {
         tracing::trace!("Adding client");
 
         if self.clients.read().await.contains_key(&client_info.id) {
@@ -125,17 +143,10 @@ impl ClientManager {
             Vec::new()
         };
 
-        if self.broadcast_tx.receiver_count() > 0 {
-            tracing::trace!("Broadcasting client connected message");
-            if let Err(err) = self.broadcast_tx.send(SignalingMessage::ClientConnected {
-                client: client_info,
-            }) {
-                tracing::warn!(?err, "Failed to broadcast client connected message");
-            }
-        } else {
-            tracing::trace!(
-                "No other broadcast receivers subscribed, skipping client connected message"
-            );
+        if let Err(err) = self.broadcast(server::ClientConnected {
+            client: client_info,
+        }) {
+            tracing::warn!(?err, "Failed to broadcast client connected message");
         }
 
         self.broadcast_station_changes(&changes).await;
@@ -207,18 +218,8 @@ impl ClientManager {
         };
         client.disconnect(disconnect_reason);
 
-        if self.broadcast_tx.receiver_count() > 1 {
-            tracing::trace!("Broadcasting client disconnected message");
-            if let Err(err) = self
-                .broadcast_tx
-                .send(SignalingMessage::ClientDisconnected { id: client_id })
-            {
-                tracing::warn!(?err, "Failed to broadcast client disconnected message");
-            }
-        } else {
-            tracing::debug!(
-                "No other broadcast receivers subscribed, skipping client disconnected message"
-            );
+        if let Err(err) = self.broadcast(server::ClientDisconnected { client_id }) {
+            tracing::warn!(?err, "Failed to broadcast client disconnected message");
         }
 
         self.broadcast_station_changes(&changes).await;
@@ -286,8 +287,30 @@ impl ClientManager {
         self.clients.read().await.get(client_id).cloned()
     }
 
+    pub async fn is_client_connected(&self, client_id: &ClientId) -> bool {
+        self.clients.read().await.contains_key(client_id)
+    }
+
     pub async fn is_empty(&self) -> bool {
         self.clients.read().await.is_empty()
+    }
+
+    #[allow(clippy::result_large_err)]
+    pub fn broadcast(
+        &self,
+        message: impl Into<ServerMessage>,
+    ) -> Result<usize, SendError<ServerMessage>> {
+        let message = message.into();
+        if self.broadcast_tx.receiver_count() > 0 {
+            tracing::trace!(message_variant = message.variant(), "Broadcasting message");
+            self.broadcast_tx.send(message)
+        } else {
+            tracing::trace!(
+                message_variant = message.variant(),
+                "No receivers subscribed, skipping message broadcast"
+            );
+            Ok(0)
+        }
     }
 
     pub async fn sync_vatsim_state(
@@ -295,7 +318,7 @@ impl ClientManager {
         controllers: &HashMap<ClientId, ControllerInfo>,
         pending_disconnect: &mut HashSet<ClientId>,
     ) -> Vec<(ClientId, DisconnectReason)> {
-        let mut updates: Vec<SignalingMessage> = Vec::new();
+        let mut updates: Vec<ServerMessage> = Vec::new();
         let mut disconnected_clients: Vec<(ClientId, DisconnectReason)> = Vec::new();
         let mut coverage_changes: Vec<StationChange> = Vec::new();
 
@@ -439,8 +462,8 @@ impl ClientManager {
                                 );
 
                                 if let Err(err) = session
-                                    .send_message(SignalingMessage::SessionInfo {
-                                        info: session.client_info().clone(),
+                                    .send_message(server::SessionInfo {
+                                        client: session.client_info().clone(),
                                         profile: session_profile,
                                     })
                                     .await
@@ -454,9 +477,7 @@ impl ClientManager {
                             }
 
                             tracing::trace!(?cid, ?session, "Client info updated, broadcasting");
-                            updates.push(SignalingMessage::ClientInfo {
-                                info: session.client_info().clone(),
-                            });
+                            updates.push(ServerMessage::from(session.client_info().clone()));
                         }
                     }
                 }
@@ -477,7 +498,7 @@ impl ClientManager {
 
         if self.broadcast_tx.receiver_count() > 0 {
             for msg in updates {
-                if let Err(err) = self.broadcast_tx.send(msg) {
+                if let Err(err) = self.broadcast(msg) {
                     tracing::warn!(?err, "Failed to broadcast client info update");
                 }
             }
@@ -568,7 +589,7 @@ impl ClientManager {
             }
 
             if let Err(err) = client
-                .send_message(SignalingMessage::StationChanges {
+                .send_message(server::StationChanges {
                     changes: changes_to_send,
                 })
                 .await

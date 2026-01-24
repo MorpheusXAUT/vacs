@@ -9,7 +9,7 @@ export type ClientInfo = {
 };
 
 export type SessionInfo = {
-    info: ClientInfo;
+    client: ClientInfo;
     profile: SessionProfile;
 };
 

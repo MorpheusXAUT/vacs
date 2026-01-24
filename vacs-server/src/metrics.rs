@@ -11,7 +11,7 @@ use axum_prometheus::{
 use metrics::{Unit, counter, describe_counter, describe_gauge, describe_histogram, histogram};
 use semver::Version;
 use vacs_protocol::http::version::ReleaseChannel;
-use vacs_protocol::ws::LoginFailureReason;
+use vacs_protocol::ws::server::LoginFailureReason;
 
 pub fn setup_prometheus_metric_layer() -> (PrometheusMetricLayer<'static>, PrometheusHandle) {
     register_metrics();

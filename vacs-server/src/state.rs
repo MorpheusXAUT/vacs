@@ -1,4 +1,5 @@
-pub mod client;
+pub mod calls;
+pub mod clients;
 
 use crate::config;
 use crate::config::AppConfig;
@@ -7,10 +8,9 @@ use crate::metrics::ErrorMetrics;
 use crate::metrics::guards::ClientConnectionGuard;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
-use crate::state::client::manager::ClientManager;
-use crate::state::client::session::ClientSession;
+use crate::state::calls::CallManager;
+use crate::state::clients::{ClientManager, ClientSession};
 use crate::store::{Store, StoreBackend};
-use crate::ws::calls::CallStateManager;
 use anyhow::Context;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -21,7 +21,8 @@ use tokio::time;
 use tracing::{Instrument, instrument};
 use uuid::Uuid;
 use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId};
-use vacs_protocol::ws::{ClientInfo, DisconnectReason, ErrorReason, SignalingMessage, StationInfo};
+use vacs_protocol::ws::server::{ClientInfo, DisconnectReason, ServerMessage, StationInfo};
+use vacs_protocol::ws::shared::{Error, ErrorReason};
 use vacs_vatsim::ControllerInfo;
 use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::DataFeed;
@@ -30,11 +31,11 @@ use vacs_vatsim::slurper::SlurperClient;
 pub struct AppState {
     pub config: AppConfig,
     pub updates: UpdateChecker,
-    pub call_state: CallStateManager,
+    pub calls: CallManager,
     pub clients: ClientManager,
     pub ice_config_provider: Arc<dyn IceConfigProvider>,
     store: Store,
-    broadcast_tx: broadcast::Sender<SignalingMessage>,
+    broadcast_tx: broadcast::Sender<ServerMessage>,
     slurper: SlurperClient,
     data_feed: Arc<dyn DataFeed>,
     rate_limiters: RateLimiters,
@@ -60,7 +61,7 @@ impl AppState {
             updates,
             ice_config_provider,
             store,
-            call_state: CallStateManager::new(),
+            calls: CallManager::new(),
             clients: ClientManager::new(broadcast_tx.clone(), network),
             broadcast_tx,
             slurper,
@@ -72,7 +73,7 @@ impl AppState {
 
     pub fn get_client_receivers(
         &self,
-    ) -> (broadcast::Receiver<SignalingMessage>, watch::Receiver<()>) {
+    ) -> (broadcast::Receiver<ServerMessage>, watch::Receiver<()>) {
         (self.broadcast_tx.subscribe(), self.shutdown_rx.clone())
     }
 
@@ -82,7 +83,7 @@ impl AppState {
         client_info: ClientInfo,
         active_profile: ActiveProfile<ProfileId>,
         client_connection_guard: ClientConnectionGuard,
-    ) -> anyhow::Result<(ClientSession, mpsc::Receiver<SignalingMessage>)> {
+    ) -> anyhow::Result<(ClientSession, mpsc::Receiver<ServerMessage>)> {
         tracing::trace!("Registering client");
 
         let (client, rx) = self
@@ -106,7 +107,7 @@ impl AppState {
             .remove_client(client_id.clone(), disconnect_reason)
             .await;
 
-        self.call_state.cleanup_client_calls(client_id);
+        self.calls.cleanup_client_calls(client_id);
 
         tracing::debug!("Client unregistered");
     }
@@ -129,45 +130,41 @@ impl AppState {
         self.clients.get_client(client_id).await
     }
 
-    pub async fn send_message_to_peer(
+    #[tracing::instrument(level = "trace", skip(self, message))]
+    pub async fn send_message(
         &self,
-        client: &ClientSession,
-        peer_id: &ClientId,
-        message: SignalingMessage,
-    ) {
-        match self.get_client(peer_id).await {
-            Some(peer) => {
-                tracing::trace!(?peer_id, "Sending message to peer");
-                if let Err(err) = peer.send_message(message).await {
-                    tracing::warn!(?err, "Failed to send message to peer");
+        client_id: &ClientId,
+        message: impl Into<ServerMessage>,
+    ) -> Result<(), Error> {
+        match self.get_client(client_id).await {
+            Some(client) => {
+                tracing::trace!("Sending message to client");
+                if let Err(err) = client.send_message(message).await {
+                    tracing::warn!(?err, "Failed to send message to client");
                     ErrorMetrics::error(&ErrorReason::PeerConnection);
-                    if let Err(e) = client
-                        .send_message(SignalingMessage::Error {
-                            reason: ErrorReason::PeerConnection,
-                            peer_id: Some(peer_id.clone()),
-                        })
-                        .await
-                    {
-                        tracing::warn!(?peer_id, orig_err = ?err, err = ?e, "Failed to send error message to client");
-                    }
+                    Err(Error::new(ErrorReason::PeerConnection).with_client_id(client_id.clone()))
+                } else {
+                    Ok(())
                 }
             }
             None => {
-                tracing::warn!(?peer_id, "Peer not found");
+                tracing::warn!("Client not found");
                 ErrorMetrics::peer_not_found();
-                if let Err(err) = client
-                    .send_message(SignalingMessage::PeerNotFound {
-                        peer_id: peer_id.clone(),
-                    })
-                    .await
-                {
-                    tracing::warn!(
-                        ?peer_id,
-                        ?err,
-                        "Failed to send peer not found message to client"
-                    );
-                }
+                Err(Error::new(ErrorReason::ClientNotFound).with_client_id(client_id.clone()))
             }
+        }
+    }
+
+    pub async fn send_peer_message(
+        &self,
+        source: &ClientSession,
+        target: &ClientId,
+        message: impl Into<ServerMessage>,
+    ) {
+        if let Err(err) = self.send_message(target, message).await
+            && source.send_message(err).await.is_err()
+        {
+            tracing::warn!("Failed to send error message to source client");
         }
     }
 

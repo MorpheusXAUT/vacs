@@ -39,7 +39,7 @@ mod delete {
     use super::*;
     use crate::http::StatusCodeResult;
     use axum::http::StatusCode;
-    use vacs_protocol::ws::DisconnectReason;
+    use vacs_protocol::ws::server::DisconnectReason;
 
     pub async fn terminate_connection(
         auth_session: AuthSession,

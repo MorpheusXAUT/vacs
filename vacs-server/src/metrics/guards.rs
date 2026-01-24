@@ -1,8 +1,10 @@
 use crate::metrics::labels::AsMetricLabel;
 use metrics::{counter, gauge, histogram};
 use std::time::Instant;
-use vacs_protocol::ws::{CallErrorReason, DisconnectReason};
+use vacs_protocol::ws::server::DisconnectReason;
+use vacs_protocol::ws::shared::CallErrorReason;
 
+#[derive(Debug)]
 pub struct ClientConnectionGuard {
     start_time: Instant,
     disconnect_reason: Option<DisconnectReason>,
@@ -45,6 +47,7 @@ impl Drop for ClientConnectionGuard {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CallAttemptOutcome {
     Accepted,
     Rejected,
@@ -53,6 +56,7 @@ pub enum CallAttemptOutcome {
     Aborted,
 }
 
+#[derive(Debug)]
 pub struct CallAttemptGuard {
     start_time: Instant,
     outcome: Option<CallAttemptOutcome>,
@@ -93,6 +97,7 @@ impl Drop for CallAttemptGuard {
     }
 }
 
+#[derive(Debug)]
 pub struct CallGuard {
     start_time: Instant,
 }

@@ -3,7 +3,8 @@ use std::ops::Add;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio_tungstenite::tungstenite;
-use vacs_protocol::ws::{DisconnectReason, ErrorReason, LoginFailureReason};
+use vacs_protocol::ws::server::{DisconnectReason, LoginFailureReason};
+use vacs_protocol::ws::shared::ErrorReason;
 
 #[derive(Debug, Error)]
 pub enum SignalingError {

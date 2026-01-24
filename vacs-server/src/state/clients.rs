@@ -1,6 +1,9 @@
 pub mod manager;
 pub mod session;
 
+pub use manager::*;
+pub use session::*;
+
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]

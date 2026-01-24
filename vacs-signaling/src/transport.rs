@@ -6,7 +6,7 @@ use crate::error::{SignalingError, SignalingRuntimeError};
 use ::tokio::sync::mpsc;
 use async_trait::async_trait;
 use tokio_tungstenite::tungstenite;
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::server::ServerMessage;
 
 #[async_trait]
 pub trait SignalingTransport: Send + Sync + 'static {
@@ -27,5 +27,5 @@ pub trait SignalingReceiver: Send + Sync + 'static {
     async fn recv(
         &mut self,
         send_tx: &mpsc::Sender<tungstenite::Message>,
-    ) -> Result<SignalingMessage, SignalingRuntimeError>;
+    ) -> Result<ServerMessage, SignalingRuntimeError>;
 }

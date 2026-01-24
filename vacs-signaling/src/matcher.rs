@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, oneshot};
 use tracing::instrument;
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::server::ServerMessage;
 
 /// Represents a waiting request for a message that matches a predicate.
 struct MatcherEntry {
-    predicate: Box<dyn Fn(&SignalingMessage) -> bool + Send + Sync + 'static>,
-    responder: oneshot::Sender<SignalingMessage>,
+    predicate: Box<dyn Fn(&ServerMessage) -> bool + Send + Sync + 'static>,
+    responder: oneshot::Sender<ServerMessage>,
 }
 
 /// ResponseMatcher holds a queue of waiters that want to match an incoming message.
@@ -39,9 +39,9 @@ impl ResponseMatcher {
         &self,
         predicate: F,
         timeout: Duration,
-    ) -> Result<SignalingMessage, SignalingError>
+    ) -> Result<ServerMessage, SignalingError>
     where
-        F: Fn(&SignalingMessage) -> bool + Send + Sync + 'static,
+        F: Fn(&ServerMessage) -> bool + Send + Sync + 'static,
     {
         let (tx, rx) = oneshot::channel();
 
@@ -75,9 +75,9 @@ impl ResponseMatcher {
     ///     Should you ever make it here, please open an issue with the next generation of project maintainers.
     /// - `Err(SignalingError:Disconnected)` if the Matcher was closed unexpectedly.
     #[instrument(level = "debug", skip(self, predicate), err)]
-    pub async fn wait_for<F>(&self, predicate: F) -> Result<SignalingMessage, SignalingError>
+    pub async fn wait_for<F>(&self, predicate: F) -> Result<ServerMessage, SignalingError>
     where
-        F: Fn(&SignalingMessage) -> bool + Send + Sync + 'static,
+        F: Fn(&ServerMessage) -> bool + Send + Sync + 'static,
     {
         self.wait_for_with_timeout(predicate, Duration::MAX).await
     }
@@ -85,7 +85,7 @@ impl ResponseMatcher {
     /// Called by the receiving task to check if a message completes any match. If so, the message is
     /// forwarded to the matcher awaiting it and not processed any further by [`try_match`].
     #[instrument(level = "debug", skip(self, msg))]
-    pub fn try_match(&self, msg: &SignalingMessage) {
+    pub fn try_match(&self, msg: &ServerMessage) {
         let mut inner = self.inner.try_lock();
         if let Ok(ref mut queue) = inner
             && let Some(pos) = queue.iter().position(|entry| (entry.predicate)(msg))

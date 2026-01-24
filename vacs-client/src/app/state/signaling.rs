@@ -14,10 +14,12 @@ use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
-use vacs_signaling::protocol::ws::{
-    CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason, SessionProfile,
-    SignalingMessage,
+use vacs_signaling::protocol::ws::client::{CallRejectReason, ClientMessage};
+use vacs_signaling::protocol::ws::server::{
+    DisconnectReason, LoginFailureReason, ServerMessage, SessionProfile,
 };
+use vacs_signaling::protocol::ws::shared::{CallErrorReason, CallId, ErrorReason};
+use vacs_signaling::protocol::ws::{client, server, shared};
 use vacs_signaling::transport::tokio::TokioTransport;
 
 const INCOMING_CALLS_LIMIT: usize = 5;
@@ -30,7 +32,7 @@ pub trait AppStateSignalingExt: sealed::Sealed {
     ) -> Result<(), Error>;
     async fn disconnect_signaling(&mut self, app: &AppHandle);
     async fn handle_signaling_connection_closed(&mut self, app: &AppHandle);
-    async fn send_signaling_message(&mut self, msg: SignalingMessage) -> Result<(), Error>;
+    async fn send_signaling_message(&mut self, msg: impl Into<ClientMessage>) -> Result<(), Error>;
     fn set_outgoing_call_peer_id(&mut self, peer_id: Option<ClientId>);
     fn remove_outgoing_call_peer_id(&mut self, peer_id: &ClientId) -> bool;
     fn incoming_call_peer_ids_len(&self) -> usize;
@@ -108,7 +110,8 @@ impl AppStateSignalingExt for AppStateInner {
         log::debug!("Successfully handled closed signaling server connection");
     }
 
-    async fn send_signaling_message(&mut self, msg: SignalingMessage) -> Result<(), Error> {
+    async fn send_signaling_message(&mut self, msg: impl Into<ClientMessage>) -> Result<(), Error> {
+        let msg = msg.into();
         log::trace!("Sending signaling message: {msg:?}");
 
         if let Err(err) = self.signaling_client.send(msg).await {
@@ -217,9 +220,10 @@ impl AppStateSignalingExt for AppStateInner {
                         let state = app.state::<AppState>();
                         let mut state = state.lock().await;
 
-                        if let Err(err) = state.send_signaling_message(SignalingMessage::CallEnd { peer_id: peer_id.clone() }).await {
-                            log::warn!("Failed to send call end message after call timer expired: {err:?}");
-                        }
+                        // TODO end with route
+                        // if let Err(err) = state.send_signaling_message(SignalingMessage::CallEnd { client_id: peer_id.clone() }).await {
+                        //     log::warn!("Failed to send call end message after call timer expired: {err:?}");
+                        // }
 
                         state.cleanup_call(&peer_id).await;
                         state.set_outgoing_call_peer_id(None);
@@ -257,13 +261,14 @@ impl AppStateSignalingExt for AppStateInner {
     async fn accept_call(
         &mut self,
         app: &AppHandle,
-        peer_id: Option<ClientId>,
+        client_id: Option<ClientId>,
     ) -> Result<bool, Error> {
-        let peer_id = match peer_id.or_else(|| self.incoming_call_peer_ids.iter().next().cloned()) {
-            Some(id) => id,
-            None => return Ok(false),
-        };
-        log::debug!("Accepting call from {peer_id}");
+        let client_id =
+            match client_id.or_else(|| self.incoming_call_peer_ids.iter().next().cloned()) {
+                Some(id) => id,
+                None => return Ok(false),
+            };
+        log::debug!("Accepting call from {client_id}");
 
         if !self.config.ice.is_default() && self.is_ice_config_expired() {
             match app
@@ -280,15 +285,16 @@ impl AppStateSignalingExt for AppStateInner {
             };
         }
 
-        self.send_signaling_message(SignalingMessage::CallAccept {
-            peer_id: peer_id.clone(),
+        self.send_signaling_message(shared::CallAccept {
+            call_id: CallId::new(), // TODO set actual call ID
+            accepting_client_id: client_id.clone(),
         })
         .await?;
-        self.remove_incoming_call_peer_id(&peer_id);
+        self.remove_incoming_call_peer_id(&client_id);
 
         self.audio_manager.read().stop(SourceType::Ring);
 
-        app.emit("signaling:call-accept", peer_id).ok();
+        app.emit("signaling:call-accept", client_id).ok();
 
         Ok(true)
     }
@@ -307,8 +313,9 @@ impl AppStateSignalingExt for AppStateInner {
         };
         log::debug!("Ending call with {peer_id}");
 
-        self.send_signaling_message(SignalingMessage::CallEnd {
-            peer_id: peer_id.clone(),
+        self.send_signaling_message(shared::CallEnd {
+            call_id: CallId::new(),            // TODO set actual call ID
+            ending_client_id: peer_id.clone(), // TODO set own client ID
         })
         .await?;
 
@@ -340,8 +347,8 @@ impl AppStateInner {
 
                 app.emit(
                     "signaling:connected",
-                    SignalingMessage::SessionInfo {
-                        info: client_info,
+                    server::SessionInfo {
+                        client: client_info,
                         profile: SessionProfile::Changed(profile),
                     },
                 )
@@ -374,9 +381,14 @@ impl AppStateInner {
         }
     }
 
-    async fn handle_signaling_message(msg: SignalingMessage, app: &AppHandle) {
+    async fn handle_signaling_message(msg: ServerMessage, app: &AppHandle) {
         match msg {
-            SignalingMessage::CallInvite { peer_id } => {
+            ServerMessage::CallInvite(shared::CallInvite {
+                call_id,
+                source,
+                target,
+            }) => {
+                let caller_id = &source.client_id;
                 {
                     if app
                         .state::<AppState>()
@@ -385,23 +397,25 @@ impl AppStateInner {
                         .config
                         .client
                         .ignored
-                        .contains(&peer_id)
+                        .contains(caller_id)
                     {
-                        log::trace!("Ignoring call invite from {peer_id}");
+                        log::trace!("Ignoring call invite from {caller_id}");
                         return;
                     }
                 }
-                log::trace!("Call invite received from {peer_id}");
+                log::trace!("Call invite received from {caller_id} for target {target:?}");
 
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                state.add_call_to_call_list(app, &peer_id, true);
+                state.add_call_to_call_list(app, caller_id, true);
 
                 if state.incoming_call_peer_ids_len() >= INCOMING_CALLS_LIMIT {
                     if let Err(err) = state
-                        .send_signaling_message(SignalingMessage::CallReject {
-                            peer_id: peer_id.clone(),
+                        .send_signaling_message(client::CallReject {
+                            call_id,
+                            rejecting_client_id: ClientId::new(""), // TODO set actual call ID
+                            reason: Some(CallRejectReason::Busy),
                         })
                         .await
                     {
@@ -410,26 +424,35 @@ impl AppStateInner {
                     return;
                 }
 
-                state.add_incoming_call_peer_id(&peer_id);
-                app.emit("signaling:call-invite", &peer_id).ok();
+                state.add_incoming_call_peer_id(caller_id);
+                app.emit("signaling:call-invite", caller_id).ok();
 
                 state.audio_manager.read().restart(SourceType::Ring);
             }
-            SignalingMessage::CallAccept { peer_id } => {
-                log::trace!("Call accept received from {peer_id}");
+            ServerMessage::CallAccept(shared::CallAccept {
+                call_id,
+                accepting_client_id,
+            }) => {
+                log::trace!("Call accept received for call {call_id} from {accepting_client_id}");
 
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                state.cancel_unanswered_call_timer(&peer_id);
-                let res = if state.remove_outgoing_call_peer_id(&peer_id) {
-                    app.emit("signaling:call-accept", peer_id.clone()).ok();
+                state.cancel_unanswered_call_timer(&accepting_client_id);
+                let res = if state.remove_outgoing_call_peer_id(&accepting_client_id) {
+                    app.emit("signaling:call-accept", accepting_client_id.clone())
+                        .ok();
 
-                    match state.init_call(app.clone(), peer_id.clone(), None).await {
+                    match state
+                        .init_call(app.clone(), accepting_client_id.clone(), None)
+                        .await
+                    {
                         Ok(sdp) => {
                             state
-                                .send_signaling_message(SignalingMessage::CallOffer {
-                                    peer_id,
+                                .send_signaling_message(shared::WebrtcOffer {
+                                    call_id,
+                                    from_client_id: ClientId::new(""), // TODO set actual client ID
+                                    to_client_id: accepting_client_id.clone(),
                                     sdp,
                                 })
                                 .await
@@ -438,11 +461,12 @@ impl AppStateInner {
                             log::warn!("Failed to start call: {err:?}");
 
                             let reason: CallErrorReason = err.into();
-                            state.emit_call_error(app, peer_id.clone(), true, reason.clone());
+                            state.emit_call_error(app, accepting_client_id.clone(), true, reason);
                             state
-                                .send_signaling_message(SignalingMessage::CallError {
-                                    peer_id,
+                                .send_signaling_message(shared::CallError {
+                                    call_id,
                                     reason,
+                                    message: None,
                                 })
                                 .await
                         }
@@ -450,9 +474,10 @@ impl AppStateInner {
                 } else {
                     log::warn!("Received call accept message for peer that is not set as outgoing");
                     state
-                        .send_signaling_message(SignalingMessage::CallError {
-                            peer_id,
+                        .send_signaling_message(shared::CallError {
+                            call_id,
                             reason: CallErrorReason::CallFailure,
+                            message: None,
                         })
                         .await
                 };
@@ -461,27 +486,41 @@ impl AppStateInner {
                     log::warn!("Failed to send call message: {err:?}");
                 }
             }
-            SignalingMessage::CallOffer { peer_id, sdp } => {
-                log::trace!("Call offer received from {peer_id}");
+            ServerMessage::WebrtcOffer(shared::WebrtcOffer {
+                call_id,
+                from_client_id,
+                to_client_id,
+                sdp,
+            }) => {
+                log::trace!("WebRTC offer for call {call_id} received from {from_client_id}");
 
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
                 let res = match state
-                    .init_call(app.clone(), peer_id.clone(), Some(sdp))
+                    .init_call(app.clone(), from_client_id.clone(), Some(sdp))
                     .await
                 {
                     Ok(sdp) => {
                         state
-                            .send_signaling_message(SignalingMessage::CallAnswer { peer_id, sdp })
+                            .send_signaling_message(shared::WebrtcAnswer {
+                                call_id,
+                                to_client_id: from_client_id,
+                                from_client_id: to_client_id,
+                                sdp,
+                            })
                             .await
                     }
                     Err(err) => {
                         log::warn!("Failed to accept call offer: {err:?}");
                         let reason: CallErrorReason = err.into();
-                        state.emit_call_error(app, peer_id.clone(), true, reason.clone());
+                        state.emit_call_error(app, from_client_id.clone(), true, reason);
                         state
-                            .send_signaling_message(SignalingMessage::CallError { peer_id, reason })
+                            .send_signaling_message(shared::CallError {
+                                call_id,
+                                reason,
+                                message: None,
+                            })
                             .await
                     }
                 };
@@ -490,18 +529,24 @@ impl AppStateInner {
                     log::warn!("Failed to send call message: {err:?}");
                 }
             }
-            SignalingMessage::CallAnswer { peer_id, sdp } => {
-                log::trace!("Call answer received from {peer_id}");
+            ServerMessage::WebrtcAnswer(shared::WebrtcAnswer {
+                call_id,
+                from_client_id,
+                sdp,
+                ..
+            }) => {
+                log::trace!("WebRTC answer for call {call_id} received from {from_client_id}");
 
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                if let Err(err) = state.accept_call_answer(&peer_id, sdp).await {
+                if let Err(err) = state.accept_call_answer(&from_client_id, sdp).await {
                     log::warn!("Failed to accept answer: {err:?}");
                     if let Err(err) = state
-                        .send_signaling_message(SignalingMessage::CallError {
-                            peer_id,
+                        .send_signaling_message(shared::CallError {
+                            call_id,
                             reason: err.into(),
+                            message: None,
                         })
                         .await
                     {
@@ -509,110 +554,114 @@ impl AppStateInner {
                     }
                 };
             }
-            SignalingMessage::CallEnd { peer_id } => {
-                log::trace!("Call end received from {peer_id}");
+            ServerMessage::CallEnd(shared::CallEnd {
+                call_id,
+                ending_client_id,
+            }) => {
+                log::trace!("Call end for call {call_id} received from {ending_client_id}");
 
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                if !state.cleanup_call(&peer_id).await {
+                if !state.cleanup_call(&ending_client_id).await {
                     log::debug!("Received call end message for peer that is not active");
                 }
 
-                state.remove_incoming_call_peer_id(&peer_id);
+                state.remove_incoming_call_peer_id(&ending_client_id);
 
-                app.emit("signaling:call-end", &peer_id).ok();
+                app.emit("signaling:call-end", &ending_client_id).ok();
             }
-            SignalingMessage::CallError { peer_id, reason } => {
-                log::trace!("Call error received from {peer_id}. Reason: {reason:?}");
+            ServerMessage::CallError(shared::CallError {
+                call_id,
+                reason,
+                message,
+            }) => {
+                log::trace!(
+                    "Call error for call {call_id} received. Reason: {reason:?}, message: {message:?}"
+                );
 
-                let state = app.state::<AppState>();
-                let mut state = state.lock().await;
+                // let state = app.state::<AppState>();
+                // let mut state = state.lock().await;
 
-                if !state.cleanup_call(&peer_id).await {
-                    log::debug!("Received call end message for peer that is not active");
-                }
+                // TODO cleanup call with call ID?
+                // if !state.cleanup_call(&peer_id).await {
+                //     log::debug!("Received call end message for peer that is not active");
+                // }
 
-                state.remove_outgoing_call_peer_id(&peer_id);
-                state.remove_incoming_call_peer_id(&peer_id);
+                // state.remove_outgoing_call_peer_id(&peer_id);
+                // state.remove_incoming_call_peer_id(&peer_id);
 
-                state.emit_call_error(app, peer_id, false, reason);
+                // state.cancel_unanswered_call_timer(&peer_id);
+
+                // TODO emit call ID?
+                // state.emit_call_error(app, peer_id, false, reason);
             }
-            SignalingMessage::CallReject { peer_id } => {
-                log::trace!("Call reject received from {peer_id}");
+            ServerMessage::CallCancelled(server::CallCancelled { call_id, reason }) => {
+                log::trace!("Call {call_id} cancelled. Reason: {reason:?}");
 
-                let state = app.state::<AppState>();
-                let mut state = state.lock().await;
+                // let state = app.state::<AppState>();
+                // let mut state = state.lock().await;
 
-                state.cancel_unanswered_call_timer(&peer_id);
-                if state.remove_outgoing_call_peer_id(&peer_id) {
-                    app.emit("signaling:call-reject", peer_id).ok();
-                } else {
-                    log::warn!("Received call reject message for peer that is not set as outgoing");
-                }
+                // TODO everything
+                // state.cancel_unanswered_call_timer(&peer_id);
+                // if state.remove_outgoing_call_peer_id(&peer_id) {
+                //     app.emit("signaling:call-reject", peer_id).ok();
+                // } else {
+                //     log::warn!("Received call reject message for peer that is not set as outgoing");
+                // }
             }
-            SignalingMessage::CallIceCandidate { peer_id, candidate } => {
-                log::trace!("ICE candidate received from {peer_id}");
+            ServerMessage::WebrtcIceCandidate(shared::WebrtcIceCandidate {
+                call_id,
+                from_client_id,
+                candidate,
+                ..
+            }) => {
+                log::trace!("ICE candidate for call {call_id} received from {from_client_id}");
 
                 let state = app.state::<AppState>();
                 let state = state.lock().await;
 
-                state.set_remote_ice_candidate(&peer_id, candidate).await;
+                state
+                    .set_remote_ice_candidate(&from_client_id, candidate)
+                    .await;
             }
-            SignalingMessage::PeerNotFound { peer_id } => {
-                log::trace!("Received peer not found: {peer_id}");
-
-                let state = app.state::<AppState>();
-                let mut state = state.lock().await;
-
-                // Stop any active webrtc call
-                state.cleanup_call(&peer_id).await;
-
-                // Remove from outgoing and incoming states
-                state.remove_outgoing_call_peer_id(&peer_id);
-                state.remove_incoming_call_peer_id(&peer_id);
-
-                state.cancel_unanswered_call_timer(&peer_id);
-
-                app.emit("signaling:peer-not-found", peer_id).ok();
-            }
-            SignalingMessage::ClientConnected { client } => {
+            ServerMessage::ClientConnected(server::ClientConnected { client }) => {
                 log::trace!("Client connected: {client:?}");
 
                 app.emit("signaling:client-connected", client).ok();
             }
-            SignalingMessage::ClientDisconnected { id } => {
-                log::trace!("Client disconnected: {id:?}");
+            ServerMessage::ClientDisconnected(server::ClientDisconnected { client_id }) => {
+                log::trace!("Client disconnected: {client_id:?}");
 
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
                 // Stop any active webrtc call
-                state.cleanup_call(&id).await;
+                state.cleanup_call(&client_id).await;
 
                 // Remove from outgoing and incoming states
-                state.remove_outgoing_call_peer_id(&id);
-                state.remove_incoming_call_peer_id(&id);
+                state.remove_outgoing_call_peer_id(&client_id);
+                state.remove_incoming_call_peer_id(&client_id);
 
-                state.cancel_unanswered_call_timer(&id);
+                state.cancel_unanswered_call_timer(&client_id);
 
-                app.emit("signaling:client-disconnected", id).ok();
+                app.emit("signaling:client-disconnected", client_id).ok();
             }
-            SignalingMessage::ClientList { clients } => {
+            ServerMessage::ClientList(server::ClientList { clients }) => {
                 log::trace!("Received client list: {} clients connected", clients.len());
 
                 app.emit("signaling:client-list", clients).ok();
             }
-            SignalingMessage::ClientInfo { info } => {
+            ServerMessage::ClientInfo(info) => {
                 log::trace!("Received client info: {info:?}");
 
                 app.emit("signaling:client-connected", info).ok();
             }
-            ref msg @ SignalingMessage::SessionInfo {
-                ref info,
+            ref msg @ ServerMessage::SessionInfo(server::SessionInfo {
+                ref client,
                 ref profile,
-            } => {
-                log::trace!("Received session info: {info:?}");
+            }) => {
+                log::trace!("Received session info: {client:?}");
 
                 if let SessionProfile::Changed(profile) = profile {
                     log::trace!("Active profile changed: {profile:?}");
@@ -622,7 +671,7 @@ impl AppStateInner {
 
                 app.emit("signaling:connected", msg).ok();
             }
-            SignalingMessage::StationList { stations } => {
+            ServerMessage::StationList(server::StationList { stations }) => {
                 log::trace!(
                     "Received station list: {} stations covered ({} by self)",
                     stations.len(),
@@ -631,7 +680,7 @@ impl AppStateInner {
 
                 app.emit("signaling:station-list", stations).ok();
             }
-            SignalingMessage::StationChanges { changes } => {
+            ServerMessage::StationChanges(server::StationChanges { changes }) => {
                 log::trace!(
                     "Received station changes: {} stations changed",
                     changes.len()
@@ -639,7 +688,7 @@ impl AppStateInner {
 
                 app.emit("signaling:station-changes", changes).ok();
             }
-            SignalingMessage::Error { reason, peer_id } => match reason {
+            ServerMessage::Error(shared::Error { reason, client_id }) => match reason {
                 ErrorReason::MalformedMessage => {
                     log::warn!("Received malformed error message from signaling server");
 
@@ -664,26 +713,26 @@ impl AppStateInner {
                     .ok();
                 }
                 ErrorReason::PeerConnection => {
-                    let peer_id = peer_id.unwrap_or_default();
+                    let client_id = client_id.unwrap_or_default();
                     log::warn!(
-                        "Received peer connection error from signaling server with peer {peer_id}"
+                        "Received peer connection error from signaling server with peer {client_id}"
                     );
 
                     let state = app.state::<AppState>();
                     let mut state = state.lock().await;
 
-                    if !state.cleanup_call(&peer_id).await {
+                    if !state.cleanup_call(&client_id).await {
                         log::debug!(
                             "Received peer connection error message for peer that is not active"
                         );
                     }
 
-                    state.remove_outgoing_call_peer_id(&peer_id);
-                    state.remove_incoming_call_peer_id(&peer_id);
+                    state.remove_outgoing_call_peer_id(&client_id);
+                    state.remove_incoming_call_peer_id(&client_id);
 
-                    state.cancel_unanswered_call_timer(&peer_id);
+                    state.cancel_unanswered_call_timer(&client_id);
 
-                    state.emit_call_error(app, peer_id, false, CallErrorReason::SignalingFailure);
+                    state.emit_call_error(app, client_id, false, CallErrorReason::SignalingFailure);
                 }
                 ErrorReason::UnexpectedMessage(ref msg) => {
                     log::warn!("Received unexpected message error from signaling server: {msg}");
@@ -701,7 +750,7 @@ impl AppStateInner {
                         "Received rate limited error from signaling server, rate limited for {retry_after_secs}"
                     );
 
-                    if let Some(peer_id) = peer_id {
+                    if let Some(peer_id) = client_id {
                         let state = app.state::<AppState>();
                         let mut state = state.lock().await;
 
@@ -718,6 +767,13 @@ impl AppStateInner {
                         ))),
                     )
                     .ok();
+                }
+                ErrorReason::ClientNotFound => {
+                    let client_id = client_id.unwrap_or_default();
+                    log::warn!(
+                        "Received client not found error from signaling server with peer {client_id}"
+                    );
+                    // TODO everything
                 }
             },
             _ => {}
