@@ -4,7 +4,7 @@ use crate::metrics::guards::ClientConnectionGuard;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
 use crate::state::AppState;
-use crate::state::client::session::ClientSession;
+use crate::state::clients::session::ClientSession;
 use crate::store::Store;
 use crate::store::memory::MemoryStore;
 use axum::extract::ws;
@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::sync::{Mutex, broadcast, mpsc, watch};
 use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId};
-use vacs_protocol::ws::{ClientInfo, SignalingMessage};
+use vacs_protocol::ws::server::{ClientInfo, ServerMessage};
 use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::mock::MockDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
@@ -79,8 +79,8 @@ pub struct TestSetup {
     pub mock_sink: MockSink,
     pub websocket_tx: Arc<Mutex<mpsc::Sender<ws::Message>>>,
     pub websocket_rx: Arc<Mutex<mpsc::Receiver<ws::Message>>>,
-    pub rx: mpsc::Receiver<SignalingMessage>,
-    pub broadcast_rx: broadcast::Receiver<SignalingMessage>,
+    pub rx: mpsc::Receiver<ServerMessage>,
+    pub broadcast_rx: broadcast::Receiver<ServerMessage>,
     pub shutdown_tx: watch::Sender<()>,
     pub coverage_dir: tempfile::TempDir,
 }
@@ -162,7 +162,7 @@ impl TestSetup {
     pub async fn register_client(
         &self,
         client_info: ClientInfo,
-    ) -> (ClientSession, mpsc::Receiver<SignalingMessage>) {
+    ) -> (ClientSession, mpsc::Receiver<ServerMessage>) {
         self.app_state
             .register_client(
                 client_info,
@@ -177,7 +177,7 @@ impl TestSetup {
         &self,
         client_info: ClientInfo,
         active_profile: ActiveProfile<ProfileId>,
-    ) -> (ClientSession, mpsc::Receiver<SignalingMessage>) {
+    ) -> (ClientSession, mpsc::Receiver<ServerMessage>) {
         self.app_state
             .register_client(
                 client_info,
@@ -191,7 +191,7 @@ impl TestSetup {
     pub async fn register_clients(
         &self,
         client_ids: Vec<ClientInfo>,
-    ) -> HashMap<String, (ClientSession, mpsc::Receiver<SignalingMessage>)> {
+    ) -> HashMap<String, (ClientSession, mpsc::Receiver<ServerMessage>)> {
         futures_util::future::join_all(client_ids.into_iter().map(|client_id| async move {
             (
                 client_id.id.to_string(),
@@ -207,19 +207,36 @@ impl TestSetup {
         self.websocket_rx.lock().await.recv().await
     }
 
-    pub fn spawn_session_handle_interaction(mut self) -> tokio::task::JoinHandle<()> {
-        tokio::spawn(async move {
-            self.session
+    pub fn spawn_session_handle_interaction(
+        self,
+    ) -> (tokio::task::JoinHandle<()>, watch::Sender<()>) {
+        let TestSetup {
+            app_state,
+            mut session,
+            mock_stream,
+            mock_sink,
+            mut broadcast_rx,
+            mut rx,
+            shutdown_tx,
+            ..
+        } = self;
+
+        let mut shutdown_rx = shutdown_tx.subscribe();
+
+        let handle = tokio::spawn(async move {
+            session
                 .handle_interaction(
-                    &self.app_state,
-                    self.mock_stream,
-                    self.mock_sink,
-                    &mut self.broadcast_rx,
-                    &mut self.rx,
-                    &mut self.shutdown_tx.subscribe(),
+                    &app_state,
+                    mock_stream,
+                    mock_sink,
+                    &mut broadcast_rx,
+                    &mut rx,
+                    &mut shutdown_rx,
                 )
                 .await;
-        })
+        });
+
+        (handle, shutdown_tx)
     }
 }
 

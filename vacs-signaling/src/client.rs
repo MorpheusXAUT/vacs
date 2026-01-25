@@ -849,7 +849,8 @@ mod tests {
     use test_log::test;
     use tokio::sync::Notify;
     use vacs_protocol::vatsim::{ClientId, PositionId};
-    use vacs_protocol::ws::{ErrorReason, LoginFailureReason};
+    use vacs_protocol::ws::server::LoginFailureReason;
+    use vacs_protocol::ws::shared::ErrorReason;
 
     async fn setup_test_client(
         transport: MockTransport,
@@ -868,15 +869,18 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::SessionInfo {
-                    info: ClientInfo {
+                ServerMessage::serialize(&ServerMessage::SessionInfo(server::SessionInfo {
+                    client: ClientInfo {
                         id: ClientId::from("client1"),
                         position_id: Some(PositionId::from("position1")),
-                        display_name: "client1".to_string(),
-                        frequency: "".to_string(),
+                        display_name: "Client 1".into(),
+                        frequency: "100.000".into(),
                     },
-                    profile: SessionProfile::Changed(ActiveProfile::None),
-                })
+                    profile: SessionProfile::Changed(ActiveProfile::Specific(Profile {
+                        id: vacs_protocol::vatsim::ProfileId::from("1"),
+                        profile_type: vacs_protocol::vatsim::ProfileType::Tabbed(vec![]),
+                    })),
+                }))
                 .unwrap()
                 .into(),
             );
@@ -932,10 +936,16 @@ mod tests {
         let mut outgoing_rx = transport.outgoing_tx.subscribe();
         let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
-        let msg = SignalingMessage::CallInvite {
-            peer_id: ClientId::from("client2"),
-        };
-        let serialized = tungstenite::Message::from(SignalingMessage::serialize(&msg).unwrap());
+        let msg = ClientMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+            call_id: vacs_protocol::ws::shared::CallId::new(),
+            source: vacs_protocol::ws::shared::CallSource {
+                client_id: ClientId::from("client1"),
+                position_id: None,
+                station_id: None,
+            },
+            target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+        });
+        let serialized = tungstenite::Message::from(ClientMessage::serialize(&msg).unwrap());
 
         let result = client.send(msg.clone()).await;
         assert!(result.is_ok());
@@ -962,12 +972,12 @@ mod tests {
             &tokio::runtime::Handle::current(),
         );
 
-        let msg = SignalingMessage::Login {
+        let msg = ClientMessage::Login(client::Login {
             token: "test".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
             custom_profile: false,
             position_id: None,
-        };
+        });
 
         let result = client.send(msg.clone()).await;
         assert_matches!(
@@ -999,9 +1009,15 @@ mod tests {
         let client_clone = client.clone();
         tokio::spawn(async move {
             transport_ready.notified().await;
-            let msg = SignalingMessage::CallInvite {
-                peer_id: ClientId::from("client2"),
-            };
+            let msg = ClientMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+                call_id: vacs_protocol::ws::shared::CallId::new(),
+                source: vacs_protocol::ws::shared::CallSource {
+                    client_id: ClientId::from("client1"),
+                    position_id: None,
+                    station_id: None,
+                },
+                target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+            });
 
             let result = client_clone.send(msg.clone()).await;
             assert_matches!(
@@ -1025,12 +1041,12 @@ mod tests {
 
         assert_matches!(client.state(), State::Disconnected);
 
-        let msg = SignalingMessage::Login {
+        let msg = ClientMessage::Login(client::Login {
             token: "test".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
             custom_profile: false,
             position_id: None,
-        };
+        });
 
         let result = client.send(msg.clone()).await;
         assert_matches!(
@@ -1051,12 +1067,12 @@ mod tests {
 
         assert_matches!(client.state(), State::Disconnected);
 
-        let msg = SignalingMessage::Login {
+        let msg = ClientMessage::Login(client::Login {
             token: "test".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
             custom_profile: false,
             position_id: None,
-        };
+        });
 
         let result = client.send(msg.clone()).await;
         assert_matches!(
@@ -1073,16 +1089,22 @@ mod tests {
         let incoming_tx = transport.incoming_tx.clone();
         let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
-        let msg = SignalingMessage::CallInvite {
-            peer_id: ClientId::from("client2"),
-        };
+        let msg = ServerMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+            call_id: vacs_protocol::ws::shared::CallId::new(),
+            source: vacs_protocol::ws::shared::CallSource {
+                client_id: ClientId::from("client1"),
+                position_id: None,
+                station_id: None,
+            },
+            target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+        });
 
         let task = tokio::spawn(async move {
             return client.recv().await;
         });
 
         let result = incoming_tx.send(tungstenite::Message::from(
-            SignalingMessage::serialize(&msg).unwrap(),
+            ServerMessage::serialize(&msg).unwrap(),
         ));
         assert!(result.is_ok());
 
@@ -1120,16 +1142,22 @@ mod tests {
         let incoming_tx = transport.incoming_tx.clone();
         let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
-        let msg = SignalingMessage::CallInvite {
-            peer_id: ClientId::from("client2"),
-        };
+        let msg = ServerMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+            call_id: vacs_protocol::ws::shared::CallId::new(),
+            source: vacs_protocol::ws::shared::CallSource {
+                client_id: ClientId::from("client1"),
+                position_id: None,
+                station_id: None,
+            },
+            target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+        });
 
         let task = tokio::spawn(async move {
             return client.recv_with_timeout(Duration::from_millis(100)).await;
         });
 
         let result = incoming_tx.send(tungstenite::Message::from(
-            SignalingMessage::serialize(&msg).unwrap(),
+            ServerMessage::serialize(&msg).unwrap(),
         ));
         assert!(result.is_ok());
 
@@ -1142,9 +1170,15 @@ mod tests {
         let incoming_tx = transport.incoming_tx.clone();
         let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
-        let msg = SignalingMessage::CallInvite {
-            peer_id: ClientId::from("client2"),
-        };
+        let msg = ServerMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+            call_id: vacs_protocol::ws::shared::CallId::new(),
+            source: vacs_protocol::ws::shared::CallSource {
+                client_id: ClientId::from("client1"),
+                position_id: None,
+                station_id: None,
+            },
+            target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+        });
 
         let client_clone = client.clone();
         let task = tokio::spawn(async move {
@@ -1156,7 +1190,7 @@ mod tests {
 
         incoming_tx
             .send(tungstenite::Message::from(
-                SignalingMessage::serialize(&msg).unwrap(),
+                ServerMessage::serialize(&msg).unwrap(),
             ))
             .unwrap();
 
@@ -1200,9 +1234,9 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::LoginFailure {
+                ServerMessage::serialize(&ServerMessage::LoginFailure(server::LoginFailure {
                     reason: LoginFailureReason::Timeout,
-                })
+                }))
                 .unwrap()
                 .into(),
             );
@@ -1263,9 +1297,9 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::LoginFailure {
+                ServerMessage::serialize(&ServerMessage::LoginFailure(server::LoginFailure {
                     reason: LoginFailureReason::Unauthorized,
-                })
+                }))
                 .unwrap()
                 .into(),
             );
@@ -1304,9 +1338,9 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::LoginFailure {
+                ServerMessage::serialize(&ServerMessage::LoginFailure(server::LoginFailure {
                     reason: LoginFailureReason::InvalidCredentials,
-                })
+                }))
                 .unwrap()
                 .into(),
             );
@@ -1345,9 +1379,9 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::LoginFailure {
+                ServerMessage::serialize(&ServerMessage::LoginFailure(server::LoginFailure {
                     reason: LoginFailureReason::DuplicateId,
-                })
+                }))
                 .unwrap()
                 .into(),
             );
@@ -1386,10 +1420,14 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::CallAnswer {
-                    peer_id: ClientId::from("client2"),
-                    sdp: "sdp2".to_string(),
-                })
+                ServerMessage::serialize(&ServerMessage::WebrtcAnswer(
+                    vacs_protocol::ws::shared::WebrtcAnswer {
+                        call_id: vacs_protocol::ws::shared::CallId::new(),
+                        from_client_id: ClientId::from("client1"),
+                        to_client_id: ClientId::from("client2"),
+                        sdp: "sdp2".to_string(),
+                    },
+                ))
                 .unwrap()
                 .into(),
             );
@@ -1425,10 +1463,10 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::Error {
+                ServerMessage::serialize(&ServerMessage::Error(vacs_protocol::ws::shared::Error {
                     reason: ErrorReason::Internal("something failed".to_string()),
-                    peer_id: None,
-                })
+                    client_id: None,
+                }))
                 .unwrap()
                 .into(),
             );

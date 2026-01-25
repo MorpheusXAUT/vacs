@@ -4,7 +4,8 @@ use test_log::test;
 use tokio_tungstenite::tungstenite;
 use tokio_tungstenite::tungstenite::Bytes;
 use vacs_protocol::vatsim::ClientId;
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::{self, ServerMessage};
 use vacs_server::test_utils::{TestApp, TestClient, setup_n_test_clients};
 
 #[test(tokio::test)]
@@ -29,7 +30,7 @@ async fn client_connected() -> anyhow::Result<()> {
             .collect();
 
         for message in messages {
-            if let SignalingMessage::ClientConnected { client } = message {
+            if let ServerMessage::ClientConnected(server::ClientConnected { client }) = message {
                 assert!(
                     expected_ids.contains(&client.id),
                     "Unexpected client ID: {:?}, expected one of: {:?}",
@@ -54,7 +55,7 @@ async fn client_disconnected() -> anyhow::Result<()> {
     clients
         .last_mut()
         .unwrap()
-        .send(SignalingMessage::Logout)
+        .send(ClientMessage::Logout)
         .await
         .expect("Failed to send logout message");
 
@@ -80,7 +81,7 @@ async fn client_disconnected() -> anyhow::Result<()> {
 
         for message in messages {
             match message {
-                SignalingMessage::ClientConnected { client } => {
+                ServerMessage::ClientConnected(server::ClientConnected { client }) => {
                     assert!(
                         expected_ids.contains(&client.id),
                         "Unexpected client ID: {:?}, expected one of: {:?}",
@@ -88,12 +89,12 @@ async fn client_disconnected() -> anyhow::Result<()> {
                         expected_ids
                     );
                 }
-                SignalingMessage::ClientDisconnected { id } => {
+                ServerMessage::ClientDisconnected(server::ClientDisconnected { client_id }) => {
                     assert_eq!(
-                        id,
+                        client_id,
                         ClientId::from(format!("client{initial_client_count}")),
                         "Unexpected client ID: {:?}",
-                        id
+                        client_id
                     );
                 }
                 message => {
@@ -130,7 +131,7 @@ async fn client_dropped() -> anyhow::Result<()> {
 
         for message in messages {
             match message {
-                SignalingMessage::ClientConnected { client } => {
+                ServerMessage::ClientConnected(server::ClientConnected { client }) => {
                     assert!(
                         expected_ids.contains(&client.id),
                         "Unexpected client ID: {:?}, expected one of: {:?}",
@@ -138,12 +139,12 @@ async fn client_dropped() -> anyhow::Result<()> {
                         expected_ids
                     );
                 }
-                SignalingMessage::ClientDisconnected { id } => {
+                ServerMessage::ClientDisconnected(server::ClientDisconnected { client_id }) => {
                     assert_eq!(
-                        id,
+                        client_id,
                         ClientId::from(format!("client{initial_client_count}")),
                         "Unexpected client ID: {:?}",
-                        id
+                        client_id
                     );
                 }
                 message => {

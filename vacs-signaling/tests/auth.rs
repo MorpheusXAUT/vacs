@@ -3,7 +3,9 @@ use std::time::Duration;
 use test_log::test;
 use tokio_util::sync::CancellationToken;
 use vacs_protocol::vatsim::ClientId;
-use vacs_protocol::ws::{LoginFailureReason, SignalingMessage};
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::LoginFailureReason;
+use vacs_protocol::ws::server::ServerMessage;
 use vacs_server::test_utils::{TestApp, TestClient};
 use vacs_signaling::auth::mock::MockTokenProvider;
 use vacs_signaling::client::{SignalingClient, SignalingEvent, State};
@@ -36,7 +38,7 @@ async fn login_without_self() {
     let connected_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event|
         matches!(event, SignalingEvent::Connected{ client_info, .. } if client_info.id == ClientId::from("client1") && client_info.display_name == "client1" && client_info.frequency.is_empty()),
     ).await;
-    let client_info_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
+    let client_info_event = broadcast_rx.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(ServerMessage::ClientList(vacs_protocol::ws::server::ClientList { clients })) if clients.is_empty())).await;
 
     assert!(res.is_ok());
     assert!(connected_event.is_ok());
@@ -71,7 +73,7 @@ async fn login() {
     let connected_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event|
         matches!(event, SignalingEvent::Connected{ client_info, .. } if client_info.id == ClientId::from("client1") && client_info.display_name == "client1" && client_info.frequency.is_empty()),
     ).await;
-    let client_list_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.is_empty())).await;
+    let client_list_event1 = broadcast_rx1.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(ServerMessage::ClientList(vacs_protocol::ws::server::ClientList { clients })) if clients.is_empty())).await;
 
     assert!(res1.is_ok());
     assert!(connected_event1.is_ok());
@@ -97,7 +99,7 @@ async fn login() {
     let connected_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event|
         matches!(event, SignalingEvent::Connected{ client_info, .. } if client_info.id == ClientId::from("client2") && client_info.display_name == "client2" && client_info.frequency.is_empty()),
     ).await;
-    let client_list_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == ClientId::from("client1"))).await;
+    let client_list_event2 = broadcast_rx2.recv_with_timeout(Duration::from_millis(100), |event| matches!(event, SignalingEvent::Message(ServerMessage::ClientList(vacs_protocol::ws::server::ClientList { clients })) if clients.len() == 1 && clients[0].id == ClientId::from("client1"))).await;
 
     assert!(res2.is_ok());
     assert!(connected_event2.is_ok());
@@ -205,7 +207,7 @@ async fn logout() {
     let mut test_rig = TestRig::new(1).await;
     let client = test_rig.client_mut(0);
 
-    let res = client.client.send(SignalingMessage::Logout).await;
+    let res = client.client.send(ClientMessage::Logout).await;
     assert!(res.is_ok());
 }
 
@@ -233,7 +235,7 @@ async fn client_disconnects() {
         .client_mut(1)
         .recv_with_timeout_and_filter(
             Duration::from_millis(300),
-            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if *id == ClientId::from("client0")),
+            |e| matches!(e, SignalingEvent::Message(ServerMessage::ClientDisconnected(vacs_protocol::ws::server::ClientDisconnected { client_id })) if client_id.as_str() == "client0"),
         )
         .await;
     assert!(event.is_some());
@@ -252,7 +254,7 @@ async fn client_list_synchronization() {
         .client_mut(2)
         .recv_with_timeout_and_filter(
             Duration::from_millis(300),
-            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientDisconnected { id }) if *id == ClientId::from("client0")),
+            |e| matches!(e, SignalingEvent::Message(ServerMessage::ClientDisconnected(vacs_protocol::ws::server::ClientDisconnected { client_id })) if client_id.as_str() == "client0"),
         )
         .await;
     assert!(event.is_some());
@@ -260,7 +262,7 @@ async fn client_list_synchronization() {
     test_rig
         .client_mut(2)
         .client
-        .send(SignalingMessage::ListClients)
+        .send(ClientMessage::ListClients)
         .await
         .unwrap();
 
@@ -268,7 +270,7 @@ async fn client_list_synchronization() {
         .client_mut(2)
         .recv_with_timeout_and_filter(
             Duration::from_millis(300),
-            |e| matches!(e, SignalingEvent::Message(SignalingMessage::ClientList { clients }) if clients.len() == 1 && clients[0].id == ClientId::from("client1")),
+            |e| matches!(e, SignalingEvent::Message(ServerMessage::ClientList(vacs_protocol::ws::server::ClientList { clients })) if clients.len() == 1 && clients[0].id == ClientId::from("client1")),
         )
         .await;
     assert!(event.is_some());
@@ -295,13 +297,15 @@ async fn client_connected_broadcast() {
             .recv_with_timeout_and_filter(Duration::from_millis(100), |e| {
                 matches!(
                     e,
-                    SignalingEvent::Message(SignalingMessage::ClientConnected { .. })
+                    SignalingEvent::Message(ServerMessage::ClientConnected(..))
                 )
             })
             .await
         {
             match msg {
-                SignalingEvent::Message(SignalingMessage::ClientConnected { client }) => {
+                SignalingEvent::Message(ServerMessage::ClientConnected(
+                    vacs_protocol::ws::server::ClientConnected { client },
+                )) => {
                     received_client_ids.push(client.id);
                 }
                 _ => panic!("Unexpected message: {msg:?}"),

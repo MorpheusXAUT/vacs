@@ -7,7 +7,8 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use vacs_protocol::VACS_PROTOCOL_VERSION;
 use vacs_protocol::vatsim::ClientId;
-use vacs_protocol::ws::{ClientInfo, SignalingMessage, StationInfo};
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::{self, ClientInfo, ServerMessage, StationInfo};
 
 pub struct TestClient {
     id: ClientId,
@@ -64,15 +65,17 @@ impl TestClient {
         FC: FnOnce(&[ClientInfo]) -> anyhow::Result<()> + Copy,
         FS: FnOnce(&[StationInfo]) -> anyhow::Result<()> + Copy,
     {
-        let login_msg = SignalingMessage::Login {
+        let login_msg = ClientMessage::Login(vacs_protocol::ws::client::Login {
             token: self.token.to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
             custom_profile: false,
             position_id: None,
-        };
+        });
         self.send_and_expect_with_timeout(login_msg, Duration::from_millis(100), |msg| match msg {
-            SignalingMessage::SessionInfo { info, .. } => client_info_predicate(true, info),
-            SignalingMessage::LoginFailure { reason } => {
+            ServerMessage::SessionInfo(server::SessionInfo { client, .. }) => {
+                client_info_predicate(true, client)
+            }
+            ServerMessage::LoginFailure(server::LoginFailure { reason }) => {
                 Err(anyhow::anyhow!("Login failed: {:?}", reason))
             }
             _ => Err(anyhow::anyhow!("Unexpected response: {:?}", msg)),
@@ -80,13 +83,13 @@ impl TestClient {
         .await?;
 
         self.recv_with_timeout_and_filter(Duration::from_millis(100), |msg| {
-            matches!(msg, SignalingMessage::ClientList { clients } if client_list_predicate(clients).is_ok())
+            matches!(msg, ServerMessage::ClientList(server::ClientList { clients }) if client_list_predicate(clients).is_ok())
         })
         .await
         .ok_or_else(|| anyhow::anyhow!("Client list not received"))?;
 
         self.recv_with_timeout_and_filter(Duration::from_millis(100), |msg| {
-            matches!(msg, SignalingMessage::StationList { stations } if station_list_predicate(stations).is_ok())
+            matches!(msg, ServerMessage::StationList(server::StationList { stations }) if station_list_predicate(stations).is_ok())
         })
         .await
         .ok_or_else(|| anyhow::anyhow!("Station list not received"))?;
@@ -99,9 +102,9 @@ impl TestClient {
         Ok(())
     }
 
-    pub async fn send(&mut self, msg: SignalingMessage) -> anyhow::Result<()> {
+    pub async fn send(&mut self, msg: ClientMessage) -> anyhow::Result<()> {
         self.ws_stream
-            .send(Message::from(SignalingMessage::serialize(&msg)?))
+            .send(Message::from(ClientMessage::serialize(&msg)?))
             .await?;
         Ok(())
     }
@@ -128,10 +131,10 @@ impl TestClient {
         self.recv_raw_with_timeout(Duration::MAX).await
     }
 
-    pub async fn recv_with_timeout(&mut self, timeout: Duration) -> Option<SignalingMessage> {
+    pub async fn recv_with_timeout(&mut self, timeout: Duration) -> Option<ServerMessage> {
         loop {
             match self.recv_raw_with_timeout(timeout).await {
-                Some(Message::Text(text)) => return SignalingMessage::deserialize(&text).ok(),
+                Some(Message::Text(text)) => return ServerMessage::deserialize(&text).ok(),
                 Some(Message::Ping(_)) => continue,
                 _ => return None,
             }
@@ -142,9 +145,9 @@ impl TestClient {
         &mut self,
         timeout: Duration,
         predicate: F,
-    ) -> Option<SignalingMessage>
+    ) -> Option<ServerMessage>
     where
-        F: Fn(&SignalingMessage) -> bool,
+        F: Fn(&ServerMessage) -> bool,
     {
         while let Some(message) = self.recv_with_timeout(timeout).await {
             if predicate(&message) {
@@ -154,7 +157,7 @@ impl TestClient {
         None
     }
 
-    pub async fn recv_until_timeout(&mut self, timeout: Duration) -> Vec<SignalingMessage> {
+    pub async fn recv_until_timeout(&mut self, timeout: Duration) -> Vec<ServerMessage> {
         let mut messages = Vec::new();
         while let Some(message) = self.recv_with_timeout(timeout).await {
             messages.push(message);
@@ -166,9 +169,9 @@ impl TestClient {
         &mut self,
         timeout: Duration,
         predicate: F,
-    ) -> Vec<SignalingMessage>
+    ) -> Vec<ServerMessage>
     where
-        F: Fn(&SignalingMessage) -> bool,
+        F: Fn(&ServerMessage) -> bool,
     {
         let mut messages = Vec::new();
         while let Some(message) = self.recv_with_timeout(timeout).await {
@@ -179,7 +182,7 @@ impl TestClient {
         messages
     }
 
-    pub async fn recv(&mut self) -> Option<SignalingMessage> {
+    pub async fn recv(&mut self) -> Option<ServerMessage> {
         self.recv_with_timeout(Duration::MAX).await
     }
 
@@ -210,12 +213,12 @@ impl TestClient {
 
     pub async fn send_and_expect_with_timeout<F>(
         &mut self,
-        msg: SignalingMessage,
+        msg: ClientMessage,
         timeout: Duration,
         predicate: F,
     ) -> anyhow::Result<()>
     where
-        F: FnOnce(SignalingMessage) -> anyhow::Result<()>,
+        F: FnOnce(ServerMessage) -> anyhow::Result<()>,
     {
         self.send(msg).await?;
         match self.recv_with_timeout(timeout).await {
@@ -226,11 +229,11 @@ impl TestClient {
 
     pub async fn send_and_expect<F>(
         &mut self,
-        msg: SignalingMessage,
+        msg: ClientMessage,
         predicate: F,
     ) -> anyhow::Result<()>
     where
-        F: FnOnce(SignalingMessage) -> anyhow::Result<()>,
+        F: FnOnce(ServerMessage) -> anyhow::Result<()>,
     {
         self.send_and_expect_with_timeout(msg, Duration::MAX, predicate)
             .await

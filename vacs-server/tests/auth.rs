@@ -5,7 +5,8 @@ use test_log::test;
 use tokio_tungstenite::tungstenite;
 use vacs_protocol::VACS_PROTOCOL_VERSION;
 use vacs_protocol::vatsim::ClientId;
-use vacs_protocol::ws::{LoginFailureReason, SignalingMessage};
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::{self, ServerMessage};
 use vacs_server::test_utils::{
     TestApp, TestClient, assert_message_matches, assert_raw_message_matches, connect_to_websocket,
     setup_test_clients,
@@ -125,17 +126,17 @@ async fn unauthorized_message_before_login() {
 
     ws_stream
         .send(tungstenite::Message::from(
-            SignalingMessage::serialize(&SignalingMessage::ListClients).unwrap(),
+            ClientMessage::serialize(&ClientMessage::ListClients).unwrap(),
         ))
         .await
         .expect("Failed to send ListClients message");
 
     let message_result = ws_stream.next().await;
     assert_raw_message_matches(message_result, |response| match response {
-        SignalingMessage::LoginFailure { reason } => {
+        ServerMessage::LoginFailure(server::LoginFailure { reason }) => {
             assert_eq!(
                 reason,
-                LoginFailureReason::Unauthorized,
+                server::LoginFailureReason::Unauthorized,
                 "Unexpected reason for LoginFailure"
             );
         }
@@ -187,12 +188,12 @@ async fn login_timeout() {
 
     ws_stream
         .send(tungstenite::Message::from(
-            SignalingMessage::serialize(&SignalingMessage::Login {
+            ClientMessage::serialize(&ClientMessage::Login(vacs_protocol::ws::client::Login {
                 token: "token".to_string(),
                 protocol_version: VACS_PROTOCOL_VERSION.to_string(),
                 custom_profile: false,
                 position_id: None,
-            })
+            }))
             .unwrap(),
         ))
         .await
@@ -200,9 +201,9 @@ async fn login_timeout() {
 
     match ws_stream.next().await {
         Some(Ok(tungstenite::Message::Text(response))) => {
-            match SignalingMessage::deserialize(&response) {
-                Ok(SignalingMessage::LoginFailure { reason }) => {
-                    assert_eq!(reason, LoginFailureReason::Timeout);
+            match ServerMessage::deserialize(&response) {
+                Ok(ServerMessage::LoginFailure(server::LoginFailure { reason })) => {
+                    assert_eq!(reason, server::LoginFailureReason::Timeout);
                 }
                 _ => panic!("Unexpected response: {response:?}"),
             }
@@ -224,7 +225,7 @@ async fn client_connected() {
     let client1 = clients.get_mut(&ClientId::from("client1")).unwrap();
     let client_connected = client1.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_connected, |message| match message {
-        SignalingMessage::ClientConnected { client } => {
+        ServerMessage::ClientConnected(server::ClientConnected { client }) => {
             assert_eq!(client.id, ClientId::from("client2"));
             assert_eq!(client.display_name, "client2");
         }
@@ -253,7 +254,7 @@ async fn client_disconnected() {
     let client1 = clients.get_mut(&ClientId::from("client1")).unwrap();
     let client_connected = client1.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_connected, |message| match message {
-        SignalingMessage::ClientConnected { client } => {
+        ServerMessage::ClientConnected(server::ClientConnected { client }) => {
             assert_eq!(client.id, ClientId::from("client2"));
             assert_eq!(client.display_name, "client2");
         }
@@ -265,7 +266,9 @@ async fn client_disconnected() {
     let client2 = clients.get_mut(&ClientId::from("client2")).unwrap();
     let client_disconnected = client2.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_disconnected, |message| match message {
-        SignalingMessage::ClientDisconnected { id } => assert_eq!(id, ClientId::from("client1")),
+        ServerMessage::ClientDisconnected(server::ClientDisconnected { client_id }) => {
+            assert_eq!(client_id, ClientId::from("client1"));
+        }
         _ => panic!("Unexpected message: {message:?}"),
     });
 }
@@ -334,14 +337,14 @@ async fn logout() {
     let client1 = clients.get_mut(&ClientId::from("client1")).unwrap();
     let client_connected = client1.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_connected, |message| match message {
-        SignalingMessage::ClientConnected { client } => {
+        ServerMessage::ClientConnected(server::ClientConnected { client }) => {
             assert_eq!(client.id, ClientId::from("client2"));
             assert_eq!(client.display_name, "client2");
         }
         _ => panic!("Unexpected message: {message:?}"),
     });
 
-    client1.send(SignalingMessage::Logout).await.unwrap();
+    client1.send(ClientMessage::Logout).await.unwrap();
     assert!(
         client1
             .recv_with_timeout(Duration::from_millis(100))
@@ -352,7 +355,9 @@ async fn logout() {
     let client2 = clients.get_mut(&ClientId::from("client2")).unwrap();
     let client_disconnected = client2.recv_with_timeout(Duration::from_millis(100)).await;
     assert_message_matches(client_disconnected, |message| match message {
-        SignalingMessage::ClientDisconnected { id } => assert_eq!(id, ClientId::from("client1")),
+        ServerMessage::ClientDisconnected(server::ClientDisconnected { client_id }) => {
+            assert_eq!(client_id, ClientId::from("client1"));
+        }
         _ => panic!("Unexpected message: {message:?}"),
     });
 }
