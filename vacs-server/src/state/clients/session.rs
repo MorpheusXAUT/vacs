@@ -521,7 +521,7 @@ mod tests {
         let client_info_1 = create_client_info(1);
         let profile_id_1 = ProfileId::from("profile1");
         let active_profile = ActiveProfile::Specific(profile_id_1.clone());
-        let (tx, _rx) = mpsc::channel::<SignalingMessage>(10);
+        let (tx, _rx) = mpsc::channel::<ServerMessage>(10);
         let session = ClientSession::new(
             client_info_1.clone(),
             active_profile,
@@ -546,9 +546,9 @@ mod tests {
         );
 
         let client_info_2 = create_client_info(2);
-        let message = SignalingMessage::ClientList {
+        let message = ServerMessage::ClientList(server::ClientList {
             clients: vec![client_info_2],
-        };
+        });
         let result = session.send_message(message.clone()).await;
 
         assert!(result.is_ok());
@@ -569,9 +569,9 @@ mod tests {
         drop(tx); // Drop the sender to simulate the client disconnecting
 
         let client_info_2 = create_client_info(2);
-        let message = SignalingMessage::ClientList {
+        let message = ServerMessage::ClientList(server::ClientList {
             clients: vec![client_info_2],
-        };
+        });
         let result = session.send_message(message.clone()).await;
 
         assert!(result.is_err_and(|err| err.to_string().contains("failed to send message")));
@@ -584,7 +584,7 @@ mod tests {
         setup.register_client(client_info_1).await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction();
+        let (handle_task, _shutdown_tx) = setup.spawn_session_handle_interaction();
 
         let _ = websocket_rx.lock().await.recv().await; // skip client info message
         let message = websocket_rx.lock().await.recv().await;
@@ -592,7 +592,7 @@ mod tests {
             Some(ws::Message::Text(text)) => {
                 assert_eq!(
                     text,
-                    Utf8Bytes::from_static(r#"{"type":"ClientList","clients":[]}"#)
+                    Utf8Bytes::from_static(r#"{"type":"clientList","clients":[]}"#)
                 );
             }
             _ => panic!("Expected client list message"),
@@ -608,7 +608,7 @@ mod tests {
         setup.register_client(client_info_1).await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction();
+        let (handle_task, _shutdown_tx) = setup.spawn_session_handle_interaction();
 
         let message = websocket_rx.lock().await.recv().await;
         match message {
@@ -616,7 +616,7 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"type":"SessionInfo","info":{"id":"client1","positionId":"POSITION1","displayName":"Client 1","frequency":"100.000"},"profile":{"type":"changed","activeProfile":{"type":"none"}}}"#
+                        r#"{"type":"sessionInfo","client":{"id":"client1","displayName":"Client 1","frequency":"100.000","positionId":"POSITION1"},"profile":{"type":"changed","activeProfile":{"type":"none"}}}"#
                     )
                 );
             }
@@ -635,7 +635,7 @@ mod tests {
         setup.register_client(client_info_2).await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction();
+        let (handle_task, _shutdown_tx) = setup.spawn_session_handle_interaction();
 
         let _ = websocket_rx.lock().await.recv().await; // skip client info message
         let message = websocket_rx.lock().await.recv().await;
@@ -644,7 +644,7 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"type":"ClientList","clients":[{"id":"client2","positionId":"POSITION2","displayName":"Client 2","frequency":"200.000"}]}"#
+                        r#"{"type":"clientList","clients":[{"id":"client2","displayName":"Client 2","frequency":"200.000","positionId":"POSITION2"}]}"#
                     )
                 );
             }
@@ -658,12 +658,12 @@ mod tests {
     async fn handle_interaction() {
         let client_info_2 = create_client_info(2);
         let setup = TestSetup::new().with_messages(vec![Ok(ws::Message::Text(
-            Utf8Bytes::from_static(r#"{"type":"CallOffer","peerId":"client2","sdp":"sdp1"}"#),
+            Utf8Bytes::from_static(r#"{"type":"callInvite","callId":"00000000-0000-0000-0000-000000000000","source":{"clientId":"client1"},"target":{"client":"client2"}}"#),
         ))]);
         let (_, mut client2_rx) = setup.register_client(client_info_2).await;
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction();
+        let (handle_task, _shutdown_tx) = setup.spawn_session_handle_interaction();
 
         let _ = websocket_rx.lock().await.recv().await; // skip client info message
         let message = websocket_rx.lock().await.recv().await;
@@ -672,20 +672,25 @@ mod tests {
                 assert_eq!(
                     text,
                     Utf8Bytes::from_static(
-                        r#"{"type":"ClientList","clients":[{"id":"client2","positionId":"POSITION2","displayName":"Client 2","frequency":"200.000"}]}"#
+                        r#"{"type":"clientList","clients":[{"id":"client2","displayName":"Client 2","frequency":"200.000","positionId":"POSITION2"}]}"#
                     )
                 );
             }
             _ => panic!("Expected client list message"),
         }
 
-        let call_offer = client2_rx.recv().await.unwrap();
+        let call_invite = client2_rx.recv().await.unwrap();
         assert_eq!(
-            call_offer,
-            SignalingMessage::CallOffer {
-                client_id: ClientId::from("client1"),
-                sdp: "sdp1".to_string()
-            }
+            call_invite,
+            ServerMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+                call_id: vacs_protocol::ws::shared::CallId::from(uuid::Uuid::nil()),
+                source: vacs_protocol::ws::shared::CallSource {
+                    client_id: ClientId::from("client1"),
+                    position_id: None,
+                    station_id: None,
+                },
+                target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+            })
         );
 
         handle_task.await.unwrap();
@@ -696,7 +701,7 @@ mod tests {
         let setup = TestSetup::new().with_messages(vec![Err(axum::Error::new("Test error"))]);
         let websocket_rx = setup.websocket_rx.clone();
 
-        let handle_task = setup.spawn_session_handle_interaction();
+        let (handle_task, _shutdown_tx) = setup.spawn_session_handle_interaction();
 
         let _ = websocket_rx.lock().await.recv().await; // skip client info message
         let message = websocket_rx.lock().await.recv().await;
@@ -704,7 +709,7 @@ mod tests {
             Some(ws::Message::Text(text)) => {
                 assert_eq!(
                     text,
-                    Utf8Bytes::from_static(r#"{"type":"ClientList","clients":[]}"#)
+                    Utf8Bytes::from_static(r#"{"type":"clientList","clients":[]}"#)
                 );
             }
             _ => panic!("Expected client list message"),

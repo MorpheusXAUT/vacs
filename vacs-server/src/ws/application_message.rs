@@ -560,12 +560,10 @@ async fn send_call_error(
 mod tests {
     use super::*;
     use crate::ws::test_util::{TestSetup, create_client_info};
-    use axum::extract::ws;
-    use axum::extract::ws::Utf8Bytes;
-    use pretty_assertions::assert_eq;
-    use std::ops::Deref;
+    use pretty_assertions::{assert_eq, assert_matches};
     use test_log::test;
-    use vacs_protocol::ws::LoginFailureReason;
+    use vacs_protocol::vatsim::ClientId;
+    use vacs_protocol::ws::server::{self, ServerMessage};
 
     #[test(tokio::test)]
     async fn handle_application_message_list_clients_without_self() {
@@ -575,21 +573,15 @@ mod tests {
         let control_flow = handle_application_message(
             &setup.app_state,
             &setup.session,
-            setup.websocket_tx.lock().await.deref(),
-            SignalingMessage::ListClients,
+            ClientMessage::ListClients,
         )
         .await;
         assert_eq!(control_flow, ControlFlow::Continue(()));
 
-        let message = setup
-            .take_last_websocket_message()
-            .await
-            .expect("No message received");
-        assert_eq!(
+        let message = setup.rx.recv().await.expect("No message received");
+        assert_matches!(
             message,
-            ws::Message::Text(Utf8Bytes::from_static(
-                r#"{"type":"ClientList","clients":[]}"#
-            ))
+            ServerMessage::ClientList(server::ClientList { clients }) if clients.is_empty()
         );
     }
 
@@ -601,21 +593,15 @@ mod tests {
         let control_flow = handle_application_message(
             &setup.app_state,
             &setup.session,
-            setup.websocket_tx.lock().await.deref(),
-            SignalingMessage::ListStations,
+            ClientMessage::ListStations,
         )
         .await;
         assert_eq!(control_flow, ControlFlow::Continue(()));
 
-        let message = setup
-            .take_last_websocket_message()
-            .await
-            .expect("No message received");
-        assert_eq!(
+        let message = setup.rx.recv().await.expect("No message received");
+        assert_matches!(
             message,
-            ws::Message::Text(Utf8Bytes::from_static(
-                r#"{"type":"StationList","stations":[]}"#
-            ))
+            ServerMessage::StationList(server::StationList { stations }) if stations.is_empty()
         );
     }
 
@@ -623,26 +609,21 @@ mod tests {
     async fn handle_application_message_list_clients() {
         let mut setup = TestSetup::new();
         setup.register_client(create_client_info(1)).await;
-        setup.register_client(create_client_info(2)).await;
+        let client_2 = create_client_info(2);
+        setup.register_client(client_2.clone()).await;
 
         let control_flow = handle_application_message(
             &setup.app_state,
             &setup.session,
-            setup.websocket_tx.lock().await.deref(),
-            SignalingMessage::ListClients,
+            ClientMessage::ListClients,
         )
         .await;
         assert_eq!(control_flow, ControlFlow::Continue(()));
 
-        let message = setup
-            .take_last_websocket_message()
-            .await
-            .expect("No message received");
-        assert_eq!(
+        let message = setup.rx.recv().await.expect("No message received");
+        assert_matches!(
             message,
-            ws::Message::Text(Utf8Bytes::from_static(
-                r#"{"type":"ClientList","clients":[{"id":"client2","positionId":"POSITION2","displayName":"Client 2","frequency":"200.000"}]}"#
-            ))
+            ServerMessage::ClientList(server::ClientList { clients }) if clients == vec![client_2]
         );
     }
 
@@ -651,51 +632,28 @@ mod tests {
         let setup = TestSetup::new();
         setup.register_client(create_client_info(1)).await;
 
-        let control_flow = handle_application_message(
-            &setup.app_state,
-            &setup.session,
-            setup.websocket_tx.lock().await.deref(),
-            SignalingMessage::Logout,
-        )
-        .await;
+        let control_flow =
+            handle_application_message(&setup.app_state, &setup.session, ClientMessage::Logout)
+                .await;
         assert_eq!(control_flow, ControlFlow::Break(()));
     }
 
     #[test(tokio::test)]
     async fn handle_application_message_call_offer() {
         let setup = TestSetup::new();
-        let client_info_1 = create_client_info(1);
-        let client_info_2 = create_client_info(2);
-        let mut clients = setup
-            .register_clients(vec![client_info_1, client_info_2])
-            .await;
 
         let control_flow = handle_application_message(
             &setup.app_state,
             &setup.session,
-            setup.websocket_tx.lock().await.deref(),
-            SignalingMessage::CallOffer {
-                client_id: ClientId::from("client2"),
+            ClientMessage::WebrtcOffer(WebrtcOffer {
+                call_id: CallId::new(),
+                from_client_id: ClientId::from("client1"),
+                to_client_id: ClientId::from("client2"),
                 sdp: "sdp1".to_string(),
-            },
+            }),
         )
         .await;
         assert_eq!(control_flow, ControlFlow::Continue(()));
-
-        let message = clients
-            .get_mut("client2")
-            .unwrap()
-            .1
-            .recv()
-            .await
-            .expect("Failed to receive message");
-        assert_eq!(
-            message,
-            SignalingMessage::CallOffer {
-                client_id: ClientId::from("client1"),
-                sdp: "sdp1".to_string()
-            }
-        );
     }
 
     #[test(tokio::test)]
@@ -705,38 +663,11 @@ mod tests {
         let control_flow = handle_application_message(
             &setup.app_state,
             &setup.session,
-            setup.websocket_tx.lock().await.deref(),
-            SignalingMessage::LoginFailure {
-                reason: LoginFailureReason::DuplicateId,
-            },
+            ClientMessage::Error(vacs_protocol::ws::shared::Error::new(
+                ErrorReason::Internal("test".to_string()),
+            )),
         )
         .await;
         assert_eq!(control_flow, ControlFlow::Continue(()));
-    }
-
-    #[test(tokio::test)]
-    async fn check_self_message_allows_regular_message() {
-        let setup = TestSetup::new();
-
-        let is_self_message = check_self_message(
-            setup.websocket_tx.lock().await.deref(),
-            &setup.session,
-            &ClientId::from("client2"),
-        )
-        .await;
-        assert_eq!(is_self_message, false);
-    }
-
-    #[test(tokio::test)]
-    async fn check_self_message_rejects_message_to_self() {
-        let setup = TestSetup::new();
-
-        let is_self_message = check_self_message(
-            setup.websocket_tx.lock().await.deref(),
-            &setup.session,
-            &ClientId::from("client1"),
-        )
-        .await;
-        assert_eq!(is_self_message, true);
     }
 }

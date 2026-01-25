@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::tungstenite;
 use tokio_util::sync::CancellationToken;
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::server::ServerMessage;
 
 pub struct MockTransport {
     pub outgoing_rx: broadcast::Receiver<tungstenite::Message>,
@@ -106,7 +106,7 @@ impl SignalingReceiver for MockReceiver {
     async fn recv(
         &mut self,
         send_tx: &mpsc::Sender<tungstenite::Message>,
-    ) -> Result<SignalingMessage, SignalingRuntimeError> {
+    ) -> Result<ServerMessage, SignalingRuntimeError> {
         loop {
             tokio::select! {
                 biased;
@@ -119,7 +119,7 @@ impl SignalingReceiver for MockReceiver {
                     match msg {
                         Ok(tungstenite::Message::Text(text)) => {
                             tracing::debug!("Received message");
-                            return SignalingMessage::deserialize(&text).map_err(|err| {
+                            return ServerMessage::deserialize(&text).map_err(|err| {
                                 tracing::warn!(?err, "Failed to deserialize message");
                                 SignalingRuntimeError::SerializationError(err.to_string())
                             });

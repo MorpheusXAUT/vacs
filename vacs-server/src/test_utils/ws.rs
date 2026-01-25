@@ -1,6 +1,6 @@
 use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::server::ServerMessage;
 
 pub async fn connect_to_websocket(addr: &str) -> WebSocketStream<MaybeTlsStream<TcpStream>> {
     let (ws_stream, response) = tokio_tungstenite::connect_async(addr)
@@ -18,11 +18,11 @@ pub fn assert_raw_message_matches<F>(
     message: Option<Result<tungstenite::Message, tungstenite::Error>>,
     predicate: F,
 ) where
-    F: FnOnce(SignalingMessage),
+    F: FnOnce(ServerMessage),
 {
     match message {
         Some(Ok(tungstenite::Message::Text(raw_message))) => {
-            match SignalingMessage::deserialize(&raw_message) {
+            match ServerMessage::deserialize(&raw_message) {
                 Ok(message) => predicate(message),
                 Err(err) => panic!("Failed to deserialize message: {err:?}"),
             }
@@ -33,9 +33,9 @@ pub fn assert_raw_message_matches<F>(
     }
 }
 
-pub fn assert_message_matches<F>(message: Option<SignalingMessage>, predicate: F)
+pub fn assert_message_matches<F>(message: Option<ServerMessage>, predicate: F)
 where
-    F: FnOnce(SignalingMessage),
+    F: FnOnce(ServerMessage),
 {
     match message {
         Some(message) => predicate(message),

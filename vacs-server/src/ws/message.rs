@@ -110,23 +110,24 @@ mod tests {
     use test_log::test;
     use tokio::sync::{Mutex, mpsc};
     use tokio_tungstenite::tungstenite;
-    use vacs_protocol::VACS_PROTOCOL_VERSION;
+    use uuid::Uuid;
     use vacs_protocol::vatsim::{ClientId, PositionId};
-    use vacs_protocol::ws::ClientInfo;
+    use vacs_protocol::ws::server::{self, ClientInfo, ServerMessage};
+    use vacs_protocol::ws::shared::CallId;
 
     #[test(tokio::test)]
     async fn send_single_message_raw() {
         let (tx, mut rx) = mpsc::channel(100);
         let mut mock_sink = MockSink::new(tx);
 
-        let message = SignalingMessage::ClientConnected {
+        let message = ServerMessage::ClientConnected(server::ClientConnected {
             client: ClientInfo {
                 id: ClientId::from("client1"),
                 position_id: Some(PositionId::from("position1")),
                 display_name: "Client 1".to_string(),
                 frequency: "100.000".to_string(),
             },
-        };
+        });
 
         assert!(
             send_message_raw(&mut mock_sink, message.clone())
@@ -136,7 +137,7 @@ mod tests {
 
         if let Some(sent_message) = rx.recv().await {
             if let ws::Message::Text(serialized_message) = sent_message {
-                let deserialized_message = SignalingMessage::deserialize(&serialized_message)
+                let deserialized_message = ServerMessage::deserialize(&serialized_message)
                     .expect("Failed to deserialize message");
                 assert_eq!(deserialized_message, message);
             } else {
@@ -153,14 +154,11 @@ mod tests {
         let mut mock_sink = MockSink::new(tx);
 
         let messages = vec![
-            SignalingMessage::Login {
-                token: "token1".to_string(),
-                protocol_version: VACS_PROTOCOL_VERSION.to_string(),
-                custom_profile: false,
-                position_id: None,
-            },
-            SignalingMessage::ListClients,
-            SignalingMessage::Logout,
+            ServerMessage::ClientList(server::ClientList { clients: vec![] }),
+            ServerMessage::StationList(server::StationList { stations: vec![] }),
+            ServerMessage::Disconnected(server::Disconnected {
+                reason: server::DisconnectReason::Terminated,
+            }),
         ];
         for message in &messages {
             assert!(
@@ -174,7 +172,7 @@ mod tests {
             let sent = rx.recv().await.expect("No message received");
             match sent {
                 ws::Message::Text(raw_message) => {
-                    let message = SignalingMessage::deserialize(&raw_message)
+                    let message = ServerMessage::deserialize(&raw_message)
                         .expect("Failed to deserialize message");
                     assert_eq!(message, expected);
                 }
@@ -189,14 +187,11 @@ mod tests {
         let mock_sink = Arc::new(Mutex::new(MockSink::new(tx)));
 
         let messages = vec![
-            SignalingMessage::Login {
-                token: "token1".to_string(),
-                protocol_version: VACS_PROTOCOL_VERSION.to_string(),
-                custom_profile: false,
-                position_id: None,
-            },
-            SignalingMessage::ListClients,
-            SignalingMessage::Logout,
+            ServerMessage::ClientList(server::ClientList { clients: vec![] }),
+            ServerMessage::StationList(server::StationList { stations: vec![] }),
+            ServerMessage::Disconnected(server::Disconnected {
+                reason: server::DisconnectReason::Terminated,
+            }),
         ];
 
         let mut tasks = vec![];
@@ -220,7 +215,7 @@ mod tests {
         for _ in 0..messages.len() {
             let msg = rx.recv().await.expect("Expected a message");
             if let ws::Message::Text(raw_message) = msg {
-                let message = SignalingMessage::deserialize(&raw_message)
+                let message = ServerMessage::deserialize(&raw_message)
                     .expect("Failed to deserialize message");
                 sent.push(message);
             }
@@ -238,14 +233,14 @@ mod tests {
         drop(rx); // Drop the receiver to simulate the sink being disconnected.
         let mut mock_sink = MockSink::new(tx);
 
-        let message = SignalingMessage::ClientConnected {
+        let message = ServerMessage::ClientConnected(server::ClientConnected {
             client: ClientInfo {
                 id: ClientId::from("client1"),
                 position_id: Some(PositionId::from("position1")),
                 display_name: "Client 1".to_string(),
                 frequency: "100.000".to_string(),
             },
-        };
+        });
 
         assert!(
             send_message_raw(&mut mock_sink, message.clone())
@@ -257,19 +252,21 @@ mod tests {
     #[test(tokio::test)]
     async fn receive_single_message() {
         let mut mock_stream = MockStream::new(vec![Ok(ws::Message::from(
-            "{\"type\":\"Login\",\"id\":\"client1\",\"token\":\"token1\",\"protocolVersion\":\"0.0.0\",\"customProfile\":false}",
+            "{\"type\":\"login\",\"id\":\"client1\",\"token\":\"token1\",\"protocolVersion\":\"0.0.0\",\"customProfile\":false}",
         ))]);
 
         let result = receive_message(&mut mock_stream).await;
 
         assert_eq!(
             result,
-            MessageResult::ApplicationMessage(SignalingMessage::Login {
-                token: "token1".to_string(),
-                protocol_version: "0.0.0".to_string(),
-                custom_profile: false,
-                position_id: None,
-            })
+            MessageResult::ApplicationMessage(ClientMessage::Login(
+                vacs_protocol::ws::client::Login {
+                    token: "token1".to_string(),
+                    protocol_version: "0.0.0".to_string(),
+                    custom_profile: false,
+                    position_id: None,
+                }
+            ))
         );
     }
 
@@ -277,33 +274,39 @@ mod tests {
     async fn receive_multiple_messages() {
         let mut mock_stream = MockStream::new(vec![
             Ok(ws::Message::from(
-                "{\"type\":\"Login\",\"id\":\"client1\",\"token\":\"token1\",\"protocolVersion\":\"0.0.0\",\"customProfile\":false}",
+                "{\"type\":\"login\",\"id\":\"client1\",\"token\":\"token1\",\"protocolVersion\":\"0.0.0\",\"customProfile\":false}",
             )),
-            Ok(ws::Message::from("{\"type\":\"Logout\"}")),
+            Ok(ws::Message::from("{\"type\":\"logout\"}")),
             Ok(ws::Message::from(
-                "{\"type\":\"CallOffer\",\"peerId\":\"client1\",\"sdp\":\"sdp1\"}",
+                "{\"type\":\"webrtcOffer\",\"callId\":\"00000000-0000-0000-0000-000000000000\",\"fromClientId\":\"client1\",\"toClientId\":\"client2\",\"sdp\":\"sdp1\"}",
             )),
         ]);
 
         assert_eq!(
             receive_message(&mut mock_stream).await,
-            MessageResult::ApplicationMessage(SignalingMessage::Login {
-                token: "token1".to_string(),
-                protocol_version: "0.0.0".to_string(),
-                custom_profile: false,
-                position_id: None,
-            })
+            MessageResult::ApplicationMessage(ClientMessage::Login(
+                vacs_protocol::ws::client::Login {
+                    token: "token1".to_string(),
+                    protocol_version: "0.0.0".to_string(),
+                    custom_profile: false,
+                    position_id: None,
+                }
+            ))
         );
         assert_eq!(
             receive_message(&mut mock_stream).await,
-            MessageResult::ApplicationMessage(SignalingMessage::Logout)
+            MessageResult::ApplicationMessage(ClientMessage::Logout)
         );
         assert_eq!(
             receive_message(&mut mock_stream).await,
-            MessageResult::ApplicationMessage(SignalingMessage::CallOffer {
-                client_id: ClientId::from("client1"),
-                sdp: "sdp1".to_string()
-            })
+            MessageResult::ApplicationMessage(ClientMessage::WebrtcOffer(
+                vacs_protocol::ws::shared::WebrtcOffer {
+                    call_id: CallId::from(Uuid::nil()),
+                    from_client_id: ClientId::from("client1"),
+                    to_client_id: ClientId::from("client2"),
+                    sdp: "sdp1".to_string()
+                }
+            ))
         );
     }
 
@@ -311,11 +314,11 @@ mod tests {
     async fn receive_messages_concurrently() {
         let mock_stream = Arc::new(Mutex::new(MockStream::new(vec![
             Ok(ws::Message::from(
-                "{\"type\":\"Login\",\"id\":\"client1\",\"token\":\"token1\",\"protocolVersion\":\"0.0.0\",\"customProfile\":false}",
+                "{\"type\":\"login\",\"id\":\"client1\",\"token\":\"token1\",\"protocolVersion\":\"0.0.0\",\"customProfile\":false}",
             )),
-            Ok(ws::Message::from("{\"type\":\"Logout\"}")),
+            Ok(ws::Message::from("{\"type\":\"logout\"}")),
             Ok(ws::Message::from(
-                "{\"type\":\"CallOffer\",\"peerId\":\"client1\",\"sdp\":\"sdp1\"}",
+                "{\"type\":\"webrtcOffer\",\"callId\":\"00000000-0000-0000-0000-000000000000\",\"fromClientId\":\"client1\",\"toClientId\":\"client2\",\"sdp\":\"sdp1\"}",
             )),
         ])));
 
@@ -339,19 +342,21 @@ mod tests {
     #[test(tokio::test)]
     async fn receive_replayed_messages() {
         let msg = ws::Message::from(
-            "{\"type\":\"Login\",\"id\":\"client1\",\"token\":\"token1\",\"protocolVersion\":\"0.0.0\",\"customProfile\":false}",
+            "{\"type\":\"login\",\"id\":\"client1\",\"token\":\"token1\",\"protocolVersion\":\"0.0.0\",\"customProfile\":false}",
         );
         let mut mock_stream = MockStream::new(vec![Ok(msg.clone()), Ok(msg)]);
 
         for _ in 0..2 {
             assert_eq!(
                 receive_message(&mut mock_stream).await,
-                MessageResult::ApplicationMessage(SignalingMessage::Login {
-                    token: "token1".to_string(),
-                    protocol_version: "0.0.0".to_string(),
-                    custom_profile: false,
-                    position_id: None,
-                })
+                MessageResult::ApplicationMessage(ClientMessage::Login(
+                    vacs_protocol::ws::client::Login {
+                        token: "token1".to_string(),
+                        protocol_version: "0.0.0".to_string(),
+                        custom_profile: false,
+                        position_id: None,
+                    }
+                ))
             );
         }
     }
@@ -398,7 +403,7 @@ mod tests {
     async fn receive_mixed_messages() {
         let mut mock_stream = MockStream::new(vec![
             Ok(ws::Message::Ping(tungstenite::Bytes::from("ping"))),
-            Ok(ws::Message::from("{\"type\":\"Logout\"}")),
+            Ok(ws::Message::from("{\"type\":\"logout\"}")),
             Ok(ws::Message::Pong(tungstenite::Bytes::from("pong"))),
         ]);
 
@@ -408,7 +413,7 @@ mod tests {
         );
         assert_eq!(
             receive_message(&mut mock_stream).await,
-            MessageResult::ApplicationMessage(SignalingMessage::Logout)
+            MessageResult::ApplicationMessage(ClientMessage::Logout)
         );
         assert_eq!(
             receive_message(&mut mock_stream).await,
@@ -430,7 +435,7 @@ mod tests {
     #[test(tokio::test)]
     async fn receive_message_invalid_json() {
         let mut mock_stream =
-            MockStream::new(vec![Ok(ws::Message::Text(ws::Utf8Bytes::from("\"Logout")))]);
+            MockStream::new(vec![Ok(ws::Message::Text(ws::Utf8Bytes::from("\"logout")))]);
 
         assert_eq!(
             receive_message(&mut mock_stream).await,

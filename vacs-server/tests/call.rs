@@ -1,7 +1,9 @@
 use std::time::Duration;
 use test_log::test;
 use vacs_protocol::vatsim::ClientId;
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::ServerMessage;
+use vacs_protocol::ws::shared::{CallId, CallTarget};
 use vacs_server::test_utils::{TestApp, setup_n_test_clients};
 
 #[test(tokio::test)]
@@ -12,32 +14,86 @@ async fn call_offer() -> anyhow::Result<()> {
     let mut client1 = clients.remove(0);
     let mut client2 = clients.remove(0);
 
+    let call_id = CallId::new();
     client1
-        .send(SignalingMessage::CallOffer {
-            peer_id: client2.id().clone(),
-            sdp: "sdp1".to_string(),
+        .send(ClientMessage::CallInvite(
+            vacs_protocol::ws::shared::CallInvite {
+                call_id,
+                source: vacs_protocol::ws::shared::CallSource {
+                    client_id: client1.id().clone(),
+                    position_id: None,
+                    station_id: None,
+                },
+                target: CallTarget::Client(client2.id().clone()),
+            },
+        ))
+        .await?;
+
+    let invite_messages = client2
+        .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
+            matches!(m, ServerMessage::CallInvite(_))
         })
+        .await;
+    assert_eq!(
+        invite_messages.len(),
+        1,
+        "client2 should receive CallInvite"
+    );
+
+    client2
+        .send(ClientMessage::CallAccept(
+            vacs_protocol::ws::shared::CallAccept {
+                call_id,
+                accepting_client_id: client2.id().clone(),
+            },
+        ))
+        .await?;
+
+    let accept_messages = client1
+        .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
+            matches!(m, ServerMessage::CallAccept(_))
+        })
+        .await;
+    assert_eq!(
+        accept_messages.len(),
+        1,
+        "client1 should receive CallAccept"
+    );
+
+    client1
+        .send(ClientMessage::WebrtcOffer(
+            vacs_protocol::ws::shared::WebrtcOffer {
+                call_id,
+                from_client_id: client1.id().clone(),
+                to_client_id: client2.id().clone(),
+                sdp: "sdp1".to_string(),
+            },
+        ))
         .await?;
 
     let call_offer_messages = client2
         .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-            matches!(m, SignalingMessage::CallOffer { .. })
+            matches!(m, ServerMessage::WebrtcOffer(_))
         })
         .await;
 
     assert_eq!(
         call_offer_messages.len(),
         1,
-        "client2 should have received exactly one CallOffer message"
+        "client2 should have received exactly one WebrtcOffer message"
     );
 
     match &call_offer_messages[0] {
-        SignalingMessage::CallOffer { peer_id, sdp } => {
-            assert_eq!(peer_id, client1.id(), "CallOffer targeted the wrong client");
-            assert_eq!(sdp, "sdp1", "CallOffer contains the wrong SDP");
+        ServerMessage::WebrtcOffer(offer) => {
+            assert_eq!(
+                &offer.from_client_id,
+                client1.id(),
+                "WebrtcOffer targeted the wrong client"
+            );
+            assert_eq!(offer.sdp, "sdp1", "WebrtcOffer contains the wrong SDP");
         }
         message => panic!(
-            "Unexpected message: {:?}, expected CallOffer from client1",
+            "Unexpected message: {:?}, expected WebrtcOffer from client1",
             message
         ),
     };
@@ -45,7 +101,7 @@ async fn call_offer() -> anyhow::Result<()> {
     for (i, client) in clients.iter_mut().enumerate() {
         let call_offer_messages = client
             .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-                matches!(m, SignalingMessage::CallOffer { .. })
+                matches!(m, ServerMessage::WebrtcOffer(_))
             })
             .await;
 
@@ -59,7 +115,7 @@ async fn call_offer() -> anyhow::Result<()> {
 
     let call_offer_messages = client1
         .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-            matches!(m, SignalingMessage::CallOffer { .. })
+            matches!(m, ServerMessage::WebrtcOffer(_))
         })
         .await;
     assert!(
@@ -79,46 +135,72 @@ async fn call_offer_answer() -> anyhow::Result<()> {
     let mut client1 = clients.remove(0);
     let mut client2 = clients.remove(0);
 
+    let call_id = CallId::new();
+    // Setup call first
     client1
-        .send(SignalingMessage::CallOffer {
-            peer_id: client2.id().clone(),
-            sdp: "sdp1".to_string(),
-        })
+        .send(ClientMessage::CallInvite(
+            vacs_protocol::ws::shared::CallInvite {
+                call_id,
+                source: vacs_protocol::ws::shared::CallSource {
+                    client_id: client1.id().clone(),
+                    position_id: None,
+                    station_id: None,
+                },
+                target: CallTarget::Client(client2.id().clone()),
+            },
+        ))
         .await?;
-
-    let call_offer_messages = client2
+    let _ = client2
         .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-            matches!(m, SignalingMessage::CallOffer { .. })
+            matches!(m, ServerMessage::CallInvite(_))
+        })
+        .await;
+    client2
+        .send(ClientMessage::CallAccept(
+            vacs_protocol::ws::shared::CallAccept {
+                call_id,
+                accepting_client_id: client2.id().clone(),
+            },
+        ))
+        .await?;
+    let _ = client1
+        .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
+            matches!(m, ServerMessage::CallAccept(_))
         })
         .await;
 
-    assert_eq!(
-        call_offer_messages.len(),
-        1,
-        "client2 should have received exactly one CallOffer message"
-    );
+    client1
+        .send(ClientMessage::WebrtcOffer(
+            vacs_protocol::ws::shared::WebrtcOffer {
+                call_id,
+                from_client_id: client1.id().clone(),
+                to_client_id: client2.id().clone(),
+                sdp: "sdp1".to_string(),
+            },
+        ))
+        .await?;
 
-    match &call_offer_messages[0] {
-        SignalingMessage::CallOffer { peer_id, sdp } => {
-            assert_eq!(peer_id, client1.id(), "CallOffer targeted the wrong client");
-            assert_eq!(sdp, "sdp1", "CallOffer contains the wrong SDP");
-        }
-        message => panic!(
-            "Unexpected message: {:?}, expected CallOffer from client1",
-            message
-        ),
-    };
+    // Consume offer on client2
+    let _ = client2
+        .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
+            matches!(m, ServerMessage::WebrtcOffer(_))
+        })
+        .await;
 
     client2
-        .send(SignalingMessage::CallAnswer {
-            peer_id: client1.id().clone(),
-            sdp: "sdp2".to_string(),
-        })
+        .send(ClientMessage::WebrtcAnswer(
+            vacs_protocol::ws::shared::WebrtcAnswer {
+                call_id,
+                from_client_id: client2.id().clone(),
+                to_client_id: client1.id().clone(),
+                sdp: "sdp2".to_string(),
+            },
+        ))
         .await?;
 
     let call_answer_messages = client1
         .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-            matches!(m, SignalingMessage::CallAnswer { .. })
+            matches!(m, ServerMessage::WebrtcAnswer(_))
         })
         .await;
 
@@ -129,13 +211,13 @@ async fn call_offer_answer() -> anyhow::Result<()> {
     );
 
     match &call_answer_messages[0] {
-        SignalingMessage::CallAnswer { peer_id, sdp } => {
+        ServerMessage::WebrtcAnswer(answer) => {
             assert_eq!(
-                peer_id,
+                &answer.from_client_id,
                 client2.id(),
                 "CallAnswer targeted the wrong client"
             );
-            assert_eq!(sdp, "sdp2", "CallAnswer contains the wrong SDP");
+            assert_eq!(answer.sdp, "sdp2", "CallAnswer contains the wrong SDP");
         }
         message => panic!(
             "Unexpected message: {:?}, expected CallAnswer from client2",
@@ -148,7 +230,7 @@ async fn call_offer_answer() -> anyhow::Result<()> {
             .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
                 matches!(
                     m,
-                    SignalingMessage::CallOffer { .. } | SignalingMessage::CallAnswer { .. }
+                    ServerMessage::WebrtcOffer(_) | ServerMessage::WebrtcAnswer(_)
                 )
             })
             .await;
@@ -163,7 +245,7 @@ async fn call_offer_answer() -> anyhow::Result<()> {
 
     let call_offer_messages = client1
         .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-            matches!(m, SignalingMessage::CallOffer { .. })
+            matches!(m, ServerMessage::WebrtcOffer(_))
         })
         .await;
     assert!(
@@ -174,7 +256,7 @@ async fn call_offer_answer() -> anyhow::Result<()> {
 
     let call_answer_messages = client2
         .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-            matches!(m, SignalingMessage::CallAnswer { .. })
+            matches!(m, ServerMessage::WebrtcAnswer(_))
         })
         .await;
     assert!(
@@ -187,7 +269,7 @@ async fn call_offer_answer() -> anyhow::Result<()> {
 }
 
 #[test(tokio::test)]
-async fn peer_not_found() -> anyhow::Result<()> {
+async fn target_not_found() -> anyhow::Result<()> {
     let test_app = TestApp::new().await;
     let mut clients = setup_n_test_clients(test_app.addr(), 5).await;
 
@@ -195,46 +277,57 @@ async fn peer_not_found() -> anyhow::Result<()> {
     let mut client2 = clients.remove(0);
 
     client1
-        .send(SignalingMessage::CallOffer {
-            peer_id: ClientId::from("client69"),
-            sdp: "sdp1".to_string(),
-        })
+        .send(ClientMessage::CallInvite(
+            vacs_protocol::ws::shared::CallInvite {
+                call_id: CallId::new(),
+                source: vacs_protocol::ws::shared::CallSource {
+                    client_id: client1.id().clone(),
+                    position_id: None,
+                    station_id: None,
+                },
+                target: CallTarget::Client(ClientId::from("client69")),
+            },
+        ))
         .await?;
 
-    let call_offer_messages = client2
+    // Expect empty offer/invite on client2 (which is fine, it's not target)
+    let call_messages = client2
         .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-            matches!(m, SignalingMessage::CallOffer { .. })
+            matches!(
+                m,
+                ServerMessage::WebrtcOffer(_) | ServerMessage::CallInvite(_)
+            )
         })
         .await;
 
     assert!(
-        call_offer_messages.is_empty(),
+        call_messages.is_empty(),
         "client2 should have received no messages, but received: {:?}",
-        call_offer_messages
+        call_messages
     );
 
     let peer_not_found_messages = client1
         .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-            matches!(m, SignalingMessage::PeerNotFound { .. })
+            matches!(m, ServerMessage::CallError(_))
         })
         .await;
 
     assert_eq!(
         peer_not_found_messages.len(),
         1,
-        "client1 should have received exactly one PeerNotFound message"
+        "client1 should have received exactly one CallError message"
     );
 
     match &peer_not_found_messages[0] {
-        SignalingMessage::PeerNotFound { peer_id } => {
+        ServerMessage::CallError(error) => {
             assert_eq!(
-                *peer_id,
-                ClientId::from("client69"),
-                "PeerNotFound targeted the wrong client"
+                error.reason,
+                vacs_protocol::ws::shared::CallErrorReason::TargetNotFound,
+                "CallErrorReason mismatch"
             );
         }
         message => panic!(
-            "Unexpected message: {:?}, expected PeerNotFound for client2",
+            "Unexpected message: {:?}, expected Error from server",
             message
         ),
     };
@@ -242,10 +335,7 @@ async fn peer_not_found() -> anyhow::Result<()> {
     for (i, client) in clients.iter_mut().enumerate() {
         let call_offer_messages = client
             .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
-                matches!(
-                    m,
-                    SignalingMessage::CallOffer { .. } | SignalingMessage::PeerNotFound { .. }
-                )
+                matches!(m, ServerMessage::WebrtcOffer(_) | ServerMessage::Error(_))
             })
             .await;
 
