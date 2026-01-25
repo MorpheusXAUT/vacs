@@ -1,6 +1,6 @@
 use crate::metrics::ErrorMetrics;
-use crate::metrics::guards::CallAttemptOutcome;
 use crate::state::AppState;
+use crate::state::calls::{CallTerminationOutcome, StartCallError};
 use crate::state::clients::session::ClientSession;
 use std::collections::HashSet;
 use std::ops::ControlFlow;
@@ -132,14 +132,17 @@ async fn handle_call_invite(state: &AppState, client: &ClientSession, invite: Ca
         return;
     }
 
-    if !state
+    match state
         .calls
         .start_call_attempt(call_id, client.id(), &invite.target, &target_clients)
     {
-        tracing::debug!("Client already has an outgoing call, rejecting call invite");
-        // TODO error metrics
-        send_call_error(client, call_id, CallErrorReason::CallActive, None).await;
-        return;
+        Ok(_) => {}
+        Err(StartCallError::CallerBusy) => {
+            tracing::debug!("Client already has an outgoing call, rejecting call invite");
+            // TODO error metrics
+            send_call_error(client, call_id, CallErrorReason::CallActive, None).await;
+            return;
+        }
     }
 
     for callee_id in target_clients {
@@ -147,11 +150,7 @@ async fn handle_call_invite(state: &AppState, client: &ClientSession, invite: Ca
         if let Err(err) = state.send_message(&callee_id, invite.clone()).await {
             tracing::warn!(?err, ?callee_id, "Failed to send call invite to target");
             // TODO error metrics
-            if state
-                .calls
-                .mark_errored(call_id, &callee_id)
-                .unwrap_or(true)
-            {
+            if let CallTerminationOutcome::Failed(_) = state.calls.call_error(call_id, &callee_id) {
                 tracing::trace!(?callee_id, "All call attempts failed, returning call error");
                 // TODO error metrics
                 // TODO other call error reason?
@@ -244,36 +243,39 @@ async fn handle_call_reject(state: &AppState, client: &ClientSession, reject: Ca
         return;
     }
 
-    let Some(failed) = state.calls.mark_rejected(call_id, rejecter_id) else {
-        tracing::warn!("No ringing call found, returning call error");
-        // TODO error metrics
-        // TODO other call error reason?
-        send_call_error(client, call_id, CallErrorReason::CallFailure, None).await;
-        return;
-    };
-
-    if failed
-        && let Some(ringing) =
-            state
-                .calls
-                .cancel_ringing_call(call_id, rejecter_id, CallAttemptOutcome::Rejected)
-    {
-        tracing::trace!(
-            "All notified clients either rejected or errored, call failed, sending call error to source client"
-        );
-        // TODO error metrics
-        // TODO other call error reason?
-        // TODO send CallCancelled to all notified, just in case?
-        if let Err(err) = state
-            .send_message(
-                &ringing.caller_id,
-                server::CallCancelled::new(*call_id, CallCancelReason::AllFailed),
-            )
-            .await
-        {
-            tracing::warn!(?err, "Failed to send call error to source client");
+    match state.calls.reject_call(call_id, rejecter_id) {
+        CallTerminationOutcome::CallNotFound => {
+            tracing::warn!("No ringing call found, returning call error");
+            // TODO error metrics
+            // TODO other call error reason?
+            send_call_error(client, call_id, CallErrorReason::CallFailure, None).await;
+            return;
         }
-        return;
+        CallTerminationOutcome::ClientNotNotified => {
+            tracing::warn!("Client was not notified of this call, returning call error");
+            // TODO error metrics
+            send_call_error(client, call_id, CallErrorReason::CallFailure, None).await;
+            return;
+        }
+        CallTerminationOutcome::Continued => {}
+        CallTerminationOutcome::Failed(ringing) => {
+            tracing::trace!(
+                "All notified clients either rejected or errored, call failed, sending call error to source client"
+            );
+            // TODO error metrics
+            // TODO other call error reason?
+            // TODO send CallCancelled to all notified, just in case?
+            if let Err(err) = state
+                .send_message(
+                    &ringing.caller_id,
+                    server::CallCancelled::new(*call_id, CallCancelReason::AllFailed),
+                )
+                .await
+            {
+                tracing::warn!(?err, "Failed to send call error to source client");
+            }
+            return;
+        }
     }
 }
 
@@ -342,37 +344,39 @@ async fn handle_call_error(state: &AppState, client: &ClientSession, error: Call
     let erroring_id = client.id();
     let call_id = &error.call_id;
 
-    let Some(failed) = state.calls.mark_errored(call_id, erroring_id) else {
-        tracing::warn!("No ringing call found, returning call error");
-        // TODO error metrics
-        // TODO other call error reason?
-        send_call_error(client, call_id, CallErrorReason::CallFailure, None).await;
-        return;
-    };
-
-    if failed
-        && let Some(ringing) = state.calls.cancel_ringing_call(
-            call_id,
-            erroring_id,
-            CallAttemptOutcome::Error(error.reason),
-        )
-    {
-        tracing::trace!(
-            "All notified clients either rejected or errored, call failed, sending call error to source client"
-        );
-        // TODO error metrics
-        // TODO other call error reason?
-        // TODO send CallCancelled to all notified, just in case?
-        if let Err(err) = state
-            .send_message(
-                &ringing.caller_id,
-                server::CallCancelled::new(*call_id, CallCancelReason::AllFailed),
-            )
-            .await
-        {
-            tracing::warn!(?err, "Failed to send call error to source client");
+    match state.calls.call_error(call_id, erroring_id) {
+        CallTerminationOutcome::CallNotFound => {
+            tracing::warn!("No ringing call found, returning call error");
+            // TODO error metrics
+            // TODO other call error reason?
+            send_call_error(client, call_id, CallErrorReason::CallFailure, None).await;
+            return;
         }
-        return;
+        CallTerminationOutcome::ClientNotNotified => {
+            tracing::warn!("Client was not notified of this call, returning call error");
+            // TODO error metrics
+            send_call_error(client, call_id, CallErrorReason::CallFailure, None).await;
+            return;
+        }
+        CallTerminationOutcome::Continued => {}
+        CallTerminationOutcome::Failed(ringing) => {
+            tracing::trace!(
+                "All notified clients either rejected or errored, call failed, sending call error to source client"
+            );
+            // TODO error metrics
+            // TODO other call error reason?
+            // TODO send CallCancelled to all notified, just in case?
+            if let Err(err) = state
+                .send_message(
+                    &ringing.caller_id,
+                    server::CallCancelled::new(*call_id, CallCancelReason::AllFailed),
+                )
+                .await
+            {
+                tracing::warn!(?err, "Failed to send call error to source client");
+            }
+            return;
+        }
     }
 }
 

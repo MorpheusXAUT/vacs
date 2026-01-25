@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::shared::{CallId, CallTarget};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RingingCall {
     pub call_id: CallId,
     pub caller_id: ClientId,
