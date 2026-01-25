@@ -6,6 +6,19 @@ use std::collections::{HashMap, HashSet};
 use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::shared::{CallId, CallTarget};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartCallError {
+    CallerBusy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CallTerminationOutcome {
+    CallNotFound,
+    ClientNotNotified,
+    Continued,
+    Failed(RingingCall),
+}
+
 pub struct CallManager {
     ringing_calls: RwLock<HashMap<CallId, RingingCallEntry>>,
     active_calls: RwLock<HashMap<CallId, ActiveCallEntry>>,
@@ -65,10 +78,10 @@ impl CallManager {
         caller_id: &ClientId,
         target: &CallTarget,
         notified_clients: &HashSet<ClientId>,
-    ) -> bool {
+    ) -> Result<(), StartCallError> {
         if self.has_outgoing_call(caller_id) {
             tracing::warn!("Client already has outgoing call");
-            return false;
+            return Err(StartCallError::CallerBusy);
         }
 
         let ringing = RingingCallEntry::new(
@@ -91,23 +104,64 @@ impl CallManager {
                 .insert(*call_id);
         }
 
-        true
+        Ok(())
     }
 
-    pub fn mark_rejected(&self, call_id: &CallId, rejecting_client_id: &ClientId) -> Option<bool> {
+    pub fn reject_call(
+        &self,
+        call_id: &CallId,
+        rejecting_client_id: &ClientId,
+    ) -> CallTerminationOutcome {
         self.remove_client_incoming_call(call_id, rejecting_client_id);
-        self.ringing_calls
-            .write()
-            .get_mut(call_id)
-            .map(|c| c.mark_rejected(rejecting_client_id))
+
+        let mut ringing_calls = self.ringing_calls.write();
+        match ringing_calls.entry(*call_id) {
+            Entry::Occupied(mut entry) => {
+                if !entry.get().has_notified_client(rejecting_client_id) {
+                    return CallTerminationOutcome::ClientNotNotified;
+                }
+
+                if entry.get_mut().mark_rejected(rejecting_client_id) {
+                    let ringing = entry.remove();
+                    drop(ringing_calls);
+                    self.cleanup_ringing_call(call_id, &ringing);
+                    CallTerminationOutcome::Failed(ringing.complete(CallAttemptOutcome::Rejected))
+                } else {
+                    CallTerminationOutcome::Continued
+                }
+            }
+            Entry::Vacant(_) => CallTerminationOutcome::CallNotFound,
+        }
     }
 
-    pub fn mark_errored(&self, call_id: &CallId, erroring_client_id: &ClientId) -> Option<bool> {
+    pub fn call_error(
+        &self,
+        call_id: &CallId,
+        erroring_client_id: &ClientId,
+    ) -> CallTerminationOutcome {
         self.remove_client_incoming_call(call_id, erroring_client_id);
-        self.ringing_calls
-            .write()
-            .get_mut(call_id)
-            .map(|c| c.mark_errored(erroring_client_id))
+
+        let mut ringing_calls = self.ringing_calls.write();
+        match ringing_calls.entry(*call_id) {
+            Entry::Occupied(mut entry) => {
+                if !entry.get().has_notified_client(erroring_client_id) {
+                    return CallTerminationOutcome::ClientNotNotified;
+                }
+
+                if entry.get_mut().mark_errored(erroring_client_id) {
+                    let ringing = entry.remove();
+                    drop(ringing_calls);
+                    self.cleanup_ringing_call(call_id, &ringing);
+                    // TODO: should we allow passing strict error reason here?
+                    CallTerminationOutcome::Failed(ringing.complete(CallAttemptOutcome::Error(
+                        vacs_protocol::ws::shared::CallErrorReason::CallFailure,
+                    )))
+                } else {
+                    CallTerminationOutcome::Continued
+                }
+            }
+            Entry::Vacant(_) => CallTerminationOutcome::CallNotFound,
+        }
     }
 
     pub fn accept_call(
