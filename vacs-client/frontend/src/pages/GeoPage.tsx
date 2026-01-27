@@ -10,6 +10,10 @@ import {
 import {CSSProperties} from "preact";
 import {useProfileStore} from "../stores/profile-store.ts";
 import DirectAccessPage from "../components/DirectAccessPage.tsx";
+import {useCallStore} from "../stores/call-store.ts";
+import {ClientId, StationId} from "../types/generic.ts";
+import {Call} from "../types/call.ts";
+import {useAuthStore} from "../stores/auth-store.ts";
 
 type GeoPageProps = {
     page: GeoPageContainerModel;
@@ -92,12 +96,58 @@ type GeoPageButtonProps = {
     button: GeoPageButtonModel;
 };
 
+function callInvolvesButtonStations(call: Call, stationIds: StationId[], cid: ClientId) {
+    return call.source.clientId === cid
+        ? call.target.station !== undefined && stationIds.includes(call.target.station)
+        : call.source.stationId !== undefined && stationIds.includes(call.source.stationId);
+}
+
 function GeoPageButton({button}: GeoPageButtonProps) {
+    const blink = useCallStore(state => state.blink);
+    const callDisplay = useCallStore(state => state.callDisplay);
+    const incomingCalls = useCallStore(state => state.incomingCalls);
+    const cid = useAuthStore(state => state.cid);
+
     const setSelectedPage = useProfileStore(state => state.setPage);
+
+    // TODO
+    // LOVV_CTR und LOWW_F_APP sind da
+    // Ich rufe als LOVV_N1, LOWW_F_APP an
+    // Anruf wird aufgebaut und wir reden
+    // Währenddessen verbindet sich LOVV_N_CTR
+    // Wird dann mein N LOWL grün?
+
+    const stationIds =
+        button.page?.keys.flatMap(key => {
+            if (key.stationId === undefined) return [];
+            return [key.stationId];
+        }) ?? [];
+
+    const isCalling = incomingCalls.some(
+        call => call.source.stationId !== undefined && stationIds.includes(call.source.stationId),
+    );
+    const beingCalled =
+        callDisplay?.type === "outgoing" &&
+        callDisplay.call.target.station !== undefined &&
+        stationIds.includes(callDisplay.call.target.station);
+    const involved =
+        callDisplay !== undefined && callInvolvesButtonStations(callDisplay.call, stationIds, cid);
+    const inCall = callDisplay?.type === "accepted" && involved;
+    const isRejected = callDisplay?.type === "rejected" && involved;
+    const isError = callDisplay?.type === "error" && involved;
 
     return (
         <Button
-            color="gray"
+            color={
+                inCall
+                    ? "green"
+                    : (isCalling || isRejected) && blink
+                      ? "green"
+                      : isError && blink
+                        ? "red"
+                        : "gray"
+            }
+            highlight={beingCalled || isRejected ? "green" : undefined}
             className={"aspect-square w-auto! rounded-none! overflow-hidden"}
             style={{height: `${button.size}rem`}}
             onClick={() => setSelectedPage(button.page)}

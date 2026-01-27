@@ -1,14 +1,15 @@
+use crate::app::state::AppState;
+use crate::app::state::signaling::AppStateSignalingExt;
 use crate::keybinds::KeybindsError;
 use crate::radio::RadioError;
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt::{Debug, Display, Formatter};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
-use vacs_signaling::protocol::vatsim::ClientId;
 use vacs_signaling::protocol::ws::server::{DisconnectReason, LoginFailureReason};
-use vacs_signaling::protocol::ws::shared::{CallErrorReason, ErrorReason};
+use vacs_signaling::protocol::ws::shared::{CallErrorReason, CallId, ErrorReason};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -91,16 +92,20 @@ impl serde::Serialize for Error {
     }
 }
 
-pub trait HandleUnauthorizedExt<R> {
-    fn handle_unauthorized(self, app: &AppHandle) -> Result<R, Error>;
+#[async_trait::async_trait]
+pub trait HandleUnauthorizedExt<R: Send> {
+    async fn handle_unauthorized(self, app: &AppHandle) -> Result<R, Error>;
 }
 
-impl<R> HandleUnauthorizedExt<R> for Result<R, Error> {
-    fn handle_unauthorized(self, app: &AppHandle) -> Result<R, Error> {
+#[async_trait::async_trait]
+impl<R: Send> HandleUnauthorizedExt<R> for Result<R, Error> {
+    async fn handle_unauthorized(self, app: &AppHandle) -> Result<R, Error> {
         match self {
             Ok(val) => Ok(val),
             Err(Error::Unauthorized) => {
                 log::info!("Not authenticated");
+
+                app.state::<AppState>().lock().await.set_client_id(None);
                 app.emit("auth:unauthenticated", Value::Null).ok();
                 Err(Error::Unauthorized)
             }
@@ -273,14 +278,14 @@ impl From<Error> for CallErrorReason {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CallError {
-    peer_id: ClientId,
+    call_id: CallId,
     reason: String,
 }
 
 impl CallError {
-    pub fn new(peer_id: ClientId, is_local: bool, reason: CallErrorReason) -> Self {
+    pub fn new(call_id: CallId, is_local: bool, reason: CallErrorReason) -> Self {
         Self {
-            peer_id,
+            call_id,
             reason: format!(
                 "{} {}",
                 if is_local { "Local" } else { "Remote" },

@@ -2,25 +2,25 @@ import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {useClientsStore} from "../stores/clients-store.ts";
 import {ClientInfo, SessionInfo} from "../types/client-info.ts";
 import {useCallStore} from "../stores/call-store.ts";
-import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 import {useCallListStore} from "../stores/call-list-store.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
-import {PositionId} from "../types/generic.ts";
+import {CallId, ClientId, PositionId} from "../types/generic.ts";
 import {useProfileStore} from "../stores/profile-store.ts";
 import {StationChange, StationInfo} from "../types/station.ts";
 import {useStationsStore} from "../stores/stations-store.ts";
+import {Call} from "../types/call.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, getClientInfo, removeClient} = useClientsStore.getState();
     const {setStations, addStationChanges} = useStationsStore.getState();
     const {
         addIncomingCall,
-        removePeer,
-        rejectPeer,
-        acceptCall,
+        removeCall,
+        rejectCall,
+        acceptIncomingCall,
+        setOutgoingCallAccepted,
         reset: resetCallStore,
     } = useCallStore.getState().actions;
-    const {open: openErrorOverlay} = useErrorOverlayStore.getState();
     const {addCall: addCallToCallList, clearCallList} = useCallListStore.getState().actions;
     const {setConnectionState, setConnectionInfo, setPositionsToSelect} =
         useConnectionStore.getState();
@@ -69,34 +69,29 @@ export function setupSignalingListeners() {
             listen<ClientInfo>("signaling:client-connected", event => {
                 addClient(event.payload);
             }),
-            listen<string>("signaling:client-disconnected", event => {
+            listen<ClientId>("signaling:client-disconnected", event => {
                 removeClient(event.payload);
-                removePeer(event.payload);
             }),
-            listen<string>("signaling:call-invite", event => {
-                addIncomingCall(getClientInfo(event.payload));
+            listen<Call>("signaling:call-invite", event => {
+                addIncomingCall(event.payload);
             }),
-            listen<string>("signaling:call-accept", event => {
-                acceptCall(getClientInfo(event.payload));
+            listen<CallId>("signaling:accept-incoming-call", event => {
+                acceptIncomingCall(event.payload);
             }),
-            listen<string>("signaling:call-end", event => {
-                removePeer(event.payload, true);
+            listen<{callId: CallId; acceptingClientId: ClientId}>(
+                "signaling:outgoing-call-accepted",
+                event => {
+                    setOutgoingCallAccepted(event.payload.callId, event.payload.acceptingClientId);
+                },
+            ),
+            listen<CallId>("signaling:call-end", event => {
+                removeCall(event.payload, true);
             }),
-            listen<string>("signaling:force-call-end", event => {
-                removePeer(event.payload);
+            listen<CallId>("signaling:force-call-end", event => {
+                removeCall(event.payload);
             }),
-            listen<string>("signaling:call-reject", event => {
-                rejectPeer(event.payload);
-            }),
-            listen<string>("signaling:peer-not-found", event => {
-                removeClient(event.payload);
-                removePeer(event.payload);
-                openErrorOverlay(
-                    "Peer not found",
-                    `Cannot find peer with CID ${event.payload}`,
-                    false,
-                    5000,
-                );
+            listen<CallId>("signaling:call-reject", event => {
+                rejectCall(event.payload);
             }),
             listen<{incoming: boolean; peerId: string}>("signaling:add-to-call-list", event => {
                 const clientInfo = getClientInfo(event.payload.peerId);

@@ -7,6 +7,7 @@ import List from "../ui/List.tsx";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeSafe} from "../../error.ts";
 import {useConnectionStore} from "../../stores/connection-store.ts";
+import {ClientId} from "../../types/generic.ts";
 
 function CallList() {
     const calls = useCallListStore(state => state.callList);
@@ -25,7 +26,7 @@ function CallList() {
     const handleCallClick = useAsyncDebounce(async () => {
         const peerId: string | undefined = calls[selectedCall]?.number;
         if (peerId === undefined || callDisplay !== undefined) return;
-        await startCall(peerId);
+        await startCall({client: peerId as ClientId}); // TODO
     });
 
     function callRow(index: number, isSelected: boolean, onClick: () => void) {

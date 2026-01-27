@@ -7,6 +7,7 @@ import {TargetedEvent} from "preact";
 import {useAuthStore} from "../../stores/auth-store.ts";
 import {useCallListStore} from "../../stores/call-list-store.ts";
 import {useConnectionStore} from "../../stores/connection-store.ts";
+import {ClientId} from "../../types/generic.ts";
 
 const DIAL_BUTTONS: {digit: string; chars: string}[] = [
     {digit: "1", chars: ""},
@@ -50,7 +51,7 @@ function DialPad() {
 
     const handleStartCall = useAsyncDebounce(async (peerId: string | undefined) => {
         if (peerId === undefined || callDisplay !== undefined) return;
-        await startCall(peerId);
+        await startCall({client: peerId as ClientId}); // TODO
     });
 
     return (

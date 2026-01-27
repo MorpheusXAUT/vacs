@@ -11,6 +11,8 @@ use std::collections::HashSet;
 use tauri::{AppHandle, Manager, State};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
+use vacs_signaling::protocol::ws::shared;
+use vacs_signaling::protocol::ws::shared::{CallId, CallSource, CallTarget};
 
 #[tauri::command]
 #[vacs_macros::log_err]
@@ -60,7 +62,8 @@ pub async fn signaling_terminate(
     http_state
         .http_delete::<()>(BackendEndpoint::TerminateWsSession, None)
         .await
-        .handle_unauthorized(&app)?;
+        .handle_unauthorized(&app)
+        .await?;
 
     log::info!("Successfully terminated signaling server session");
 
@@ -74,30 +77,33 @@ pub async fn signaling_start_call(
     app_state: State<'_, AppState>,
     http_state: State<'_, HttpState>,
     audio_manager: State<'_, AudioManagerHandle>,
-    peer_id: ClientId,
-) -> Result<(), Error> {
-    log::debug!("Starting call with {peer_id}");
+    target: CallTarget,
+    source: CallSource,
+) -> Result<CallId, Error> {
+    log::debug!("Starting call with {target:?} as {source:?}");
 
     let mut state = app_state.lock().await;
 
-    // TODO CallInvite with route
-    // state
-    //     .send_signaling_message(SignalingMessage::CallInvite {
-    //         peer_id: peer_id.clone(),
-    //     })
-    //     .await?;
+    let call_id = CallId::new();
+    state
+        .send_signaling_message(shared::CallInvite {
+            call_id,
+            target,
+            source,
+        })
+        .await?;
 
     if state.is_ice_config_expired() {
         refresh_ice_config(&http_state, &mut state).await;
     }
 
-    state.add_call_to_call_list(&app, &peer_id, false);
-    state.start_unanswered_call_timer(&app, &peer_id);
-    state.set_outgoing_call_peer_id(Some(peer_id));
+    // state.add_call_to_call_list(&app, &call_id, false); TODO
+    state.start_unanswered_call_timer(&app, &call_id);
+    state.set_outgoing_call_id(Some(call_id));
 
     audio_manager.read().restart(SourceType::Ringback);
 
-    Ok(())
+    Ok(call_id)
 }
 
 #[tauri::command]
@@ -105,12 +111,12 @@ pub async fn signaling_start_call(
 pub async fn signaling_accept_call(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    peer_id: ClientId,
+    call_id: CallId,
 ) -> Result<(), Error> {
-    log::debug!("Accepting call from {peer_id}");
+    log::debug!("Accepting call {call_id:?}");
 
     let mut state = app_state.lock().await;
-    state.accept_call(&app, Some(peer_id)).await?;
+    state.accept_call(&app, Some(call_id)).await?;
 
     Ok(())
 }
@@ -120,12 +126,12 @@ pub async fn signaling_accept_call(
 pub async fn signaling_end_call(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    peer_id: ClientId,
+    call_id: CallId,
 ) -> Result<(), Error> {
-    log::debug!("Ending call with {peer_id}");
+    log::debug!("Ending call {call_id:?}");
 
     let mut state = app_state.lock().await;
-    state.end_call(&app, Some(peer_id)).await?;
+    state.end_call(&app, Some(call_id)).await?;
 
     Ok(())
 }

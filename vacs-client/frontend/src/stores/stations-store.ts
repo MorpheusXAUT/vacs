@@ -2,6 +2,7 @@ import {create} from "zustand/react";
 import {StationChange, StationInfo} from "../types/station.ts";
 import {useConnectionStore} from "./connection-store.ts";
 import {StationId} from "../types/generic.ts";
+import {useShallow} from "zustand/react/shallow";
 
 type StationsState = {
     stations: Map<StationId, boolean>; // boolean => own
@@ -32,3 +33,12 @@ export const useStationsStore = create<StationsState>()((set, get) => ({
         set({stations});
     },
 }));
+
+export const useOwnStationIds = () =>
+    useStationsStore(
+        useShallow(state =>
+            Array.from(state.stations.entries())
+                .filter(([, own]) => own)
+                .map(([station]) => station),
+        ),
+    );

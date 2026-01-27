@@ -1,5 +1,13 @@
-import {DirectAccessPage, Profile} from "../types/profile.ts";
+import {
+    DirectAccessKey,
+    DirectAccessPage,
+    GeoPageContainer,
+    isGeoPageButton,
+    isGeoPageContainer,
+    Profile,
+} from "../types/profile.ts";
 import {create} from "zustand/react";
+import {useShallow} from "zustand/react/shallow";
 
 type ProfileState = {
     profile: Profile | undefined;
@@ -21,5 +29,34 @@ export const useProfileType = (): "geo" | "tabbed" | "unknown" | undefined => {
         if (state.profile.geo !== undefined) return "geo";
         if (state.profile.tabbed !== undefined) return "tabbed";
         return "unknown";
+    });
+};
+
+export const useProfileStationKeys = () => {
+    return useProfileStore(
+        useShallow(state => {
+            if (state.profile?.tabbed !== undefined) {
+                return state.profile.tabbed.flatMap(t =>
+                    t.page.keys.filter(k => k.stationId !== undefined),
+                );
+            }
+            if (state.profile?.geo !== undefined) {
+                return geoPageContainerToKeys(state.profile.geo).filter(
+                    k => k.stationId !== undefined,
+                );
+            }
+            return [];
+        }),
+    );
+};
+
+const geoPageContainerToKeys = (container: GeoPageContainer): DirectAccessKey[] => {
+    return container.children.flatMap(c => {
+        if (isGeoPageContainer(c)) {
+            return geoPageContainerToKeys(c);
+        } else if (isGeoPageButton(c)) {
+            return c.page?.keys ?? [];
+        }
+        return [];
     });
 };

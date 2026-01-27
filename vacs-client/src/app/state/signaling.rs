@@ -16,7 +16,7 @@ use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
 use vacs_signaling::protocol::ws::client::{CallRejectReason, ClientMessage};
 use vacs_signaling::protocol::ws::server::{
-    DisconnectReason, LoginFailureReason, ServerMessage, SessionProfile,
+    CallCancelReason, DisconnectReason, LoginFailureReason, ServerMessage, SessionProfile,
 };
 use vacs_signaling::protocol::ws::shared::{CallErrorReason, CallId, ErrorReason};
 use vacs_signaling::protocol::ws::{client, server, shared};
@@ -33,11 +33,13 @@ pub trait AppStateSignalingExt: sealed::Sealed {
     async fn disconnect_signaling(&mut self, app: &AppHandle);
     async fn handle_signaling_connection_closed(&mut self, app: &AppHandle);
     async fn send_signaling_message(&mut self, msg: impl Into<ClientMessage>) -> Result<(), Error>;
-    fn set_outgoing_call_peer_id(&mut self, peer_id: Option<ClientId>);
-    fn remove_outgoing_call_peer_id(&mut self, peer_id: &ClientId) -> bool;
-    fn incoming_call_peer_ids_len(&self) -> usize;
-    fn add_incoming_call_peer_id(&mut self, peer_id: &ClientId);
-    fn remove_incoming_call_peer_id(&mut self, peer_id: &ClientId) -> bool;
+    fn set_client_id(&mut self, client_id: Option<ClientId>);
+    fn outgoing_call_id(&self) -> Option<&CallId>;
+    fn set_outgoing_call_id(&mut self, call_id: Option<CallId>);
+    fn remove_outgoing_call_id(&mut self, call_id: &CallId) -> bool;
+    fn incoming_call_ids_len(&self) -> usize;
+    fn add_incoming_call_id(&mut self, call_id: &CallId);
+    fn remove_incoming_call_id(&mut self, call_id: &CallId) -> bool;
     fn add_call_to_call_list(&mut self, app: &AppHandle, peer_id: &ClientId, incoming: bool);
     fn new_signaling_client(
         app: AppHandle,
@@ -45,15 +47,14 @@ pub trait AppStateSignalingExt: sealed::Sealed {
         shutdown_token: CancellationToken,
         max_reconnect_attempts: u8,
     ) -> SignalingClient<TokioTransport, TauriTokenProvider>;
-    fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &ClientId);
-    fn cancel_unanswered_call_timer(&mut self, peer_id: &ClientId);
+    fn start_unanswered_call_timer(&mut self, app: &AppHandle, call_id: &CallId);
+    fn cancel_unanswered_call_timer(&mut self, call_id: &CallId);
     async fn accept_call(
         &mut self,
         app: &AppHandle,
-        peer_id: Option<ClientId>,
+        call_id: Option<CallId>,
     ) -> Result<bool, Error>;
-    async fn end_call(&mut self, app: &AppHandle, peer_id: Option<ClientId>)
-    -> Result<bool, Error>;
+    async fn end_call(&mut self, app: &AppHandle, call_id: Option<CallId>) -> Result<bool, Error>;
 }
 
 impl AppStateSignalingExt for AppStateInner {
@@ -123,15 +124,23 @@ impl AppStateSignalingExt for AppStateInner {
         Ok(())
     }
 
-    fn set_outgoing_call_peer_id(&mut self, peer_id: Option<ClientId>) {
-        self.outgoing_call_peer_id = peer_id;
+    fn set_client_id(&mut self, client_id: Option<ClientId>) {
+        self.client_id = client_id;
     }
 
-    fn remove_outgoing_call_peer_id(&mut self, peer_id: &ClientId) -> bool {
-        if let Some(id) = &self.outgoing_call_peer_id
-            && id == peer_id
+    fn outgoing_call_id(&self) -> Option<&CallId> {
+        self.outgoing_call_id.as_ref()
+    }
+
+    fn set_outgoing_call_id(&mut self, call_id: Option<CallId>) {
+        self.outgoing_call_id = call_id;
+    }
+
+    fn remove_outgoing_call_id(&mut self, call_id: &CallId) -> bool {
+        if let Some(id) = &self.outgoing_call_id
+            && id == call_id
         {
-            self.outgoing_call_peer_id = None;
+            self.outgoing_call_id = None;
             self.audio_manager.read().stop(SourceType::Ringback);
             true
         } else {
@@ -139,17 +148,17 @@ impl AppStateSignalingExt for AppStateInner {
         }
     }
 
-    fn incoming_call_peer_ids_len(&self) -> usize {
-        self.incoming_call_peer_ids.len()
+    fn incoming_call_ids_len(&self) -> usize {
+        self.incoming_call_ids.len()
     }
 
-    fn add_incoming_call_peer_id(&mut self, peer_id: &ClientId) {
-        self.incoming_call_peer_ids.insert(peer_id.clone());
+    fn add_incoming_call_id(&mut self, call_id: &CallId) {
+        self.incoming_call_ids.insert(*call_id);
     }
 
-    fn remove_incoming_call_peer_id(&mut self, peer_id: &ClientId) -> bool {
-        let found = self.incoming_call_peer_ids.remove(peer_id);
-        if self.incoming_call_peer_ids.is_empty() {
+    fn remove_incoming_call_id(&mut self, call_id: &CallId) -> bool {
+        let found = self.incoming_call_ids.remove(call_id);
+        if self.incoming_call_ids.is_empty() {
             self.audio_manager.read().stop(SourceType::Ring);
         }
         found
@@ -193,8 +202,13 @@ impl AppStateSignalingExt for AppStateInner {
         )
     }
 
-    fn start_unanswered_call_timer(&mut self, app: &AppHandle, peer_id: &ClientId) {
-        self.cancel_unanswered_call_timer(peer_id);
+    fn start_unanswered_call_timer(&mut self, app: &AppHandle, call_id: &CallId) {
+        self.cancel_unanswered_call_timer(call_id);
+
+        let Some(own_client_id) = self.client_id.as_ref().cloned() else {
+            log::warn!("Cannot start unanswered call timer without own client ID");
+            return;
+        };
 
         let timeout = Duration::from_secs(self.config.client.auto_hangup_seconds);
         if timeout.is_zero() {
@@ -205,53 +219,52 @@ impl AppStateSignalingExt for AppStateInner {
 
         let handle = tauri::async_runtime::spawn({
             let app = app.clone();
-            let peer_id = peer_id.clone();
             let cancel = cancel.clone();
+            let call_id = *call_id;
             async move {
-                log::debug!("Starting unanswered call timer of {timeout:?} for peer {peer_id}");
+                log::debug!("Starting unanswered call timer of {timeout:?} for call {call_id}");
                 tokio::select! {
                     biased;
                     _ = cancel.cancelled() => {
-                        log::debug!("Unanswered call timer cancelled for peer {peer_id}");
+                        log::debug!("Unanswered call timer cancelled for call {call_id}");
                     }
                     _ = tokio::time::sleep(timeout) => {
-                        log::debug!("Unanswered call timer expired for peer {peer_id}, hanging up");
+                        log::debug!("Unanswered call timer expired for call {call_id}, hanging up");
 
                         let state = app.state::<AppState>();
                         let mut state = state.lock().await;
 
-                        // TODO end with route
-                        // if let Err(err) = state.send_signaling_message(SignalingMessage::CallEnd { client_id: peer_id.clone() }).await {
-                        //     log::warn!("Failed to send call end message after call timer expired: {err:?}");
-                        // }
+                        if let Err(err) = state.send_signaling_message(shared::CallEnd { call_id, ending_client_id: own_client_id }).await {
+                            log::warn!("Failed to send call end message after call timer expired: {err:?}");
+                        }
 
-                        state.cleanup_call(&peer_id).await;
-                        state.set_outgoing_call_peer_id(None);
+                        state.cleanup_call(&call_id).await;
+                        state.set_outgoing_call_id(None);
 
                         let audio_manager = app.state::<AudioManagerHandle>();
                         audio_manager.read().stop(SourceType::Ringback);
 
-                        state.emit_call_error(&app, peer_id, false, CallErrorReason::AutoHangup);
+                        state.emit_call_error(&app, call_id, false, CallErrorReason::AutoHangup);
                     }
                 }
             }
         });
 
         self.unanswered_call_guard = Some(UnansweredCallGuard {
-            peer_id: peer_id.clone(),
+            call_id: *call_id,
             cancel,
             handle,
         });
     }
 
-    fn cancel_unanswered_call_timer(&mut self, peer_id: &ClientId) {
+    fn cancel_unanswered_call_timer(&mut self, call_id: &CallId) {
         if let Some(guard) = self
             .unanswered_call_guard
-            .take_if(|g| g.peer_id == *peer_id)
+            .take_if(|g| g.call_id == *call_id)
         {
             log::trace!(
-                "Cancelling unanswered call timer for peer {}",
-                guard.peer_id
+                "Cancelling unanswered call timer for call {}",
+                guard.call_id
             );
             guard.cancel.cancel();
             guard.handle.abort();
@@ -261,14 +274,18 @@ impl AppStateSignalingExt for AppStateInner {
     async fn accept_call(
         &mut self,
         app: &AppHandle,
-        client_id: Option<ClientId>,
+        call_id: Option<CallId>,
     ) -> Result<bool, Error> {
-        let client_id =
-            match client_id.or_else(|| self.incoming_call_peer_ids.iter().next().cloned()) {
-                Some(id) => id,
-                None => return Ok(false),
-            };
-        log::debug!("Accepting call from {client_id}");
+        let Some(own_client_id) = self.client_id.as_ref().cloned() else {
+            log::warn!("Cannot accept call without own client ID");
+            return Err(Error::Unauthorized);
+        };
+
+        let call_id = match call_id.or_else(|| self.incoming_call_ids.iter().next().cloned()) {
+            Some(id) => id,
+            None => return Ok(false),
+        };
+        log::debug!("Accepting call {call_id:?}");
 
         if !self.config.ice.is_default() && self.is_ice_config_expired() {
             match app
@@ -286,47 +303,48 @@ impl AppStateSignalingExt for AppStateInner {
         }
 
         self.send_signaling_message(shared::CallAccept {
-            call_id: CallId::new(), // TODO set actual call ID
-            accepting_client_id: client_id.clone(),
+            call_id,
+            accepting_client_id: own_client_id,
         })
         .await?;
-        self.remove_incoming_call_peer_id(&client_id);
+        self.remove_incoming_call_id(&call_id);
 
         self.audio_manager.read().stop(SourceType::Ring);
 
-        app.emit("signaling:call-accept", client_id).ok();
+        app.emit("signaling:accept-incoming-call", call_id).ok();
 
         Ok(true)
     }
 
-    async fn end_call(
-        &mut self,
-        app: &AppHandle,
-        peer_id: Option<ClientId>,
-    ) -> Result<bool, Error> {
-        let Some(peer_id) = peer_id.or_else(|| {
-            self.active_call_peer_id()
-                .or(self.outgoing_call_peer_id.as_ref())
+    async fn end_call(&mut self, app: &AppHandle, call_id: Option<CallId>) -> Result<bool, Error> {
+        let Some(own_client_id) = self.client_id.as_ref().cloned() else {
+            log::warn!("Cannot end call without own client ID");
+            return Err(Error::Unauthorized);
+        };
+
+        let Some(call_id) = call_id.or_else(|| {
+            self.active_call_id()
+                .or(self.outgoing_call_id.as_ref())
                 .cloned()
         }) else {
             return Ok(false);
         };
-        log::debug!("Ending call with {peer_id}");
+        log::debug!("Ending call {call_id}");
 
         self.send_signaling_message(shared::CallEnd {
-            call_id: CallId::new(),            // TODO set actual call ID
-            ending_client_id: peer_id.clone(), // TODO set own client ID
+            call_id,
+            ending_client_id: own_client_id,
         })
         .await?;
 
-        self.cleanup_call(&peer_id).await;
+        self.cleanup_call(&call_id).await;
 
-        self.cancel_unanswered_call_timer(&peer_id);
-        self.set_outgoing_call_peer_id(None);
+        self.cancel_unanswered_call_timer(&call_id);
+        self.set_outgoing_call_id(None);
 
         self.audio_manager.read().stop(SourceType::Ringback);
 
-        app.emit("signaling:force-call-end", peer_id).ok();
+        app.emit("signaling:force-call-end", call_id).ok();
 
         Ok(true)
     }
@@ -383,38 +401,36 @@ impl AppStateInner {
 
     async fn handle_signaling_message(msg: ServerMessage, app: &AppHandle) {
         match msg {
-            ServerMessage::CallInvite(shared::CallInvite {
-                call_id,
-                source,
-                target,
-            }) => {
+            ServerMessage::CallInvite(
+                ref msg @ shared::CallInvite {
+                    ref call_id,
+                    ref source,
+                    ref target,
+                },
+            ) => {
                 let caller_id = &source.client_id;
-                {
-                    if app
-                        .state::<AppState>()
-                        .lock()
-                        .await
-                        .config
-                        .client
-                        .ignored
-                        .contains(caller_id)
-                    {
-                        log::trace!("Ignoring call invite from {caller_id}");
-                        return;
-                    }
-                }
                 log::trace!("Call invite received from {caller_id} for target {target:?}");
 
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
+                let Some(own_client_id) = state.client_id.as_ref().cloned() else {
+                    log::warn!("Cannot handle call invite without own client ID");
+                    return;
+                };
+
+                if state.config.client.ignored.contains(caller_id) {
+                    log::trace!("Ignoring call invite from {caller_id}");
+                    return;
+                }
+
                 state.add_call_to_call_list(app, caller_id, true);
 
-                if state.incoming_call_peer_ids_len() >= INCOMING_CALLS_LIMIT {
+                if state.incoming_call_ids_len() >= INCOMING_CALLS_LIMIT {
                     if let Err(err) = state
                         .send_signaling_message(client::CallReject {
-                            call_id,
-                            rejecting_client_id: ClientId::new(""), // TODO set actual call ID
+                            call_id: *call_id,
+                            rejecting_client_id: own_client_id,
                             reason: Some(CallRejectReason::Busy),
                         })
                         .await
@@ -424,34 +440,40 @@ impl AppStateInner {
                     return;
                 }
 
-                state.add_incoming_call_peer_id(caller_id);
-                app.emit("signaling:call-invite", caller_id).ok();
+                state.add_incoming_call_id(call_id);
+                app.emit("signaling:call-invite", msg).ok();
 
                 state.audio_manager.read().restart(SourceType::Ring);
             }
-            ServerMessage::CallAccept(shared::CallAccept {
-                call_id,
-                accepting_client_id,
-            }) => {
+            ServerMessage::CallAccept(
+                ref msg @ shared::CallAccept {
+                    ref call_id,
+                    ref accepting_client_id,
+                },
+            ) => {
                 log::trace!("Call accept received for call {call_id} from {accepting_client_id}");
 
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                state.cancel_unanswered_call_timer(&accepting_client_id);
-                let res = if state.remove_outgoing_call_peer_id(&accepting_client_id) {
-                    app.emit("signaling:call-accept", accepting_client_id.clone())
-                        .ok();
+                let Some(own_client_id) = state.client_id.as_ref().cloned() else {
+                    log::warn!("Cannot handle call accept without own client ID");
+                    return;
+                };
+
+                state.cancel_unanswered_call_timer(call_id);
+                let res = if state.remove_outgoing_call_id(call_id) {
+                    app.emit("signaling:outgoing-call-accepted", msg).ok();
 
                     match state
-                        .init_call(app.clone(), accepting_client_id.clone(), None)
+                        .init_call(app.clone(), *call_id, accepting_client_id.clone(), None)
                         .await
                     {
                         Ok(sdp) => {
                             state
                                 .send_signaling_message(shared::WebrtcOffer {
-                                    call_id,
-                                    from_client_id: ClientId::new(""), // TODO set actual client ID
+                                    call_id: *call_id,
+                                    from_client_id: own_client_id,
                                     to_client_id: accepting_client_id.clone(),
                                     sdp,
                                 })
@@ -461,10 +483,10 @@ impl AppStateInner {
                             log::warn!("Failed to start call: {err:?}");
 
                             let reason: CallErrorReason = err.into();
-                            state.emit_call_error(app, accepting_client_id.clone(), true, reason);
+                            state.emit_call_error(app, *call_id, true, reason);
                             state
                                 .send_signaling_message(shared::CallError {
-                                    call_id,
+                                    call_id: *call_id,
                                     reason,
                                     message: None,
                                 })
@@ -475,7 +497,7 @@ impl AppStateInner {
                     log::warn!("Received call accept message for peer that is not set as outgoing");
                     state
                         .send_signaling_message(shared::CallError {
-                            call_id,
+                            call_id: *call_id,
                             reason: CallErrorReason::CallFailure,
                             message: None,
                         })
@@ -498,7 +520,7 @@ impl AppStateInner {
                 let mut state = state.lock().await;
 
                 let res = match state
-                    .init_call(app.clone(), from_client_id.clone(), Some(sdp))
+                    .init_call(app.clone(), call_id, from_client_id.clone(), Some(sdp))
                     .await
                 {
                     Ok(sdp) => {
@@ -514,7 +536,7 @@ impl AppStateInner {
                     Err(err) => {
                         log::warn!("Failed to accept call offer: {err:?}");
                         let reason: CallErrorReason = err.into();
-                        state.emit_call_error(app, from_client_id.clone(), true, reason);
+                        state.emit_call_error(app, call_id, true, reason);
                         state
                             .send_signaling_message(shared::CallError {
                                 call_id,
@@ -563,13 +585,13 @@ impl AppStateInner {
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                if !state.cleanup_call(&ending_client_id).await {
+                if !state.cleanup_call(&call_id).await {
                     log::debug!("Received call end message for peer that is not active");
                 }
 
-                state.remove_incoming_call_peer_id(&ending_client_id);
+                state.remove_incoming_call_id(&call_id);
 
-                app.emit("signaling:call-end", &ending_client_id).ok();
+                app.emit("signaling:call-end", &call_id).ok();
             }
             ServerMessage::CallError(shared::CallError {
                 call_id,
@@ -580,35 +602,41 @@ impl AppStateInner {
                     "Call error for call {call_id} received. Reason: {reason:?}, message: {message:?}"
                 );
 
-                // let state = app.state::<AppState>();
-                // let mut state = state.lock().await;
+                let state = app.state::<AppState>();
+                let mut state = state.lock().await;
 
-                // TODO cleanup call with call ID?
-                // if !state.cleanup_call(&peer_id).await {
-                //     log::debug!("Received call end message for peer that is not active");
-                // }
+                if !state.cleanup_call(&call_id).await {
+                    log::debug!("Received call end message for call that is not active");
+                }
 
-                // state.remove_outgoing_call_peer_id(&peer_id);
-                // state.remove_incoming_call_peer_id(&peer_id);
+                state.remove_outgoing_call_id(&call_id);
+                state.remove_incoming_call_id(&call_id);
 
-                // state.cancel_unanswered_call_timer(&peer_id);
+                state.cancel_unanswered_call_timer(&call_id);
 
-                // TODO emit call ID?
-                // state.emit_call_error(app, peer_id, false, reason);
+                state.emit_call_error(app, call_id, false, reason);
             }
             ServerMessage::CallCancelled(server::CallCancelled { call_id, reason }) => {
                 log::trace!("Call {call_id} cancelled. Reason: {reason:?}");
 
-                // let state = app.state::<AppState>();
-                // let mut state = state.lock().await;
+                let state = app.state::<AppState>();
+                let mut state = state.lock().await;
 
-                // TODO everything
-                // state.cancel_unanswered_call_timer(&peer_id);
-                // if state.remove_outgoing_call_peer_id(&peer_id) {
-                //     app.emit("signaling:call-reject", peer_id).ok();
-                // } else {
-                //     log::warn!("Received call reject message for peer that is not set as outgoing");
-                // }
+                // Stop any active webrtc call
+                state.cleanup_call(&call_id).await;
+
+                // Remove from outgoing and incoming states
+                state.remove_outgoing_call_id(&call_id); // TODO signaling:call-reject?
+                state.remove_incoming_call_id(&call_id);
+
+                state.cancel_unanswered_call_timer(&call_id);
+
+                match reason {
+                    CallCancelReason::AnsweredElsewhere(_) | CallCancelReason::CallerCancelled => {
+                        app.emit("signaling:call-end", &call_id).ok();
+                    }
+                    _ => {} // TODO: call-reject & call-error
+                }
             }
             ServerMessage::WebrtcIceCandidate(shared::WebrtcIceCandidate {
                 call_id,
@@ -621,9 +649,7 @@ impl AppStateInner {
                 let state = app.state::<AppState>();
                 let state = state.lock().await;
 
-                state
-                    .set_remote_ice_candidate(&from_client_id, candidate)
-                    .await;
+                state.set_remote_ice_candidate(&call_id, candidate).await;
             }
             ServerMessage::ClientConnected(server::ClientConnected { client }) => {
                 log::trace!("Client connected: {client:?}");
@@ -632,18 +658,6 @@ impl AppStateInner {
             }
             ServerMessage::ClientDisconnected(server::ClientDisconnected { client_id }) => {
                 log::trace!("Client disconnected: {client_id:?}");
-
-                let state = app.state::<AppState>();
-                let mut state = state.lock().await;
-
-                // Stop any active webrtc call
-                state.cleanup_call(&client_id).await;
-
-                // Remove from outgoing and incoming states
-                state.remove_outgoing_call_peer_id(&client_id);
-                state.remove_incoming_call_peer_id(&client_id);
-
-                state.cancel_unanswered_call_timer(&client_id);
 
                 app.emit("signaling:client-disconnected", client_id).ok();
             }
@@ -718,21 +732,22 @@ impl AppStateInner {
                         "Received peer connection error from signaling server with peer {client_id}"
                     );
 
-                    let state = app.state::<AppState>();
-                    let mut state = state.lock().await;
+                    // let state = app.state::<AppState>();
+                    // let mut state = state.lock().await;
 
-                    if !state.cleanup_call(&client_id).await {
-                        log::debug!(
-                            "Received peer connection error message for peer that is not active"
-                        );
-                    }
+                    // TODO (We dont really know if client_id is our outgoing client)
+                    // if !state.cleanup_call(&client_id).await {
+                    //     log::debug!(
+                    //         "Received peer connection error message for peer that is not active"
+                    //     );
+                    // }
+                    //
+                    // state.remove_outgoing_call_id(&client_id);
+                    // state.remove_incoming_call_peer_id(&client_id);
 
-                    state.remove_outgoing_call_peer_id(&client_id);
-                    state.remove_incoming_call_peer_id(&client_id);
+                    // state.cancel_unanswered_call_timer(&client_id);
 
-                    state.cancel_unanswered_call_timer(&client_id);
-
-                    state.emit_call_error(app, client_id, false, CallErrorReason::SignalingFailure);
+                    // state.emit_call_error(app, client_id, false, CallErrorReason::SignalingFailure);
                 }
                 ErrorReason::UnexpectedMessage(ref msg) => {
                     log::warn!("Received unexpected message error from signaling server: {msg}");
@@ -751,12 +766,13 @@ impl AppStateInner {
                     );
 
                     if let Some(peer_id) = client_id {
-                        let state = app.state::<AppState>();
-                        let mut state = state.lock().await;
+                        // let state = app.state::<AppState>();
+                        // let mut state = state.lock().await;
 
-                        state.cleanup_call(&peer_id).await;
-                        state.remove_outgoing_call_peer_id(&peer_id);
-                        state.remove_incoming_call_peer_id(&peer_id);
+                        // TODO (We dont really know if client_id is our outgoing client)
+                        // state.cleanup_call(&peer_id).await;
+                        // state.remove_outgoing_call_id(&peer_id);
+                        // state.remove_incoming_call_peer_id(&peer_id);
 
                         app.emit("signaling:force-call-end", peer_id).ok();
                     }
@@ -781,8 +797,8 @@ impl AppStateInner {
     }
 
     async fn cleanup_signaling(&mut self, app: &AppHandle) {
-        self.incoming_call_peer_ids.clear();
-        self.outgoing_call_peer_id = None;
+        self.incoming_call_ids.clear();
+        self.outgoing_call_id = None;
 
         {
             let mut audio_manager = self.audio_manager.write();
@@ -795,19 +811,19 @@ impl AppStateInner {
 
         self.keybind_engine.read().await.set_call_active(false);
 
-        if let Some(peer_id) = self.active_call_peer_id().cloned() {
-            self.cleanup_call(&peer_id).await;
+        if let Some(call_id) = self.active_call_id().cloned() {
+            self.cleanup_call(&call_id).await;
         };
-        let peer_ids = self.held_calls.keys().cloned().collect::<Vec<_>>();
-        for peer_id in peer_ids {
-            self.cleanup_call(&peer_id).await;
-            app.emit("signaling:call-end", &peer_id).ok();
+        let call_ids = self.held_calls.keys().cloned().collect::<Vec<_>>();
+        for call_id in call_ids {
+            self.cleanup_call(&call_id).await;
+            app.emit("signaling:call-end", &call_id).ok();
         }
 
         if let Some(guard) = self.unanswered_call_guard.take() {
             log::trace!(
-                "Cancelling unanswered call timer for peer {}",
-                guard.peer_id
+                "Cancelling unanswered call timer for call {}",
+                guard.call_id
             );
             guard.cancel.cancel();
             guard.handle.abort();
