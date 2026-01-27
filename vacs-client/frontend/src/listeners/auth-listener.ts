@@ -1,5 +1,6 @@
 import {useAuthStore} from "../stores/auth-store.ts";
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
+import {ClientId} from "../types/generic.ts";
 
 export function setupAuthListeners() {
     const {setAuthenticated, setUnauthenticated} = useAuthStore.getState();
@@ -8,7 +9,7 @@ export function setupAuthListeners() {
 
     const init = () => {
         unlistenFns.push(
-            listen<string>("auth:authenticated", event => {
+            listen<ClientId>("auth:authenticated", event => {
                 setAuthenticated(event.payload);
             }),
             listen("auth:unauthenticated", () => {

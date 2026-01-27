@@ -1,22 +1,23 @@
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {useCallStore} from "../stores/call-store.ts";
 import {CallError} from "../error.ts";
+import {CallId} from "../types/generic.ts";
 
 export function setupWebrtcListeners() {
-    const {errorPeer, setConnectionState} = useCallStore.getState().actions;
+    const {errorCall, setConnectionState} = useCallStore.getState().actions;
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 
     const init = () => {
         unlistenFns.push(
-            listen<string>("webrtc:call-connected", event => {
+            listen<CallId>("webrtc:call-connected", event => {
                 setConnectionState(event.payload, "connected");
             }),
-            listen<string>("webrtc:call-disconnected", event => {
+            listen<CallId>("webrtc:call-disconnected", event => {
                 setConnectionState(event.payload, "disconnected");
             }),
             listen<CallError>("webrtc:call-error", event => {
-                errorPeer(event.payload.peerId, event.payload.reason);
+                errorCall(event.payload.callId, event.payload.reason);
             }),
         );
     };

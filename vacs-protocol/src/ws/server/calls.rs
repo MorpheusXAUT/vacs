@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum CallCancelReason {
     AnsweredElsewhere(ClientId),
     CallerCancelled,
-    AllFailed,
+    AllFailed, // TODO: Separate in error/reject and choose whatever the last remaining client (which received the call invite) resulted to
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

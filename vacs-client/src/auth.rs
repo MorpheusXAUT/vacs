@@ -1,6 +1,8 @@
 pub(crate) mod commands;
 
+use crate::app::state::AppState;
 use crate::app::state::http::HttpState;
+use crate::app::state::signaling::AppStateSignalingExt;
 use crate::config::BackendEndpoint;
 use crate::error::Error;
 use anyhow::Context;
@@ -38,6 +40,11 @@ pub async fn handle_auth_callback(app: &AppHandle, url: &str) -> Result<(), Erro
         )
         .await?
         .cid;
+
+    app.state::<AppState>()
+        .lock()
+        .await
+        .set_client_id(Some(cid.clone()));
 
     log::info!("Successfully authenticated as CID {cid}");
     app.emit("auth:authenticated", cid).ok();

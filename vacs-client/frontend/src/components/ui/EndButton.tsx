@@ -9,7 +9,7 @@ import {clsx} from "clsx";
 
 function EndButton() {
     const callDisplay = useCallStore(state => state.callDisplay);
-    const {endCall, dismissRejectedPeer, dismissErrorPeer} = useCallStore(state => state.actions);
+    const {endCall, dismissRejectedCall, dismissErrorCall} = useCallStore(state => state.actions);
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
 
@@ -18,13 +18,13 @@ function EndButton() {
     const endAnyCall = useAsyncDebounce(async () => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {
             try {
-                await invokeStrict("signaling_end_call", {peerId: callDisplay.peer.id});
+                await invokeStrict("signaling_end_call", {callId: callDisplay.call.callId});
                 endCall();
             } catch {}
         } else if (callDisplay?.type === "rejected") {
-            dismissRejectedPeer();
+            dismissRejectedCall();
         } else if (callDisplay?.type === "error") {
-            dismissErrorPeer();
+            dismissErrorCall();
         }
     });
 
