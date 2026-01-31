@@ -39,18 +39,6 @@ pub async fn handle_application_message(
                 tracing::warn!(?err, "Failed to send station list");
             }
         }
-        ClientMessage::Logout => {
-            tracing::trace!("Logging out client");
-            // TODO move higher to client manager?
-            handle_client_disconnect(state, client).await;
-            return ControlFlow::Break(());
-        }
-        ClientMessage::Disconnect => {
-            tracing::trace!("Disconnecting client");
-            // TODO move higher to client manager?
-            handle_client_disconnect(state, client).await;
-            return ControlFlow::Break(());
-        }
         ClientMessage::CallInvite(call_invite) => {
             handle_call_invite(state, client, call_invite).await;
         }
@@ -75,8 +63,10 @@ pub async fn handle_application_message(
         ClientMessage::WebrtcIceCandidate(webrtc_ice_candidate) => {
             handle_webrtc_ice_candidate(state, client, webrtc_ice_candidate).await;
         }
-        ClientMessage::Login(_) => {}
-        ClientMessage::Error(_) => {}
+        ClientMessage::Login(_)
+        | ClientMessage::Logout
+        | ClientMessage::Disconnect
+        | ClientMessage::Error(_) => {}
     };
     ControlFlow::Continue(())
 }
@@ -478,64 +468,6 @@ async fn handle_webrtc_ice_candidate(
     state
         .send_peer_message(client, &ice_candidate.to_client_id, ice_candidate.clone())
         .await;
-}
-
-#[tracing::instrument(level = "trace", skip(state, client))]
-async fn handle_client_disconnect(state: &AppState, client: &ClientSession) {
-    tracing::trace!("Handling client disconnect");
-    let client_id = client.id();
-
-    let (ringing_calls, active) = state.calls.cleanup_client_calls(client_id);
-
-    for ringing in ringing_calls {
-        if ringing.caller_id == *client_id {
-            let cancelled =
-                server::CallCancelled::new(ringing.call_id, CallCancelReason::CallerCancelled);
-            for callee_id in ringing.notified_clients {
-                tracing::trace!(?callee_id, "Sending call cancelled to notified client");
-                if let Err(err) = state.send_message(&callee_id, cancelled.clone()).await {
-                    // TODO error metrics
-                    tracing::warn!(
-                        ?err,
-                        ?callee_id,
-                        "Failed to send call cancelled to notified client"
-                    );
-                }
-            }
-        } else {
-            tracing::trace!(
-                "All notified clients either rejected or errored, call failed, sending call error to source client"
-            );
-            // TODO error metrics
-            // TODO other call error reason?
-            // TODO send CallCancelled to all notified, just in case?
-            if let Err(err) = state
-                .send_message(
-                    &ringing.caller_id,
-                    server::CallCancelled::new(ringing.call_id, CallCancelReason::Disconnected),
-                )
-                .await
-            {
-                tracing::warn!(?err, "Failed to send call error to source client");
-            }
-        }
-    }
-
-    if let Some(active) = active
-        && let Some(peer_id) = active.peer(client_id)
-    {
-        tracing::trace!(?peer_id, "Sending call end to peer");
-        if let Err(err) = state
-            .send_message(peer_id, CallEnd::new(active.call_id, peer_id.clone()))
-            .await
-        {
-            tracing::warn!(?err, ?peer_id, "Failed to send call end to peer");
-            // TODO error metrics
-        } else {
-            tracing::warn!("No peer found for active call");
-            // TODO error metrics
-        }
-    }
 }
 
 async fn send_call_error(

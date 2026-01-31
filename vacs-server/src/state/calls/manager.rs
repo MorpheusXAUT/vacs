@@ -1,10 +1,14 @@
 use crate::metrics::guards::CallAttemptOutcome;
+use crate::state::AppState;
 use crate::state::calls::{ActiveCall, ActiveCallEntry, RingingCall, RingingCallEntry};
 use parking_lot::RwLock;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
+use tracing::instrument;
 use vacs_protocol::vatsim::ClientId;
-use vacs_protocol::ws::shared::{CallId, CallTarget};
+use vacs_protocol::ws::server;
+use vacs_protocol::ws::server::CallCancelReason;
+use vacs_protocol::ws::shared::{CallEnd, CallId, CallTarget};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StartCallError {
@@ -124,7 +128,7 @@ impl CallManager {
                 if entry.get_mut().mark_rejected(rejecting_client_id) {
                     let ringing = entry.remove();
                     drop(ringing_calls);
-                    self.cleanup_ringing_call(call_id, &ringing);
+                    self.cleanup_ringing_call(&ringing);
                     CallTerminationOutcome::Failed(ringing.complete(CallAttemptOutcome::Rejected))
                 } else {
                     CallTerminationOutcome::Continued
@@ -151,7 +155,7 @@ impl CallManager {
                 if entry.get_mut().mark_errored(erroring_client_id) {
                     let ringing = entry.remove();
                     drop(ringing_calls);
-                    self.cleanup_ringing_call(call_id, &ringing);
+                    self.cleanup_ringing_call(&ringing);
                     // TODO: should we allow passing strict error reason here?
                     CallTerminationOutcome::Failed(ringing.complete(CallAttemptOutcome::Error(
                         vacs_protocol::ws::shared::CallErrorReason::CallFailure,
@@ -179,7 +183,7 @@ impl CallManager {
             }
         }?;
 
-        self.cleanup_ringing_call(call_id, &ringing);
+        self.cleanup_ringing_call(&ringing);
 
         let active = ActiveCallEntry::new(
             *call_id,
@@ -213,7 +217,7 @@ impl CallManager {
             }
         }?;
 
-        self.cleanup_ringing_call(call_id, &ringing);
+        self.cleanup_ringing_call(&ringing);
 
         Some(ringing.complete(outcome))
     }
@@ -233,7 +237,7 @@ impl CallManager {
             }
         }?;
 
-        self.cleanup_ringing_call(call_id, &ringing);
+        self.cleanup_ringing_call(&ringing);
 
         Some(ringing.complete(CallAttemptOutcome::Cancelled))
     }
@@ -262,10 +266,10 @@ impl CallManager {
         Some(ActiveCall::from(active))
     }
 
-    pub fn cleanup_client_calls(
-        &self,
-        client_id: &ClientId,
-    ) -> (Vec<RingingCall>, Option<ActiveCall>) {
+    #[instrument(level = "trace", skip(self, state))]
+    pub async fn cleanup_client_calls(&self, state: &AppState, client_id: &ClientId) {
+        tracing::trace!("Cleaning up client calls");
+
         let mut cleaned_ringing_calls: Vec<RingingCall> = Vec::new();
         let mut cleaned_active_call: Option<ActiveCall> = None;
 
@@ -285,6 +289,7 @@ impl CallManager {
                     }
                 }
 
+                tracing::trace!(?outgoing_call_id, "Aborting outgoing ringing call");
                 cleaned_ringing_calls.push(ringing.complete(CallAttemptOutcome::Aborted)); // TODO other outcome?
             }
         }
@@ -300,7 +305,14 @@ impl CallManager {
                     ringing.rejected_clients.remove(client_id);
                     ringing.errored_clients.remove(client_id);
 
+                    tracing::trace!(
+                        ?call_id,
+                        ?ringing,
+                        "Removing client from incoming ringing call"
+                    );
+
                     if ringing.all_rejected_or_errored() {
+                        tracing::trace!(?call_id, "Aborting incoming ringing call");
                         ringing.set_outcome(CallAttemptOutcome::Aborted); // TODO other outcome?
                         cleaned_ringing_calls.push(ringing.to_ringing_call());
                         removed_call_ids.push(call_id);
@@ -333,7 +345,59 @@ impl CallManager {
             }
         }
 
-        (cleaned_ringing_calls, cleaned_active_call)
+        for ringing in cleaned_ringing_calls {
+            self.client_outgoing_calls
+                .write()
+                .remove(&ringing.caller_id);
+
+            if ringing.caller_id == *client_id {
+                let cancelled =
+                    server::CallCancelled::new(ringing.call_id, CallCancelReason::CallerCancelled);
+                for callee_id in ringing.notified_clients {
+                    tracing::trace!(?callee_id, "Sending call cancelled to notified client");
+                    if let Err(err) = state.send_message(&callee_id, cancelled.clone()).await {
+                        // TODO error metrics
+                        tracing::warn!(
+                            ?err,
+                            ?callee_id,
+                            "Failed to send call cancelled to notified client"
+                        );
+                    }
+                }
+            } else {
+                tracing::trace!(
+                    "All notified clients either rejected or errored, call failed, sending call error to source client"
+                );
+                // TODO error metrics
+                // TODO other call error reason?
+                // TODO send CallCancelled to all notified, just in case?
+                if let Err(err) = state
+                    .send_message(
+                        &ringing.caller_id,
+                        server::CallCancelled::new(ringing.call_id, CallCancelReason::Disconnected),
+                    )
+                    .await
+                {
+                    tracing::warn!(?err, "Failed to send call error to source client");
+                }
+            }
+        }
+
+        if let Some(active) = cleaned_active_call
+            && let Some(peer_id) = active.peer(client_id)
+        {
+            tracing::trace!(?peer_id, "Sending call end to peer");
+            if let Err(err) = state
+                .send_message(peer_id, CallEnd::new(active.call_id, peer_id.clone()))
+                .await
+            {
+                tracing::warn!(?err, ?peer_id, "Failed to send call end to peer");
+                // TODO error metrics
+            } else {
+                tracing::warn!("No peer found for active call");
+                // TODO error metrics
+            }
+        }
     }
 
     fn remove_client_incoming_call(&self, call_id: &CallId, client_id: &ClientId) {
@@ -346,7 +410,7 @@ impl CallManager {
         }
     }
 
-    fn cleanup_ringing_call(&self, call_id: &CallId, ringing: &RingingCallEntry) {
+    fn cleanup_ringing_call(&self, ringing: &RingingCallEntry) {
         self.client_outgoing_calls
             .write()
             .remove(&ringing.caller_id);
@@ -354,7 +418,7 @@ impl CallManager {
         let mut client_incoming_calls = self.client_incoming_calls.write();
         for callee_id in ringing.notified_clients.iter() {
             if let Some(calls) = client_incoming_calls.get_mut(callee_id) {
-                calls.remove(call_id);
+                calls.remove(&ringing.call_id);
                 if calls.is_empty() {
                     client_incoming_calls.remove(callee_id);
                 }

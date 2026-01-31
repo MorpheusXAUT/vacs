@@ -107,7 +107,7 @@ impl AppState {
             .remove_client(client_id.clone(), disconnect_reason)
             .await;
 
-        self.calls.cleanup_client_calls(client_id);
+        self.calls.cleanup_client_calls(self, client_id).await;
 
         tracing::debug!("Client unregistered");
     }
