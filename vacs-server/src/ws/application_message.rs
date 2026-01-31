@@ -268,7 +268,7 @@ async fn handle_call_reject(state: &AppState, client: &ClientSession, reject: Ca
             if let Err(err) = state
                 .send_message(
                     &ringing.caller_id,
-                    server::CallCancelled::new(*call_id, CallCancelReason::AllFailed),
+                    server::CallCancelled::new(*call_id, CallCancelReason::Rejected(reject.reason)),
                 )
                 .await
             {
@@ -369,7 +369,7 @@ async fn handle_call_error(state: &AppState, client: &ClientSession, error: Call
             if let Err(err) = state
                 .send_message(
                     &ringing.caller_id,
-                    server::CallCancelled::new(*call_id, CallCancelReason::AllFailed),
+                    server::CallCancelled::new(*call_id, CallCancelReason::Errored(error.reason)),
                 )
                 .await
             {
@@ -512,7 +512,7 @@ async fn handle_client_disconnect(state: &AppState, client: &ClientSession) {
             if let Err(err) = state
                 .send_message(
                     &ringing.caller_id,
-                    server::CallCancelled::new(ringing.call_id, CallCancelReason::AllFailed),
+                    server::CallCancelled::new(ringing.call_id, CallCancelReason::Disconnected),
                 )
                 .await
             {

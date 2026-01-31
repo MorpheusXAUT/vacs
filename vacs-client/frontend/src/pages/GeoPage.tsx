@@ -110,13 +110,6 @@ function GeoPageButton({button}: GeoPageButtonProps) {
 
     const setSelectedPage = useProfileStore(state => state.setPage);
 
-    // TODO
-    // LOVV_CTR und LOWW_F_APP sind da
-    // Ich rufe als LOVV_N1, LOWW_F_APP an
-    // Anruf wird aufgebaut und wir reden
-    // Währenddessen verbindet sich LOVV_N_CTR
-    // Wird dann mein N LOWL grün?
-
     const stationIds =
         button.page?.keys.flatMap(key => {
             if (key.stationId === undefined) return [];

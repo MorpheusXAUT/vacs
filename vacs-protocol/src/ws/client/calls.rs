@@ -14,8 +14,7 @@ pub enum CallRejectReason {
 pub struct CallReject {
     pub call_id: CallId,
     pub rejecting_client_id: ClientId,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reason: Option<CallRejectReason>,
+    pub reason: CallRejectReason,
 }
 
 impl From<CallReject> for ClientMessage {

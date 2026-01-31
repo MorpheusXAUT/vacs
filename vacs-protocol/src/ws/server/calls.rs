@@ -1,6 +1,7 @@
 use crate::vatsim::ClientId;
+use crate::ws::client::CallRejectReason;
 use crate::ws::server::ServerMessage;
-use crate::ws::shared::CallId;
+use crate::ws::shared::{CallErrorReason, CallId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -8,7 +9,9 @@ use serde::{Deserialize, Serialize};
 pub enum CallCancelReason {
     AnsweredElsewhere(ClientId),
     CallerCancelled,
-    AllFailed, // TODO: Separate in error/reject and choose whatever the last remaining client (which received the call invite) resulted to
+    Disconnected,
+    Errored(CallErrorReason),
+    Rejected(CallRejectReason),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

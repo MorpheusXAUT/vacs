@@ -7,6 +7,7 @@ import {useProfileStationKeys} from "../stores/profile-store.ts";
 import {DirectAccessKey} from "../types/profile.ts";
 import {ComponentChild} from "preact";
 import {ClientId, PositionId, StationId} from "../types/generic.ts";
+import {useAuthStore} from "../stores/auth-store.ts";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -16,6 +17,7 @@ function CallQueue() {
         state => state.actions,
     );
     const stationKeys = useProfileStationKeys();
+    const cid = useAuthStore(state => state.cid);
 
     const handleCallDisplayClick = async (call: Call) => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {
@@ -76,7 +78,7 @@ function CallQueue() {
                         onClick={() => handleCallDisplayClick(callDisplay.call)}
                         className="h-16 text-sm p-1.5 [&_p]:leading-3.5"
                     >
-                        {callDisplay.type === "outgoing" // TODO: Fix jumping text when blinking
+                        {callDisplay.call.source.clientId === cid // TODO: Fix jumping text when blinking
                             ? callLabel(
                                   callDisplay.call.target.station,
                                   callDisplay.call.target.position,

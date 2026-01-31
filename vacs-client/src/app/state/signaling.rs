@@ -431,7 +431,7 @@ impl AppStateInner {
                         .send_signaling_message(client::CallReject {
                             call_id: *call_id,
                             rejecting_client_id: own_client_id,
-                            reason: Some(CallRejectReason::Busy),
+                            reason: CallRejectReason::Busy,
                         })
                         .await
                     {
@@ -626,7 +626,7 @@ impl AppStateInner {
                 state.cleanup_call(&call_id).await;
 
                 // Remove from outgoing and incoming states
-                state.remove_outgoing_call_id(&call_id); // TODO signaling:call-reject?
+                state.remove_outgoing_call_id(&call_id);
                 state.remove_incoming_call_id(&call_id);
 
                 state.cancel_unanswered_call_timer(&call_id);
@@ -635,7 +635,15 @@ impl AppStateInner {
                     CallCancelReason::AnsweredElsewhere(_) | CallCancelReason::CallerCancelled => {
                         app.emit("signaling:call-end", &call_id).ok();
                     }
-                    _ => {} // TODO: call-reject & call-error
+                    CallCancelReason::Disconnected => {
+                        app.emit("signaling:force-call-end", &call_id).ok();
+                    }
+                    CallCancelReason::Rejected(_) => {
+                        app.emit("signaling:call-reject", &call_id).ok();
+                    }
+                    CallCancelReason::Errored(reason) => {
+                        state.emit_call_error(app, call_id, false, reason);
+                    }
                 }
             }
             ServerMessage::WebrtcIceCandidate(shared::WebrtcIceCandidate {
