@@ -246,11 +246,8 @@ async fn handle_login_outcome(
         LoginOutcome::Error(reason) => {
             ClientMetrics::login_attempt(false);
             ErrorMetrics::error(&reason);
-            let message = shared::Error {
-                reason,
-                client_id: None,
-            };
-            if let Err(err) = send_message_raw(websocket_sender, message).await {
+            if let Err(err) = send_message_raw(websocket_sender, shared::Error::from(reason)).await
+            {
                 tracing::warn!(?err, "Failed to send websocket login error message");
             }
         }

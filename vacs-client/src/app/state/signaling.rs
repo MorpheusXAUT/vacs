@@ -710,7 +710,11 @@ impl AppStateInner {
 
                 app.emit("signaling:station-changes", changes).ok();
             }
-            ServerMessage::Error(shared::Error { reason, client_id }) => match reason {
+            ServerMessage::Error(shared::Error {
+                reason,
+                client_id,
+                call_id,
+            }) => match reason {
                 ErrorReason::MalformedMessage => {
                     log::warn!("Received malformed error message from signaling server");
 
@@ -734,29 +738,6 @@ impl AppStateInner {
                     )
                     .ok();
                 }
-                ErrorReason::PeerConnection => {
-                    let client_id = client_id.unwrap_or_default();
-                    log::warn!(
-                        "Received peer connection error from signaling server with peer {client_id}"
-                    );
-
-                    // let state = app.state::<AppState>();
-                    // let mut state = state.lock().await;
-
-                    // TODO (We dont really know if client_id is our outgoing client)
-                    // if !state.cleanup_call(&client_id).await {
-                    //     log::debug!(
-                    //         "Received peer connection error message for peer that is not active"
-                    //     );
-                    // }
-                    //
-                    // state.remove_outgoing_call_id(&client_id);
-                    // state.remove_incoming_call_peer_id(&client_id);
-
-                    // state.cancel_unanswered_call_timer(&client_id);
-
-                    // state.emit_call_error(app, client_id, false, CallErrorReason::SignalingFailure);
-                }
                 ErrorReason::UnexpectedMessage(ref msg) => {
                     log::warn!("Received unexpected message error from signaling server: {msg}");
 
@@ -773,16 +754,15 @@ impl AppStateInner {
                         "Received rate limited error from signaling server, rate limited for {retry_after_secs}"
                     );
 
-                    if let Some(peer_id) = client_id {
-                        // let state = app.state::<AppState>();
-                        // let mut state = state.lock().await;
+                    if let Some(call_id) = call_id {
+                        let state = app.state::<AppState>();
+                        let mut state = state.lock().await;
 
-                        // TODO (We dont really know if client_id is our outgoing client)
-                        // state.cleanup_call(&peer_id).await;
-                        // state.remove_outgoing_call_id(&peer_id);
-                        // state.remove_incoming_call_peer_id(&peer_id);
+                        state.cleanup_call(&call_id).await;
+                        state.remove_outgoing_call_id(&call_id);
+                        state.remove_incoming_call_id(&call_id);
 
-                        app.emit("signaling:force-call-end", peer_id).ok();
+                        app.emit("signaling:force-call-end", call_id).ok();
                     }
                     app.emit::<FrontendError>(
                         "error",
@@ -792,15 +772,30 @@ impl AppStateInner {
                     )
                     .ok();
                 }
+                ErrorReason::PeerConnection => {
+                    let client_id = client_id.unwrap_or_default();
+                    log::warn!(
+                        "Received peer connection error from signaling server with peer {client_id}"
+                    );
+
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::from(Error::from(SignalingRuntimeError::ServerError(
+                            ErrorReason::PeerConnection,
+                        ))),
+                    )
+                    .ok();
+                }
                 ErrorReason::ClientNotFound => {
                     let client_id = client_id.unwrap_or_default();
                     log::warn!(
                         "Received client not found error from signaling server with peer {client_id}"
                     );
-                    // TODO everything
+
+                    app.emit("signaling:client-not-found", client_id).ok();
                 }
             },
-            _ => {}
+            ServerMessage::Disconnected(_) | ServerMessage::LoginFailure(_) => {}
         }
     }
 

@@ -1,6 +1,7 @@
 use crate::vatsim::ClientId;
 use crate::ws::client::ClientMessage;
 use crate::ws::server::ServerMessage;
+use crate::ws::shared::CallId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,6 +21,8 @@ pub struct Error {
     pub reason: ErrorReason,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_id: Option<ClientId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub call_id: Option<CallId>,
 }
 
 impl Error {
@@ -27,11 +30,17 @@ impl Error {
         Self {
             reason,
             client_id: None,
+            call_id: None,
         }
     }
 
     pub fn with_client_id(mut self, client_id: ClientId) -> Self {
         self.client_id = Some(client_id);
+        self
+    }
+
+    pub fn with_call_id(mut self, call_id: CallId) -> Self {
+        self.call_id = Some(call_id);
         self
     }
 }
@@ -41,6 +50,7 @@ impl From<ErrorReason> for Error {
         Self {
             reason,
             client_id: None,
+            call_id: None,
         }
     }
 }

@@ -155,19 +155,6 @@ impl AppState {
         }
     }
 
-    pub async fn send_peer_message(
-        &self,
-        source: &ClientSession,
-        target: &ClientId,
-        message: impl Into<ServerMessage>,
-    ) {
-        if let Err(err) = self.send_message(target, message).await
-            && source.send_message(err).await.is_err()
-        {
-            tracing::warn!("Failed to send error message to source client");
-        }
-    }
-
     #[instrument(level = "debug", skip(self), err)]
     pub async fn generate_ws_auth_token(&self, cid: &str) -> anyhow::Result<String> {
         tracing::debug!("Generating web socket auth token");

@@ -1466,6 +1466,7 @@ mod tests {
                 ServerMessage::serialize(&ServerMessage::Error(vacs_protocol::ws::shared::Error {
                     reason: ErrorReason::Internal("something failed".to_string()),
                     client_id: None,
+                    call_id: None,
                 }))
                 .unwrap()
                 .into(),

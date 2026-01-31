@@ -6,12 +6,12 @@ use std::collections::HashSet;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use vacs_protocol::ws::client::{CallReject, ClientMessage};
-use vacs_protocol::ws::server;
 use vacs_protocol::ws::server::CallCancelReason;
 use vacs_protocol::ws::shared::{
     CallAccept, CallEnd, CallError, CallErrorReason, CallId, CallInvite, CallTarget, ErrorReason,
     WebrtcAnswer, WebrtcIceCandidate, WebrtcOffer,
 };
+use vacs_protocol::ws::{server, shared};
 
 #[tracing::instrument(level = "trace", skip(state))]
 pub async fn handle_application_message(
@@ -83,7 +83,9 @@ async fn handle_call_invite(state: &AppState, client: &ClientSession, invite: Ca
             retry_after_secs: until.as_secs(),
         };
         ErrorMetrics::error(&reason);
-        client.send_error(reason).await;
+        client
+            .send_error(shared::Error::from(reason).with_call_id(invite.call_id))
+            .await;
         return;
     }
 
@@ -182,8 +184,7 @@ async fn handle_call_accept(state: &AppState, client: &ClientSession, accept: Ca
     if let Err(err) = state.send_message(&ringing.caller_id, accept.clone()).await {
         tracing::warn!(?err, "Failed to send call accept to source client");
         // TODO error metrics
-        // TODO other error?
-        client.send_error(err).await;
+        send_call_error(client, call_id, CallErrorReason::SignalingFailure, None).await;
         return;
     }
 
@@ -311,7 +312,7 @@ async fn handle_call_end(state: &AppState, client: &ClientSession, end: CallEnd)
                 tracing::warn!(?err, ?peer_id, "Failed to send call end to peer");
                 // TODO error metrics
                 // TODO other call error reason?
-                send_call_error(client, call_id, CallErrorReason::WebrtcFailure, None).await;
+                send_call_error(client, call_id, CallErrorReason::SignalingFailure, None).await;
             }
         } else {
             tracing::warn!("No peer found for active call, returning call error");
@@ -397,9 +398,10 @@ async fn handle_webrtc_offer(state: &AppState, client: &ClientSession, offer: We
         return;
     }
 
-    state
-        .send_peer_message(client, &offer.to_client_id, offer.clone())
-        .await;
+    if let Err(err) = state.send_message(&offer.to_client_id, offer.clone()).await {
+        tracing::warn!(?err, "Failed to send WebRTC offer to peer");
+        send_call_error(client, call_id, CallErrorReason::SignalingFailure, None).await;
+    }
 }
 
 #[tracing::instrument(level = "trace", skip(state, client))]
@@ -429,9 +431,13 @@ async fn handle_webrtc_answer(state: &AppState, client: &ClientSession, answer: 
         return;
     }
 
-    state
-        .send_peer_message(client, &answer.to_client_id, answer.clone())
-        .await;
+    if let Err(err) = state
+        .send_message(&answer.to_client_id, answer.clone())
+        .await
+    {
+        tracing::warn!(?err, "Failed to send WebRTC answer to peer");
+        send_call_error(client, call_id, CallErrorReason::SignalingFailure, None).await;
+    }
 }
 
 #[tracing::instrument(level = "trace", skip(state, client))]
@@ -465,9 +471,13 @@ async fn handle_webrtc_ice_candidate(
         return;
     }
 
-    state
-        .send_peer_message(client, &ice_candidate.to_client_id, ice_candidate.clone())
-        .await;
+    if let Err(err) = state
+        .send_message(&ice_candidate.to_client_id, ice_candidate.clone())
+        .await
+    {
+        tracing::warn!(?err, "Failed to send WebRTC ice candidate to peer");
+        send_call_error(client, call_id, CallErrorReason::SignalingFailure, None).await;
+    }
 }
 
 async fn send_call_error(

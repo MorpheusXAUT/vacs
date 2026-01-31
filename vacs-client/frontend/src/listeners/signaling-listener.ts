@@ -9,6 +9,7 @@ import {useProfileStore} from "../stores/profile-store.ts";
 import {StationChange, StationInfo} from "../types/station.ts";
 import {useStationsStore} from "../stores/stations-store.ts";
 import {Call} from "../types/call.ts";
+import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, getClientInfo, removeClient} = useClientsStore.getState();
@@ -25,6 +26,7 @@ export function setupSignalingListeners() {
     const {setConnectionState, setConnectionInfo, setPositionsToSelect} =
         useConnectionStore.getState();
     const {setProfile} = useProfileStore.getState();
+    const {open: openErrorOverlay} = useErrorOverlayStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 
@@ -71,6 +73,15 @@ export function setupSignalingListeners() {
             }),
             listen<ClientId>("signaling:client-disconnected", event => {
                 removeClient(event.payload);
+            }),
+            listen<ClientId>("signaling:client-not-found", event => {
+                removeClient(event.payload);
+                openErrorOverlay(
+                    "Client not found",
+                    `Server cannot find a client with CID ${event.payload}`,
+                    false,
+                    5000,
+                );
             }),
             listen<Call>("signaling:call-invite", event => {
                 addIncomingCall(event.payload);

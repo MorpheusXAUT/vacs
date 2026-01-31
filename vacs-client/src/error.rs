@@ -244,7 +244,7 @@ fn format_signaling_error(err: &SignalingError) -> String {
                     format!("Server error: Rate limited. Retry after {retry_after_secs}.")
                 },
                 ErrorReason::ClientNotFound => {
-                    "Server error: Client not found.".to_string() // TODO proper error message
+                    "Server error: Client not found.".to_string()
                 }
             },
             SignalingRuntimeError::Disconnected(reason) => match reason {
