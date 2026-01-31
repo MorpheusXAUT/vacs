@@ -1,5 +1,5 @@
 import {clsx} from "clsx";
-import {ComponentChildren} from "preact";
+import {ComponentChildren, CSSProperties} from "preact";
 import {invokeSafe} from "../../error.ts";
 
 type ButtonColor = "gray" | "cyan" | "green" | "blue" | "cornflower" | "emerald" | "red" | "salmon";
@@ -15,12 +15,13 @@ export type ButtonProps = {
     muted?: boolean;
     highlight?: ButtonHighlightColor;
     title?: string;
+    style?: CSSProperties;
 };
 
 const ButtonColors: Record<ButtonColor, string> = {
     cyan: "bg-[#92e1fe] border-t-cyan-100 border-l-cyan-100 border-r-cyan-950 border-b-cyan-950",
     green: "bg-[#4b8747] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950",
-    gray: "bg-gray-300 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700 shadow-[0_0_0_1px_#364153]",
+    gray: "bg-gray-300 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700 border-3 outline outline-gray-700 -outline-offset-1",
     blue: "bg-blue-700 border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900 text-white",
     cornflower:
         "bg-[#5B95F9] border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900",
@@ -44,14 +45,14 @@ const ActiveButtonColors: Record<ButtonColor, string> = {
 };
 
 export const ForceDisabledButtonColors: Record<ButtonColor, string> = {
-    cyan: "!border-cyan-900 !border",
-    green: "!border-green-950 !border",
-    gray: "!border-gray-700 !border !shadow-none",
-    blue: "!border-blue-950 !border",
-    cornflower: "!border-blue-950 !border",
-    emerald: "!border-emerald-950 !border",
-    red: "!border-red-950 !border",
-    salmon: "!border-red-950 !border",
+    cyan: "border-cyan-900! border!",
+    green: "border-green-950! border!",
+    gray: "border-gray-700! border! outline-none!",
+    blue: "border-blue-950! border!",
+    cornflower: "border-blue-950! border!",
+    emerald: "border-emerald-950! border!",
+    red: "border-red-950! border!",
+    salmon: "border-red-950! border!",
 };
 
 const ButtonHighlightColors: Record<ButtonHighlightColor, string> = {
@@ -79,8 +80,9 @@ function Button(props: ButtonProps) {
                 props.highlight !== undefined && "p-1.5",
                 !props.disabled &&
                     !props.softDisabled &&
-                    "active:[&>*]:translate-y-[1px] active:[&>*]:translate-x-[1px]",
+                    "active:*:translate-y-px active:*:translate-x-px",
             )}
+            style={props.style}
             onClick={event => {
                 if (props.muted !== true) {
                     void invokeSafe("audio_play_ui_click");

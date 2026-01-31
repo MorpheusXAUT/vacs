@@ -1,6 +1,6 @@
 import {clsx} from "clsx";
-import {useSignalingStore} from "../../stores/signaling-store.ts";
 import {useCallStore} from "../../stores/call-store.ts";
+import {useConnectionStore} from "../../stores/connection-store.ts";
 
 export type Status = "green" | "yellow" | "red" | "gray";
 
@@ -12,7 +12,7 @@ export const StatusColors: Record<Status, string> = {
 };
 
 function StatusIndicator() {
-    const connected = useSignalingStore(state => state.connectionState === "connected");
+    const connected = useConnectionStore(state => state.connectionState === "connected");
     const callConnectionState = useCallStore(state => state.callDisplay?.connectionState);
     const status = ((): Status => {
         if (connected) {

@@ -43,9 +43,7 @@ mod get {
     pub async fn user_info(auth_session: AuthSession) -> ApiResult<UserInfo> {
         let user = auth_session.user.expect("User not logged in");
 
-        Ok(Json(UserInfo {
-            cid: user.cid.to_string(),
-        }))
+        Ok(Json(UserInfo { cid: user.cid }))
     }
 }
 
@@ -84,9 +82,7 @@ mod post {
             .await
             .context("Failed to login user")?;
 
-        Ok(Json(UserInfo {
-            cid: user.cid.to_string(),
-        }))
+        Ok(Json(UserInfo { cid: user.cid }))
     }
 
     pub async fn logout(mut auth_session: AuthSession, session: Session) -> StatusCodeResult {
