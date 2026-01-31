@@ -4,11 +4,15 @@ import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeSafe} from "../../error.ts";
 import {useEffect, useState} from "preact/hooks";
 import {listen} from "@tauri-apps/api/event";
+import {clsx} from "clsx";
+import {useProfileType} from "../../stores/profile-store.ts";
 
 function RadioPrioButton() {
     const [prio, setPrio] = useState<boolean>(false);
     const [implicitRadioPrio, setImplicitRadioPrio] = useState<boolean>(false);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
+
+    const collapsed = useProfileType() === "tabbed";
 
     const handleOnClick = useAsyncDebounce(async () => {
         if (implicitRadioPrio) return;
@@ -31,7 +35,7 @@ function RadioPrioButton() {
     return (
         <Button
             color={implicitRadioPrio || prio ? "blue" : "cyan"}
-            className="text-lg w-46"
+            className={clsx("text-lg transition-[width]", collapsed ? "w-38" : "w-46")}
             disabled={callDisplayType !== "accepted"}
             onClick={handleOnClick}
         >

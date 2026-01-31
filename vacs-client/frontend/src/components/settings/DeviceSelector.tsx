@@ -84,7 +84,7 @@ function DeviceSelector(props: DeviceSelectorProps) {
             </p>
             <Select
                 name={props.deviceType}
-                className={clsx("mb-1", isFallback && "text-red-500 disabled:!text-[#B34F5C]")}
+                className={clsx("mb-1", isFallback && "text-red-500 disabled:text-[#B34F5C]!")}
                 options={devices}
                 selected={device}
                 onChange={handleOnChange}
