@@ -1,14 +1,15 @@
+use crate::app::state::AppState;
+use crate::app::state::signaling::AppStateSignalingExt;
 use crate::keybinds::KeybindsError;
 use crate::radio::RadioError;
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt::{Debug, Display, Formatter};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
 use vacs_signaling::error::{SignalingError, SignalingRuntimeError};
-use vacs_signaling::protocol::ws::{
-    CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason,
-};
+use vacs_signaling::protocol::ws::server::{DisconnectReason, LoginFailureReason};
+use vacs_signaling::protocol::ws::shared::{CallErrorReason, CallId, ErrorReason};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -91,16 +92,20 @@ impl serde::Serialize for Error {
     }
 }
 
-pub trait HandleUnauthorizedExt<R> {
-    fn handle_unauthorized(self, app: &AppHandle) -> Result<R, Error>;
+#[async_trait::async_trait]
+pub trait HandleUnauthorizedExt<R: Send> {
+    async fn handle_unauthorized(self, app: &AppHandle) -> Result<R, Error>;
 }
 
-impl<R> HandleUnauthorizedExt<R> for Result<R, Error> {
-    fn handle_unauthorized(self, app: &AppHandle) -> Result<R, Error> {
+#[async_trait::async_trait]
+impl<R: Send> HandleUnauthorizedExt<R> for Result<R, Error> {
+    async fn handle_unauthorized(self, app: &AppHandle) -> Result<R, Error> {
         match self {
             Ok(val) => Ok(val),
             Err(Error::Unauthorized) => {
                 log::info!("Not authenticated");
+
+                app.state::<AppState>().lock().await.set_client_id(None);
                 app.emit("auth:unauthenticated", Value::Null).ok();
                 Err(Error::Unauthorized)
             }
@@ -213,6 +218,12 @@ fn format_signaling_error(err: &SignalingError) -> String {
             LoginFailureReason::NoActiveVatsimConnection => {
                 "Login failed: No active VATSIM connection. Wait a few seconds after connecting to VATSIM and try again."
             }
+            LoginFailureReason::AmbiguousVatsimPosition(_) => {
+                "Login failed: Multiple VATSIM positions matched your current position. Please select the correct position manually."
+            }
+            LoginFailureReason::InvalidVatsimPosition => {
+                "Login failed: Selected VATSIM position is not covered by your active VATSIM connection. Wait a few seconds after connecting to VATSIM and try again."
+            }
             LoginFailureReason::Timeout => {
                 "Login failed: Login did not complete in time. Please try again."
             }
@@ -232,11 +243,17 @@ fn format_signaling_error(err: &SignalingError) -> String {
                 ErrorReason::RateLimited {retry_after_secs} => {
                     format!("Server error: Rate limited. Retry after {retry_after_secs}.")
                 },
+                ErrorReason::ClientNotFound => {
+                    "Server error: Client not found.".to_string()
+                }
             },
             SignalingRuntimeError::Disconnected(reason) => match reason {
                 None => "Disconnected",
                 Some(DisconnectReason::Terminated) => "Disconnected: Your connection was terminated by another client.",
                 Some(DisconnectReason::NoActiveVatsimConnection) => "Disconnected: No active VATSIM connection was found.",
+                Some(DisconnectReason::AmbiguousVatsimPosition(_)) => {
+                    "Disconnected: Multiple VATSIM positions matched your current position. Please select the correct position manually."
+                }
             }.to_string(),
             _ => runtime_err.to_string(),
         },
@@ -261,14 +278,14 @@ impl From<Error> for CallErrorReason {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CallError {
-    peer_id: String,
+    call_id: CallId,
     reason: String,
 }
 
 impl CallError {
-    pub fn new(peer_id: String, is_local: bool, reason: CallErrorReason) -> Self {
+    pub fn new(call_id: CallId, is_local: bool, reason: CallErrorReason) -> Self {
         Self {
-            peer_id,
+            call_id,
             reason: format!(
                 "{} {}",
                 if is_local { "Local" } else { "Remote" },
@@ -276,9 +293,11 @@ impl CallError {
                     CallErrorReason::WebrtcFailure => "Connection failure",
                     CallErrorReason::AudioFailure => "Audio failure",
                     CallErrorReason::CallFailure => "Call failure",
+                    CallErrorReason::CallActive => "Call already active",
                     CallErrorReason::SignalingFailure => "Target not reachable",
                     CallErrorReason::AutoHangup => "Target did not answer",
                     CallErrorReason::Other => "Unknown failure",
+                    CallErrorReason::TargetNotFound => "Call target not found",
                 }
             ),
         }

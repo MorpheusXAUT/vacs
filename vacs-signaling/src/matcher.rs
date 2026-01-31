@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, oneshot};
 use tracing::instrument;
-use vacs_protocol::ws::SignalingMessage;
+use vacs_protocol::ws::server::ServerMessage;
 
 /// Represents a waiting request for a message that matches a predicate.
 struct MatcherEntry {
-    predicate: Box<dyn Fn(&SignalingMessage) -> bool + Send + Sync + 'static>,
-    responder: oneshot::Sender<SignalingMessage>,
+    predicate: Box<dyn Fn(&ServerMessage) -> bool + Send + Sync + 'static>,
+    responder: oneshot::Sender<ServerMessage>,
 }
 
 /// ResponseMatcher holds a queue of waiters that want to match an incoming message.
@@ -39,9 +39,9 @@ impl ResponseMatcher {
         &self,
         predicate: F,
         timeout: Duration,
-    ) -> Result<SignalingMessage, SignalingError>
+    ) -> Result<ServerMessage, SignalingError>
     where
-        F: Fn(&SignalingMessage) -> bool + Send + Sync + 'static,
+        F: Fn(&ServerMessage) -> bool + Send + Sync + 'static,
     {
         let (tx, rx) = oneshot::channel();
 
@@ -75,9 +75,9 @@ impl ResponseMatcher {
     ///     Should you ever make it here, please open an issue with the next generation of project maintainers.
     /// - `Err(SignalingError:Disconnected)` if the Matcher was closed unexpectedly.
     #[instrument(level = "debug", skip(self, predicate), err)]
-    pub async fn wait_for<F>(&self, predicate: F) -> Result<SignalingMessage, SignalingError>
+    pub async fn wait_for<F>(&self, predicate: F) -> Result<ServerMessage, SignalingError>
     where
-        F: Fn(&SignalingMessage) -> bool + Send + Sync + 'static,
+        F: Fn(&ServerMessage) -> bool + Send + Sync + 'static,
     {
         self.wait_for_with_timeout(predicate, Duration::MAX).await
     }
@@ -85,7 +85,7 @@ impl ResponseMatcher {
     /// Called by the receiving task to check if a message completes any match. If so, the message is
     /// forwarded to the matcher awaiting it and not processed any further by [`try_match`].
     #[instrument(level = "debug", skip(self, msg))]
-    pub fn try_match(&self, msg: &SignalingMessage) {
+    pub fn try_match(&self, msg: &ServerMessage) {
         let mut inner = self.inner.try_lock();
         if let Ok(ref mut queue) = inner
             && let Some(pos) = queue.iter().position(|entry| (entry.predicate)(msg))
@@ -108,7 +108,9 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_matches;
     use test_log::test;
-    use vacs_protocol::ws::ClientInfo;
+    use vacs_protocol::vatsim::{ClientId, PositionId};
+    use vacs_protocol::ws::server;
+    use vacs_protocol::ws::server::ClientInfo;
 
     #[test(tokio::test)]
     async fn wait_for() {
@@ -117,32 +119,35 @@ mod tests {
         let matcher_clone = matcher.clone();
         let handle = tokio::spawn(async move {
             matcher_clone
-                .wait_for(|msg| matches!(msg, SignalingMessage::Logout))
+                .wait_for(|msg| matches!(msg, ServerMessage::Disconnected(_)))
                 .await
         });
 
         tokio::time::sleep(Duration::from_millis(10)).await;
-        matcher.try_match(&SignalingMessage::Logout);
+        matcher.try_match(&ServerMessage::Disconnected(server::Disconnected {
+            reason: server::DisconnectReason::Terminated,
+        }));
 
         let result = handle.await.unwrap();
-        assert_matches!(result, Ok(SignalingMessage::Logout));
+        assert_matches!(result, Ok(ServerMessage::Disconnected(_)));
     }
 
     #[test(tokio::test)]
     async fn wait_for_content() {
         let matcher = ResponseMatcher::new();
-        let msg = SignalingMessage::ClientList {
+        let msg = ServerMessage::ClientList(server::ClientList {
             clients: vec![ClientInfo {
-                id: "client1".to_string(),
+                id: ClientId::from("client1"),
+                position_id: Some(PositionId::from("position1")),
                 display_name: "Client 1".to_string(),
                 frequency: "100.000".to_string(),
             }],
-        };
+        });
 
         let matcher_clone = matcher.clone();
         let handle = tokio::spawn(async move {
             matcher_clone
-                .wait_for(|msg| matches!(msg, SignalingMessage::ClientList { .. }))
+                .wait_for(|msg| matches!(msg, ServerMessage::ClientList(_)))
                 .await
         });
 
@@ -150,31 +155,37 @@ mod tests {
         matcher.try_match(&msg);
 
         let result = handle.await.unwrap();
-        assert_matches!(result, Ok(SignalingMessage::ClientList { clients }) if clients.len() == 1);
+        assert_matches!(result, Ok(ServerMessage::ClientList(inner)) if inner.clients.len() == 1);
     }
 
     #[test(tokio::test)]
     async fn wait_for_matching_peer_id() {
         let matcher = ResponseMatcher::new();
         let messages = vec![
-            SignalingMessage::CallAnswer {
-                peer_id: "client1".to_string(),
+            ServerMessage::WebrtcAnswer(vacs_protocol::ws::shared::WebrtcAnswer {
+                call_id: vacs_protocol::ws::shared::CallId::new(),
+                from_client_id: ClientId::from("client1"),
+                to_client_id: ClientId::from("client2"),
                 sdp: "sdp1".to_string(),
-            },
-            SignalingMessage::CallAnswer {
-                peer_id: "client2".to_string(),
+            }),
+            ServerMessage::WebrtcAnswer(vacs_protocol::ws::shared::WebrtcAnswer {
+                call_id: vacs_protocol::ws::shared::CallId::new(),
+                from_client_id: ClientId::from("client2"),
+                to_client_id: ClientId::from("client3"),
                 sdp: "sdp2".to_string(),
-            },
-            SignalingMessage::CallAnswer {
-                peer_id: "client3".to_string(),
+            }),
+            ServerMessage::WebrtcAnswer(vacs_protocol::ws::shared::WebrtcAnswer {
+                call_id: vacs_protocol::ws::shared::CallId::new(),
+                from_client_id: ClientId::from("client3"),
+                to_client_id: ClientId::from("client1"),
                 sdp: "sdp3".to_string(),
-            },
+            }),
         ];
 
         let matcher_clone = matcher.clone();
         let handle = tokio::spawn(async move {
             matcher_clone
-                .wait_for(|msg| matches!(msg, SignalingMessage::CallAnswer { peer_id, .. } if peer_id == "client2"))
+                .wait_for(|msg| matches!(msg, ServerMessage::WebrtcAnswer(ans) if ans.from_client_id == ClientId::from("client2")))
                 .await
         });
 
@@ -184,19 +195,21 @@ mod tests {
         }
 
         let result = handle.await.unwrap();
-        assert_matches!(result, Ok(SignalingMessage::CallAnswer { peer_id, sdp }) if peer_id == "client2" && sdp == "sdp2");
+        assert_matches!(result, Ok(ServerMessage::WebrtcAnswer(ans)) if ans.from_client_id == ClientId::from("client2") && ans.sdp == "sdp2");
     }
 
     #[test(tokio::test)]
     async fn wait_for_with_timeout() {
         let matcher = ResponseMatcher::new();
-        let msg = SignalingMessage::Logout;
+        let msg = ServerMessage::Disconnected(server::Disconnected {
+            reason: server::DisconnectReason::Terminated,
+        });
 
         let matcher_clone = matcher.clone();
         let handle = tokio::spawn(async move {
             matcher_clone
                 .wait_for_with_timeout(
-                    |msg| matches!(msg, SignalingMessage::Logout),
+                    |msg| matches!(msg, ServerMessage::Disconnected(_)),
                     Duration::from_millis(100),
                 )
                 .await
@@ -206,7 +219,7 @@ mod tests {
         matcher.try_match(&msg);
 
         let result = handle.await.unwrap();
-        assert_matches!(result, Ok(SignalingMessage::Logout));
+        assert_matches!(result, Ok(ServerMessage::Disconnected(_)));
     }
 
     #[test(tokio::test)]
@@ -215,7 +228,7 @@ mod tests {
 
         let result = matcher
             .wait_for_with_timeout(
-                |msg| matches!(msg, SignalingMessage::Logout),
+                |msg| matches!(msg, ServerMessage::Disconnected(_)),
                 Duration::from_millis(1),
             )
             .await;
@@ -231,28 +244,31 @@ mod tests {
 
         let h1 = tokio::spawn(async move {
             m1.wait_for_with_timeout(
-                |m| matches!(m, SignalingMessage::Logout),
+                |m| matches!(m, ServerMessage::Disconnected(_)),
                 Duration::from_millis(20),
             )
             .await
         });
         let h2 = tokio::spawn(async move {
             m2.wait_for_with_timeout(
-                |m| matches!(m, SignalingMessage::Logout),
+                |m| matches!(m, ServerMessage::Disconnected(_)),
                 Duration::from_millis(20),
             )
             .await
         });
 
         tokio::time::sleep(Duration::from_millis(10)).await;
-        matcher.try_match(&SignalingMessage::Logout);
+        matcher.try_match(&ServerMessage::Disconnected(server::Disconnected {
+            reason: server::DisconnectReason::Terminated,
+        }));
 
         let r1 = h1.await.unwrap();
         let r2 = h2.await.unwrap();
 
         // One should succeed, the other one should time out
         assert!(
-            matches!(r1, Ok(SignalingMessage::Logout)) ^ matches!(r2, Ok(SignalingMessage::Logout))
+            matches!(r1, Ok(ServerMessage::Disconnected(_)))
+                ^ matches!(r2, Ok(ServerMessage::Disconnected(_)))
         );
     }
 
@@ -268,7 +284,7 @@ mod tests {
                 |m| {
                     matches!(
                         m,
-                        SignalingMessage::Logout | SignalingMessage::PeerNotFound { .. }
+                        ServerMessage::Disconnected(_) | ServerMessage::CallError { .. }
                     )
                 },
                 Duration::from_millis(20),
@@ -277,21 +293,23 @@ mod tests {
         });
         let h2 = tokio::spawn(async move {
             m2.wait_for_with_timeout(
-                |m| matches!(m, SignalingMessage::Logout),
+                |m| matches!(m, ServerMessage::Disconnected(_)),
                 Duration::from_millis(20),
             )
             .await
         });
 
         tokio::time::sleep(Duration::from_millis(10)).await;
-        matcher.try_match(&SignalingMessage::Logout);
+        matcher.try_match(&ServerMessage::Disconnected(server::Disconnected {
+            reason: server::DisconnectReason::Terminated,
+        }));
 
         let r1 = h1.await.unwrap();
         let r2 = h2.await.unwrap();
 
         let matches = [r1, r2]
             .iter()
-            .filter(|r| matches!(r, Ok(SignalingMessage::Logout)))
+            .filter(|r| matches!(r, Ok(ServerMessage::Disconnected(_))))
             .count();
         assert_eq!(matches, 1);
     }
@@ -310,7 +328,7 @@ mod tests {
                 barrier_clone.wait().await;
                 matcher_clone
                     .wait_for_with_timeout(
-                        |m| matches!(m, SignalingMessage::Logout),
+                        |m| matches!(m, ServerMessage::Disconnected(_)),
                         Duration::from_millis(20),
                     )
                     .await
@@ -319,11 +337,13 @@ mod tests {
 
         barrier.wait().await;
         tokio::time::sleep(Duration::from_millis(10)).await;
-        matcher.try_match(&SignalingMessage::Logout);
+        matcher.try_match(&ServerMessage::Disconnected(server::Disconnected {
+            reason: server::DisconnectReason::Terminated,
+        }));
 
         let mut matches = 0;
         for h in handles {
-            if matches!(h.await.unwrap(), Ok(SignalingMessage::Logout)) {
+            if matches!(h.await.unwrap(), Ok(ServerMessage::Disconnected(_))) {
                 matches += 1;
             }
         }
@@ -338,43 +358,52 @@ mod tests {
         let h2 = matcher.clone();
 
         let w1 = tokio::spawn(async move {
-            h1.wait_for(|msg| matches!(msg, SignalingMessage::CallAnswer { .. }))
+            h1.wait_for(|msg| matches!(msg, ServerMessage::WebrtcAnswer(_)))
                 .await
         });
 
         let w2 = tokio::spawn(async move {
-            h2.wait_for(|msg| matches!(msg, SignalingMessage::ClientList { .. }))
+            h2.wait_for(|msg| matches!(msg, ServerMessage::ClientList(_)))
                 .await
         });
 
         tokio::time::sleep(Duration::from_millis(10)).await;
 
         for _ in 0..10 {
-            matcher.try_match(&SignalingMessage::Logout);
+            matcher.try_match(&ServerMessage::Disconnected(server::Disconnected {
+                reason: server::DisconnectReason::Terminated,
+            }));
         }
 
-        matcher.try_match(&SignalingMessage::ClientList {
+        matcher.try_match(&ServerMessage::ClientList(server::ClientList {
             clients: vec![ClientInfo {
-                id: "client1".into(),
+                id: ClientId::from("client1"),
+                position_id: Some(PositionId::from("position1")),
                 display_name: "Client 1".into(),
                 frequency: "100.000".into(),
             }],
-        });
-        matcher.try_match(&SignalingMessage::CallAnswer {
-            peer_id: "client2".to_string(),
-            sdp: "sdp2".into(),
-        });
+        }));
+        matcher.try_match(&ServerMessage::WebrtcAnswer(
+            vacs_protocol::ws::shared::WebrtcAnswer {
+                call_id: vacs_protocol::ws::shared::CallId::new(),
+                from_client_id: ClientId::from("client2"),
+                to_client_id: ClientId::from("client1"),
+                sdp: "sdp2".into(),
+            },
+        ));
 
         let r1 = w1.await.unwrap();
         let r2 = w2.await.unwrap();
 
-        assert_matches!(r1, Ok(SignalingMessage::CallAnswer { .. }));
-        assert_matches!(r2, Ok(SignalingMessage::ClientList { .. }));
+        assert_matches!(r1, Ok(ServerMessage::WebrtcAnswer(_)));
+        assert_matches!(r2, Ok(ServerMessage::ClientList(_)));
     }
 
     #[test(tokio::test)]
     async fn try_match_without_matchers() {
         let matcher = ResponseMatcher::new();
-        matcher.try_match(&SignalingMessage::Logout);
+        matcher.try_match(&ServerMessage::Disconnected(server::Disconnected {
+            reason: server::DisconnectReason::Terminated,
+        }));
     }
 }
