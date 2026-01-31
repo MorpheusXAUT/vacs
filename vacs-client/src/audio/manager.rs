@@ -18,7 +18,8 @@ use vacs_audio::sources::opus::OpusSource;
 use vacs_audio::sources::waveform::{Waveform, WaveformSource, WaveformTone};
 use vacs_audio::stream::capture::{CaptureStream, InputLevel};
 use vacs_audio::stream::playback::PlaybackStream;
-use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
+use vacs_signaling::protocol::ws::shared;
+use vacs_signaling::protocol::ws::shared::CallErrorReason;
 
 const AUDIO_STREAM_ERROR_CHANNEL_SIZE: usize = 32;
 
@@ -143,27 +144,26 @@ impl AudioManager {
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                if let Some(peer_id) = state.active_call_peer_id().cloned() {
-                    log::debug!(
-                        "Ending active call with peer {peer_id} due to capture stream error"
-                    );
+                if let Some(call_id) = state.active_call_id().cloned() {
+                    log::debug!("Ending active call {call_id} due to capture stream error");
 
-                    state.cleanup_call(&peer_id).await;
+                    state.cleanup_call(&call_id).await;
                     if let Err(err) = state
-                        .send_signaling_message(SignalingMessage::CallError {
-                            peer_id: peer_id.clone(),
+                        .send_signaling_message(shared::CallError {
+                            call_id,
                             reason: CallErrorReason::AudioFailure,
+                            message: None,
                         })
                         .await
                     {
                         log::warn!("Failed to send call end signaling message: {:?}", err);
                     };
-                    state.set_outgoing_call_peer_id(None);
+                    state.set_outgoing_call_id(None);
                     app.state::<AudioManagerHandle>()
                         .read()
                         .stop(SourceType::Ringback);
 
-                    app.emit("signaling:call-end", &peer_id).ok();
+                    app.emit("signaling:call-end", &call_id).ok();
                 }
 
                 app.emit::<FrontendError>("error", Error::from(err).into())
@@ -367,27 +367,26 @@ impl AudioManager {
                         anyhow::anyhow!("Audio output device failed to start irrecoverably, check your audio settings and restart the application.")
                     ))).into()).ok();
                 } else {
-                    if let Some(peer_id) = state.active_call_peer_id().cloned() {
-                        log::debug!(
-                            "Ending active call with peer {peer_id} due to playback stream error"
-                        );
+                    if let Some(call_id) = state.active_call_id().cloned() {
+                        log::debug!("Ending active call {call_id} due to playback stream error");
 
-                        state.cleanup_call(&peer_id).await;
+                        state.cleanup_call(&call_id).await;
                         if let Err(err) = state
-                            .send_signaling_message(SignalingMessage::CallError {
-                                peer_id: peer_id.clone(),
+                            .send_signaling_message(shared::CallError {
+                                call_id,
                                 reason: CallErrorReason::AudioFailure,
+                                message: None,
                             })
                             .await
                         {
                             log::warn!("Failed to send call end signaling message: {:?}", err);
                         };
-                        state.set_outgoing_call_peer_id(None);
+                        state.set_outgoing_call_id(None);
                         app.state::<AudioManagerHandle>()
                             .read()
                             .stop(SourceType::Ringback);
 
-                        app.emit("signaling:call-end", &peer_id).ok();
+                        app.emit("signaling:call-end", &call_id).ok();
                     }
 
                     if let Err(err) = app

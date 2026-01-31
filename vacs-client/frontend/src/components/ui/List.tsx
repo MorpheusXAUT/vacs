@@ -24,7 +24,7 @@ function List(props: ListProps) {
         <div
             ref={listContainer}
             className={clsx(
-                "h-full grid box-border gap-[1px] [&>div]:outline-1 [&>div]:outline-gray-500",
+                "h-full grid box-border gap-px [&>div]:outline-1 [&>div]:outline-gray-500",
                 props.className,
             )}
             style={{
@@ -44,7 +44,7 @@ function List(props: ListProps) {
                     {headerItem.title}
                 </div>
             ))}
-            <div className="!outline-0"></div>
+            <div className="outline-0!"></div>
 
             {visibleItemIndices.map((itemIndex, idx) => {
                 const rowSpan = visibleItemIndices.length - 2;

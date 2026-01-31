@@ -1,15 +1,20 @@
+import {PositionId} from "./generic.ts";
+import {SessionProfile} from "./profile.ts";
+
 export type ClientInfo = {
     id: string;
+    positionId: PositionId | undefined;
     displayName: string;
     frequency: string;
 };
 
-export type ClientInfoWithAlias = ClientInfo & {
-    alias: string | undefined;
+export type SessionInfo = {
+    client: ClientInfo;
+    profile: SessionProfile;
 };
 
-export function splitDisplayName(client: ClientInfoWithAlias): [string, string] {
-    const parts = (client.alias ?? client.displayName).split("_");
+export function splitDisplayName(client: ClientInfo): [string, string] {
+    const parts = client.displayName.split("_");
 
     if (parts.length <= 1) {
         return [parts[0], ""];

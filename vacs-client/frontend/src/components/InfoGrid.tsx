@@ -1,18 +1,19 @@
 import {useAuthStore} from "../stores/auth-store.ts";
 import "../styles/info-grid.css";
-import {useSignalingStore} from "../stores/signaling-store.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {useUpdateStore} from "../stores/update-store.ts";
 import {navigate} from "wouter/use-browser-location";
 import {invokeSafe} from "../error.ts";
 import {clsx} from "clsx";
 import {openUrl} from "@tauri-apps/plugin-opener";
+import {useConnectionStore} from "../stores/connection-store.ts";
 
 function InfoGrid() {
     const cid = useAuthStore(state => state.cid);
-    const clientInfo = useSignalingStore(
-        state =>
-            `${state.alias ?? state.displayName}${state.frequency !== "" ? ` (${state.frequency})` : ""}`,
+    const clientInfo = useConnectionStore(state =>
+        state.connectionState === "connected"
+            ? `${state.info.positionId || cid}${state.info.frequency !== "" ? ` (${state.info.frequency})` : ""}`
+            : "",
     );
     const callErrorReason = useCallStore(state => state.callDisplay?.errorReason);
     const currentVersion = useUpdateStore(state => state.currentVersion);

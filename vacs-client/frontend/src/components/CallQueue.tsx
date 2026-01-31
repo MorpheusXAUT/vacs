@@ -2,38 +2,44 @@ import Button from "./ui/Button.tsx";
 import {useCallStore} from "../stores/call-store.ts";
 import {invokeStrict} from "../error.ts";
 import unplug from "../assets/unplug.svg";
-import {ClientInfoWithAlias, splitDisplayName} from "../types/client-info.ts";
+import {Call} from "../types/call.ts";
+import {useProfileStationKeys} from "../stores/profile-store.ts";
+import {DirectAccessKey} from "../types/profile.ts";
+import {ComponentChild} from "preact";
+import {ClientId, PositionId, StationId} from "../types/generic.ts";
+import {useAuthStore} from "../stores/auth-store.ts";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
-    const {acceptCall, endCall, dismissRejectedPeer, dismissErrorPeer, removePeer} = useCallStore(
+    const {endCall, dismissRejectedCall, dismissErrorCall, removeCall} = useCallStore(
         state => state.actions,
     );
+    const stationKeys = useProfileStationKeys();
+    const cid = useAuthStore(state => state.cid);
 
-    const handleCallDisplayClick = async (peerId: string) => {
+    const handleCallDisplayClick = async (call: Call) => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {
             try {
-                await invokeStrict("signaling_end_call", {peerId: peerId});
+                await invokeStrict("signaling_end_call", {callId: call.callId});
                 endCall();
             } catch {}
         } else if (callDisplay?.type === "rejected") {
-            dismissRejectedPeer();
+            dismissRejectedCall();
         } else if (callDisplay?.type === "error") {
-            dismissErrorPeer();
+            dismissErrorCall();
         }
     };
 
-    const handleAnswerKeyClick = async (peer: ClientInfoWithAlias) => {
+    const handleAnswerKeyClick = async (call: Call) => {
         // Can't accept someone's call if something is in your call display
         if (callDisplay !== undefined) return;
 
         try {
-            acceptCall(peer);
-            await invokeStrict("signaling_accept_call", {peerId: peer.id});
+            await invokeStrict("signaling_accept_call", {callId: call.callId});
         } catch {
-            removePeer(peer.id);
+            removeCall(call.callId);
         }
     };
 
@@ -48,7 +54,7 @@ function CallQueue() {
 
     return (
         <div
-            className="flex flex-col-reverse gap-2.5 pt-3 pr-[1px] overflow-y-auto"
+            className="flex flex-col-reverse gap-2.5 pt-3 pr-px overflow-y-auto"
             style={{scrollbarWidth: "none"}}
         >
             {/*Call Display*/}
@@ -69,10 +75,22 @@ function CallQueue() {
                                 : undefined
                         }
                         softDisabled={true}
-                        onClick={() => handleCallDisplayClick(callDisplay.peer.id)}
+                        onClick={() => handleCallDisplayClick(callDisplay.call)}
                         className="h-16 text-sm p-1.5 [&_p]:leading-3.5"
                     >
-                        {clientLabel(callDisplay.peer)}
+                        {callDisplay.call.source.clientId === cid // TODO: Fix jumping text when blinking
+                            ? callLabel(
+                                  callDisplay.call.target.station,
+                                  callDisplay.call.target.position,
+                                  callDisplay.call.target.client,
+                                  stationKeys,
+                              )
+                            : callLabel(
+                                  callDisplay.call.source.stationId,
+                                  callDisplay.call.source.positionId,
+                                  callDisplay.call.source.clientId,
+                                  stationKeys,
+                              )}
                     </Button>
                 </div>
             ) : (
@@ -80,14 +98,19 @@ function CallQueue() {
             )}
 
             {/*Answer Keys*/}
-            {incomingCalls.map((peer, idx) => (
+            {incomingCalls.map((call, idx) => (
                 <Button
                     key={idx}
                     color={blink ? "green" : "gray"}
                     className="h-16 text-sm p-1.5 [&_p]:leading-3.5"
-                    onClick={() => handleAnswerKeyClick(peer)}
+                    onClick={() => handleAnswerKeyClick(call)}
                 >
-                    {clientLabel(peer)}
+                    {callLabel(
+                        call.source.stationId,
+                        call.source.positionId,
+                        call.source.clientId,
+                        stationKeys,
+                    )}
                 </Button>
             ))}
             {Array.from(Array(Math.max(5 - incomingCalls.length, 0)).keys()).map(idx => (
@@ -97,16 +120,43 @@ function CallQueue() {
     );
 }
 
-const clientLabel = (client: ClientInfoWithAlias) => {
-    const [stationName, stationType] = splitDisplayName(client);
-    return (
-        <>
-            <p className="max-w-full whitespace-nowrap" title={stationName}>
-                {stationName}
+const callLabel = (
+    stationId: StationId | undefined,
+    positionId: PositionId | undefined,
+    clientId: ClientId | undefined,
+    stationKeys: DirectAccessKey[],
+): ComponentChild => {
+    if (stationId !== undefined) {
+        // TODO: Display who is being called (call.target.station)
+        const station = stationKeys.find(key => key.stationId === stationId);
+        if (station !== undefined) {
+            return (
+                <>
+                    {station.label.map((s, index) => (
+                        <p key={index} className="max-w-full whitespace-nowrap" title={s}>
+                            {s}
+                        </p>
+                    ))}
+                </>
+            );
+        }
+        return (
+            <p className="max-w-full whitespace-nowrap text-center w-full" title={stationId}>
+                {stationId}
             </p>
-            {stationType !== "" && <p>{stationType}</p>}
-            {client.frequency !== "" && <p title={client.frequency}>{client.frequency}</p>}
-        </>
+        );
+    } else if (positionId !== undefined) {
+        // TODO: Display who is being called (call.target.station)
+        return (
+            <p className="max-w-full whitespace-nowrap text-center w-full" title={positionId}>
+                {positionId}
+            </p>
+        );
+    }
+    return (
+        <p className="max-w-full whitespace-nowrap text-center w-full" title={clientId}>
+            {clientId}
+        </p>
     );
 };
 

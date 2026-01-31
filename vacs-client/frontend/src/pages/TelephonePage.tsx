@@ -22,7 +22,7 @@ function TelephonePage() {
     return (
         <div
             className={clsx(
-                "z-10 absolute h-[calc(100%+5rem+3px-0.5rem+0.25rem)] top-[-1px] right-[-2px]",
+                "z-10 absolute h-[calc(100%+5rem+3px-0.5rem+0.25rem)] -top-px right-[-2px]",
                 "bg-blue-700 px-2 pb-2 flex flex-col overflow-auto rounded-md",
                 page === "dir" && "w-[calc(100%+3px)]",
             )}
@@ -90,7 +90,7 @@ function TelephonePageButton(props: TelephonePageButtonProps) {
                 "active:border-r-gray-100 active:border-b-gray-100 active:border-t-gray-700 active:border-l-gray-700",
                 "disabled:relative disabled:cursor-default disabled:border-gray-600",
                 "active-telephone-page",
-                "not-disabled:active:[&>*]:translate-y-[1px] not-disabled:active:[&>*]:translate-x-[1px]",
+                "not-disabled:active:*:translate-y-px not-disabled:active:*:translate-x-px",
             )}
             onClick={() => {
                 void invokeSafe("audio_play_ui_click");

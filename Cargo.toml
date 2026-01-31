@@ -75,6 +75,7 @@ tauri-plugin-opener = "2.5.3"
 tauri-plugin-prevent-default = "4.0.3"
 tauri-plugin-single-instance = "2.3.7"
 tauri-plugin-updater = { git = "https://github.com/tauri-apps/plugins-workspace.git", rev = "8cf8eeab02efddd4e44e3bba92b33902a8c00956" }
+tempfile = "3.23.0"
 test-log = { version = "0.2.19", features = ["trace"] }
 thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread", "macros", "signal", "sync", "time"] }
@@ -88,7 +89,7 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 tracing = { version = "0.1.44", features = ["log"] }
 trackaudio = "0.2.1"
 url = "2.5.8"
-uuid = { version = "1.20.0", features = ["v4"] }
+uuid = { version = "1.20.0", features = ["v7", "serde"] }
 vacs-audio = { path = "vacs-audio" }
 vacs-macros = { path = "vacs-macros" }
 vacs-protocol = { path = "vacs-protocol", default-features = false }
