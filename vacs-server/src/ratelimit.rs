@@ -11,6 +11,7 @@ use std::net::IpAddr;
 use std::num::{NonZero, NonZeroU32};
 use std::ops::Deref;
 use std::time::Duration;
+use vacs_protocol::vatsim::ClientId;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(default)]
@@ -62,6 +63,18 @@ impl From<String> for Key {
 
 impl From<&str> for Key {
     fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<ClientId> for Key {
+    fn from(value: ClientId) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<&ClientId> for Key {
+    fn from(value: &ClientId) -> Self {
         Self(value.to_string())
     }
 }

@@ -156,6 +156,7 @@ pub struct VatsimConfig {
     pub slurper_base_url: String,
     pub data_feed_url: String,
     pub controller_update_interval: Duration,
+    pub coverage_dir: String,
 }
 
 impl Default for VatsimConfig {
@@ -166,6 +167,7 @@ impl Default for VatsimConfig {
             slurper_base_url: "https://slurper.vatsim.net".to_string(),
             data_feed_url: "https://data.vatsim.net/v3/vatsim-data.json".to_string(),
             controller_update_interval: Duration::from_secs(30),
+            coverage_dir: "/etc/vacs-server/data/coverage".to_string(),
         }
     }
 }

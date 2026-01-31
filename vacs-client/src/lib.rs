@@ -116,7 +116,6 @@ pub fn run() {
             app::commands::app_check_for_update,
             app::commands::app_frontend_ready,
             app::commands::app_open_folder,
-            app::commands::app_pick_extra_stations_config,
             app::commands::app_platform_capabilities,
             app::commands::app_quit,
             app::commands::app_reset_window_size,
@@ -152,9 +151,7 @@ pub fn run() {
             signaling::commands::signaling_disconnect,
             signaling::commands::signaling_end_call,
             signaling::commands::signaling_get_ignored_clients,
-            signaling::commands::signaling_get_stations_config,
             signaling::commands::signaling_remove_ignored_client,
-            signaling::commands::signaling_set_selected_stations_config_profile,
             signaling::commands::signaling_start_call,
             signaling::commands::signaling_terminate,
         ])

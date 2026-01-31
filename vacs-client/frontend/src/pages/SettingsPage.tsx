@@ -3,7 +3,6 @@ import {navigate} from "wouter/use-browser-location";
 import {useAuthStore} from "../stores/auth-store.ts";
 import {invokeSafe, invokeStrict} from "../error.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
-import {useSignalingStore} from "../stores/signaling-store.ts";
 import DeviceSelector from "../components/settings/DeviceSelector.tsx";
 import VolumeSettings from "../components/settings/VolumeSettings.tsx";
 import AudioHostSelector from "../components/settings/AudioHostSelector.tsx";
@@ -14,10 +13,11 @@ import {Route, Switch} from "wouter";
 import TransmitModePage from "../components/settings/TransmitModePage.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 import HotkeysConfigPage from "../components/settings/HotkeysConfigPage.tsx";
+import {useConnectionStore} from "../stores/connection-store.ts";
 
 function SettingsPage() {
     return (
-        <div className="h-full w-full relative">
+        <>
             <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col">
                 <p className="w-full text-white bg-blue-700 font-semibold text-center">Settings</p>
                 <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col overflow-auto">
@@ -94,12 +94,12 @@ function SettingsPage() {
                 <Route path="/transmit" component={TransmitModePage} />
                 <Route path="/hotkeys" component={HotkeysConfigPage} />
             </Switch>
-        </div>
+        </>
     );
 }
 
 function AppControlButtons() {
-    const connected = useSignalingStore(state => state.connectionState === "connected");
+    const connected = useConnectionStore(state => state.connectionState === "connected");
     const isAuthenticated = useAuthStore(state => state.status === "authenticated");
 
     const handleLogoutClick = useAsyncDebounce(async () => {
@@ -300,7 +300,7 @@ function WindowStateButtons() {
 
 export function CloseButton() {
     return (
-        <Button color="gray" className="!w-18" onClick={() => navigate("/settings")}>
+        <Button color="gray" className="w-18!" onClick={() => navigate("/settings")}>
             <svg
                 width="26"
                 height="26"

@@ -5,7 +5,7 @@ use crate::config::BackendEndpoint;
 use crate::error::{Error, HandleUnauthorizedExt};
 use anyhow::Context;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use vacs_signaling::protocol::http::auth::{InitVatsimLogin, UserInfo};
 
 #[tauri::command]
@@ -38,16 +38,28 @@ pub async fn auth_check_session(
     match response {
         Ok(user_info) => {
             log::info!("Authenticated as CID {}", user_info.cid);
+
+            app.state::<AppState>()
+                .lock()
+                .await
+                .set_client_id(Some(user_info.cid.clone()));
+
             app.emit("auth:authenticated", user_info.cid).ok();
             Ok(())
         }
         Err(Error::Unauthorized) => {
             log::info!("Not authenticated");
+
+            app.state::<AppState>().lock().await.set_client_id(None);
+
             app.emit("auth:unauthenticated", Value::Null).ok();
             Ok(())
         }
         Err(err) => {
             log::info!("Not authenticated");
+
+            app.state::<AppState>().lock().await.set_client_id(None);
+
             app.emit("auth:unauthenticated", Value::Null).ok();
             Err(err)
         }
@@ -68,13 +80,17 @@ pub async fn auth_logout(
     http_state
         .http_post::<(), ()>(BackendEndpoint::Logout, None, None)
         .await
-        .handle_unauthorized(&app)?;
+        .handle_unauthorized(&app)
+        .await?;
 
     http_state
         .clear_cookie_store()
         .context("Failed to clear cookie store")?;
 
+    app.state::<AppState>().lock().await.set_client_id(None);
+
     log::info!("Successfully logged out");
+
     app.emit("auth:unauthenticated", Value::Null).ok();
 
     Ok(())
