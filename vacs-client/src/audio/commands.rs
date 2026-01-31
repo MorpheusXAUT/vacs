@@ -45,7 +45,7 @@ pub async fn audio_set_host(
 ) -> Result<(), Error> {
     let mut state = app_state.lock().await;
 
-    if state.active_call_peer_id().is_some() {
+    if state.active_call_id().is_some() {
         return Err(AudioError::Other(anyhow::anyhow!(
             "Cannot set audio host while call is active"
         ))
@@ -136,7 +136,7 @@ pub async fn audio_set_device(
     let mut state = app_state.lock().await;
     let mut audio_manager = audio_manager.write();
 
-    if state.active_call_peer_id().is_some() {
+    if state.active_call_id().is_some() {
         return Err(AudioError::Other(anyhow::anyhow!(
             "Cannot set audio device while call is active"
         ))

@@ -19,19 +19,22 @@ use tauri::{AppHandle, Manager};
 use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
 use tokio_util::sync::CancellationToken;
 use vacs_signaling::client::SignalingClient;
+use vacs_signaling::protocol::vatsim::ClientId;
+use vacs_signaling::protocol::ws::shared::CallId;
 use vacs_signaling::transport::tokio::TokioTransport;
 
 pub struct AppStateInner {
     pub config: AppConfig,
+    client_id: Option<ClientId>,
     shutdown_token: CancellationToken,
     signaling_client: SignalingClient<TokioTransport, TauriTokenProvider>,
     audio_manager: AudioManagerHandle,
     keybind_engine: KeybindEngineHandle,
     active_call: Option<Call>,
     unanswered_call_guard: Option<UnansweredCallGuard>,
-    held_calls: HashMap<String, Call>,       // peer_id -> call
-    outgoing_call_peer_id: Option<String>,   // peer_id
-    incoming_call_peer_ids: HashSet<String>, // peer_id
+    held_calls: HashMap<CallId, Call>,  // call_id -> call
+    outgoing_call_id: Option<CallId>,   // peer_id
+    incoming_call_ids: HashSet<CallId>, // peer_id
 }
 
 pub type AppState = TokioMutex<AppStateInner>;
@@ -47,6 +50,7 @@ impl AppStateInner {
         let shutdown_token = CancellationToken::new();
 
         Ok(Self {
+            client_id: None,
             config: config.clone(),
             signaling_client: Self::new_signaling_client(
                 app.clone(),
@@ -69,8 +73,8 @@ impl AppStateInner {
             active_call: None,
             unanswered_call_guard: None,
             held_calls: HashMap::new(),
-            outgoing_call_peer_id: None,
-            incoming_call_peer_ids: HashSet::new(),
+            outgoing_call_id: None,
+            incoming_call_ids: HashSet::new(),
         })
     }
 

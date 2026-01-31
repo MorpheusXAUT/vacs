@@ -32,3 +32,15 @@ body {
 .scrollbar-hide {
     @apply [scrollbar-width:none] [&::-webkit-scrollbar]:hidden;
 }
+
+.active-tab::after {
+    content: "";
+    position: absolute;
+    height: 2px;
+    width: calc(100% + 4px);
+    left: -2px;
+    top: 0;
+    background-color: #b5bbc6;
+    opacity: 1;
+    z-index: 0;
+}

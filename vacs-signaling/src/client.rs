@@ -2,7 +2,7 @@ use crate::auth::TokenProvider;
 use crate::error::{SignalingError, SignalingRuntimeError, UntilInstant};
 use crate::matcher::ResponseMatcher;
 use crate::transport::{SignalingReceiver, SignalingSender, SignalingTransport};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use rand::RngExt;
 use std::collections::VecDeque;
 use std::pin::Pin;
@@ -14,7 +14,10 @@ use tokio_tungstenite::tungstenite;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, instrument};
 use vacs_protocol::VACS_PROTOCOL_VERSION;
-use vacs_protocol::ws::{ClientInfo, SignalingMessage};
+use vacs_protocol::vatsim::{ActiveProfile, PositionId, Profile};
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::{ClientInfo, ServerMessage, SessionProfile};
+use vacs_protocol::ws::{client, server};
 
 const BROADCAST_CHANNEL_SIZE: usize = 100;
 const SEND_CHANNEL_SIZE: usize = 100;
@@ -42,10 +45,15 @@ pub enum State {
 pub enum SignalingEvent {
     /// Emitted after the [`SignalingClient`] successfully connected to the server, including authentication.
     /// The client is ready to send and receive messages.
-    Connected { client_info: ClientInfo },
-    /// Emitted for every [`SignalingMessage`] received by a connected and authenticated [`SignalingClientInner`].
-    Message(SignalingMessage),
-    /// Emitted for every [`SignalingRuntimeError`] handled by the [`SignalingClientInner`].
+    Connected {
+        /// Information about the connected client.
+        client_info: ClientInfo,
+        /// The profile associated with the current session.
+        profile: ActiveProfile<Profile>,
+    },
+    /// Emitted for every [`ServerMessage`] received by a connected and authenticated [`SignalingClient`].
+    Message(ServerMessage),
+    /// Emitted for every [`SignalingRuntimeError`] handled by the [`SignalingClient`].
     /// This includes issues during transmission or other errors received from the server.
     Error(SignalingRuntimeError),
 }
@@ -60,11 +68,13 @@ pub struct SignalingClient<ST: SignalingTransport, TP: TokenProvider> {
 }
 
 impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new<F, Fut>(
         transport: ST,
         token_provider: TP,
         on_event: F,
         shutdown_token: CancellationToken,
+        custom_profile: bool,
         login_timeout: Duration,
         reconnect_max_tries: u8,
         handle: &tokio::runtime::Handle,
@@ -78,6 +88,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
             token_provider,
             Arc::new(move |e| Box::pin(on_event(e))),
             shutdown_token,
+            custom_profile,
             login_timeout,
             reconnect_max_tries,
         ));
@@ -107,7 +118,8 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
         self.inner.state()
     }
 
-    pub async fn connect(&self) -> Result<(), SignalingError> {
+    pub async fn connect(&self, position_id: Option<PositionId>) -> Result<(), SignalingError> {
+        self.inner.set_position_id(position_id);
         self.inner.connect().await
     }
 
@@ -115,11 +127,11 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
         self.inner.disconnect(true).await;
     }
 
-    pub async fn send(&self, msg: SignalingMessage) -> Result<(), SignalingError> {
+    pub async fn send(&self, msg: ClientMessage) -> Result<(), SignalingError> {
         self.inner.send(msg).await
     }
 
-    pub async fn recv(&self) -> Result<SignalingMessage, SignalingError> {
+    pub async fn recv(&self) -> Result<ServerMessage, SignalingError> {
         self.inner.recv().await
     }
 
@@ -130,7 +142,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClient<ST, TP> {
     pub async fn recv_with_timeout(
         &self,
         timeout: Duration,
-    ) -> Result<SignalingMessage, SignalingError> {
+    ) -> Result<ServerMessage, SignalingError> {
         self.inner.recv_with_timeout(timeout).await
     }
 }
@@ -160,6 +172,9 @@ struct SignalingClientInner<ST: SignalingTransport, TP: TokenProvider> {
 
     send_tx: Arc<Mutex<Option<mpsc::Sender<tungstenite::Message>>>>,
 
+    custom_profile: bool,
+    position_id: Arc<RwLock<Option<PositionId>>>,
+
     login_timeout: Duration,
     reconnect_max_tries: u8,
     reconnect_gate: Arc<Mutex<ReconnectGate>>,
@@ -174,6 +189,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         token_provider: TP,
         on_event: OnEventCb,
         shutdown_token: CancellationToken,
+        custom_profile: bool,
         login_timeout: Duration,
         reconnect_max_tries: u8,
     ) -> Self {
@@ -194,6 +210,9 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
             broadcast_tx: broadcast::channel(BROADCAST_CHANNEL_SIZE).0,
 
             send_tx: Arc::new(Mutex::new(None)),
+
+            custom_profile,
+            position_id: Arc::new(RwLock::new(None)),
 
             login_timeout,
             reconnect_max_tries,
@@ -225,7 +244,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
     async fn disconnect(&self, requested: bool) {
         if self.state() != State::Disconnected {
             tracing::trace!(?requested, "Sending logout message before disconnecting");
-            if let Err(err) = self.send(SignalingMessage::Logout).await {
+            if let Err(err) = self.send(ClientMessage::Logout).await {
                 tracing::warn!(?err, "Failed to send Logout message before disconnecting");
             }
         }
@@ -238,7 +257,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn send(&self, msg: SignalingMessage) -> Result<(), SignalingError> {
+    pub async fn send(&self, msg: ClientMessage) -> Result<(), SignalingError> {
         match self.state() {
             State::Disconnected => {
                 tracing::warn!("Tried to send message before signaling client was started");
@@ -246,7 +265,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
                     SignalingRuntimeError::Disconnected(None),
                 ));
             }
-            State::Connected if !matches!(msg, SignalingMessage::Login { .. }) => {
+            State::Connected if !matches!(msg, ClientMessage::Login { .. }) => {
                 tracing::warn!("Tried to send message before login");
                 return Err(SignalingError::Runtime(
                     SignalingRuntimeError::Disconnected(None),
@@ -263,7 +282,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         };
 
         tracing::debug!("Sending message to send channel");
-        let serialized = SignalingMessage::serialize(&msg).map_err(|err| {
+        let serialized = ClientMessage::serialize(&msg).map_err(|err| {
             tracing::warn!(?err, "Failed to serialize message");
             SignalingError::Runtime(SignalingRuntimeError::SerializationError(err.to_string()))
         })?;
@@ -275,16 +294,13 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    async fn recv(&self) -> Result<SignalingMessage, SignalingError> {
+    async fn recv(&self) -> Result<ServerMessage, SignalingError> {
         tracing::debug!("Waiting for message from server");
         self.recv_with_timeout(Duration::MAX).await
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    async fn recv_with_timeout(
-        &self,
-        timeout: Duration,
-    ) -> Result<SignalingMessage, SignalingError> {
+    async fn recv_with_timeout(&self, timeout: Duration) -> Result<ServerMessage, SignalingError> {
         tracing::debug!("Waiting for message from server with timeout");
         let mut broadcast_rx = self.subscribe();
 
@@ -325,37 +341,59 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         }
     }
 
+    fn set_position_id(&self, position_id: Option<PositionId>) {
+        *self.position_id.write() = position_id;
+    }
+
     #[instrument(level = "debug", skip(self), err)]
-    async fn login(&self) -> Result<ClientInfo, SignalingError> {
+    async fn login(&self) -> Result<(ClientInfo, ActiveProfile<Profile>), SignalingError> {
         tracing::trace!("Retrieving auth token from token provider");
         let token = self.token_provider.get_token().await?;
+
+        let position_id = self.position_id.read().clone();
         tracing::debug!("Sending Login message to server");
-        self.send(SignalingMessage::Login {
-            token: token.to_string(),
-            protocol_version: VACS_PROTOCOL_VERSION.to_string(),
-        })
+        self.send(
+            client::Login {
+                token: token.to_string(),
+                protocol_version: VACS_PROTOCOL_VERSION.to_string(),
+                custom_profile: self.custom_profile,
+                position_id,
+            }
+            .into(),
+        )
         .await?;
 
         tracing::debug!("Awaiting authentication response from server");
         match self.recv_with_timeout(self.login_timeout).await? {
-            SignalingMessage::ClientInfo { own, info } if own => {
-                tracing::info!(?info, "Login successful, received own client info");
-                Ok(info)
+            ServerMessage::SessionInfo(server::SessionInfo { client, profile }) => {
+                if let SessionProfile::Changed(profile) = profile {
+                    tracing::info!(?client, ?profile, "Login successful, received session info");
+                    Ok((client, profile))
+                } else {
+                    tracing::error!(
+                        ?client,
+                        ?profile,
+                        "Login successful, but received unexpected session profile"
+                    );
+                    Err(SignalingError::ProtocolError(
+                        "Expected active profile after Login".to_string(),
+                    ))
+                }
             }
-            SignalingMessage::LoginFailure { reason } => {
-                tracing::warn!(?reason, "Login failed");
-                Err(SignalingError::LoginError(reason))
+            ServerMessage::LoginFailure(failure) => {
+                tracing::warn!(reason = ?failure.reason, "Login failed");
+                Err(SignalingError::LoginError(failure.reason))
             }
-            SignalingMessage::Error { reason, peer_id } => {
-                tracing::error!(?reason, ?peer_id, "Server returned error");
+            ServerMessage::Error(error) => {
+                tracing::error!(reason = ?error.reason, client_id = ?error.client_id, "Server returned error");
                 Err(SignalingError::Runtime(SignalingRuntimeError::ServerError(
-                    reason,
+                    error.reason,
                 )))
             }
             other => {
                 tracing::error!(?other, "Received unexpected message from server");
                 Err(SignalingError::ProtocolError(
-                    "Expected own client info after Login".to_string(),
+                    "Expected own session info after Login".to_string(),
                 ))
             }
         }
@@ -404,14 +442,14 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
         tracing::trace!("Successfully started worker tasks, logging in");
         match self.login().await {
-            Ok(client_info) => {
+            Ok((client_info, profile)) => {
                 tracing::trace!("Successfully logged in to server");
 
                 self.set_state(State::LoggedIn);
-                if let Err(err) = self
-                    .broadcast_tx
-                    .send(SignalingEvent::Connected { client_info })
-                {
+                if let Err(err) = self.broadcast_tx.send(SignalingEvent::Connected {
+                    client_info,
+                    profile,
+                }) {
                     tracing::warn!(?err, "Failed to broadcast connected event");
                 }
 
@@ -810,10 +848,13 @@ mod tests {
     use pretty_assertions::{assert_eq, assert_matches};
     use test_log::test;
     use tokio::sync::Notify;
-    use vacs_protocol::ws::{ErrorReason, LoginFailureReason};
+    use vacs_protocol::vatsim::{ClientId, PositionId};
+    use vacs_protocol::ws::server::LoginFailureReason;
+    use vacs_protocol::ws::shared::ErrorReason;
 
     async fn setup_test_client(
         transport: MockTransport,
+        custom_profile: bool,
         reconnect_max_tries: u8,
     ) -> (
         Arc<SignalingClient<MockTransport, MockTokenProvider>>,
@@ -828,14 +869,18 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::ClientInfo {
-                    own: true,
-                    info: ClientInfo {
-                        id: "client1".to_string(),
-                        display_name: "client1".to_string(),
-                        frequency: "".to_string(),
+                ServerMessage::serialize(&ServerMessage::SessionInfo(server::SessionInfo {
+                    client: ClientInfo {
+                        id: ClientId::from("client1"),
+                        position_id: Some(PositionId::from("position1")),
+                        display_name: "Client 1".into(),
+                        frequency: "100.000".into(),
                     },
-                })
+                    profile: SessionProfile::Changed(ActiveProfile::Specific(Profile {
+                        id: vacs_protocol::vatsim::ProfileId::from("1"),
+                        profile_type: vacs_protocol::vatsim::ProfileType::Tabbed(vec![]),
+                    })),
+                }))
                 .unwrap()
                 .into(),
             );
@@ -847,12 +892,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            custom_profile,
             Duration::from_millis(100),
             reconnect_max_tries,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_ok());
         assert_matches!(client.state(), State::LoggedIn);
 
@@ -861,12 +907,12 @@ mod tests {
 
     #[test(tokio::test)]
     async fn connect() {
-        setup_test_client(MockTransport::default(), 0).await;
+        setup_test_client(MockTransport::default(), false, 0).await;
     }
 
     #[test(tokio::test)]
     async fn shutdown() {
-        let (client, shutdown_token) = setup_test_client(MockTransport::default(), 0).await;
+        let (client, shutdown_token) = setup_test_client(MockTransport::default(), false, 0).await;
 
         shutdown_token.cancel();
 
@@ -877,7 +923,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn disconnect() {
-        let (client, _shutdown_token) = setup_test_client(MockTransport::default(), 0).await;
+        let (client, _shutdown_token) = setup_test_client(MockTransport::default(), false, 0).await;
 
         client.disconnect().await;
 
@@ -888,12 +934,18 @@ mod tests {
     async fn send() {
         let transport = MockTransport::default();
         let mut outgoing_rx = transport.outgoing_tx.subscribe();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
-        let msg = SignalingMessage::CallInvite {
-            peer_id: "client2".to_string(),
-        };
-        let serialized = tungstenite::Message::from(SignalingMessage::serialize(&msg).unwrap());
+        let msg = ClientMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+            call_id: vacs_protocol::ws::shared::CallId::new(),
+            source: vacs_protocol::ws::shared::CallSource {
+                client_id: ClientId::from("client1"),
+                position_id: None,
+                station_id: None,
+            },
+            target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+        });
+        let serialized = tungstenite::Message::from(ClientMessage::serialize(&msg).unwrap());
 
         let result = client.send(msg.clone()).await;
         assert!(result.is_ok());
@@ -914,15 +966,18 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             8,
             &tokio::runtime::Handle::current(),
         );
 
-        let msg = SignalingMessage::Login {
+        let msg = ClientMessage::Login(client::Login {
             token: "test".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
-        };
+            custom_profile: false,
+            position_id: None,
+        });
 
         let result = client.send(msg.clone()).await;
         assert_matches!(
@@ -945,6 +1000,7 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             8,
             &tokio::runtime::Handle::current(),
@@ -953,9 +1009,15 @@ mod tests {
         let client_clone = client.clone();
         tokio::spawn(async move {
             transport_ready.notified().await;
-            let msg = SignalingMessage::CallInvite {
-                peer_id: "client2".to_string(),
-            };
+            let msg = ClientMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+                call_id: vacs_protocol::ws::shared::CallId::new(),
+                source: vacs_protocol::ws::shared::CallSource {
+                    client_id: ClientId::from("client1"),
+                    position_id: None,
+                    station_id: None,
+                },
+                target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+            });
 
             let result = client_clone.send(msg.clone()).await;
             assert_matches!(
@@ -966,23 +1028,25 @@ mod tests {
             );
         });
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(res.unwrap_err(), SignalingError::Timeout(_));
     }
 
     #[test(tokio::test)]
     async fn send_disconnected() {
-        let (client, _shutdown_token) = setup_test_client(MockTransport::default(), 0).await;
+        let (client, _shutdown_token) = setup_test_client(MockTransport::default(), false, 0).await;
 
         client.disconnect().await;
 
         assert_matches!(client.state(), State::Disconnected);
 
-        let msg = SignalingMessage::Login {
+        let msg = ClientMessage::Login(client::Login {
             token: "test".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
-        };
+            custom_profile: false,
+            position_id: None,
+        });
 
         let result = client.send(msg.clone()).await;
         assert_matches!(
@@ -995,7 +1059,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn send_shutdown() {
-        let (client, shutdown_token) = setup_test_client(MockTransport::default(), 0).await;
+        let (client, shutdown_token) = setup_test_client(MockTransport::default(), false, 0).await;
 
         shutdown_token.cancel();
 
@@ -1003,10 +1067,12 @@ mod tests {
 
         assert_matches!(client.state(), State::Disconnected);
 
-        let msg = SignalingMessage::Login {
+        let msg = ClientMessage::Login(client::Login {
             token: "test".to_string(),
             protocol_version: VACS_PROTOCOL_VERSION.to_string(),
-        };
+            custom_profile: false,
+            position_id: None,
+        });
 
         let result = client.send(msg.clone()).await;
         assert_matches!(
@@ -1021,18 +1087,24 @@ mod tests {
     async fn recv() {
         let transport = MockTransport::default();
         let incoming_tx = transport.incoming_tx.clone();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
-        let msg = SignalingMessage::CallInvite {
-            peer_id: "client2".to_string(),
-        };
+        let msg = ServerMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+            call_id: vacs_protocol::ws::shared::CallId::new(),
+            source: vacs_protocol::ws::shared::CallSource {
+                client_id: ClientId::from("client1"),
+                position_id: None,
+                station_id: None,
+            },
+            target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+        });
 
         let task = tokio::spawn(async move {
             return client.recv().await;
         });
 
         let result = incoming_tx.send(tungstenite::Message::from(
-            SignalingMessage::serialize(&msg).unwrap(),
+            ServerMessage::serialize(&msg).unwrap(),
         ));
         assert!(result.is_ok());
 
@@ -1042,7 +1114,7 @@ mod tests {
     #[test(tokio::test)]
     async fn recv_shutdown() {
         let transport = MockTransport::default();
-        let (client, shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, shutdown_token) = setup_test_client(transport, false, 0).await;
 
         let ready = Arc::new(Notify::new());
         let ready_clone = ready.clone();
@@ -1068,18 +1140,24 @@ mod tests {
     async fn recv_with_timeout() {
         let transport = MockTransport::default();
         let incoming_tx = transport.incoming_tx.clone();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
-        let msg = SignalingMessage::CallInvite {
-            peer_id: "client2".to_string(),
-        };
+        let msg = ServerMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+            call_id: vacs_protocol::ws::shared::CallId::new(),
+            source: vacs_protocol::ws::shared::CallSource {
+                client_id: ClientId::from("client1"),
+                position_id: None,
+                station_id: None,
+            },
+            target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+        });
 
         let task = tokio::spawn(async move {
             return client.recv_with_timeout(Duration::from_millis(100)).await;
         });
 
         let result = incoming_tx.send(tungstenite::Message::from(
-            SignalingMessage::serialize(&msg).unwrap(),
+            ServerMessage::serialize(&msg).unwrap(),
         ));
         assert!(result.is_ok());
 
@@ -1090,11 +1168,17 @@ mod tests {
     async fn recv_with_timeout_expired() {
         let transport = MockTransport::default();
         let incoming_tx = transport.incoming_tx.clone();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
-        let msg = SignalingMessage::CallInvite {
-            peer_id: "client2".to_string(),
-        };
+        let msg = ServerMessage::CallInvite(vacs_protocol::ws::shared::CallInvite {
+            call_id: vacs_protocol::ws::shared::CallId::new(),
+            source: vacs_protocol::ws::shared::CallSource {
+                client_id: ClientId::from("client1"),
+                position_id: None,
+                station_id: None,
+            },
+            target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+        });
 
         let client_clone = client.clone();
         let task = tokio::spawn(async move {
@@ -1106,7 +1190,7 @@ mod tests {
 
         incoming_tx
             .send(tungstenite::Message::from(
-                SignalingMessage::serialize(&msg).unwrap(),
+                ServerMessage::serialize(&msg).unwrap(),
             ))
             .unwrap();
 
@@ -1122,7 +1206,7 @@ mod tests {
     async fn recv_connection_closed() {
         let transport = MockTransport::default();
         let transport_disconnect_token = transport.disconnect_token();
-        let (client, _shutdown_token) = setup_test_client(transport, 0).await;
+        let (client, _shutdown_token) = setup_test_client(transport, false, 0).await;
 
         transport_disconnect_token.cancel();
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1150,9 +1234,9 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::LoginFailure {
+                ServerMessage::serialize(&ServerMessage::LoginFailure(server::LoginFailure {
                     reason: LoginFailureReason::Timeout,
-                })
+                }))
                 .unwrap()
                 .into(),
             );
@@ -1164,12 +1248,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(
             res.unwrap_err(),
@@ -1189,12 +1274,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         ));
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(res.unwrap_err(), SignalingError::Timeout(_));
     }
@@ -1211,9 +1297,9 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::LoginFailure {
+                ServerMessage::serialize(&ServerMessage::LoginFailure(server::LoginFailure {
                     reason: LoginFailureReason::Unauthorized,
-                })
+                }))
                 .unwrap()
                 .into(),
             );
@@ -1225,12 +1311,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(
             res.unwrap_err(),
@@ -1251,9 +1338,9 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::LoginFailure {
+                ServerMessage::serialize(&ServerMessage::LoginFailure(server::LoginFailure {
                     reason: LoginFailureReason::InvalidCredentials,
-                })
+                }))
                 .unwrap()
                 .into(),
             );
@@ -1265,12 +1352,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(
             res.unwrap_err(),
@@ -1291,9 +1379,9 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::LoginFailure {
+                ServerMessage::serialize(&ServerMessage::LoginFailure(server::LoginFailure {
                     reason: LoginFailureReason::DuplicateId,
-                })
+                }))
                 .unwrap()
                 .into(),
             );
@@ -1305,12 +1393,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(
             res.unwrap_err(),
@@ -1331,10 +1420,14 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::CallAnswer {
-                    peer_id: "client2".to_string(),
-                    sdp: "sdp2".to_string(),
-                })
+                ServerMessage::serialize(&ServerMessage::WebrtcAnswer(
+                    vacs_protocol::ws::shared::WebrtcAnswer {
+                        call_id: vacs_protocol::ws::shared::CallId::new(),
+                        from_client_id: ClientId::from("client1"),
+                        to_client_id: ClientId::from("client2"),
+                        sdp: "sdp2".to_string(),
+                    },
+                ))
                 .unwrap()
                 .into(),
             );
@@ -1346,14 +1439,15 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
-        assert_matches!(res.unwrap_err(), SignalingError::ProtocolError(reason) if reason == "Expected own client info after Login");
+        assert_matches!(res.unwrap_err(), SignalingError::ProtocolError(reason) if reason == "Expected own session info after Login");
         assert_matches!(client.state(), State::Disconnected);
     }
 
@@ -1369,10 +1463,11 @@ mod tests {
         tokio::spawn(async move {
             ready.notified().await;
             let msg = tungstenite::Message::Text(
-                SignalingMessage::serialize(&SignalingMessage::Error {
+                ServerMessage::serialize(&ServerMessage::Error(vacs_protocol::ws::shared::Error {
                     reason: ErrorReason::Internal("something failed".to_string()),
-                    peer_id: None,
-                })
+                    client_id: None,
+                    call_id: None,
+                }))
                 .unwrap()
                 .into(),
             );
@@ -1384,12 +1479,13 @@ mod tests {
             token_provider,
             |_| async {},
             shutdown_token.clone(),
+            false,
             Duration::from_millis(100),
             0,
             &tokio::runtime::Handle::current(),
         );
 
-        let res = client.connect().await;
+        let res = client.connect(None).await;
         assert!(res.is_err());
         assert_matches!(res.unwrap_err(), SignalingError::Runtime(SignalingRuntimeError::ServerError(ErrorReason::Internal(reason))) if reason == "something failed");
         assert_matches!(client.state(), State::Disconnected);

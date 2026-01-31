@@ -4,23 +4,30 @@ use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::config::{
-    BackendEndpoint, CLIENT_SETTINGS_FILE_NAME, FrontendStationsConfig, Persistable,
-    PersistedClientConfig,
+    BackendEndpoint, CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig,
 };
 use crate::error::{Error, HandleUnauthorizedExt};
 use std::collections::HashSet;
 use tauri::{AppHandle, Manager, State};
 use vacs_signaling::protocol::http::webrtc::IceConfig;
-use vacs_signaling::protocol::ws::SignalingMessage;
+use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
+use vacs_signaling::protocol::ws::shared;
+use vacs_signaling::protocol::ws::shared::{CallId, CallSource, CallTarget};
 
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn signaling_connect(
+    app: AppHandle,
     app_state: State<'_, AppState>,
     http_state: State<'_, HttpState>,
+    position_id: Option<PositionId>,
 ) -> Result<(), Error> {
     let mut app_state = app_state.lock().await;
-    app_state.connect_signaling().await?;
+
+    #[cfg(debug_assertions)]
+    let position_id = position_id.or_else(|| app_state.config.backend.dev_position_id.clone());
+
+    app_state.connect_signaling(&app, position_id).await?;
 
     if !app_state.config.ice.is_default() {
         log::info!("Modified ICE config detected, not fetching from server");
@@ -55,7 +62,8 @@ pub async fn signaling_terminate(
     http_state
         .http_delete::<()>(BackendEndpoint::TerminateWsSession, None)
         .await
-        .handle_unauthorized(&app)?;
+        .handle_unauthorized(&app)
+        .await?;
 
     log::info!("Successfully terminated signaling server session");
 
@@ -69,15 +77,19 @@ pub async fn signaling_start_call(
     app_state: State<'_, AppState>,
     http_state: State<'_, HttpState>,
     audio_manager: State<'_, AudioManagerHandle>,
-    peer_id: String,
-) -> Result<(), Error> {
-    log::debug!("Starting call with {peer_id}");
+    target: CallTarget,
+    source: CallSource,
+) -> Result<CallId, Error> {
+    log::debug!("Starting call with {target:?} as {source:?}");
 
     let mut state = app_state.lock().await;
 
+    let call_id = CallId::new();
     state
-        .send_signaling_message(SignalingMessage::CallInvite {
-            peer_id: peer_id.clone(),
+        .send_signaling_message(shared::CallInvite {
+            call_id,
+            target,
+            source,
         })
         .await?;
 
@@ -85,13 +97,13 @@ pub async fn signaling_start_call(
         refresh_ice_config(&http_state, &mut state).await;
     }
 
-    state.add_call_to_call_list(&app, &peer_id, false);
-    state.start_unanswered_call_timer(&app, &peer_id);
-    state.set_outgoing_call_peer_id(Some(peer_id));
+    // state.add_call_to_call_list(&app, &call_id, false); TODO
+    state.start_unanswered_call_timer(&app, &call_id);
+    state.set_outgoing_call_id(Some(call_id));
 
     audio_manager.read().restart(SourceType::Ringback);
 
-    Ok(())
+    Ok(call_id)
 }
 
 #[tauri::command]
@@ -99,12 +111,12 @@ pub async fn signaling_start_call(
 pub async fn signaling_accept_call(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    peer_id: String,
+    call_id: CallId,
 ) -> Result<(), Error> {
-    log::debug!("Accepting call from {peer_id}");
+    log::debug!("Accepting call {call_id:?}");
 
     let mut state = app_state.lock().await;
-    state.accept_call(&app, Some(peer_id)).await?;
+    state.accept_call(&app, Some(call_id)).await?;
 
     Ok(())
 }
@@ -114,50 +126,12 @@ pub async fn signaling_accept_call(
 pub async fn signaling_end_call(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    peer_id: String,
+    call_id: CallId,
 ) -> Result<(), Error> {
-    log::debug!("Ending call with {peer_id}");
+    log::debug!("Ending call {call_id:?}");
 
     let mut state = app_state.lock().await;
-    state.end_call(&app, Some(peer_id)).await?;
-
-    Ok(())
-}
-
-#[tauri::command]
-#[vacs_macros::log_err]
-pub async fn signaling_get_stations_config(
-    app_state: State<'_, AppState>,
-) -> Result<FrontendStationsConfig, Error> {
-    let config = {
-        let state = app_state.lock().await;
-        let mut config = FrontendStationsConfig::from(state.config.stations.clone());
-        config.selected_profile = state.config.client.selected_stations_profile.clone();
-        config
-    };
-
-    Ok(config)
-}
-
-#[tauri::command]
-#[vacs_macros::log_err]
-pub async fn signaling_set_selected_stations_config_profile(
-    app: AppHandle,
-    app_state: State<'_, AppState>,
-    profile: String,
-) -> Result<(), Error> {
-    let persisted_client_config = {
-        let mut state = app_state.lock().await;
-        state.config.client.selected_stations_profile = profile;
-
-        PersistedClientConfig::from(state.config.client.clone())
-    };
-
-    let config_dir = app
-        .path()
-        .app_config_dir()
-        .expect("Cannot get config directory");
-    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+    state.end_call(&app, Some(call_id)).await?;
 
     Ok(())
 }
@@ -166,7 +140,7 @@ pub async fn signaling_set_selected_stations_config_profile(
 #[vacs_macros::log_err]
 pub async fn signaling_get_ignored_clients(
     app_state: State<'_, AppState>,
-) -> Result<HashSet<String>, Error> {
+) -> Result<HashSet<ClientId>, Error> {
     let state = app_state.lock().await;
 
     Ok(state.config.client.ignored.clone())
@@ -177,7 +151,7 @@ pub async fn signaling_get_ignored_clients(
 pub async fn signaling_add_ignored_client(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    client_id: String,
+    client_id: ClientId,
 ) -> Result<bool, Error> {
     let (persisted_stations_config, added): (PersistedClientConfig, bool) = {
         let mut state = app_state.lock().await;
@@ -199,7 +173,7 @@ pub async fn signaling_add_ignored_client(
 pub async fn signaling_remove_ignored_client(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    client_id: String,
+    client_id: ClientId,
 ) -> Result<bool, Error> {
     let (persisted_stations_config, removed): (PersistedClientConfig, bool) = {
         let mut state = app_state.lock().await;

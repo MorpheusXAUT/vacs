@@ -1,6 +1,7 @@
 import {invoke, InvokeArgs} from "@tauri-apps/api/core";
 import {useErrorOverlayStore} from "./stores/error-overlay-store.ts";
 import {error} from "@tauri-apps/plugin-log";
+import {CallId} from "./types/generic.ts";
 
 export type Error = {
     title: string;
@@ -10,7 +11,7 @@ export type Error = {
 };
 
 export type CallError = {
-    peerId: string;
+    callId: CallId;
     reason: string;
 };
 
