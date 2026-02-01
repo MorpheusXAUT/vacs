@@ -18,7 +18,7 @@ use vacs_signaling::protocol::ws::client::{CallRejectReason, ClientMessage};
 use vacs_signaling::protocol::ws::server::{
     CallCancelReason, DisconnectReason, LoginFailureReason, ServerMessage, SessionProfile,
 };
-use vacs_signaling::protocol::ws::shared::{CallErrorReason, CallId, ErrorReason};
+use vacs_signaling::protocol::ws::shared::{CallErrorReason, CallId, CallSource, ErrorReason};
 use vacs_signaling::protocol::ws::{client, server, shared};
 use vacs_signaling::transport::tokio::TokioTransport;
 
@@ -40,7 +40,18 @@ pub trait AppStateSignalingExt: sealed::Sealed {
     fn incoming_call_ids_len(&self) -> usize;
     fn add_incoming_call_id(&mut self, call_id: &CallId);
     fn remove_incoming_call_id(&mut self, call_id: &CallId) -> bool;
-    fn add_call_to_call_list(&mut self, app: &AppHandle, peer_id: &ClientId, incoming: bool);
+    fn add_incoming_call_to_call_list(
+        &mut self,
+        app: &AppHandle,
+        call_id: &CallId,
+        source: &CallSource,
+    );
+    fn update_accepted_call_in_call_list(
+        &mut self,
+        app: &AppHandle,
+        call_id: &CallId,
+        client_id: Option<&ClientId>,
+    );
     fn new_signaling_client(
         app: AppHandle,
         ws_url: &str,
@@ -164,17 +175,42 @@ impl AppStateSignalingExt for AppStateInner {
         found
     }
 
-    fn add_call_to_call_list(&mut self, app: &AppHandle, peer_id: &ClientId, incoming: bool) {
+    fn add_incoming_call_to_call_list(
+        &mut self,
+        app: &AppHandle,
+        call_id: &CallId,
+        source: &CallSource,
+    ) {
         #[derive(Clone, Serialize)]
         #[serde(rename_all = "camelCase")]
-        struct CallListEntry<'a> {
-            peer_id: &'a ClientId,
-            incoming: bool,
+        struct IncomingCallListEntry<'a> {
+            call_id: &'a CallId,
+            source: &'a CallSource,
         }
 
         app.emit(
-            "signaling:add-to-call-list",
-            CallListEntry { peer_id, incoming },
+            "signaling:add-incoming-to-call-list",
+            IncomingCallListEntry { call_id, source },
+        )
+        .ok();
+    }
+
+    fn update_accepted_call_in_call_list(
+        &mut self,
+        app: &AppHandle,
+        call_id: &CallId,
+        client_id: Option<&ClientId>,
+    ) {
+        #[derive(Clone, Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct CallListUpdate<'a> {
+            call_id: &'a CallId,
+            client_id: Option<&'a ClientId>,
+        }
+
+        app.emit(
+            "signaling:update-call-list",
+            CallListUpdate { call_id, client_id },
         )
         .ok();
     }
@@ -424,7 +460,7 @@ impl AppStateInner {
                     return;
                 }
 
-                state.add_call_to_call_list(app, caller_id, true);
+                state.add_incoming_call_to_call_list(app, call_id, source);
 
                 if state.incoming_call_ids_len() >= INCOMING_CALLS_LIMIT {
                     if let Err(err) = state
@@ -464,6 +500,11 @@ impl AppStateInner {
                 state.cancel_unanswered_call_timer(call_id);
                 let res = if state.remove_outgoing_call_id(call_id) {
                     app.emit("signaling:outgoing-call-accepted", msg).ok();
+                    state.update_accepted_call_in_call_list(
+                        app,
+                        call_id,
+                        Some(accepting_client_id),
+                    );
 
                     match state
                         .init_call(app.clone(), *call_id, accepting_client_id.clone(), None)
