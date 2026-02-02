@@ -43,7 +43,7 @@ pub struct ControllerInfo {
 
 /// Enum representing the different VATSIM facility types as parsed from their respective callsign suffixes
 /// (in accordance with the [VATSIM GCAP](https://vatsim.net/docs/policy/global-controller-administration-policy).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub enum FacilityType {
     #[default]
     Unknown,
