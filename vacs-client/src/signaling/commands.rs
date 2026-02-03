@@ -97,7 +97,6 @@ pub async fn signaling_start_call(
         refresh_ice_config(&http_state, &mut state).await;
     }
 
-    // state.add_call_to_call_list(&app, &call_id, false); TODO
     state.start_unanswered_call_timer(&app, &call_id);
     state.set_outgoing_call_id(Some(call_id));
 
