@@ -6,12 +6,19 @@ import {useShallow} from "zustand/react/shallow";
 
 type StationsState = {
     stations: Map<StationId, boolean>; // boolean => own
+    defaultSource: StationId | undefined;
+    temporarySource: StationId | undefined;
     setStations: (stations: StationInfo[]) => void;
     addStationChanges: (changes: StationChange[]) => void;
+    setDefaultSource: (source: StationId | undefined) => void;
+    setTemporarySource: (source: StationId | undefined) => void;
+    reset: () => void;
 };
 
 export const useStationsStore = create<StationsState>()((set, get) => ({
     stations: new Map(),
+    defaultSource: undefined,
+    temporarySource: undefined,
     setStations: stations => set({stations: new Map(stations.map(s => [s.id, s.own]))}),
     addStationChanges: changes => {
         const stations = new Map(get().stations);
@@ -32,6 +39,9 @@ export const useStationsStore = create<StationsState>()((set, get) => ({
 
         set({stations});
     },
+    setDefaultSource: source => set({defaultSource: source}),
+    setTemporarySource: source => set({temporarySource: source}),
+    reset: () => set({stations: new Map(), defaultSource: undefined, temporarySource: undefined}),
 }));
 
 export const useOwnStationIds = () =>
