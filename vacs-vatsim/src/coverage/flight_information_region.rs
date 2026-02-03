@@ -86,34 +86,68 @@ impl Validator for FlightInformationRegionRaw {
 }
 
 impl FlightInformationRegionRaw {
-    #[tracing::instrument(level = "trace", skip(dir), err, fields(dir = tracing::field::Empty))]
-    pub fn load_from_dir(dir: impl AsRef<std::path::Path>) -> Result<Self, CoverageError> {
+    #[tracing::instrument(level = "trace", skip(dir), fields(dir = tracing::field::Empty))]
+    pub fn load_from_dir(dir: impl AsRef<std::path::Path>) -> Result<Self, Vec<CoverageError>> {
         let path = dir.as_ref();
         tracing::Span::current().record("dir", tracing::field::debug(path));
         tracing::trace!("Loading FIR");
 
         let Some(dir_name) = path.file_name() else {
             tracing::warn!("Missing dir name");
-            return Err(IoError::Read {
-                path: path.into(),
-                reason: "missing dir name".to_string(),
-            }
-            .into());
+            return Err(vec![
+                IoError::Read {
+                    path: path.into(),
+                    reason: "missing dir name".to_string(),
+                }
+                .into(),
+            ]);
         };
         let Some(dir_name) = dir_name.to_str() else {
             tracing::warn!("Invalid dir name");
-            return Err(IoError::Read {
-                path: path.into(),
-                reason: "invalid dir name".to_string(),
-            }
-            .into());
+            return Err(vec![
+                IoError::Read {
+                    path: path.into(),
+                    reason: "invalid dir name".to_string(),
+                }
+                .into(),
+            ]);
         };
+
+        let mut errors = Vec::new();
+
+        let stations = match Self::read_file::<StationConfigFile>(path, "stations") {
+            Ok(config) => config.stations,
+            Err(err) => {
+                errors.push(err);
+                Vec::new()
+            }
+        };
+
+        let positions = match Self::read_file::<PositionConfigFile>(path, "positions") {
+            Ok(config) => config.positions,
+            Err(err) => {
+                errors.push(err);
+                Vec::new()
+            }
+        };
+
+        let profiles = match Self::read_profiles(path) {
+            Ok(profiles) => profiles,
+            Err(err) => {
+                errors.push(err);
+                HashMap::new()
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
 
         let fir_raw = Self {
             id: FlightInformationRegionId::from(dir_name),
-            stations: Self::read_file::<StationConfigFile>(path, "stations")?.stations,
-            positions: Self::read_file::<PositionConfigFile>(path, "positions")?.positions,
-            profiles: Self::read_profiles(path)?,
+            stations,
+            positions,
+            profiles,
         };
 
         tracing::trace!(?fir_raw, "Successfully loaded FIR");
@@ -516,7 +550,9 @@ mod tests {
 
         // No files
         let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
-        assert_matches!(res, Err(CoverageError::Io(IoError::Read { ref reason, .. })) if reason.contains("No stations file found"));
+        // Should have errors for missing stations and positions
+        assert_matches!(res, Err(errors) if errors.iter().any(|e| matches!(e, CoverageError::Io(IoError::Read { reason, .. }) if reason.contains("No stations file found")))
+            && errors.iter().any(|e| matches!(e, CoverageError::Io(IoError::Read { reason, .. }) if reason.contains("No positions file found"))));
 
         // Only stations
         let stations_toml = r#"
@@ -527,7 +563,7 @@ mod tests {
         std::fs::write(fir_path.join("stations.toml"), stations_toml).unwrap();
 
         let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
-        assert_matches!(res, Err(CoverageError::Io(IoError::Read { ref reason, .. })) if reason.contains("No positions file found"));
+        assert_matches!(res, Err(errors) if errors.iter().any(|e| matches!(e, CoverageError::Io(IoError::Read { reason, .. }) if reason.contains("No positions file found"))));
 
         // Only positions
         let positions_toml = r#"
@@ -542,7 +578,7 @@ mod tests {
         std::fs::remove_file(fir_path.join("stations.toml")).unwrap();
 
         let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
-        assert_matches!(res, Err(CoverageError::Io(IoError::Read { ref reason, .. })) if reason.contains("No stations file found"));
+        assert_matches!(res, Err(errors) if errors.iter().any(|e| matches!(e, CoverageError::Io(IoError::Read { reason, .. }) if reason.contains("No stations file found"))));
     }
 
     #[test]
@@ -658,7 +694,7 @@ mod tests {
             .get(&StationId::from("LOWW_DEL"))
             .expect("LOWW_DEL should exist");
 
-        let actual_ids = leaf.resolve_controlled_by(&all_stations);
+        let actual_ids = leaf.resolve_controlled_by(&all_stations).unwrap();
 
         let expected_ids: Vec<PositionId> = vec![
             "LOWW_DEL",
@@ -689,7 +725,7 @@ mod tests {
         std::fs::write(fir_path.join("stations.toml"), "invalid toml").unwrap();
 
         let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
-        assert_matches!(res, Err(CoverageError::Io(IoError::Parse { .. })));
+        assert_matches!(res, Err(errors) if matches!(errors[0], CoverageError::Io(IoError::Parse { .. })));
     }
 
     #[test]
@@ -701,7 +737,7 @@ mod tests {
         std::fs::write(fir_path.join("stations.json"), "invalid json").unwrap();
 
         let res = FlightInformationRegionRaw::load_from_dir(&fir_path);
-        assert_matches!(res, Err(CoverageError::Io(IoError::Parse { .. })));
+        assert_matches!(res, Err(errors) if matches!(errors[0], CoverageError::Io(IoError::Parse { .. })));
     }
 
     #[test]
