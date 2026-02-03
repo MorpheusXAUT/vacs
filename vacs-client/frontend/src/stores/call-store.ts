@@ -3,9 +3,10 @@ import {invokeStrict} from "../error.ts";
 import {useErrorOverlayStore} from "./error-overlay-store.ts";
 import {useAuthStore} from "./auth-store.ts";
 import {Call, CallSource, CallTarget} from "../types/call.ts";
-import {CallId, ClientId} from "../types/generic.ts";
+import {CallId, ClientId, StationId} from "../types/generic.ts";
 import {useConnectionStore} from "./connection-store.ts";
 import {useCallListStore} from "./call-list-store.ts";
+import {useStationsStore} from "./stations-store.ts";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
@@ -226,21 +227,31 @@ type StateSetter = {
 };
 
 export const startCall = async (target: CallTarget) => {
-    const {setOutgoingCall} = useCallStore.getState().actions;
-    const openErrorOverlay = useErrorOverlayStore.getState().open;
     const {cid} = useAuthStore.getState();
-    const {info} = useConnectionStore.getState();
-    const {addOutgoingCall: addOutgoingCallToCallList} = useCallListStore.getState().actions;
+    const openErrorOverlay = useErrorOverlayStore.getState().open;
 
     if (target.client === cid) {
         openErrorOverlay("Call error", "You cannot call yourself", false, 5000);
         return;
     }
 
+    const {info} = useConnectionStore.getState();
+    const {addOutgoingCall: addOutgoingCallToCallList} = useCallListStore.getState().actions;
+    const {setOutgoingCall} = useCallStore.getState().actions;
+    const {defaultSource, temporarySource, setTemporarySource} = useStationsStore.getState();
+
+    let stationId: StationId | undefined;
+    if (temporarySource !== undefined) {
+        stationId = temporarySource;
+        setTemporarySource(undefined);
+    } else if (defaultSource !== undefined) {
+        stationId = defaultSource;
+    }
+
     const source: CallSource = {
         clientId: cid,
         positionId: info.positionId,
-        stationId: undefined, // TODO
+        stationId,
     };
 
     try {

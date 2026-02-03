@@ -2,7 +2,6 @@ import {DirectAccessKey} from "../../types/profile.ts";
 import Button from "./Button.tsx";
 import {clsx} from "clsx";
 import {useStationsStore} from "../../stores/stations-store.ts";
-import {useErrorOverlayStore} from "../../stores/error-overlay-store.ts";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeSafe, invokeStrict} from "../../error.ts";
@@ -20,8 +19,12 @@ function DirectAccessStationKey({
     const stations = useStationsStore(state => state.stations);
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
-    const openErrorOverlay = useErrorOverlayStore(state => state.open);
     const {endCall, dismissRejectedCall, dismissErrorCall} = useCallStore(state => state.actions);
+
+    const defaultStationSource = useStationsStore(state => state.defaultSource);
+    const temporaryStationSource = useStationsStore(state => state.temporarySource);
+    const setDefaultStationSource = useStationsStore(state => state.setDefaultSource);
+    const setTemporaryStationSource = useStationsStore(state => state.setTemporarySource);
 
     const hasStationId = stationId !== undefined;
     const station = hasStationId && stations.get(stationId);
@@ -37,16 +40,30 @@ function DirectAccessStationKey({
         callDisplay?.type === "outgoing" &&
         callDisplay.call.target.station === stationId;
     const involved =
+        !own &&
         callDisplay !== undefined &&
         (callDisplay.call.source.stationId === stationId ||
             callDisplay.call.target.station === stationId);
-    const inCall = hasStationId && !own && involved && callDisplay.type === "accepted";
-    const isRejected = hasStationId && !own && involved && callDisplay?.type === "rejected";
-    const isError = hasStationId && !own && involved && callDisplay?.type === "error";
+    const inCall = hasStationId && involved && callDisplay.type === "accepted";
+    const isRejected = hasStationId && involved && callDisplay?.type === "rejected";
+    const isError = hasStationId && involved && callDisplay?.type === "error";
 
     const handleClick = useAsyncDebounce(async () => {
         if (own) {
-            openErrorOverlay("Call error", "You cannot call yourself", false, 5000);
+            if (defaultStationSource !== stationId && temporaryStationSource !== stationId) {
+                setTemporaryStationSource(stationId);
+            } else if (
+                temporaryStationSource === stationId &&
+                defaultStationSource !== stationId &&
+                defaultStationSource === undefined
+            ) {
+                setDefaultStationSource(stationId);
+                setTemporaryStationSource(undefined);
+            } else if (defaultStationSource === stationId) {
+                setDefaultStationSource(undefined);
+            } else {
+                setTemporaryStationSource(undefined);
+            }
             return;
         }
 
@@ -78,7 +95,12 @@ function DirectAccessStationKey({
                       ? "green"
                       : isError && blink
                         ? "red"
-                        : "gray"
+                        : temporaryStationSource === stationId &&
+                            temporaryStationSource !== undefined
+                          ? "peach"
+                          : defaultStationSource === stationId && defaultStationSource !== undefined
+                            ? "honey"
+                            : "gray"
             }
             highlight={beingCalled || isRejected ? "green" : undefined}
             disabled={stationId === undefined || !online}
