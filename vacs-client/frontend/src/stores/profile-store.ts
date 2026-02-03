@@ -32,22 +32,22 @@ export const useProfileType = (): "geo" | "tabbed" | "unknown" | undefined => {
     });
 };
 
+const profileToStationKeys = (profile: Profile | undefined): DirectAccessKey[] => {
+    if (profile?.tabbed !== undefined) {
+        return profile.tabbed.flatMap(t => t.page.keys.filter(k => k.stationId !== undefined));
+    }
+    if (profile?.geo !== undefined) {
+        return geoPageContainerToKeys(profile.geo).filter(k => k.stationId !== undefined);
+    }
+    return [];
+};
+
+export const getProfileStationKeysState = () => {
+    return profileToStationKeys(useProfileStore.getState().profile);
+};
+
 export const useProfileStationKeys = () => {
-    return useProfileStore(
-        useShallow(state => {
-            if (state.profile?.tabbed !== undefined) {
-                return state.profile.tabbed.flatMap(t =>
-                    t.page.keys.filter(k => k.stationId !== undefined),
-                );
-            }
-            if (state.profile?.geo !== undefined) {
-                return geoPageContainerToKeys(state.profile.geo).filter(
-                    k => k.stationId !== undefined,
-                );
-            }
-            return [];
-        }),
-    );
+    return useProfileStore(useShallow(state => profileToStationKeys(state.profile)));
 };
 
 const geoPageContainerToKeys = (container: GeoPageContainer): DirectAccessKey[] => {

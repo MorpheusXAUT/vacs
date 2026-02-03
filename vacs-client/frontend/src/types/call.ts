@@ -17,3 +17,12 @@ export type Call = {
     source: CallSource;
     target: CallTarget;
 };
+
+export function callSourceToTarget(source: CallSource): CallTarget {
+    if (source.stationId !== undefined) {
+        return {station: source.stationId};
+    } else if (source.positionId !== undefined) {
+        return {position: source.positionId};
+    }
+    return {client: source.clientId};
+}
