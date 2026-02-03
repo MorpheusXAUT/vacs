@@ -17,7 +17,7 @@ import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, removeClient} = useClientsStore.getState();
-    const {setStations, addStationChanges} = useStationsStore.getState();
+    const {setStations, addStationChanges, reset: resetStationsStore} = useStationsStore.getState();
     const {
         addIncomingCall,
         removeCall,
@@ -48,6 +48,7 @@ export function setupSignalingListeners() {
                     event.payload.profile.activeProfile !== undefined &&
                     event.payload.profile.activeProfile.profile !== undefined
                 ) {
+                    // TODO: Do we want to clear the stations store?
                     setProfile(event.payload.profile.activeProfile.profile);
                 }
             }),
@@ -58,7 +59,7 @@ export function setupSignalingListeners() {
                 setConnectionState("disconnected");
                 setConnectionInfo({displayName: "", positionId: undefined, frequency: ""});
                 setClients([]);
-                setStations([]);
+                resetStationsStore();
                 resetCallStore();
                 clearCallList();
                 setProfile(undefined);
