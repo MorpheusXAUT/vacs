@@ -2,7 +2,17 @@ import {clsx} from "clsx";
 import {ComponentChildren, CSSProperties} from "preact";
 import {invokeSafe} from "../../error.ts";
 
-type ButtonColor = "gray" | "cyan" | "green" | "blue" | "cornflower" | "emerald" | "red" | "salmon";
+type ButtonColor =
+    | "gray"
+    | "cyan"
+    | "green"
+    | "blue"
+    | "cornflower"
+    | "emerald"
+    | "red"
+    | "salmon"
+    | "peach"
+    | "honey";
 type ButtonHighlightColor = "green" | "gray";
 
 export type ButtonProps = {
@@ -29,6 +39,8 @@ const ButtonColors: Record<ButtonColor, string> = {
         "bg-[#05cf9c] border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950",
     red: "bg-red-500 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900",
     salmon: "bg-red-400 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900",
+    peach: "bg-[#ffdf9e] border-t-orange-100 border-l-orange-100 border-r-yellow-600 border-b-yellow-600",
+    honey: "bg-[#ffc246] border-t-orange-100 border-l-orange-100 border-r-yellow-700 border-b-yellow-700",
 };
 
 const ActiveButtonColors: Record<ButtonColor, string> = {
@@ -42,6 +54,8 @@ const ActiveButtonColors: Record<ButtonColor, string> = {
         "active:border-r-green-200 active:border-b-green-200 active:border-t-green-950 active:border-l-green-950",
     red: "active:border-r-red-200 active:border-b-red-200 active:border-t-red-900 active:border-l-red-900",
     salmon: "active:border-r-red-200 active:border-b-red-200 active:border-t-red-900 active:border-l-red-900",
+    peach: "active:border-r-orange-100 active:border-b-orange-100 active:border-t-yellow-600 active:border-l-yellow-600",
+    honey: "active:border-r-orange-100 active:border-b-orange-100 active:border-t-yellow-700 active:border-l-yellow-700",
 };
 
 export const ForceDisabledButtonColors: Record<ButtonColor, string> = {
@@ -53,6 +67,8 @@ export const ForceDisabledButtonColors: Record<ButtonColor, string> = {
     emerald: "border-emerald-950! border!",
     red: "border-red-950! border!",
     salmon: "border-red-950! border!",
+    peach: "border-yellow-600! border!",
+    honey: "border-yellow-700! border!",
 };
 
 const ButtonHighlightColors: Record<ButtonHighlightColor, string> = {
