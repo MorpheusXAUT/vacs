@@ -16,7 +16,7 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.9.6",
+    "@tauri-apps/cli": "^2.10.0",
     "prettier": "^3.8.1"
   }
 }
