@@ -17,6 +17,9 @@ pub enum CoverageError {
 
     #[error(transparent)]
     Structure(#[from] StructureError),
+
+    #[error(transparent)]
+    Context(#[from] Context),
 }
 
 #[derive(Debug, Clone, Error)]
@@ -52,6 +55,12 @@ pub enum ValidationError {
     #[error("station `{0}` has no coverage")]
     EmptyCoverage(String),
 
+    #[error("cycle detected in station parent chain: {chain:?}")]
+    CycleDetected { chain: Vec<String> },
+
+    #[error("referenced parent station `{parent}` for `{station}` does not exist")]
+    MissingParent { station: String, parent: String },
+
     #[error("{0}")]
     Custom(String),
 }
@@ -85,6 +94,23 @@ pub enum StructureError {
         id: String,
         reason: String,
     },
+}
+
+#[derive(Debug, Clone, Error)]
+#[error("{location}: {error}")]
+pub struct Context {
+    pub location: String,
+    #[source]
+    pub error: Box<CoverageError>,
+}
+
+impl CoverageError {
+    pub fn context(self, location: impl Into<String>) -> Self {
+        Self::Context(Context {
+            location: location.into(),
+            error: Box::new(self),
+        })
+    }
 }
 
 pub trait Validator {
