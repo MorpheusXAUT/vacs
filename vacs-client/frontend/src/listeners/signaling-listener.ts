@@ -2,7 +2,11 @@ import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {useClientsStore} from "../stores/clients-store.ts";
 import {ClientInfo, SessionInfo} from "../types/client-info.ts";
 import {useCallStore} from "../stores/call-store.ts";
-import {useCallListStore} from "../stores/call-list-store.ts";
+import {
+    IncomingCallListEntry,
+    CallListUpdate,
+    useCallListStore,
+} from "../stores/call-list-store.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
 import {CallId, ClientId, PositionId} from "../types/generic.ts";
 import {useProfileStore} from "../stores/profile-store.ts";
@@ -12,7 +16,7 @@ import {Call} from "../types/call.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 
 export function setupSignalingListeners() {
-    const {setClients, addClient, getClientInfo, removeClient} = useClientsStore.getState();
+    const {setClients, addClient, removeClient} = useClientsStore.getState();
     const {setStations, addStationChanges} = useStationsStore.getState();
     const {
         addIncomingCall,
@@ -22,7 +26,11 @@ export function setupSignalingListeners() {
         setOutgoingCallAccepted,
         reset: resetCallStore,
     } = useCallStore.getState().actions;
-    const {addCall: addCallToCallList, clearCallList} = useCallListStore.getState().actions;
+    const {
+        addIncomingCall: addIncomingCallToCallList,
+        updateCall: updateCallInCallList,
+        clearCallList,
+    } = useCallListStore.getState().actions;
     const {setConnectionState, setConnectionInfo, setPositionsToSelect} =
         useConnectionStore.getState();
     const {setProfile} = useProfileStore.getState();
@@ -104,18 +112,11 @@ export function setupSignalingListeners() {
             listen<CallId>("signaling:call-reject", event => {
                 rejectCall(event.payload);
             }),
-            listen<{incoming: boolean; peerId: string}>("signaling:add-to-call-list", event => {
-                const clientInfo = getClientInfo(event.payload.peerId);
-                addCallToCallList({
-                    type: event.payload.incoming ? "IN" : "OUT",
-                    time: new Date().toLocaleString("de-AT", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: "UTC",
-                    }),
-                    name: clientInfo.displayName,
-                    number: event.payload.peerId,
-                });
+            listen<IncomingCallListEntry>("signaling:add-incoming-to-call-list", event => {
+                addIncomingCallToCallList(event.payload);
+            }),
+            listen<CallListUpdate>("signaling:update-call-list", event => {
+                updateCallInCallList(event.payload);
             }),
         );
     };

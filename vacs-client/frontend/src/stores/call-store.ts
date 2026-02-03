@@ -5,6 +5,7 @@ import {useAuthStore} from "./auth-store.ts";
 import {Call, CallSource, CallTarget} from "../types/call.ts";
 import {CallId, ClientId} from "../types/generic.ts";
 import {useConnectionStore} from "./connection-store.ts";
+import {useCallListStore} from "./call-list-store.ts";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
@@ -229,6 +230,7 @@ export const startCall = async (target: CallTarget) => {
     const openErrorOverlay = useErrorOverlayStore.getState().open;
     const {cid} = useAuthStore.getState();
     const {info} = useConnectionStore.getState();
+    const {addOutgoingCall: addOutgoingCallToCallList} = useCallListStore.getState().actions;
 
     if (target.client === cid) {
         openErrorOverlay("Call error", "You cannot call yourself", false, 5000);
@@ -244,5 +246,6 @@ export const startCall = async (target: CallTarget) => {
     try {
         const callId = await invokeStrict<CallId>("signaling_start_call", {source, target});
         setOutgoingCall({callId, source, target});
+        addOutgoingCallToCallList({callId, target});
     } catch {}
 };

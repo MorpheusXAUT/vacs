@@ -5,7 +5,7 @@ import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {TargetedEvent} from "preact";
 import {useAuthStore} from "../../stores/auth-store.ts";
-import {useCallListStore} from "../../stores/call-list-store.ts";
+import {useLastDialledClientId} from "../../stores/call-list-store.ts";
 import {useConnectionStore} from "../../stores/connection-store.ts";
 import {ClientId} from "../../types/generic.ts";
 
@@ -31,9 +31,7 @@ function DialPad() {
     const isDialInputOwnId = dialInput === ownId;
     const isConnected = useConnectionStore(state => state.connectionState === "connected");
     const callDisplay = useCallStore(state => state.callDisplay);
-    const lastDialledPeerId = useCallListStore(
-        state => state.callList.find(item => item.type === "OUT")?.number,
-    );
+    const lastDialledPeerId = useLastDialledClientId();
 
     const handleChange = (event: TargetedEvent<HTMLInputElement>) => {
         if (event.target instanceof HTMLInputElement) {
@@ -49,9 +47,9 @@ function DialPad() {
         }
     };
 
-    const handleStartCall = useAsyncDebounce(async (peerId: string | undefined) => {
-        if (peerId === undefined || callDisplay !== undefined) return;
-        await startCall({client: peerId as ClientId}); // TODO
+    const handleStartCall = useAsyncDebounce(async (clientId: ClientId | undefined) => {
+        if (clientId === undefined || callDisplay !== undefined) return;
+        await startCall({client: clientId});
     });
 
     return (
@@ -125,7 +123,7 @@ function DialPad() {
                               : undefined
                     }
                     disabled={isDialInputEmpty || isDialInputOwnId || !isConnected}
-                    onClick={() => handleStartCall(dialInput)}
+                    onClick={() => handleStartCall(dialInput as ClientId)}
                 >
                     Call
                 </Button>
