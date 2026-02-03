@@ -63,10 +63,8 @@ pub async fn handle_application_message(
         ClientMessage::WebrtcIceCandidate(webrtc_ice_candidate) => {
             handle_webrtc_ice_candidate(state, client, webrtc_ice_candidate).await;
         }
-        ClientMessage::Login(_)
-        | ClientMessage::Logout
-        | ClientMessage::Disconnect
-        | ClientMessage::Error(_) => {}
+        ClientMessage::Logout | ClientMessage::Disconnect => return ControlFlow::Break(()),
+        ClientMessage::Login(_) | ClientMessage::Error(_) => {}
     };
     ControlFlow::Continue(())
 }

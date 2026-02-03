@@ -13,7 +13,7 @@ pub struct Station {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub(super) struct StationRaw {
+pub struct StationRaw {
     pub id: StationId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<StationId>,
@@ -22,7 +22,7 @@ pub(super) struct StationRaw {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct StationConfigFile {
+pub struct StationConfigFile {
     pub stations: Vec<StationRaw>,
 }
 
@@ -54,10 +54,12 @@ impl Station {
         station_raw: StationRaw,
         fir_id: impl Into<FlightInformationRegionId>,
         all_stations: &HashMap<StationId, &StationRaw>,
-    ) -> Result<Self, CoverageError> {
-        station_raw.validate()?;
+    ) -> Result<Self, Vec<CoverageError>> {
+        if let Err(err) = station_raw.validate() {
+            return Err(vec![err]);
+        }
 
-        let controlled_by = station_raw.resolve_controlled_by(all_stations);
+        let controlled_by = station_raw.resolve_controlled_by(all_stations)?;
         Ok(Self {
             id: station_raw.id,
             parent_id: station_raw.parent_id,
@@ -106,20 +108,27 @@ impl StationRaw {
     pub(super) fn resolve_controlled_by(
         &self,
         all_stations: &HashMap<StationId, &StationRaw>,
-    ) -> Vec<PositionId> {
+    ) -> Result<Vec<PositionId>, Vec<CoverageError>> {
         let mut controlled_by = Vec::new();
         let mut visited_stations = HashSet::new();
+        let mut visited_stations_order = Vec::new();
+
         let mut seen_positions = HashSet::new();
         let mut current = Some(self);
+        let mut errors = Vec::new();
 
         while let Some(station) = current {
             if !visited_stations.insert(&station.id) {
-                tracing::warn!(
-                    ?station,
-                    "Cycle detected in station parent chain, stopping resolution"
+                visited_stations_order.push(station.id.to_string());
+                errors.push(
+                    ValidationError::CycleDetected {
+                        chain: visited_stations_order,
+                    }
+                    .into(),
                 );
                 break;
             }
+            visited_stations_order.push(station.id.to_string());
 
             controlled_by.extend(
                 station
@@ -132,13 +141,23 @@ impl StationRaw {
             current = station.parent_id.as_ref().and_then(|id| {
                 let parent = all_stations.get(id).copied();
                 if parent.is_none() {
-                    tracing::warn!(?id, ?self, "Parent station not found, stopping resolution");
+                    errors.push(
+                        ValidationError::MissingParent {
+                            station: self.id.to_string(),
+                            parent: id.to_string(),
+                        }
+                        .into(),
+                    );
                 }
                 parent
             });
         }
 
-        controlled_by
+        if !errors.is_empty() {
+            Err(errors)
+        } else {
+            Ok(controlled_by)
+        }
     }
 }
 
@@ -203,7 +222,7 @@ mod tests {
         };
         let all_stations = HashMap::from([("LOWW_TWR".into(), &station)]);
 
-        let actual_ids = station.resolve_controlled_by(&all_stations);
+        let actual_ids = station.resolve_controlled_by(&all_stations).unwrap();
         // Should contain explicit controlled_by
         let expected_ids: Vec<PositionId> = vec!["LOWW_TWR", "LOWW_APP"]
             .into_iter()
@@ -229,7 +248,7 @@ mod tests {
         let all_stations =
             HashMap::from([(parent.id.clone(), &parent), (child.id.clone(), &child)]);
 
-        let actual_ids = child.resolve_controlled_by(&all_stations);
+        let actual_ids = child.resolve_controlled_by(&all_stations).unwrap();
         let expected_ids: Vec<PositionId> = vec![
             "LOWW_TWR", // Self
             "LOWW_APP", // Self
@@ -289,7 +308,7 @@ mod tests {
             (leaf.id.clone(), &leaf),
         ]);
 
-        let actual_ids = leaf.resolve_controlled_by(&all_stations);
+        let actual_ids = leaf.resolve_controlled_by(&all_stations).unwrap();
 
         let expected_ids: Vec<PositionId> = vec![
             "LOWW_DEL",   // Self
@@ -325,7 +344,7 @@ mod tests {
         let all_stations =
             HashMap::from([(parent.id.clone(), &parent), (child.id.clone(), &child)]);
 
-        let actual_ids = child.resolve_controlled_by(&all_stations);
+        let actual_ids = child.resolve_controlled_by(&all_stations).unwrap();
 
         let expected_ids: Vec<PositionId> = vec![
             "LOWW_W_GND", // Self
@@ -353,19 +372,8 @@ mod tests {
 
         let all_stations = HashMap::from([(s1.id.clone(), &s1), (s2.id.clone(), &s2)]);
 
-        let actual_ids = s1.resolve_controlled_by(&all_stations);
-
-        // Should resolve A, then go to B, then see A and stop.
-        // Result: A's positions and B's positions.
-        let expected_ids: Vec<PositionId> = vec![
-            "POS_A", // Self
-            "POS_B", // From B
-        ]
-        .into_iter()
-        .map(PositionId::from)
-        .collect();
-
-        assert_eq!(actual_ids, expected_ids);
+        let result = s1.resolve_controlled_by(&all_stations);
+        assert_matches!(result, Err(errors) if matches!(errors[0], CoverageError::Validation(ValidationError::CycleDetected { .. })));
     }
 
     #[test]
@@ -379,15 +387,7 @@ mod tests {
         // Explicitly omit the parent station from the map of all stations.
         let all_stations = HashMap::from([(child.id.clone(), &child)]);
 
-        let actual_ids = child.resolve_controlled_by(&all_stations);
-
-        let expected_ids: Vec<PositionId> = vec![
-            "LOWW_DEL", // Self
-        ]
-        .into_iter()
-        .map(PositionId::from)
-        .collect();
-
-        assert_eq!(actual_ids, expected_ids);
+        let result = child.resolve_controlled_by(&all_stations);
+        assert_matches!(result, Err(errors) if matches!(errors[0], CoverageError::Validation(ValidationError::MissingParent { .. })));
     }
 }
