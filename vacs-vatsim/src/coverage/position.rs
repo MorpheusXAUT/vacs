@@ -21,7 +21,7 @@ pub struct Position {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub(super) struct PositionRaw {
+pub struct PositionRaw {
     pub id: PositionId,
     pub prefixes: HashSet<String>,
     pub frequency: String,
@@ -31,7 +31,7 @@ pub(super) struct PositionRaw {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct PositionConfigFile {
+pub struct PositionConfigFile {
     pub positions: Vec<PositionRaw>,
 }
 
