@@ -51,7 +51,6 @@ exceptions = [
     { allow = ["Zlib"], crate = "foldhash" },
     { allow = ["CC0-1.0"], crate = "tiny-keccak" },
     { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
-    { allow = ["OpenSSL"], crate = "aws-lc-sys"  },
 ]
 
 [licenses.private]
