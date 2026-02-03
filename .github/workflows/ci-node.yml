@@ -2,13 +2,13 @@ name: CI • Node
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, v2 ]
     paths:
       - 'vacs-client/frontend/**'
       - '!vacs-client/frontend/icons/**'
       - '.github/workflows/ci-node.yml'
   push:
-    branches: [ main ]
+    branches: [ main, v2 ]
     paths:
       - 'vacs-client/frontend/**'
       - '!vacs-client/frontend/icons/**'
