@@ -118,7 +118,7 @@ function CallQueue() {
 
 function callDisplayLabel(
     call: Call,
-    cid: ClientId,
+    cid: ClientId | undefined,
     stationKeys: DirectAccessKey[],
 ): ComponentChild {
     return call.source.clientId === cid

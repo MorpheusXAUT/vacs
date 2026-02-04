@@ -97,7 +97,11 @@ type GeoPageButtonProps = {
     button: GeoPageButtonModel;
 };
 
-function callInvolvesButtonStations(call: Call, stationIds: StationId[], cid: ClientId) {
+function callInvolvesButtonStations(
+    call: Call,
+    stationIds: StationId[],
+    cid: ClientId | undefined,
+) {
     return call.source.clientId === cid
         ? call.target.station !== undefined && stationIds.includes(call.target.station)
         : call.source.stationId !== undefined && stationIds.includes(call.source.stationId);

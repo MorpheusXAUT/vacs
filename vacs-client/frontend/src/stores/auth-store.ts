@@ -4,15 +4,15 @@ import {ClientId} from "../types/generic.ts";
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 type AuthState = {
-    cid: ClientId;
+    cid: ClientId | undefined;
     status: AuthStatus;
     setAuthenticated: (cid: ClientId) => void;
     setUnauthenticated: () => void;
 };
 
 export const useAuthStore = create<AuthState>()(set => ({
-    cid: "" as ClientId, // TODO: Maybe undefined?
+    cid: undefined,
     status: "loading",
     setAuthenticated: cid => set({cid, status: "authenticated"}),
-    setUnauthenticated: () => set({cid: "" as ClientId, status: "unauthenticated"}),
+    setUnauthenticated: () => set({cid: undefined, status: "unauthenticated"}),
 }));
