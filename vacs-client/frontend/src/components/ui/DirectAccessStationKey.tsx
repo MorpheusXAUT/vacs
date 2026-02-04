@@ -86,33 +86,35 @@ function DirectAccessStationKey({
         }
     });
 
+    const color = inCall
+        ? "green"
+        : (isCalling || isRejected) && blink
+          ? "green"
+          : isError && blink
+            ? "red"
+            : temporaryStationSource === stationId && temporaryStationSource !== undefined
+              ? "peach"
+              : defaultStationSource === stationId && defaultStationSource !== undefined
+                ? "honey"
+                : "gray";
+
     return (
         <Button
-            color={
-                inCall
-                    ? "green"
-                    : (isCalling || isRejected) && blink
-                      ? "green"
-                      : isError && blink
-                        ? "red"
-                        : temporaryStationSource === stationId &&
-                            temporaryStationSource !== undefined
-                          ? "peach"
-                          : defaultStationSource === stationId && defaultStationSource !== undefined
-                            ? "honey"
-                            : "gray"
-            }
+            color={color}
             highlight={beingCalled || isRejected ? "green" : undefined}
             disabled={stationId === undefined || !online}
             className={clsx(
                 className,
-                "w-25 h-full rounded p-1.5",
+                "w-25 h-full rounded",
                 (own || !online) && "text-gray-500",
+                color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
             )}
             onClick={handleClick}
         >
             {label.map((s, index) => (
-                <p key={index}>{s}</p>
+                <p key={index} className="max-w-full truncate" title={s}>
+                    {s}
+                </p>
             ))}
         </Button>
     );

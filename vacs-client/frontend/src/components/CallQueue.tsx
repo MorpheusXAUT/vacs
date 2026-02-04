@@ -8,6 +8,8 @@ import {DirectAccessKey} from "../types/profile.ts";
 import {ComponentChild} from "preact";
 import {ClientId, PositionId, StationId} from "../types/generic.ts";
 import {useAuthStore} from "../stores/auth-store.ts";
+import {splitDisplayName} from "../types/client-info.ts";
+import {clsx} from "clsx";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -76,21 +78,12 @@ function CallQueue() {
                         }
                         softDisabled={true}
                         onClick={() => handleCallDisplayClick(callDisplay.call)}
-                        className="h-16 text-sm p-1.5 [&_p]:leading-3.5"
+                        className={clsx(
+                            "h-16 text-sm [&_p]:leading-3.5",
+                            cdColor === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
+                        )}
                     >
-                        {callDisplay.call.source.clientId === cid // TODO: Fix jumping text when blinking
-                            ? callLabel(
-                                  callDisplay.call.target.station,
-                                  callDisplay.call.target.position,
-                                  callDisplay.call.target.client,
-                                  stationKeys,
-                              )
-                            : callLabel(
-                                  callDisplay.call.source.stationId,
-                                  callDisplay.call.source.positionId,
-                                  callDisplay.call.source.clientId,
-                                  stationKeys,
-                              )}
+                        {callDisplayLabel(callDisplay.call, cid, stationKeys)}
                     </Button>
                 </div>
             ) : (
@@ -102,7 +95,10 @@ function CallQueue() {
                 <Button
                     key={idx}
                     color={blink ? "green" : "gray"}
-                    className="h-16 text-sm p-1.5 [&_p]:leading-3.5"
+                    className={clsx(
+                        "h-16 text-sm [&_p]:leading-3.5",
+                        !blink ? "p-1.5" : "p-[calc(0.375rem+1px)]",
+                    )}
                     onClick={() => handleAnswerKeyClick(call)}
                 >
                     {callLabel(
@@ -120,44 +116,59 @@ function CallQueue() {
     );
 }
 
+function callDisplayLabel(
+    call: Call,
+    cid: ClientId,
+    stationKeys: DirectAccessKey[],
+): ComponentChild {
+    return call.source.clientId === cid
+        ? callLabel(call.target.station, call.target.position, call.target.client, stationKeys)
+        : callLabel(
+              call.source.stationId,
+              call.source.positionId,
+              call.source.clientId,
+              stationKeys,
+          );
+}
+
 const callLabel = (
     stationId: StationId | undefined,
     positionId: PositionId | undefined,
     clientId: ClientId | undefined,
     stationKeys: DirectAccessKey[],
 ): ComponentChild => {
+    // TODO: Make targetStationId opt-in
     if (stationId !== undefined) {
-        // TODO: Display who is being called (call.target.station)
         const station = stationKeys.find(key => key.stationId === stationId);
         if (station !== undefined) {
             return (
                 <>
-                    {station.label.map((s, index) => (
-                        <p key={index} className="max-w-full whitespace-nowrap" title={s}>
-                            {s}
-                        </p>
-                    ))}
+                    {station.label // TODO own component to render label
+                        .map((s, index) => (
+                            <p key={index} className="max-w-full truncate" title={s}>
+                                {s}
+                            </p>
+                        ))}
                 </>
             );
         }
-        return (
-            <p className="max-w-full whitespace-nowrap text-center w-full" title={stationId}>
-                {stationId}
-            </p>
-        );
+        return callsignLabel(stationId);
     } else if (positionId !== undefined) {
-        // TODO: Display who is being called (call.target.station)
-        return (
-            <p className="max-w-full whitespace-nowrap text-center w-full" title={positionId}>
-                {positionId}
-            </p>
-        );
+        return callsignLabel(positionId);
     }
-    return (
-        <p className="max-w-full whitespace-nowrap text-center w-full" title={clientId}>
-            {clientId}
-        </p>
-    );
+    return callsignLabel(clientId ?? "");
 };
+
+function callsignLabel(name: string): ComponentChild {
+    const [stationName, stationType] = splitDisplayName(name);
+    return (
+        <>
+            <p className="max-w-full truncate" title={name}>
+                {stationName}
+            </p>
+            {stationType !== "" && <p>{stationType}</p>}
+        </>
+    );
+}
 
 export default CallQueue;

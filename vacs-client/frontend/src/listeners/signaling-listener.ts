@@ -48,7 +48,6 @@ export function setupSignalingListeners() {
                     event.payload.profile.activeProfile !== undefined &&
                     event.payload.profile.activeProfile.profile !== undefined
                 ) {
-                    // TODO: Do we want to clear the stations store?
                     setProfile(event.payload.profile.activeProfile.profile);
                 }
             }),

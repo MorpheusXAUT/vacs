@@ -14,6 +14,7 @@ import {useCallStore} from "../stores/call-store.ts";
 import {ClientId, StationId} from "../types/generic.ts";
 import {Call} from "../types/call.ts";
 import {useAuthStore} from "../stores/auth-store.ts";
+import {clsx} from "clsx";
 
 type GeoPageProps = {
     page: GeoPageContainerModel;
@@ -129,24 +130,29 @@ function GeoPageButton({button}: GeoPageButtonProps) {
     const isRejected = callDisplay?.type === "rejected" && involved;
     const isError = callDisplay?.type === "error" && involved;
 
+    const color = inCall
+        ? "green"
+        : (isCalling || isRejected) && blink
+          ? "green"
+          : isError && blink
+            ? "red"
+            : "gray";
+
     return (
         <Button
-            color={
-                inCall
-                    ? "green"
-                    : (isCalling || isRejected) && blink
-                      ? "green"
-                      : isError && blink
-                        ? "red"
-                        : "gray"
-            }
+            color={color}
             highlight={beingCalled || isRejected ? "green" : undefined}
-            className={"aspect-square w-auto! rounded-none! overflow-hidden"}
+            className={clsx(
+                "aspect-square w-auto! rounded-none! overflow-hidden",
+                color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
+            )}
             style={{height: `${button.size}rem`}}
             onClick={() => setSelectedPage(button.page)}
         >
             {button.label.map((s, index) => (
-                <p key={index}>{s}</p>
+                <p key={index} className="max-w-full truncate" title={s}>
+                    {s}
+                </p>
             ))}
         </Button>
     );
