@@ -6,6 +6,7 @@ import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeSafe, invokeStrict} from "../../error.ts";
 import ButtonLabel from "./ButtonLabel.tsx";
+import {useSettingsStore} from "../../stores/settings-store.ts";
 
 type DirectAccessStationKeyProps = {
     data: DirectAccessKey;
@@ -26,6 +27,8 @@ function DirectAccessStationKey({
     const temporaryStationSource = useStationsStore(state => state.temporarySource);
     const setDefaultStationSource = useStationsStore(state => state.setDefaultSource);
     const setTemporaryStationSource = useStationsStore(state => state.setTemporarySource);
+
+    const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
 
     const hasStationId = stationId !== undefined;
     const station = hasStationId && stations.get(stationId);
@@ -51,6 +54,7 @@ function DirectAccessStationKey({
     const isError = hasStationId && involved && callDisplay?.type === "error";
 
     const isTarget =
+        highlightTarget &&
         hasStationId &&
         (incomingCalls.some(call => call.target.station === stationId) ||
             (own &&

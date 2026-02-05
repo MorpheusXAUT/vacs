@@ -138,7 +138,6 @@ const callLabel = (
     clientId: ClientId | undefined,
     stationKeys: DirectAccessKey[],
 ): ComponentChild => {
-    // TODO: Make targetStationId opt-in
     if (stationId !== undefined) {
         const station = stationKeys.find(key => key.stationId === stationId);
         if (station !== undefined) {

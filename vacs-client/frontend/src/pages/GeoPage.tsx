@@ -16,6 +16,7 @@ import {Call} from "../types/call.ts";
 import {useAuthStore} from "../stores/auth-store.ts";
 import {clsx} from "clsx";
 import ButtonLabel from "../components/ui/ButtonLabel.tsx";
+import {useSettingsStore} from "../stores/settings-store.ts";
 
 type GeoPageProps = {
     page: GeoPageContainerModel;
@@ -116,6 +117,8 @@ function GeoPageButton({button}: GeoPageButtonProps) {
 
     const setSelectedPage = useProfileStore(state => state.setPage);
 
+    const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
+
     const stationIds =
         button.page?.keys.flatMap(key => {
             if (key.stationId === undefined) return [];
@@ -136,12 +139,13 @@ function GeoPageButton({button}: GeoPageButtonProps) {
     const isError = callDisplay?.type === "error" && involved;
 
     const isTarget =
-        incomingCalls.some(
+        highlightTarget &&
+        (incomingCalls.some(
             call => call.target.station !== undefined && stationIds.includes(call.target.station),
         ) ||
-        (callDisplay?.type === "accepted" &&
-            callDisplay.call.target.station !== undefined &&
-            stationIds.includes(callDisplay.call.target.station));
+            (callDisplay?.type === "accepted" &&
+                callDisplay.call.target.station !== undefined &&
+                stationIds.includes(callDisplay.call.target.station)));
 
     const color = inCall
         ? "green"

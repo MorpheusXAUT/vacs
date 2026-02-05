@@ -1,0 +1,28 @@
+@reference "tailwindcss";
+
+.checkbox {
+    @apply w-5 h-5 appearance-none rounded-sm border-2 cursor-pointer grid place-content-center;
+    @apply bg-gray-300 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700 outline outline-gray-700 -outline-offset-1;
+}
+
+.checkbox:disabled {
+    @apply cursor-not-allowed brightness-90;
+}
+
+.checkbox:enabled:active {
+    @apply border-r-gray-100 border-b-gray-100 border-t-gray-700 border-l-gray-700;
+}
+
+.checkbox:checked {
+    @apply bg-blue-700 border-t-blue-300 border-l-blue-300 border-r-blue-900 border-b-blue-900;
+}
+
+.checkbox:enabled:checked:active {
+    @apply border-r-blue-300 border-b-blue-300 border-t-blue-900 border-l-blue-900;
+}
+
+.checkbox:checked::before {
+    content: "";
+    @apply w-2.5 h-2.5 bg-white;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
