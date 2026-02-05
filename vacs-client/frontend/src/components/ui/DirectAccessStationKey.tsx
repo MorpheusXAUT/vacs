@@ -49,6 +49,13 @@ function DirectAccessStationKey({
     const isRejected = hasStationId && involved && callDisplay?.type === "rejected";
     const isError = hasStationId && involved && callDisplay?.type === "error";
 
+    const isTarget =
+        hasStationId &&
+        (incomingCalls.some(call => call.target.station === stationId) ||
+            (own &&
+                callDisplay?.type === "accepted" &&
+                callDisplay.call.target.station === stationId));
+
     const handleClick = useAsyncDebounce(async () => {
         if (own) {
             if (defaultStationSource !== stationId && temporaryStationSource !== stationId) {
@@ -93,11 +100,13 @@ function DirectAccessStationKey({
           ? "green"
           : isError && blink
             ? "red"
-            : temporaryStationSource === stationId && temporaryStationSource !== undefined
-              ? "peach"
-              : defaultStationSource === stationId && defaultStationSource !== undefined
-                ? "honey"
-                : "gray";
+            : isTarget
+              ? "sage"
+              : temporaryStationSource === stationId && temporaryStationSource !== undefined
+                ? "peach"
+                : defaultStationSource === stationId && defaultStationSource !== undefined
+                  ? "honey"
+                  : "gray";
 
     return (
         <Button

@@ -135,13 +135,23 @@ function GeoPageButton({button}: GeoPageButtonProps) {
     const isRejected = callDisplay?.type === "rejected" && involved;
     const isError = callDisplay?.type === "error" && involved;
 
+    const isTarget =
+        incomingCalls.some(
+            call => call.target.station !== undefined && stationIds.includes(call.target.station),
+        ) ||
+        (callDisplay?.type === "accepted" &&
+            callDisplay.call.target.station !== undefined &&
+            stationIds.includes(callDisplay.call.target.station));
+
     const color = inCall
         ? "green"
         : (isCalling || isRejected) && blink
           ? "green"
           : isError && blink
             ? "red"
-            : "gray";
+            : isTarget
+              ? "sage"
+              : "gray";
 
     return (
         <Button
