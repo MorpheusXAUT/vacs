@@ -35,9 +35,10 @@ function DirectAccessStationKey({
     const incomingCall = incomingCalls.find(
         call => hasStationId && call.source.stationId === stationId,
     );
-    const isCalling = incomingCall !== undefined;
+    const isCalling = incomingCall !== undefined && !own;
     const beingCalled =
         hasStationId &&
+        !own &&
         callDisplay?.type === "outgoing" &&
         callDisplay.call.target.station === stationId;
     const involved =
@@ -116,7 +117,7 @@ function DirectAccessStationKey({
             className={clsx(
                 className,
                 "w-25 h-full rounded",
-                (own || !online) && "text-gray-500",
+                (own || !hasStationId) && "text-gray-500",
                 color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
             )}
             onClick={handleClick}
