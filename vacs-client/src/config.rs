@@ -227,6 +227,8 @@ pub struct ClientConfig {
     pub ignored: HashSet<ClientId>,
     #[serde(default)]
     pub keybinds: KeybindsConfig,
+    #[serde(default)]
+    pub call: CallConfig,
 }
 
 impl Default for ClientConfig {
@@ -243,6 +245,7 @@ impl Default for ClientConfig {
             auto_hangup_seconds: 60,
             ignored: HashSet::new(),
             keybinds: KeybindsConfig::default(),
+            call: CallConfig::default(),
         }
     }
 }
@@ -655,6 +658,51 @@ impl TryFrom<FrontendKeybindsConfig> for KeybindsConfig {
                 .transpose()
                 .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.end_call.unwrap_or_default()))))?,
         })
+    }
+}
+
+/// Various settings regarding calls.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallConfig {
+    /// Toggles highlighting of incoming call target DA keys.
+    pub highlight_incoming_call_target: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendCallConfig {
+    pub highlight_incoming_call_target: bool,
+}
+
+impl Default for CallConfig {
+    fn default() -> Self {
+        Self {
+            highlight_incoming_call_target: true,
+        }
+    }
+}
+
+impl Default for FrontendCallConfig {
+    fn default() -> Self {
+        Self {
+            highlight_incoming_call_target: true,
+        }
+    }
+}
+
+impl From<CallConfig> for FrontendCallConfig {
+    fn from(call_config: CallConfig) -> Self {
+        Self {
+            highlight_incoming_call_target: call_config.highlight_incoming_call_target,
+        }
+    }
+}
+
+impl From<FrontendCallConfig> for CallConfig {
+    fn from(frontend_call_config: FrontendCallConfig) -> Self {
+        Self {
+            highlight_incoming_call_target: frontend_call_config.highlight_incoming_call_target,
+        }
     }
 }
 

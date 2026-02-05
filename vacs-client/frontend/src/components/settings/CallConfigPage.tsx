@@ -19,13 +19,14 @@ function CallConfigPage() {
                             checked={callConfig.highlightIncomingCallTarget}
                             onChange={async e => {
                                 const next = e.currentTarget.checked;
+                                const config = {
+                                    ...callConfig,
+                                    highlightIncomingCallTarget: next,
+                                };
 
                                 try {
-                                    await invokeStrict("app_set_call_config", {callConfig});
-                                    setCallConfig({
-                                        ...callConfig,
-                                        highlightIncomingCallTarget: next,
-                                    });
+                                    await invokeStrict("app_set_call_config", {callConfig: config});
+                                    setCallConfig(config);
                                 } catch {
                                     setCallConfig({
                                         ...callConfig,

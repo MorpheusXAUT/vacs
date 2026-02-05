@@ -1,7 +1,9 @@
 use crate::app::state::AppState;
 use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog};
 use crate::build::VersionInfo;
-use crate::config::{CLIENT_SETTINGS_FILE_NAME, ClientConfig, Persistable, PersistedClientConfig};
+use crate::config::{
+    CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig, Persistable, PersistedClientConfig,
+};
 use crate::error::Error;
 use crate::platform::Capabilities;
 use anyhow::Context;
@@ -275,6 +277,36 @@ pub async fn app_reset_window_size(
             .update_window_state(&app)
             .context("Failed to update window state")?;
 
+        state.config.client.clone().into()
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_get_call_config(
+    app_state: State<'_, AppState>,
+) -> Result<FrontendCallConfig, Error> {
+    Ok(app_state.lock().await.config.client.call.clone().into())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_set_call_config(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    call_config: FrontendCallConfig,
+) -> Result<(), Error> {
+    let persisted_client_config: PersistedClientConfig = {
+        let mut state = app_state.lock().await;
+        state.config.client.call = call_config.into();
         state.config.client.clone().into()
     };
 

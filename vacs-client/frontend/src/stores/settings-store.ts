@@ -16,7 +16,7 @@ export const useSettingsStore = create<SettingsState>()(set => ({
 
 export async function fetchCallConfig() {
     try {
-        const callConfig = await invokeStrict<CallConfig>("app_call_config");
+        const callConfig = await invokeStrict<CallConfig>("app_get_call_config");
 
         useSettingsStore.getState().setCallConfig(callConfig);
     } catch {}
