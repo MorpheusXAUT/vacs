@@ -15,6 +15,7 @@ import {ClientId, StationId} from "../types/generic.ts";
 import {Call} from "../types/call.ts";
 import {useAuthStore} from "../stores/auth-store.ts";
 import {clsx} from "clsx";
+import ButtonLabel from "../components/ui/ButtonLabel.tsx";
 
 type GeoPageProps = {
     page: GeoPageContainerModel;
@@ -153,11 +154,7 @@ function GeoPageButton({button}: GeoPageButtonProps) {
             style={{height: `${button.size}rem`}}
             onClick={() => setSelectedPage(button.page)}
         >
-            {button.label.map((s, index) => (
-                <p key={index} className="max-w-full truncate" title={s}>
-                    {s}
-                </p>
-            ))}
+            <ButtonLabel label={button.label} />
         </Button>
     );
 }

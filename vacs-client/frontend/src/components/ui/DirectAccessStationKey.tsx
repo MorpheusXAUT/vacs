@@ -5,6 +5,7 @@ import {useStationsStore} from "../../stores/stations-store.ts";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeSafe, invokeStrict} from "../../error.ts";
+import ButtonLabel from "./ButtonLabel.tsx";
 
 type DirectAccessStationKeyProps = {
     data: DirectAccessKey;
@@ -111,11 +112,7 @@ function DirectAccessStationKey({
             )}
             onClick={handleClick}
         >
-            {label.map((s, index) => (
-                <p key={index} className="max-w-full truncate" title={s}>
-                    {s}
-                </p>
-            ))}
+            <ButtonLabel label={label} />
         </Button>
     );
 }

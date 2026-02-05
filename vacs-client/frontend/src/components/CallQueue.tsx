@@ -10,6 +10,7 @@ import {ClientId, PositionId, StationId} from "../types/generic.ts";
 import {useAuthStore} from "../stores/auth-store.ts";
 import {splitDisplayName} from "../types/client-info.ts";
 import {clsx} from "clsx";
+import ButtonLabel from "./ui/ButtonLabel.tsx";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -141,16 +142,7 @@ const callLabel = (
     if (stationId !== undefined) {
         const station = stationKeys.find(key => key.stationId === stationId);
         if (station !== undefined) {
-            return (
-                <>
-                    {station.label // TODO own component to render label
-                        .map((s, index) => (
-                            <p key={index} className="max-w-full truncate" title={s}>
-                                {s}
-                            </p>
-                        ))}
-                </>
-            );
+            return <ButtonLabel label={station.label} />;
         }
         return callsignLabel(stationId);
     } else if (positionId !== undefined) {
