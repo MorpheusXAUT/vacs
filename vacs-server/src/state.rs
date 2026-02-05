@@ -259,6 +259,7 @@ impl AppState {
         let controllers = state.get_vatsim_controllers().await?;
         let current: HashMap<ClientId, ControllerInfo> = controllers
             .into_iter()
+            .filter(|c| !c.callsign.ends_with("_SUP"))
             .map(|c| (c.cid.clone(), c))
             .collect();
 
