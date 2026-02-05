@@ -22,6 +22,7 @@ config = { workspace = true }
 dashmap = { workspace = true }
 futures-util = { workspace = true }
 governor = { workspace = true }
+http = { workspace = true }
 jsonwebtoken = { workspace = true }
 lru = { workspace = true }
 metrics = { workspace = true }
