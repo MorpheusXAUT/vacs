@@ -3,8 +3,10 @@ use crate::http::error::AppError;
 use anyhow::Context;
 use axum_login::{AuthUser, AuthnBackend, UserId};
 use oauth2::basic::BasicClient;
-use oauth2::reqwest::Url;
-use oauth2::{AuthorizationCode, CsrfToken, EndpointNotSet, EndpointSet, TokenResponse, reqwest};
+use oauth2::{
+    AuthorizationCode, CsrfToken, EndpointNotSet, EndpointSet, HttpRequest, TokenResponse,
+};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
@@ -82,7 +84,7 @@ impl AuthnBackend for Backend {
         let token = self
             .client
             .exchange_code(AuthorizationCode::new(creds.code))
-            .request_async(&self.http_client)
+            .request_async(&ReqwestClient(&self.http_client))
             .await
             .context("Failed to exchange code")
             .map_err(|err| {
@@ -134,6 +136,37 @@ struct ConnectUserDetails {
 #[derive(Deserialize, Debug, Clone)]
 struct ConnectUserDetailsData {
     cid: String,
+}
+
+// Wrapper for reqwest::Client to implement oauth2::AsyncHttpClient.
+// Required until oauth2 compatibility with reqwest >= 0.13.0 is fixed
+// See: https://github.com/ramosbugs/oauth2-rs/issues/333, https://github.com/ramosbugs/oauth2-rs/pull/334
+struct ReqwestClient<'a>(&'a reqwest::Client);
+
+impl<'a, 'c> oauth2::AsyncHttpClient<'c> for ReqwestClient<'a> {
+    type Error = oauth2::HttpClientError<reqwest::Error>;
+    type Future = std::pin::Pin<
+        Box<dyn Future<Output = Result<oauth2::HttpResponse, Self::Error>> + Send + Sync + 'c>,
+    >;
+
+    fn call(&'c self, request: HttpRequest) -> Self::Future {
+        Box::pin(async move {
+            let response = self
+                .0
+                .execute(request.try_into().map_err(Box::new)?)
+                .await
+                .map_err(Box::new)?;
+            let mut response_builder = http::Response::builder()
+                .status(response.status())
+                .version(response.version());
+            for (header_name, header_value) in response.headers() {
+                response_builder = response_builder.header(header_name, header_value);
+            }
+            response_builder
+                .body(response.bytes().await.map_err(Box::new)?.to_vec())
+                .map_err(oauth2::HttpClientError::Http)
+        })
+    }
 }
 
 pub mod mock {
