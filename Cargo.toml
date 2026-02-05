@@ -78,7 +78,7 @@ tauri-plugin-updater = { git = "https://github.com/tauri-apps/plugins-workspace.
 test-log = { version = "0.2.19", features = ["trace"] }
 thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread", "macros", "signal", "sync", "time"] }
-tokio-tungstenite = { version = "0.28.0", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.28.0", features = ["rustls"] }
 tokio-util = "0.7.18"
 toml = "0.9.11"
 tower-http = "0.6.8"
