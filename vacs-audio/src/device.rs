@@ -4,7 +4,9 @@ use crate::cpal::traits::{DeviceTrait, HostTrait};
 use crate::cpal::{Sample, SampleFormat, SupportedStreamConfig, SupportedStreamConfigRange};
 use crate::error::AudioError;
 use anyhow::Context;
-use rubato::{SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
+use rubato::{
+    Async, FixedAsync, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
@@ -183,7 +185,7 @@ impl StreamDevice {
         )
     }
 
-    pub(crate) fn resampler(&self) -> Result<Option<SincFixedIn<f32>>, AudioError> {
+    pub(crate) fn resampler(&self) -> Result<Option<Async<f32>>, AudioError> {
         if self.sample_rate() == TARGET_SAMPLE_RATE {
             Ok(None)
         } else {
@@ -201,16 +203,17 @@ impl StreamDevice {
             };
 
             Ok(Some(
-                SincFixedIn::<f32>::new(
+                Async::<f32>::new_sinc(
                     resample_ratio,
                     2.0,
-                    resampler_params,
+                    &resampler_params,
                     if let cpal::BufferSize::Fixed(n) = self.config.buffer_size {
                         n as usize
                     } else {
                         1024usize
                     },
                     1,
+                    FixedAsync::Input,
                 )
                 .context("Failed to create resampler")?,
             ))

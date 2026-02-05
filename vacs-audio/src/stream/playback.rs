@@ -9,7 +9,7 @@ use ringbuf::HeapRb;
 use ringbuf::consumer::Consumer;
 use ringbuf::producer::Producer;
 use ringbuf::traits::Split;
-use rubato::SincFixedIn;
+use rubato::Async;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, atomic};
 use tokio::sync::mpsc;
@@ -182,7 +182,7 @@ impl PlaybackStream {
         }
     }
 
-    pub fn resampler(&self) -> Result<Option<SincFixedIn<f32>>, AudioError> {
+    pub fn resampler(&self) -> Result<Option<Async<f32>>, AudioError> {
         self.device.resampler()
     }
 

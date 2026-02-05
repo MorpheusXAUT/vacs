@@ -8231,6 +8231,7 @@ name = "vacs-audio"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "audioadapter-buffers",
  "biquad",
  "bytes",
  "cpal 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",

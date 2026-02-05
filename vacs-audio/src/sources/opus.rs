@@ -1,9 +1,10 @@
 use crate::sources::AudioSource;
 use crate::{EncodedAudioFrame, FRAME_SIZE, TARGET_SAMPLE_RATE};
 use anyhow::{Context, Result};
+use audioadapter_buffers::direct::SequentialSliceOfVecs;
 use ringbuf::traits::{Consumer, Producer, Split};
 use ringbuf::{HeapCons, HeapProd, HeapRb};
-use rubato::{Resampler, SincFixedIn};
+use rubato::{Async, Indexing, Resampler};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::{Instrument, instrument};
@@ -22,7 +23,7 @@ impl OpusSource {
     #[instrument(level = "debug", skip(rx, resampler), err)]
     pub fn new(
         mut rx: mpsc::Receiver<EncodedAudioFrame>,
-        mut resampler: Option<SincFixedIn<f32>>,
+        mut resampler: Option<Async<f32>>,
         output_channels: u16,
         volume: f32,
         amp: f32,
@@ -44,8 +45,22 @@ impl OpusSource {
 
                 let mut decoded = vec![0.0f32; FRAME_SIZE];
                 let mut buf = Vec::<f32>::with_capacity(RESAMPLER_BUFFER_SIZE);
-                let mut resampler_in = vec![Vec::<f32>::with_capacity(FRAME_SIZE * 2)];
-                let mut resampler_out = Vec::<f32>::with_capacity(FRAME_SIZE * 2);
+                let mut resampler_in_buf = vec![Vec::<f32>::with_capacity(FRAME_SIZE * 2)];
+                let mut resampler_out_buf = vec![Vec::<f32>::with_capacity(FRAME_SIZE * 2)];
+
+                // Pre-allocate output buffer to max size to avoid repeated allocations
+                if let Some(resampler) = &resampler {
+                    let max_out = resampler.output_frames_max();
+                    resampler_out_buf[0].resize(max_out, 0.0f32);
+                }
+
+                // Reusable indexing struct to avoid repeated stack allocations
+                let mut indexing = Indexing {
+                    input_offset: 0,
+                    output_offset: 0,
+                    active_channels_mask: None,
+                    partial_len: None,
+                };
 
                 let mut overflows = 0usize;
 
@@ -61,23 +76,41 @@ impl OpusSource {
                                     continue;
                                 }
 
-                                resampler_in[0].clear();
-                                resampler_in[0].extend_from_slice(&buf[..need]);
+                                resampler_in_buf[0].clear();
+                                resampler_in_buf[0].extend_from_slice(&buf[..need]);
                                 buf.drain(..need);
 
+                                // Create adapters
+                                let input_frames = resampler_in_buf[0].len();
+                                let max_out = resampler_out_buf[0].len();
+                                let input_adapter =
+                                    SequentialSliceOfVecs::new(&resampler_in_buf, 1, input_frames)
+                                        .unwrap();
+                                let mut output_adapter = SequentialSliceOfVecs::new_mut(
+                                    &mut resampler_out_buf,
+                                    1,
+                                    max_out,
+                                )
+                                .unwrap();
+
+                                // Reset indexing offsets (reuse same struct)
+                                indexing.input_offset = 0;
+                                indexing.output_offset = 0;
+
                                 // resample opus data
-                                let resampled = match resampler.process(&resampler_in, None) {
-                                    Ok(frames) => frames,
+                                let (_frames_in, frames_out) = match resampler.process_into_buffer(
+                                    &input_adapter,
+                                    &mut output_adapter,
+                                    Some(&indexing),
+                                ) {
+                                    Ok(result) => result,
                                     Err(err) => {
                                         tracing::warn!(?err, "Failed to resample opus data");
                                         continue;
                                     }
                                 };
 
-                                resampler_out.clear();
-                                resampler_out.extend_from_slice(&resampled[0]);
-
-                                &resampler_out
+                                &resampler_out_buf[0][..frames_out]
                             } else {
                                 &decoded[..n]
                             };

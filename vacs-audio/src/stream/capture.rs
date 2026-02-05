@@ -5,13 +5,14 @@ use crate::dsp::{MicProcessor, downmix_interleaved_to_mono};
 use crate::error::AudioError;
 use crate::{EncodedAudioFrame, FRAME_SIZE, TARGET_SAMPLE_RATE};
 use anyhow::Context;
+use audioadapter_buffers::direct::SequentialSliceOfVecs;
 use bytes::Bytes;
 use parking_lot::lock_api::Mutex;
 use ringbuf::HeapRb;
 use ringbuf::consumer::Consumer;
 use ringbuf::producer::Producer;
 use ringbuf::traits::Split;
-use rubato::Resampler;
+use rubato::{Indexing, Resampler};
 use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -121,7 +122,22 @@ impl CaptureStream {
         let task = tokio::runtime::Handle::current().spawn_blocking(move || {
             tracing::trace!("Input capture stream task started");
 
-            let mut resampler_buf = vec![Vec::<f32>::with_capacity(FRAME_SIZE * 2)];
+            let mut resampler_in_buf = vec![Vec::<f32>::with_capacity(FRAME_SIZE * 2)];
+            let mut resampler_out_buf = vec![Vec::<f32>::with_capacity(FRAME_SIZE * 2)];
+
+            // Pre-allocate output buffer to max size to avoid repeated allocations
+            if let Some(resampler) = &resampler {
+                let max_out = resampler.output_frames_max();
+                resampler_out_buf[0].resize(max_out, 0.0f32);
+            }
+
+            // Reusable indexing struct to avoid repeated stack allocations
+            let mut indexing = Indexing {
+                input_offset: 0,
+                output_offset: 0,
+                active_channels_mask: None,
+                partial_len: None,
+            };
 
             while !cancel_clone.is_cancelled() {
                 // apply any queued volume ops
@@ -138,13 +154,13 @@ impl CaptureStream {
                 if let Some(resampler) = &mut resampler {
                     // buffer input data until we've reached enough to resample into the next frame
                     let need = resampler.input_frames_next();
-                    while resampler_buf[0].len() < need {
+                    while resampler_in_buf[0].len() < need {
                         if cancel_clone.is_cancelled() {
                             tracing::trace!("Input capture stream task cancelled");
                             break;
                         }
                         if let Some(sample) = input_cons.try_pop() {
-                            resampler_buf[0].push(sample);
+                            resampler_in_buf[0].push(sample);
                         } else {
                             std::thread::sleep(RESAMPLER_BUFFER_WAIT);
                         }
@@ -154,25 +170,40 @@ impl CaptureStream {
                         tracing::trace!("Input capture stream task cancelled");
                         break;
                     }
-                    if resampler_buf[0].len() < need {
+                    if resampler_in_buf[0].len() < need {
                         // canceled while waiting; exit
                         tracing::trace!("Did not receive enough input data to resample");
                         break;
                     }
 
+                    // Create adapters
+                    let input_frames = resampler_in_buf[0].len();
+                    let max_out = resampler_out_buf[0].len();
+                    let input_adapter =
+                        SequentialSliceOfVecs::new(&resampler_in_buf, 1, input_frames).unwrap();
+                    let mut output_adapter =
+                        SequentialSliceOfVecs::new_mut(&mut resampler_out_buf, 1, max_out).unwrap();
+
+                    // Reset indexing offsets (reuse same struct)
+                    indexing.input_offset = 0;
+                    indexing.output_offset = 0;
+
                     // resample the input data
-                    let resampled = match resampler.process(&resampler_buf, None) {
-                        Ok(frames) => frames,
+                    let (_frames_in, frames_out) = match resampler.process_into_buffer(
+                        &input_adapter,
+                        &mut output_adapter,
+                        Some(&indexing),
+                    ) {
+                        Ok(result) => result,
                         Err(err) => {
                             tracing::warn!(?err, "Failed to resample input");
                             continue;
                         }
                     };
-                    let resampled = &resampled[0];
 
-                    resampler_buf[0].clear();
+                    resampler_in_buf[0].clear();
 
-                    opus_framer.push_slice(resampled, gain);
+                    opus_framer.push_slice(&resampler_out_buf[0][..frames_out], gain);
                 } else {
                     let mut stash: [f32; 1024] = [0.0; 1024];
                     let mut n = 0usize;
