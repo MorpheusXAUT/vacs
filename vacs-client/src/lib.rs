@@ -121,11 +121,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app::commands::app_check_for_update,
             app::commands::app_frontend_ready,
+            app::commands::app_get_call_config,
             app::commands::app_open_folder,
             app::commands::app_platform_capabilities,
             app::commands::app_quit,
             app::commands::app_reset_window_size,
             app::commands::app_set_always_on_top,
+            app::commands::app_set_call_config,
             app::commands::app_set_fullscreen,
             app::commands::app_update,
             audio::commands::audio_get_devices,

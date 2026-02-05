@@ -12,7 +12,8 @@ type ButtonColor =
     | "red"
     | "salmon"
     | "peach"
-    | "honey";
+    | "honey"
+    | "sage";
 type ButtonHighlightColor = "green" | "gray";
 
 export type ButtonProps = {
@@ -41,6 +42,7 @@ const ButtonColors: Record<ButtonColor, string> = {
     salmon: "bg-red-400 border-t-red-200 border-l-red-200 border-r-red-900 border-b-red-900",
     peach: "bg-[#ffdf9e] border-t-orange-100 border-l-orange-100 border-r-yellow-600 border-b-yellow-600",
     honey: "bg-[#ffc246] border-t-orange-100 border-l-orange-100 border-r-yellow-700 border-b-yellow-700",
+    sage: "bg-[#9bc997] border-t-[#b1d5ae] border-l-[#b1d5ae] border-r-[#2c3b2b] border-b-[#2c3b2b]",
 };
 
 const ActiveButtonColors: Record<ButtonColor, string> = {
@@ -56,6 +58,7 @@ const ActiveButtonColors: Record<ButtonColor, string> = {
     salmon: "active:border-r-red-200 active:border-b-red-200 active:border-t-red-900 active:border-l-red-900",
     peach: "active:border-r-orange-100 active:border-b-orange-100 active:border-t-yellow-600 active:border-l-yellow-600",
     honey: "active:border-r-orange-100 active:border-b-orange-100 active:border-t-yellow-700 active:border-l-yellow-700",
+    sage: "active:border-r-[#b1d5ae] active:border-b-[#b1d5ae] active:border-t-[#2c3b2b] active:border-l-[#2c3b2b]",
 };
 
 export const ForceDisabledButtonColors: Record<ButtonColor, string> = {
@@ -69,6 +72,7 @@ export const ForceDisabledButtonColors: Record<ButtonColor, string> = {
     salmon: "border-red-950! border!",
     peach: "border-yellow-600! border!",
     honey: "border-yellow-700! border!",
+    sage: "border-gray-700! border! outline-none!",
 };
 
 const ButtonHighlightColors: Record<ButtonHighlightColor, string> = {

@@ -1,4 +1,4 @@
-import {JSX} from "preact";
+import {TargetedEvent} from "preact";
 import {clsx} from "clsx";
 
 export type SelectOption = {
@@ -21,7 +21,7 @@ type SelectProps = {
 function Select(props: SelectProps) {
     const title = props.options.find(option => option.value === props.selected)?.text;
 
-    const handleSelectChange = (event: JSX.TargetedEvent<HTMLSelectElement>) => {
+    const handleSelectChange = (event: TargetedEvent<HTMLSelectElement>) => {
         event.preventDefault();
         if (event.target instanceof HTMLSelectElement) {
             props.onChange(event.target.value);

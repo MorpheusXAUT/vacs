@@ -32,6 +32,7 @@ import MainPage from "./pages/MainPage.tsx";
 import Tabs from "./components/Tabs.tsx";
 import {useProfileType} from "./stores/profile-store.ts";
 import Button from "./components/ui/Button.tsx";
+import {fetchCallConfig} from "./stores/settings-store.ts";
 
 function App() {
     const connected = useConnectionStore(state => state.connectionState === "connected");
@@ -51,6 +52,7 @@ function App() {
         void invokeSafe("auth_check_session");
 
         void fetchCapabilities();
+        void fetchCallConfig();
 
         return () => {
             cleanups.forEach(cleanup => cleanup());

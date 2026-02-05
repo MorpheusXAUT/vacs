@@ -90,6 +90,9 @@ function DialPad() {
                         "focus:border-red-500 focus:outline-none",
                     )}
                     onChange={handleChange}
+                    onKeyPress={event =>
+                        event.key === "Enter" && handleStartCall(dialInput as ClientId)
+                    }
                     value={dialInput}
                 />
                 <div className="grid grid-cols-3 gap-3 [&>button]:w-27 mb-3">

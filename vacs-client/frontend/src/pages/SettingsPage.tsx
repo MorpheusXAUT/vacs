@@ -14,6 +14,7 @@ import TransmitModePage from "../components/settings/TransmitModePage.tsx";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 import HotkeysConfigPage from "../components/settings/HotkeysConfigPage.tsx";
 import {useConnectionStore} from "../stores/connection-store.ts";
+import CallConfigPage from "../components/settings/CallConfigPage.tsx";
 
 function SettingsPage() {
     return (
@@ -82,8 +83,12 @@ function SettingsPage() {
                             >
                                 Hotkeys
                             </Button>
-                            <Button color="gray" className="w-20 h-full text-sm" disabled={true}>
-                                Sounds
+                            <Button
+                                color="gray"
+                                className="w-20 h-full text-sm"
+                                onClick={() => navigate("/settings/call")}
+                            >
+                                Call
                             </Button>
                         </div>
                         <AppControlButtons />
@@ -93,6 +98,7 @@ function SettingsPage() {
             <Switch>
                 <Route path="/transmit" component={TransmitModePage} />
                 <Route path="/hotkeys" component={HotkeysConfigPage} />
+                <Route path="/call" component={CallConfigPage} />
             </Switch>
         </>
     );

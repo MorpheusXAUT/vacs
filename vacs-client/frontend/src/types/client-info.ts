@@ -13,8 +13,8 @@ export type SessionInfo = {
     profile: SessionProfile;
 };
 
-export function splitDisplayName(client: ClientInfo): [string, string] {
-    const parts = client.displayName.split("_");
+export function splitDisplayName(name: string): [string, string] {
+    const parts = name.replaceAll("-", "_").split("_");
 
     if (parts.length <= 1) {
         return [parts[0], ""];
