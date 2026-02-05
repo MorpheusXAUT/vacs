@@ -230,7 +230,15 @@ export const startCall = async (target: CallTarget) => {
     const {cid} = useAuthStore.getState();
     const openErrorOverlay = useErrorOverlayStore.getState().open;
 
-    if (target.client === cid) {
+    if (cid === undefined) {
+        openErrorOverlay(
+            "Unauthenticated",
+            "You are unauthenticated and cannot start a call",
+            false,
+            5000,
+        );
+        return;
+    } else if (target.client === cid) {
         openErrorOverlay("Call error", "You cannot call yourself", false, 5000);
         return;
     }

@@ -12,7 +12,8 @@ The `client` configuration allows you to control the client's behavior and local
 - **[Extra stations config](#extra-stations-config)** - Load an additional stations config file
 - **[Selected stations profile](#selected-stations-profile)** - Currently active stations profile
 - **[Transmit configuration](#transmit-configuration)** - Configure transmission mode and PTT keys
-- **[Keybinds](#call-control)** - Configure general keybinds
+- **[Keybinds](#keybinds)** - Configure general keybinds
+- **[Call](#call)** - Configure call behavior
 
 ## Configuration structure
 
@@ -31,6 +32,9 @@ mode = "VoiceActivation" # or "PushToTalk", "PushToMute", "RadioIntegration"
 [client.keybinds]
 # accept_call = "ControlRight"
 # end_call = "ControlRight"
+
+[client.call]
+# highlight_incoming_call_target = true
 
 ```
 
@@ -225,3 +229,16 @@ push_to_talk = "ShiftRight"
 accept_call = "ControlRight"
 end_call = "ControlRight"
 ```
+
+---
+
+## Call
+
+The `call` section allows you to configure call behavior.
+
+#### `highlight_incoming_call_target`: toggle highlighting for incoming call targets
+
+**Type:** Boolean  
+**Optional:** Yes
+
+If enabled, the DA key of the incoming call target will be highlighted in a sage green color.
