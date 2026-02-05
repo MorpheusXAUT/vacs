@@ -53,6 +53,12 @@ pub fn run() {
         .setup(|app| {
             log::info!("{:?}", VersionInfo::gather());
 
+            if rustls::crypto::aws_lc_rs::default_provider().install_default().is_err()  {
+                log::error!("Failed to install rustls crypto provider");
+                open_fatal_error_dialog(app.handle(), "Failed to install rustls crypto provider");
+                return Err(anyhow::anyhow!("Failed to install rustls crypto provider").into());
+            }
+
             #[cfg(target_os = "macos")]
             {
                 let handle = app.handle().clone();
