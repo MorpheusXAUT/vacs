@@ -66,6 +66,16 @@
               "description": "Key code to end an active call. Can be the same as accept_call for context-aware behavior."
             }
           }
+        },
+        "call": {
+          "type": "object",
+          "description": "Configuration for calls.",
+          "properties": {
+            "highlight_incoming_call_target": {
+              "type": "boolean",
+              "description": "Toggles highlighting of incoming call target DA keys."
+            }
+          }
         }
       },
       "additionalProperties": true

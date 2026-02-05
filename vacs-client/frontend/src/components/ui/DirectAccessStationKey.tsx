@@ -5,6 +5,8 @@ import {useStationsStore} from "../../stores/stations-store.ts";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeSafe, invokeStrict} from "../../error.ts";
+import ButtonLabel from "./ButtonLabel.tsx";
+import {useSettingsStore} from "../../stores/settings-store.ts";
 
 type DirectAccessStationKeyProps = {
     data: DirectAccessKey;
@@ -26,6 +28,8 @@ function DirectAccessStationKey({
     const setDefaultStationSource = useStationsStore(state => state.setDefaultSource);
     const setTemporaryStationSource = useStationsStore(state => state.setTemporarySource);
 
+    const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
+
     const hasStationId = stationId !== undefined;
     const station = hasStationId && stations.get(stationId);
     const online = station !== undefined;
@@ -34,9 +38,10 @@ function DirectAccessStationKey({
     const incomingCall = incomingCalls.find(
         call => hasStationId && call.source.stationId === stationId,
     );
-    const isCalling = incomingCall !== undefined;
+    const isCalling = incomingCall !== undefined && !own;
     const beingCalled =
         hasStationId &&
+        !own &&
         callDisplay?.type === "outgoing" &&
         callDisplay.call.target.station === stationId;
     const involved =
@@ -47,6 +52,14 @@ function DirectAccessStationKey({
     const inCall = hasStationId && involved && callDisplay.type === "accepted";
     const isRejected = hasStationId && involved && callDisplay?.type === "rejected";
     const isError = hasStationId && involved && callDisplay?.type === "error";
+
+    const isTarget =
+        highlightTarget &&
+        hasStationId &&
+        (incomingCalls.some(call => call.target.station === stationId) ||
+            (own &&
+                callDisplay?.type === "accepted" &&
+                callDisplay.call.target.station === stationId));
 
     const handleClick = useAsyncDebounce(async () => {
         if (own) {
@@ -86,34 +99,34 @@ function DirectAccessStationKey({
         }
     });
 
+    const color = inCall
+        ? "green"
+        : (isCalling || isRejected) && blink
+          ? "green"
+          : isError && blink
+            ? "red"
+            : isTarget
+              ? "sage"
+              : temporaryStationSource === stationId && temporaryStationSource !== undefined
+                ? "peach"
+                : defaultStationSource === stationId && defaultStationSource !== undefined
+                  ? "honey"
+                  : "gray";
+
     return (
         <Button
-            color={
-                inCall
-                    ? "green"
-                    : (isCalling || isRejected) && blink
-                      ? "green"
-                      : isError && blink
-                        ? "red"
-                        : temporaryStationSource === stationId &&
-                            temporaryStationSource !== undefined
-                          ? "peach"
-                          : defaultStationSource === stationId && defaultStationSource !== undefined
-                            ? "honey"
-                            : "gray"
-            }
+            color={color}
             highlight={beingCalled || isRejected ? "green" : undefined}
             disabled={stationId === undefined || !online}
             className={clsx(
                 className,
-                "w-25 h-full rounded p-1.5",
-                (own || !online) && "text-gray-500",
+                "w-25 h-full rounded",
+                (own || !hasStationId) && "text-gray-500",
+                color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
             )}
             onClick={handleClick}
         >
-            {label.map((s, index) => (
-                <p key={index}>{s}</p>
-            ))}
+            <ButtonLabel label={label} />
         </Button>
     );
 }

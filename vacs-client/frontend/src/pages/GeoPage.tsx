@@ -14,6 +14,9 @@ import {useCallStore} from "../stores/call-store.ts";
 import {ClientId, StationId} from "../types/generic.ts";
 import {Call} from "../types/call.ts";
 import {useAuthStore} from "../stores/auth-store.ts";
+import {clsx} from "clsx";
+import ButtonLabel from "../components/ui/ButtonLabel.tsx";
+import {useSettingsStore} from "../stores/settings-store.ts";
 
 type GeoPageProps = {
     page: GeoPageContainerModel;
@@ -96,7 +99,11 @@ type GeoPageButtonProps = {
     button: GeoPageButtonModel;
 };
 
-function callInvolvesButtonStations(call: Call, stationIds: StationId[], cid: ClientId) {
+function callInvolvesButtonStations(
+    call: Call,
+    stationIds: StationId[],
+    cid: ClientId | undefined,
+) {
     return call.source.clientId === cid
         ? call.target.station !== undefined && stationIds.includes(call.target.station)
         : call.source.stationId !== undefined && stationIds.includes(call.source.stationId);
@@ -109,6 +116,8 @@ function GeoPageButton({button}: GeoPageButtonProps) {
     const cid = useAuthStore(state => state.cid);
 
     const setSelectedPage = useProfileStore(state => state.setPage);
+
+    const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
 
     const stationIds =
         button.page?.keys.flatMap(key => {
@@ -129,25 +138,37 @@ function GeoPageButton({button}: GeoPageButtonProps) {
     const isRejected = callDisplay?.type === "rejected" && involved;
     const isError = callDisplay?.type === "error" && involved;
 
+    const isTarget =
+        highlightTarget &&
+        (incomingCalls.some(
+            call => call.target.station !== undefined && stationIds.includes(call.target.station),
+        ) ||
+            (callDisplay?.type === "accepted" &&
+                callDisplay.call.target.station !== undefined &&
+                stationIds.includes(callDisplay.call.target.station)));
+
+    const color = inCall
+        ? "green"
+        : (isCalling || isRejected) && blink
+          ? "green"
+          : isError && blink
+            ? "red"
+            : isTarget
+              ? "sage"
+              : "gray";
+
     return (
         <Button
-            color={
-                inCall
-                    ? "green"
-                    : (isCalling || isRejected) && blink
-                      ? "green"
-                      : isError && blink
-                        ? "red"
-                        : "gray"
-            }
+            color={color}
             highlight={beingCalled || isRejected ? "green" : undefined}
-            className={"aspect-square w-auto! rounded-none! overflow-hidden"}
+            className={clsx(
+                "aspect-square w-auto! rounded-none! overflow-hidden",
+                color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
+            )}
             style={{height: `${button.size}rem`}}
             onClick={() => setSelectedPage(button.page)}
         >
-            {button.label.map((s, index) => (
-                <p key={index}>{s}</p>
-            ))}
+            <ButtonLabel label={button.label} />
         </Button>
     );
 }
