@@ -50,7 +50,9 @@ export const useProfileType = (): "geo" | "tabbed" | "unknown" | undefined => {
 
 const profileToStationKeys = (profile: Profile | undefined): DirectAccessKey[] => {
     if (profile?.tabbed !== undefined) {
-        return profile.tabbed.flatMap(t => t.page.keys.filter(k => k.stationId !== undefined));
+        return profile.tabbed.flatMap(t =>
+            directAccessPageToStationKeys(t.page).filter(k => k.stationId !== undefined),
+        );
     }
     if (profile?.geo !== undefined) {
         return geoPageContainerToKeys(profile.geo).filter(k => k.stationId !== undefined);
@@ -66,13 +68,32 @@ export const useProfileStationKeys = () => {
     return useProfileStore(useShallow(state => profileToStationKeys(state.profile)));
 };
 
-const geoPageContainerToKeys = (container: GeoPageContainer): DirectAccessKey[] => {
+export function directAccessPageToStationKeys(
+    page: DirectAccessPage | undefined,
+): DirectAccessKey[] {
+    const result: DirectAccessKey[] = [];
+
+    function visit(page: DirectAccessPage | undefined) {
+        if (page === undefined) return;
+
+        for (const key of page.keys) {
+            if (key.stationId !== undefined) result.push(key);
+            visit(key.page);
+        }
+    }
+
+    visit(page);
+
+    return result;
+}
+
+function geoPageContainerToKeys(container: GeoPageContainer): DirectAccessKey[] {
     return container.children.flatMap(c => {
         if (isGeoPageContainer(c)) {
             return geoPageContainerToKeys(c);
         } else if (isGeoPageButton(c)) {
-            return c.page?.keys ?? [];
+            return directAccessPageToStationKeys(c.page);
         }
         return [];
     });
-};
+}
