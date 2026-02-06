@@ -1,6 +1,6 @@
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {useClientsStore} from "../stores/clients-store.ts";
-import {ClientInfo, SessionInfo} from "../types/client-info.ts";
+import {ClientInfo, SessionInfo} from "../types/client.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {
     IncomingCallListEntry,
@@ -64,6 +64,7 @@ export function setupSignalingListeners() {
                 resetCallStore();
                 clearCallList();
                 resetProfileStore();
+                // TODO reset filter
             }),
             listen<PositionId[]>("signaling:ambiguous-position", event => {
                 setConnectionState("connecting");
