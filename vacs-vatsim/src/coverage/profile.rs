@@ -1,7 +1,8 @@
-use crate::coverage::{CoverageError, ReferenceValidator, ValidationError, Validator};
+use crate::coverage::{CoverageError, IoError, ReferenceValidator, ValidationError, Validator};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::LazyLock;
 use vacs_protocol::vatsim::{
     DirectAccessKey, DirectAccessPage, GeoNode, GeoPageButton, GeoPageContainer, GeoPageDivider,
@@ -98,6 +99,37 @@ pub(super) struct DirectAccessKeyRaw {
     pub label: Vec<String>,
     #[serde(default)]
     pub station_id: Option<StationId>,
+}
+
+impl Profile {
+    pub fn load(path: &PathBuf) -> Result<Self, CoverageError> {
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+        let bytes = std::fs::read(path).map_err(|err| IoError::Read {
+            path: path.into(),
+            reason: err.to_string(),
+        })?;
+
+        let profile: ProfileRaw = match ext {
+            "toml" => toml::from_slice(&bytes).map_err(|err| IoError::Parse {
+                path: path.into(),
+                reason: err.to_string(),
+            }),
+            "json" => serde_json::from_slice(&bytes).map_err(|err| IoError::Parse {
+                path: path.into(),
+                reason: err.to_string(),
+            }),
+            _ => {
+                tracing::warn!(?ext, "Unsupported file extension");
+                Err(IoError::Read {
+                    path: path.into(),
+                    reason: format!("unsupported file extension: {ext}"),
+                })
+            }
+        }?;
+
+        Profile::from_raw(profile)
+    }
 }
 
 pub(super) trait FromRaw<T> {

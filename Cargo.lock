@@ -8248,6 +8248,7 @@ dependencies = [
  "vacs-audio",
  "vacs-macros",
  "vacs-signaling",
+ "vacs-vatsim",
  "vacs-webrtc",
  "vergen-git2",
  "windows 0.62.2",
