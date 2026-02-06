@@ -54,7 +54,7 @@ type DirectAccessSubpageKeyProps = {
 
 function DirectAccessSubpageKey(props: DirectAccessSubpageKeyProps) {
     const {beingCalled, isRejected, color} = useCallState(props.page);
-    const setSelectedPage = useProfileStore(state => state.setPage);
+    const setSubpage = useProfileStore(state => state.setSubpage);
 
     return (
         <Button
@@ -65,7 +65,7 @@ function DirectAccessSubpageKey(props: DirectAccessSubpageKeyProps) {
                 "w-25 h-full rounded",
                 color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
             )}
-            onClick={() => setSelectedPage({current: props.page, parent: props.parent})}
+            onClick={() => setSubpage(props.page, props.parent)}
         >
             <ButtonLabel label={props.label} />
         </Button>

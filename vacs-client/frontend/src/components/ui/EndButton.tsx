@@ -34,7 +34,7 @@ function EndButton() {
         if (isTabbedProfile) {
             navigateParentPage();
         } else {
-            setSelectedPage({current: undefined, parent: undefined});
+            setSelectedPage(undefined);
         }
         navigate("/");
 

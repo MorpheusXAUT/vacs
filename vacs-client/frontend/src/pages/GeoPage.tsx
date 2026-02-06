@@ -108,7 +108,7 @@ function GeoPageButton({button}: GeoPageButtonProps) {
                 color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
             )}
             style={{height: `${button.size}rem`}}
-            onClick={() => setSelectedPage({current: button.page, parent: undefined})}
+            onClick={() => setSelectedPage(button.page)}
         >
             <ButtonLabel label={button.label} />
         </Button>

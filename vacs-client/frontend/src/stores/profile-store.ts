@@ -16,7 +16,8 @@ type ProfileState = {
     page: SelectedPage;
     testProfilePath: string | undefined;
     setProfile: (profile: Profile | undefined) => void;
-    setPage: (page: SelectedPage) => void;
+    setPage: (page: DirectAccessPage | undefined) => void;
+    setSubpage: (page: DirectAccessPage, parent: DirectAccessPage) => void;
     navigateParentPage: () => void;
     setTestProfilePath: (path: string | undefined) => void;
     reset: () => void;
@@ -27,7 +28,8 @@ export const useProfileStore = create<ProfileState>()((set, get, store) => ({
     page: {current: undefined, parent: undefined},
     testProfilePath: undefined,
     setProfile: profile => set({profile}),
-    setPage: page => set({page: page}),
+    setPage: page => set({page: {current: page, parent: undefined}}),
+    setSubpage: (page, parent) => set({page: {current: page, parent: get().page.parent ?? parent}}),
     navigateParentPage: () => {
         const parent = get().page.parent;
         if (parent === undefined) return;

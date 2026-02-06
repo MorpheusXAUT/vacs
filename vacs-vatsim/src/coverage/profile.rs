@@ -678,14 +678,6 @@ impl Validator for DirectAccessKeyRaw {
         }
         if let Some(page) = &self.page {
             page.validate()?;
-            if page.keys.iter().any(|key| key.page.is_some()) {
-                return Err(ValidationError::InvalidValue {
-                    field: "page".to_string(),
-                    value: "".to_string(),
-                    reason: "cannot define multiple layers of subpages".to_string(),
-                }
-                .into());
-            }
         }
         Ok(())
     }
@@ -953,26 +945,6 @@ mod tests {
         assert_matches!(
             invalid_fields.validate(),
             Err(CoverageError::Validation(ValidationError::InvalidValue {field, reason, ..})) if field == "page" && reason == "cannot define both station_id and page"
-        );
-
-        let invalid_multiple_subpages = DirectAccessKeyRaw {
-            label: vec!["L".to_string()],
-            station_id: None,
-            page: Some(DirectAccessPageRaw {
-                keys: vec![DirectAccessKeyRaw {
-                    label: vec!["L".to_string()],
-                    station_id: None,
-                    page: Some(DirectAccessPageRaw {
-                        keys: vec![],
-                        rows: 1,
-                    }),
-                }],
-                rows: 1,
-            }),
-        };
-        assert_matches!(
-            invalid_multiple_subpages.validate(),
-            Err(CoverageError::Validation(ValidationError::InvalidValue {field, reason, ..})) if field == "page" && reason == "cannot define multiple layers of subpages"
         );
     }
 
