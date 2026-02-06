@@ -206,9 +206,16 @@ pub struct DirectAccessKey {
     pub label: Vec<String>,
     /// The optional station ID associated with this key.
     ///
-    /// If `None`, the DA key will be displayed on the UI, but will be non-functional.
+    /// If [`DirectAccessKey::station_id`] and [`DirectAccessKey::page`] are `None`, the DA key will be displayed on the UI, but will be non-functional.
+    /// This field is mutually exclusive with [`DirectAccessKey::page`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub station_id: Option<StationId>,
+    /// The optional subpage associated with this key.
+    ///
+    /// If [`DirectAccessKey::page`] and [`DirectAccessKey::station_id`] are `None`, the DA key will be displayed on the UI, but will be non-functional.
+    /// This field is mutually exclusive with [`DirectAccessKey::station_id`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<DirectAccessPage>,
 }
 
 /// Trait alias for types that can be used as a profile reference in [`ActiveProfile`].

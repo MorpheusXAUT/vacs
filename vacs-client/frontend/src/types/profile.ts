@@ -57,7 +57,25 @@ export type DirectAccessPage = {
 export type DirectAccessKey = {
     label: string[];
     stationId?: StationId;
+    page?: DirectAccessPage;
 };
+
+export function directAccessPageToStationIds(page: DirectAccessPage | undefined): StationId[] {
+    const result: StationId[] = [];
+
+    function visit(page: DirectAccessPage | undefined) {
+        if (page === undefined) return;
+
+        for (const key of page.keys) {
+            if (key.stationId !== undefined) result.push(key.stationId);
+            visit(key.page);
+        }
+    }
+
+    visit(page);
+
+    return result;
+}
 
 export function isGeoPageContainer(container: unknown): container is GeoPageContainer {
     if (typeof container !== "object" || container === null) {

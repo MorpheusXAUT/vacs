@@ -2,7 +2,7 @@ import {clsx} from "clsx";
 import {ComponentChildren, CSSProperties} from "preact";
 import {invokeSafe} from "../../error.ts";
 
-type ButtonColor =
+export type ButtonColor =
     | "gray"
     | "cyan"
     | "green"

@@ -12,6 +12,7 @@ function EndButton() {
     const {endCall, dismissRejectedCall, dismissErrorCall} = useCallStore(state => state.actions);
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
+    const navigateParentPage = useProfileStore(state => state.navigateParentPage);
 
     const isTabbedProfile = useProfileType() === "tabbed";
 
@@ -30,7 +31,9 @@ function EndButton() {
 
     const handleOnClick = async () => {
         setFilter("");
-        if (!isTabbedProfile) {
+        if (isTabbedProfile) {
+            navigateParentPage();
+        } else {
             setSelectedPage(undefined);
         }
         navigate("/");
