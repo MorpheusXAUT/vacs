@@ -99,6 +99,8 @@ pub(super) struct DirectAccessKeyRaw {
     pub label: Vec<String>,
     #[serde(default)]
     pub station_id: Option<StationId>,
+    #[serde(default)]
+    pub page: Option<DirectAccessPageRaw>,
 }
 
 impl Profile {
@@ -436,6 +438,7 @@ impl TryFrom<DirectAccessKeyRaw> for DirectAccessKey {
         Ok(Self {
             label: raw.label,
             station_id: raw.station_id,
+            page: raw.page.map(DirectAccessPage::from_raw).transpose()?,
         })
     }
 }
@@ -664,6 +667,25 @@ impl Validator for DirectAccessKeyRaw {
                 reason: "cannot have more than 3 lines".to_string(),
             }
             .into());
+        }
+        if self.station_id.is_some() && self.page.is_some() {
+            return Err(ValidationError::InvalidValue {
+                field: "page".to_string(),
+                value: "".to_string(),
+                reason: "cannot define both station_id and page".to_string(),
+            }
+            .into());
+        }
+        if let Some(page) = &self.page {
+            page.validate()?;
+            if page.keys.iter().any(|key| key.page.is_some()) {
+                return Err(ValidationError::InvalidValue {
+                    field: "page".to_string(),
+                    value: "".to_string(),
+                    reason: "cannot define multiple layers of subpages".to_string(),
+                }
+                .into());
+            }
         }
         Ok(())
     }
@@ -902,6 +924,59 @@ mod tests {
     }
 
     #[test]
+    fn direct_access_key_validation() {
+        let valid = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: Some(StationId::from("S1")),
+            page: None,
+        };
+        assert!(valid.validate().is_ok());
+
+        let valid = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: None,
+            page: Some(DirectAccessPageRaw {
+                keys: vec![],
+                rows: 1,
+            }),
+        };
+        assert!(valid.validate().is_ok());
+
+        let invalid_fields = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: Some(StationId::from("S1")),
+            page: Some(DirectAccessPageRaw {
+                keys: vec![],
+                rows: 1,
+            }),
+        };
+        assert_matches!(
+            invalid_fields.validate(),
+            Err(CoverageError::Validation(ValidationError::InvalidValue {field, reason, ..})) if field == "page" && reason == "cannot define both station_id and page"
+        );
+
+        let invalid_multiple_subpages = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: None,
+            page: Some(DirectAccessPageRaw {
+                keys: vec![DirectAccessKeyRaw {
+                    label: vec!["L".to_string()],
+                    station_id: None,
+                    page: Some(DirectAccessPageRaw {
+                        keys: vec![],
+                        rows: 1,
+                    }),
+                }],
+                rows: 1,
+            }),
+        };
+        assert_matches!(
+            invalid_multiple_subpages.validate(),
+            Err(CoverageError::Validation(ValidationError::InvalidValue {field, reason, ..})) if field == "page" && reason == "cannot define multiple layers of subpages"
+        );
+    }
+
+    #[test]
     fn profile_relevant_stations() {
         let raw = ProfileRaw {
             id: ProfileId::from("test"),
@@ -925,6 +1000,7 @@ mod tests {
                             keys: vec![DirectAccessKeyRaw {
                                 label: vec!["K1".to_string()],
                                 station_id: Some(StationId::from("S1")),
+                                page: None,
                             }],
                             rows: 1,
                         }),
@@ -937,14 +1013,17 @@ mod tests {
                                 DirectAccessKeyRaw {
                                     label: vec!["K2".to_string()],
                                     station_id: Some(StationId::from("S2")),
+                                    page: None,
                                 },
                                 DirectAccessKeyRaw {
                                     label: vec!["K3".to_string()],
                                     station_id: Some(StationId::from("S1")), // Duplicate
+                                    page: None,
                                 },
                                 DirectAccessKeyRaw {
                                     label: vec!["K4".to_string()],
                                     station_id: None,
+                                    page: None,
                                 },
                             ],
                             rows: 1,
@@ -986,6 +1065,7 @@ mod tests {
                         keys: vec![DirectAccessKeyRaw {
                             label: vec!["K1".to_string()],
                             station_id: Some(station_id.clone()),
+                            page: None,
                         }],
                         rows: 1,
                     }),
@@ -1016,6 +1096,7 @@ mod tests {
                         keys: vec![DirectAccessKeyRaw {
                             label: vec!["K3".to_string()],
                             station_id: Some(StationId::from("MISSING")),
+                            page: None,
                         }],
                         rows: 1,
                     }),
@@ -1050,6 +1131,7 @@ mod tests {
                         keys: vec![DirectAccessKeyRaw {
                             label: vec!["K4".to_string()],
                             station_id: None,
+                            page: None,
                         }],
                         rows: 1,
                     }),

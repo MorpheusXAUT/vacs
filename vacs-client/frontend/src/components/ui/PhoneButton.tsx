@@ -10,6 +10,7 @@ function PhoneButton() {
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
+    const navigateParentPage = useProfileStore(state => state.navigateParentPage);
 
     const isTabbedProfile = useProfileType() === "tabbed";
 
@@ -37,8 +38,10 @@ function PhoneButton() {
             )}
             onClick={() => {
                 setFilter("");
-                if (!isTabbedProfile) {
-                    setSelectedPage(undefined);
+                if (isTabbedProfile) {
+                    navigateParentPage();
+                } else {
+                    setSelectedPage({current: undefined, parent: undefined});
                 }
                 navigate("/");
             }}

@@ -10,20 +10,16 @@ import {
 import {CSSProperties} from "preact";
 import {useProfileStore} from "../stores/profile-store.ts";
 import DirectAccessPage from "../components/DirectAccessPage.tsx";
-import {useCallStore} from "../stores/call-store.ts";
-import {ClientId, StationId} from "../types/generic.ts";
-import {Call} from "../types/call.ts";
-import {useAuthStore} from "../stores/auth-store.ts";
 import {clsx} from "clsx";
 import ButtonLabel from "../components/ui/ButtonLabel.tsx";
-import {useSettingsStore} from "../stores/settings-store.ts";
+import {useCallState} from "../hooks/call-state-hook.ts";
 
 type GeoPageProps = {
     page: GeoPageContainerModel;
 };
 
 function GeoPage({page}: GeoPageProps) {
-    const selectedPage = useProfileStore(state => state.page);
+    const selectedPage = useProfileStore(state => state.page.current);
 
     return selectedPage !== undefined ? (
         <DirectAccessPage data={selectedPage} />
@@ -99,63 +95,9 @@ type GeoPageButtonProps = {
     button: GeoPageButtonModel;
 };
 
-function callInvolvesButtonStations(
-    call: Call,
-    stationIds: StationId[],
-    cid: ClientId | undefined,
-) {
-    return call.source.clientId === cid
-        ? call.target.station !== undefined && stationIds.includes(call.target.station)
-        : call.source.stationId !== undefined && stationIds.includes(call.source.stationId);
-}
-
 function GeoPageButton({button}: GeoPageButtonProps) {
-    const blink = useCallStore(state => state.blink);
-    const callDisplay = useCallStore(state => state.callDisplay);
-    const incomingCalls = useCallStore(state => state.incomingCalls);
-    const cid = useAuthStore(state => state.cid);
-
+    const {beingCalled, isRejected, color} = useCallState(button.page);
     const setSelectedPage = useProfileStore(state => state.setPage);
-
-    const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
-
-    const stationIds =
-        button.page?.keys.flatMap(key => {
-            if (key.stationId === undefined) return [];
-            return [key.stationId];
-        }) ?? [];
-
-    const isCalling = incomingCalls.some(
-        call => call.source.stationId !== undefined && stationIds.includes(call.source.stationId),
-    );
-    const beingCalled =
-        callDisplay?.type === "outgoing" &&
-        callDisplay.call.target.station !== undefined &&
-        stationIds.includes(callDisplay.call.target.station);
-    const involved =
-        callDisplay !== undefined && callInvolvesButtonStations(callDisplay.call, stationIds, cid);
-    const inCall = callDisplay?.type === "accepted" && involved;
-    const isRejected = callDisplay?.type === "rejected" && involved;
-    const isError = callDisplay?.type === "error" && involved;
-
-    const isTarget =
-        highlightTarget &&
-        (incomingCalls.some(
-            call => call.target.station !== undefined && stationIds.includes(call.target.station),
-        ) ||
-            (callDisplay?.type === "accepted" &&
-                callDisplay.call.target.station !== undefined &&
-                stationIds.includes(callDisplay.call.target.station)));
-
-    const color = inCall
-        ? "green"
-        : (isCalling || isRejected) && blink
-          ? "green"
-          : isError && blink
-            ? "red"
-            : isTarget
-              ? "sage"
-              : "gray";
 
     return (
         <Button
@@ -166,7 +108,7 @@ function GeoPageButton({button}: GeoPageButtonProps) {
                 color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
             )}
             style={{height: `${button.size}rem`}}
-            onClick={() => setSelectedPage(button.page)}
+            onClick={() => setSelectedPage({current: button.page, parent: undefined})}
         >
             <ButtonLabel label={button.label} />
         </Button>

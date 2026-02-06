@@ -9,22 +9,30 @@ import {
 import {create} from "zustand/react";
 import {useShallow} from "zustand/react/shallow";
 
+type SelectedPage = {current: DirectAccessPage | undefined; parent: DirectAccessPage | undefined};
+
 type ProfileState = {
     profile: Profile | undefined;
-    page: DirectAccessPage | undefined;
+    page: SelectedPage;
     testProfilePath: string | undefined;
     setProfile: (profile: Profile | undefined) => void;
-    setPage: (page: DirectAccessPage | undefined) => void;
+    setPage: (page: SelectedPage) => void;
+    navigateParentPage: () => void;
     setTestProfilePath: (path: string | undefined) => void;
     reset: () => void;
 };
 
-export const useProfileStore = create<ProfileState>()((set, _, store) => ({
+export const useProfileStore = create<ProfileState>()((set, get, store) => ({
     profile: undefined,
-    page: undefined,
+    page: {current: undefined, parent: undefined},
     testProfilePath: undefined,
     setProfile: profile => set({profile}),
     setPage: page => set({page: page}),
+    navigateParentPage: () => {
+        const parent = get().page.parent;
+        if (parent === undefined) return;
+        set({page: {current: parent, parent: undefined}});
+    },
     setTestProfilePath: path => set({testProfilePath: path}),
     reset: () => set(store.getInitialState()),
 }));

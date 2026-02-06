@@ -23,7 +23,7 @@ function Tabs() {
 
     useEffect(() => {
         if (tabs === undefined) return;
-        setPage(tabs[active + offset].page);
+        setPage({current: tabs[active + offset].page, parent: undefined});
     }, [active, offset, tabs, setPage]);
 
     if (tabs === undefined) return <></>;
