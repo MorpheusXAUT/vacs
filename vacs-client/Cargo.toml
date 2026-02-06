@@ -50,6 +50,7 @@ vacs-audio = { workspace = true }
 vacs-macros = { workspace = true }
 vacs-signaling = { workspace = true }
 vacs-webrtc = { workspace = true }
+vacs-vatsim = { workspace = true, features = ["coverage"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { workspace = true }

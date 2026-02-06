@@ -3,8 +3,9 @@ import {invoke} from "@tauri-apps/api/core";
 import {isError, openErrorOverlayFromUnknown} from "../error.ts";
 import {ClientInfo} from "../types/client-info.ts";
 import {PositionId} from "../types/generic.ts";
+import {useProfileStore} from "./profile-store.ts";
 
-type State = "connecting" | "connected" | "disconnected";
+type State = "test" | "connecting" | "connected" | "disconnected";
 type ClientInfoWithoutId = Omit<ClientInfo, "id">;
 
 type ConnectionState = {
@@ -31,7 +32,9 @@ export const useConnectionStore = create<ConnectionState>()(set => ({
 
 export const connect = async (position?: PositionId) => {
     const {setConnectionState, setTerminateOverlayVisible} = useConnectionStore.getState();
+    const resetProfileStore = useProfileStore.getState().reset;
 
+    resetProfileStore();
     setConnectionState("connecting");
     try {
         await invoke("signaling_connect", {positionId: position});
