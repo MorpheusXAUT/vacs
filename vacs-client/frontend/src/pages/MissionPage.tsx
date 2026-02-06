@@ -7,6 +7,9 @@ import {useConnectionStore} from "../stores/connection-store.ts";
 import {navigate} from "wouter/use-browser-location";
 
 function MissionPage() {
+    const enableTestProfile = useConnectionStore(
+        state => state.connectionState === "disconnected" || state.connectionState === "test",
+    );
     const testProfilePath = useProfileStore(state => state.testProfilePath);
     const setTestProfilePath = useProfileStore(state => state.setTestProfilePath);
     const setConnectionState = useConnectionStore(state => state.setConnectionState);
@@ -42,7 +45,13 @@ function MissionPage() {
                     <Button
                         color="gray"
                         className="w-60 whitespace-nowrap px-3 py-2"
+                        disabled={!enableTestProfile}
                         onClick={handleLoadTestProfileClick}
+                        title={
+                            enableTestProfile
+                                ? undefined
+                                : "Cannot load test profile while being connected."
+                        }
                     >
                         Load test profile
                     </Button>
@@ -50,7 +59,7 @@ function MissionPage() {
                         color="gray"
                         className="w-[2.625rem] whitespace-nowrap flex justify-center items-center"
                         onClick={handleReloadClick}
-                        disabled={testProfilePath === undefined}
+                        disabled={testProfilePath === undefined || !enableTestProfile}
                     >
                         <img src={reload} alt="Reload" />
                     </Button>
@@ -58,7 +67,7 @@ function MissionPage() {
                         color="gray"
                         className="w-[2.625rem] whitespace-nowrap flex justify-center items-center"
                         onClick={handleUnloadClick}
-                        disabled={testProfilePath === undefined}
+                        disabled={testProfilePath === undefined || !enableTestProfile}
                     >
                         <svg
                             width="26"
