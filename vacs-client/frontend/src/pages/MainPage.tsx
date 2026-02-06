@@ -4,7 +4,7 @@ import GeoPage from "./GeoPage.tsx";
 
 function MainPage() {
     const profile = useProfileStore(state => state.profile);
-    const page = useProfileStore(state => state.page);
+    const page = useProfileStore(state => state.page.current);
 
     return profile !== undefined ? (
         page !== undefined ? (
