@@ -35,7 +35,9 @@ import Button from "./components/ui/Button.tsx";
 import {fetchCallConfig} from "./stores/settings-store.ts";
 
 function App() {
-    const connected = useConnectionStore(state => state.connectionState === "connected");
+    const connected = useConnectionStore(
+        state => state.connectionState === "connected" || state.connectionState === "test",
+    );
     const authStatus = useAuthStore(state => state.status);
     const profileType = useProfileType();
 

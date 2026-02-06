@@ -14,6 +14,8 @@ import {StationChange, StationInfo} from "../types/station.ts";
 import {useStationsStore} from "../stores/stations-store.ts";
 import {Call} from "../types/call.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
+import {Profile} from "../types/profile.ts";
+import {navigate} from "wouter/use-browser-location";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, removeClient} = useClientsStore.getState();
@@ -33,7 +35,7 @@ export function setupSignalingListeners() {
     } = useCallListStore.getState().actions;
     const {setConnectionState, setConnectionInfo, setPositionsToSelect} =
         useConnectionStore.getState();
-    const {setProfile} = useProfileStore.getState();
+    const {setProfile, reset: resetProfileStore} = useProfileStore.getState();
     const {open: openErrorOverlay} = useErrorOverlayStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
@@ -61,7 +63,7 @@ export function setupSignalingListeners() {
                 resetStationsStore();
                 resetCallStore();
                 clearCallList();
-                setProfile(undefined);
+                resetProfileStore();
             }),
             listen<PositionId[]>("signaling:ambiguous-position", event => {
                 setConnectionState("connecting");
@@ -117,6 +119,11 @@ export function setupSignalingListeners() {
             }),
             listen<CallListUpdate>("signaling:update-call-list", event => {
                 updateCallInCallList(event.payload);
+            }),
+            listen<Profile>("signaling:test-profile", event => {
+                setConnectionState("test");
+                setProfile(event.payload);
+                navigate("/");
             }),
         );
     };
