@@ -1,6 +1,6 @@
 import {useCallStore} from "../stores/call-store.ts";
 import {useAuthStore} from "../stores/auth-store.ts";
-import {DirectAccessPage, directAccessPageToStationIds} from "../types/profile.ts";
+import {DirectAccessPage} from "../types/profile.ts";
 import {Call} from "../types/call.ts";
 import {ClientId, StationId} from "../types/generic.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
@@ -57,4 +57,21 @@ function callInvolvesButtonStations(
     return call.source.clientId === cid
         ? call.target.station !== undefined && stationIds.includes(call.target.station)
         : call.source.stationId !== undefined && stationIds.includes(call.source.stationId);
+}
+
+export function directAccessPageToStationIds(page: DirectAccessPage | undefined): StationId[] {
+    const result: StationId[] = [];
+
+    function visit(page: DirectAccessPage | undefined) {
+        if (page === undefined) return;
+
+        for (const key of page.keys) {
+            if (key.stationId !== undefined) result.push(key.stationId);
+            visit(key.page);
+        }
+    }
+
+    visit(page);
+
+    return result;
 }
