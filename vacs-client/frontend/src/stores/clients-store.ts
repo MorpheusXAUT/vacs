@@ -1,12 +1,13 @@
 import {ClientInfo} from "../types/client-info.ts";
 import {create} from "zustand/react";
+import {ClientId} from "../types/generic.ts";
 
 type ClientsState = {
     clients: ClientInfo[];
     setClients: (clients: ClientInfo[]) => void;
     addClient: (client: ClientInfo) => void;
-    getClientInfo: (cid: string) => ClientInfo;
-    removeClient: (cid: string) => void;
+    getClientInfo: (cid: ClientId) => ClientInfo;
+    removeClient: (cid: ClientId) => void;
 };
 
 export const useClientsStore = create<ClientsState>()((set, get) => ({
