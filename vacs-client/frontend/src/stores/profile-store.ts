@@ -12,15 +12,21 @@ import {useShallow} from "zustand/react/shallow";
 type ProfileState = {
     profile: Profile | undefined;
     page: DirectAccessPage | undefined;
+    testProfilePath: string | undefined;
     setProfile: (profile: Profile | undefined) => void;
     setPage: (page: DirectAccessPage | undefined) => void;
+    setTestProfilePath: (path: string | undefined) => void;
+    reset: () => void;
 };
 
-export const useProfileStore = create<ProfileState>()(set => ({
+export const useProfileStore = create<ProfileState>()((set, _, store) => ({
     profile: undefined,
     page: undefined,
+    testProfilePath: undefined,
     setProfile: profile => set({profile}),
     setPage: page => set({page: page}),
+    setTestProfilePath: path => set({testProfilePath: path}),
+    reset: () => set(store.getInitialState()),
 }));
 
 export const useProfileType = (): "geo" | "tabbed" | "unknown" | undefined => {

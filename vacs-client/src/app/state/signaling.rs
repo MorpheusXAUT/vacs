@@ -231,7 +231,7 @@ impl AppStateSignalingExt for AppStateInner {
                 }
             },
             shutdown_token,
-            false, // TODO custom profile
+            false,
             WS_LOGIN_TIMEOUT,
             max_reconnect_attempts,
             tauri::async_runtime::handle().inner(),

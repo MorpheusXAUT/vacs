@@ -4,10 +4,12 @@ use crate::build::VersionInfo;
 use crate::config::{
     CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig, Persistable, PersistedClientConfig,
 };
-use crate::error::Error;
+use crate::error::{Error, FrontendError};
 use crate::platform::Capabilities;
 use anyhow::Context;
+use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+use vacs_vatsim::coverage::profile::Profile;
 
 #[tauri::command]
 pub async fn app_frontend_ready(
@@ -317,4 +319,47 @@ pub async fn app_set_call_config(
     persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
 
     Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_load_test_profile(
+    app: AppHandle,
+    path: Option<String>,
+) -> Result<Option<PathBuf>, Error> {
+    let path = match path {
+        Some(path) => PathBuf::from(path),
+        None => {
+            match rfd::AsyncFileDialog::new()
+                .set_title("Select a custom profile file")
+                .add_filter("vacs Profile", &["toml", "json"])
+                .pick_file()
+                .await
+                .map(|p| p.path().to_path_buf())
+            {
+                Some(path) => path,
+                None => return Ok(None),
+            }
+        }
+    };
+
+    match Profile::load(&path) {
+        Ok(profile) => {
+            log::debug!("Loaded test profile: {:?}", profile);
+            let profile = vacs_signaling::protocol::vatsim::Profile::from(&profile);
+            app.emit("signaling:test-profile", profile).ok();
+        }
+        Err(err) => {
+            app.emit(
+                "error",
+                FrontendError::new(
+                    "Profile error",
+                    format!("Failed to load test profile: {err}"),
+                ),
+            )
+            .ok();
+        }
+    };
+
+    Ok(Some(path))
 }
