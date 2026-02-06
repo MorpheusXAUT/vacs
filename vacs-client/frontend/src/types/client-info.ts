@@ -1,8 +1,8 @@
-import {PositionId} from "./generic.ts";
+import {ClientId, PositionId} from "./generic.ts";
 import {SessionProfile} from "./profile.ts";
 
 export type ClientInfo = {
-    id: string;
+    id: ClientId;
     positionId: PositionId | undefined;
     displayName: string;
     frequency: string;

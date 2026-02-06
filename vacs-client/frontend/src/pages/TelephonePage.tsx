@@ -6,6 +6,7 @@ import DialPad from "../components/telephone/DialPad.tsx";
 import CallList from "../components/telephone/CallList.tsx";
 import {invokeSafe} from "../error.ts";
 import IgnoreList from "../components/telephone/IgnoreList.tsx";
+import TelephoneDirectory from "../components/telephone/TelephoneDirectory.tsx";
 
 type Page = "dir" | "call-list" | "dial-pad" | "ign";
 
@@ -33,9 +34,7 @@ function TelephonePage() {
             <div className="w-full grow rounded-b-sm bg-gray-500 flex flex-row">
                 <div className="grow h-full bg-[#B5BBC6] rounded-lg border-3 border-gray-600">
                     {page === "dir" ? (
-                        <div className="w-full h-full flex justify-center items-center">
-                            <p className="text-slate-600">Not implemented</p>
-                        </div>
+                        <TelephoneDirectory />
                     ) : page === "call-list" ? (
                         <CallList />
                     ) : page === "dial-pad" ? (
