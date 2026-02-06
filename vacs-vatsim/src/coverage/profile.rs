@@ -303,6 +303,9 @@ impl StationIdCollector for DirectAccessPage {
             if let Some(station_id) = &key.station_id {
                 ids.insert(station_id.clone());
             }
+            if let Some(page) = &key.page {
+                page.collect_station_ids(ids);
+            }
         }
     }
 }
