@@ -2,7 +2,8 @@ use crate::app::state::AppState;
 use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog};
 use crate::build::VersionInfo;
 use crate::config::{
-    CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig, Persistable, PersistedClientConfig,
+    CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig, FrontendClientPageConfig,
+    Persistable, PersistedClientConfig,
 };
 use crate::error::{Error, FrontendError};
 use crate::platform::Capabilities;
@@ -362,4 +363,16 @@ pub async fn app_load_test_profile(
     };
 
     Ok(Some(path))
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_get_client_page_config(
+    app_state: State<'_, AppState>,
+) -> Result<FrontendClientPageConfig, Error> {
+    let config = {
+        let state = app_state.lock().await;
+        FrontendClientPageConfig::from(state.config.client_page.clone())
+    };
+    Ok(config)
 }

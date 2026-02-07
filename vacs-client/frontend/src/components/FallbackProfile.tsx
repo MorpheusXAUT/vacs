@@ -1,24 +1,15 @@
 import {useClientsStore} from "../stores/clients-store.ts";
 import DirectAccessClientKey from "./ui/DirectAccessClientKey.tsx";
 import {useMemo} from "preact/hooks";
-import {ClientInfo, ClientPageConfig, filterAndSortClients} from "../types/client.ts";
+import {ClientInfo, filterAndSortClients} from "../types/client.ts";
 import {useFilterStore} from "../stores/filter-store.ts";
 import Button from "./ui/Button.tsx";
 import {useCallStore} from "../stores/call-store.ts";
 import {clsx} from "clsx";
+import {useSettingsStore} from "../stores/settings-store.ts";
 
 function FallbackProfile() {
-    const config: ClientPageConfig = useMemo(
-        // TODO load this config
-        () => ({
-            include: [],
-            exclude: [],
-            priority: [],
-            frequencies: "ShowAll",
-            grouping: "FirAndIcao",
-        }),
-        [],
-    );
+    const config = useSettingsStore(state => state.clientPageConfig);
     const allClients = useClientsStore(state => state.clients);
     const {filter, setFilter} = useFilterStore();
 
