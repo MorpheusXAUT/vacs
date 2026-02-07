@@ -1,6 +1,6 @@
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {useClientsStore} from "../stores/clients-store.ts";
-import {ClientInfo, SessionInfo} from "../types/client.ts";
+import {ClientInfo, ClientPageConfig, SessionInfo} from "../types/client.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {
     IncomingCallListEntry,
@@ -16,6 +16,7 @@ import {Call} from "../types/call.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 import {Profile} from "../types/profile.ts";
 import {navigate} from "wouter/use-browser-location";
+import {useSettingsStore} from "../stores/settings-store.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, removeClient} = useClientsStore.getState();
@@ -37,6 +38,7 @@ export function setupSignalingListeners() {
         useConnectionStore.getState();
     const {setProfile, reset: resetProfileStore} = useProfileStore.getState();
     const {open: openErrorOverlay} = useErrorOverlayStore.getState();
+    const {setClientPageConfig} = useSettingsStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 
@@ -126,6 +128,9 @@ export function setupSignalingListeners() {
                 resetProfileStore();
                 setProfile(event.payload);
                 navigate("/");
+            }),
+            listen<ClientPageConfig>("signaling:client-page-config", event => {
+                setClientPageConfig(event.payload);
             }),
         );
     };

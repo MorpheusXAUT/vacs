@@ -2,8 +2,8 @@ use crate::app::state::AppState;
 use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog};
 use crate::build::VersionInfo;
 use crate::config::{
-    CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig, FrontendClientPageConfig,
-    Persistable, PersistedClientConfig,
+    AppConfig, CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig,
+    FrontendClientPageConfig, Persistable, PersistedClientConfig,
 };
 use crate::error::{Error, FrontendError};
 use crate::platform::Capabilities;
@@ -375,4 +375,59 @@ pub async fn app_get_client_page_config(
         FrontendClientPageConfig::from(state.config.client_page.clone())
     };
     Ok(config)
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_load_extra_client_page_config(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+) -> Result<Option<PathBuf>, Error> {
+    log::debug!("Loading extra client page config");
+
+    let path = match rfd::AsyncFileDialog::new()
+        .set_title("Select a client page configuration file")
+        .add_filter("vacs client page config", &["toml"])
+        .pick_file()
+        .await
+        .map(|p| p.path().to_path_buf())
+    {
+        Some(path) => path,
+        None => return Ok(None),
+    };
+
+    log::debug!("Picked extra client page config file: {path:?}");
+
+    let persisted_client_config = {
+        let mut state = app_state.lock().await;
+        if state
+            .config
+            .client
+            .extra_client_page_config
+            .as_ref()
+            .is_some_and(|p| p == &path)
+        {
+            return Ok(Some(path));
+        }
+
+        state.config.client.extra_client_page_config = Some(path.to_string_lossy().to_string());
+        PersistedClientConfig::from(state.config.client.clone())
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    log::debug!("Reloading configuration");
+    let new_config = AppConfig::parse(&config_dir).context("Failed to reload configuration")?;
+
+    app_state.lock().await.config = new_config.clone();
+
+    let client_page_config = FrontendClientPageConfig::from(new_config.client_page);
+    app.emit("signaling:client-page-config", client_page_config)
+        .ok();
+
+    Ok(Some(path))
 }

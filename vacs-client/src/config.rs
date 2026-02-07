@@ -39,7 +39,7 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn parse(config_dir: &Path) -> anyhow::Result<Self> {
-        let builder = Config::builder()
+        let mut builder = Config::builder()
             .add_source(Config::try_from(&AppConfig::default())?)
             .add_source(
                 File::with_name(
@@ -82,6 +82,19 @@ impl AppConfig {
             )
             .add_source(File::with_name(CLIENT_SETTINGS_FILE_NAME).required(false))
             .add_source(Environment::with_prefix("vacs_client"));
+
+        let preliminary_config: AppConfig = builder
+            .build_cloned()
+            .context("Failed to build preliminary config")?
+            .try_deserialize()
+            .context("Failed to deserialize preliminary config")?;
+
+        if let Some(extra_client_page_config) = preliminary_config.client.extra_client_page_config {
+            log::info!("Loading extra client page config from {extra_client_page_config}");
+            builder = builder
+                .add_source(File::with_name(&extra_client_page_config).required(false))
+                .add_source(Environment::with_prefix("vacs_client"));
+        }
 
         let config: AppConfig = builder
             .build()
@@ -241,6 +254,7 @@ pub struct ClientConfig {
     pub keybinds: KeybindsConfig,
     #[serde(default)]
     pub call: CallConfig,
+    pub extra_client_page_config: Option<String>,
 }
 
 impl Default for ClientConfig {
@@ -258,6 +272,7 @@ impl Default for ClientConfig {
             ignored: HashSet::new(),
             keybinds: KeybindsConfig::default(),
             call: CallConfig::default(),
+            extra_client_page_config: None,
         }
     }
 }
