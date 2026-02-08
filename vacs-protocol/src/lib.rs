@@ -1,5 +1,6 @@
 #[cfg(any(feature = "http", feature = "http-webrtc"))]
 pub mod http;
+pub mod profile;
 #[cfg(feature = "vatsim")]
 pub mod vatsim;
 #[cfg(feature = "ws")]

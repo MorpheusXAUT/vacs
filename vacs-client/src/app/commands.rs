@@ -347,7 +347,7 @@ pub async fn app_load_test_profile(
     match Profile::load(&path) {
         Ok(profile) => {
             log::debug!("Loaded test profile: {:?}", profile);
-            let profile = vacs_signaling::protocol::vatsim::Profile::from(&profile);
+            let profile = vacs_signaling::protocol::profile::Profile::from(&profile);
             app.emit("signaling:test-profile", profile).ok();
         }
         Err(err) => {

@@ -5,7 +5,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::LazyLock;
-use vacs_protocol::vatsim::{PositionId, ProfileId, StationId};
+use vacs_protocol::profile::ProfileId;
+use vacs_protocol::vatsim::{PositionId, StationId};
 
 static FREQUENCY_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{3}\.\d{3}$").unwrap());
 

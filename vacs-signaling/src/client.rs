@@ -14,7 +14,8 @@ use tokio_tungstenite::tungstenite;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, instrument};
 use vacs_protocol::VACS_PROTOCOL_VERSION;
-use vacs_protocol::vatsim::{ActiveProfile, PositionId, Profile};
+use vacs_protocol::profile::{ActiveProfile, Profile};
+use vacs_protocol::vatsim::PositionId;
 use vacs_protocol::ws::client::ClientMessage;
 use vacs_protocol::ws::server::{ClientInfo, ServerMessage, SessionProfile};
 use vacs_protocol::ws::{client, server};
@@ -877,8 +878,8 @@ mod tests {
                         frequency: "100.000".into(),
                     },
                     profile: SessionProfile::Changed(ActiveProfile::Specific(Profile {
-                        id: vacs_protocol::vatsim::ProfileId::from("1"),
-                        profile_type: vacs_protocol::vatsim::ProfileType::Tabbed(vec![]),
+                        id: vacs_protocol::profile::ProfileId::from("1"),
+                        profile_type: vacs_protocol::profile::ProfileType::Tabbed(vec![]),
                     })),
                 }))
                 .unwrap()
