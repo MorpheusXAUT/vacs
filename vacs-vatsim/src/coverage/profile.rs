@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use vacs_protocol::profile::client_page::ClientPage;
+use vacs_protocol::profile::client_page::{ClientPage, ClientPageConfig};
 use vacs_protocol::profile::geo::{
     GeoNode, GeoPageButton, GeoPageContainer, GeoPageDivider, JustifyContent,
 };
@@ -679,17 +679,50 @@ impl Validator for DirectAccessKeyRaw {
             }
             .into());
         }
-        if self.station_id.is_some() && self.page.is_some() {
-            return Err(ValidationError::InvalidValue {
-                field: "page".to_string(),
-                value: "".to_string(),
-                reason: "cannot define both station_id and page".to_string(),
+
+        let defined = [
+            ("station_id", self.station_id.is_some()),
+            ("page", self.page.is_some()),
+            ("client_page", self.client_page.is_some()),
+        ]
+        .into_iter()
+        .filter_map(|(name, is_some)| is_some.then_some(name))
+        .collect::<Vec<_>>();
+        if defined.len() > 1 {
+            return Err(ValidationError::MutuallyExclusive {
+                fields: defined.into_iter().map(|s| s.to_string()).collect(),
             }
             .into());
         }
+
         if let Some(page) = &self.page {
             page.validate()?;
+        } else if let Some(client_page) = &self.client_page {
+            client_page.validate()?;
         }
+
+        Ok(())
+    }
+}
+
+impl Validator for ClientPage {
+    fn validate(&self) -> Result<(), CoverageError> {
+        if self.rows == 0 {
+            return Err(ValidationError::OutOfRange {
+                field: "rows".to_string(),
+                value: self.rows.to_string(),
+                min: 1.to_string(),
+                max: None,
+            }
+            .into());
+        }
+        self.config.validate()?;
+        Ok(())
+    }
+}
+
+impl Validator for ClientPageConfig {
+    fn validate(&self) -> Result<(), CoverageError> {
         Ok(())
     }
 }
@@ -773,7 +806,7 @@ mod tests {
     use super::*;
     use crate::coverage::{CoverageError, ValidationError};
     use pretty_assertions::assert_matches;
-    use vacs_protocol::profile::geo::FlexDirection;
+    use vacs_protocol::profile::{client_page::ClientPageConfig, geo::FlexDirection};
 
     #[test]
     fn profile_raw_validation() {
@@ -948,6 +981,17 @@ mod tests {
         };
         assert!(valid.validate().is_ok());
 
+        let valid = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: None,
+            page: None,
+            client_page: Some(ClientPage {
+                config: ClientPageConfig::default(),
+                rows: 1,
+            }),
+        };
+        assert!(valid.validate().is_ok());
+
         let invalid_fields = DirectAccessKeyRaw {
             label: vec!["L".to_string()],
             station_id: Some(StationId::from("S1")),
@@ -959,7 +1003,41 @@ mod tests {
         };
         assert_matches!(
             invalid_fields.validate(),
-            Err(CoverageError::Validation(ValidationError::InvalidValue {field, reason, ..})) if field == "page" && reason == "cannot define both station_id and page"
+            Err(CoverageError::Validation(ValidationError::MutuallyExclusive { fields }))
+                if fields.contains(&"station_id".to_string()) && fields.contains(&"page".to_string())
+        );
+
+        let invalid_fields = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: Some(StationId::from("S1")),
+            page: None,
+            client_page: Some(ClientPage {
+                config: ClientPageConfig::default(),
+                rows: 1,
+            }),
+        };
+        assert_matches!(
+            invalid_fields.validate(),
+            Err(CoverageError::Validation(ValidationError::MutuallyExclusive { fields }))
+                if fields.contains(&"station_id".to_string()) && fields.contains(&"client_page".to_string())
+        );
+
+        let invalid_fields = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: None,
+            page: Some(DirectAccessPageRaw {
+                keys: vec![],
+                rows: 1,
+            }),
+            client_page: Some(ClientPage {
+                config: ClientPageConfig::default(),
+                rows: 1,
+            }),
+        };
+        assert_matches!(
+            invalid_fields.validate(),
+            Err(CoverageError::Validation(ValidationError::MutuallyExclusive { fields }))
+                if fields.contains(&"page".to_string()) && fields.contains(&"client_page".to_string())
         );
     }
 
