@@ -15,7 +15,8 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{Instrument, instrument};
-use vacs_protocol::vatsim::{ActiveProfile, ClientId, PositionId, ProfileId};
+use vacs_protocol::profile::{ActiveProfile, ProfileId};
+use vacs_protocol::vatsim::{ClientId, PositionId};
 use vacs_protocol::ws::client::ClientMessage;
 use vacs_protocol::ws::server::{ClientInfo, DisconnectReason, ServerMessage, SessionProfile};
 use vacs_protocol::ws::{server, shared};
@@ -514,7 +515,6 @@ mod tests {
     use axum::extract::ws::Utf8Bytes;
     use pretty_assertions::{assert_eq, assert_matches};
     use test_log::test;
-    use vacs_protocol::vatsim::{ActiveProfile, ProfileId};
 
     #[test(tokio::test)]
     async fn new_client_session() {

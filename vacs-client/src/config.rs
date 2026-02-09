@@ -7,7 +7,7 @@ use anyhow::Context;
 use config::{Config, Environment, File};
 use keyboard_types::Code;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -15,6 +15,9 @@ use std::time::Duration;
 use tauri::{AppHandle, LogicalSize, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
+use vacs_signaling::protocol::profile::client_page::{
+    ClientGroupMode, ClientPageConfig, FrequencyDisplayMode,
+};
 use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
 
 /// User-Agent string used for all HTTP requests.
@@ -23,6 +26,7 @@ pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
 pub const DEFAULT_SETTINGS_FILE_NAME: &str = "config.toml";
 pub const AUDIO_SETTINGS_FILE_NAME: &str = "audio.toml";
 pub const CLIENT_SETTINGS_FILE_NAME: &str = "client.toml";
+pub const CLIENT_PAGE_SETTINGS_FILE_NAME: &str = "client_page.toml";
 pub const ENCODED_AUDIO_FRAME_BUFFER_SIZE: usize = 512;
 pub const ICE_CONFIG_EXPIRY_LEEWAY: Duration = Duration::from_mins(15);
 
@@ -33,11 +37,13 @@ pub struct AppConfig {
     #[serde(alias = "webrtc")] // support for old naming scheme
     pub ice: IceConfig,
     pub client: ClientConfig,
+    #[serde(default)]
+    pub client_page: ClientPageSettings,
 }
 
 impl AppConfig {
     pub fn parse(config_dir: &Path) -> anyhow::Result<Self> {
-        let builder = Config::builder()
+        let mut builder = Config::builder()
             .add_source(Config::try_from(&AppConfig::default())?)
             .add_source(
                 File::with_name(
@@ -62,6 +68,16 @@ impl AppConfig {
             .add_source(
                 File::with_name(
                     config_dir
+                        .join(CLIENT_PAGE_SETTINGS_FILE_NAME)
+                        .to_str()
+                        .expect("Failed to get local config path"),
+                )
+                .required(false),
+            )
+            .add_source(File::with_name(CLIENT_PAGE_SETTINGS_FILE_NAME).required(false))
+            .add_source(
+                File::with_name(
+                    config_dir
                         .join(CLIENT_SETTINGS_FILE_NAME)
                         .to_str()
                         .expect("Failed to get local config path"),
@@ -70,6 +86,19 @@ impl AppConfig {
             )
             .add_source(File::with_name(CLIENT_SETTINGS_FILE_NAME).required(false))
             .add_source(Environment::with_prefix("vacs_client"));
+
+        let preliminary_config: AppConfig = builder
+            .build_cloned()
+            .context("Failed to build preliminary config")?
+            .try_deserialize()
+            .context("Failed to deserialize preliminary config")?;
+
+        if let Some(extra_client_page_config) = preliminary_config.client.extra_client_page_config {
+            log::info!("Loading extra client page config from {extra_client_page_config}");
+            builder = builder
+                .add_source(File::with_name(&extra_client_page_config).required(false))
+                .add_source(Environment::with_prefix("vacs_client"));
+        }
 
         let config: AppConfig = builder
             .build()
@@ -211,7 +240,9 @@ impl From<AudioConfig> for PersistedAudioConfig {
 pub struct ClientConfig {
     pub always_on_top: bool,
     pub fullscreen: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub position: Option<PhysicalPosition<i32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<PhysicalSize<u32>>,
     pub release_channel: ReleaseChannel,
     pub signaling_auto_reconnect: bool,
@@ -229,6 +260,11 @@ pub struct ClientConfig {
     pub keybinds: KeybindsConfig,
     #[serde(default)]
     pub call: CallConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_client_page_config: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra_client_page_config: Option<String>,
+    pub test_profile_watcher_delay_ms: u64,
 }
 
 impl Default for ClientConfig {
@@ -246,6 +282,9 @@ impl Default for ClientConfig {
             ignored: HashSet::new(),
             keybinds: KeybindsConfig::default(),
             call: CallConfig::default(),
+            selected_client_page_config: None,
+            extra_client_page_config: None,
+            test_profile_watcher_delay_ms: 500,
         }
     }
 }
@@ -702,6 +741,62 @@ impl From<FrontendCallConfig> for CallConfig {
     fn from(frontend_call_config: FrontendCallConfig) -> Self {
         Self {
             highlight_incoming_call_target: frontend_call_config.highlight_incoming_call_target,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ClientPageSettings {
+    /// Named configs for different client page configurations.
+    /// Users can switch between configs in the UI.
+    pub configs: HashMap<String, ClientPageConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendClientPageSettings {
+    selected: Option<String>,
+    configs: HashMap<String, FrontendClientPageConfig>,
+}
+
+impl From<&AppConfig> for FrontendClientPageSettings {
+    fn from(config: &AppConfig) -> Self {
+        FrontendClientPageSettings {
+            selected: config.client.selected_client_page_config.clone(),
+            configs: config
+                .client_page
+                .configs
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone().into()))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendClientPageConfig {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+    pub priority: Vec<String>,
+    pub frequencies: FrequencyDisplayMode,
+    pub grouping: ClientGroupMode,
+}
+
+impl Default for FrontendClientPageConfig {
+    fn default() -> Self {
+        Self::from(ClientPageConfig::default())
+    }
+}
+
+impl From<ClientPageConfig> for FrontendClientPageConfig {
+    fn from(client_page_config: ClientPageConfig) -> Self {
+        Self {
+            include: client_page_config.include,
+            exclude: client_page_config.exclude,
+            priority: client_page_config.priority,
+            frequencies: client_page_config.frequencies,
+            grouping: client_page_config.grouping,
         }
     }
 }

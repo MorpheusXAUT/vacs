@@ -32,12 +32,11 @@ import MainPage from "./pages/MainPage.tsx";
 import Tabs from "./components/Tabs.tsx";
 import {useProfileType} from "./stores/profile-store.ts";
 import Button from "./components/ui/Button.tsx";
-import {fetchCallConfig} from "./stores/settings-store.ts";
+import {fetchCallConfig, fetchClientPageSettings} from "./stores/settings-store.ts";
 
 function App() {
-    const connected = useConnectionStore(
-        state => state.connectionState === "connected" || state.connectionState === "test",
-    );
+    const connected = useConnectionStore(state => state.connectionState === "connected");
+    const testing = useConnectionStore(state => state.connectionState === "test");
     const authStatus = useAuthStore(state => state.status);
     const profileType = useProfileType();
 
@@ -55,6 +54,7 @@ function App() {
 
         void fetchCapabilities();
         void fetchCallConfig();
+        void fetchClientPageSettings();
 
         return () => {
             cleanups.forEach(cleanup => cleanup());
@@ -79,9 +79,9 @@ function App() {
                             <Route path="/" nest>
                                 {authStatus === "loading" ? (
                                     <></>
-                                ) : authStatus === "unauthenticated" ? (
+                                ) : authStatus === "unauthenticated" && !testing ? (
                                     <LoginPage />
-                                ) : connected ? (
+                                ) : connected || testing ? (
                                     <MainPage />
                                 ) : (
                                     <ConnectPage />
@@ -128,7 +128,7 @@ function App() {
                         )}
                     </div>
                     <div className="h-full flex flex-row gap-5">
-                        {profileType === "tabbed" && <Tabs />}
+                        {(connected || testing) && profileType === "tabbed" && <Tabs />}
                         <EndButton />
                     </div>
                 </div>

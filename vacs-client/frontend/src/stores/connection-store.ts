@@ -1,7 +1,7 @@
 import {create} from "zustand/react";
 import {invoke} from "@tauri-apps/api/core";
 import {isError, openErrorOverlayFromUnknown} from "../error.ts";
-import {ClientInfo} from "../types/client-info.ts";
+import {ClientInfo} from "../types/client.ts";
 import {PositionId} from "../types/generic.ts";
 import {useProfileStore} from "./profile-store.ts";
 

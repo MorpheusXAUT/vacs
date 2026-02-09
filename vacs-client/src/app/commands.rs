@@ -2,12 +2,16 @@ use crate::app::state::AppState;
 use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog};
 use crate::build::VersionInfo;
 use crate::config::{
-    CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig, Persistable, PersistedClientConfig,
+    AppConfig, CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig,
+    FrontendClientPageSettings, Persistable, PersistedClientConfig,
 };
 use crate::error::{Error, FrontendError};
 use crate::platform::Capabilities;
 use anyhow::Context;
+use notify_debouncer_full::notify::{EventKind, RecursiveMode};
+use notify_debouncer_full::{DebounceEventResult, new_debouncer};
 use std::path::PathBuf;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 use vacs_vatsim::coverage::profile::Profile;
 
@@ -325,6 +329,7 @@ pub async fn app_set_call_config(
 #[vacs_macros::log_err]
 pub async fn app_load_test_profile(
     app: AppHandle,
+    app_state: State<'_, AppState>,
     path: Option<String>,
 ) -> Result<Option<PathBuf>, Error> {
     let path = match path {
@@ -338,7 +343,14 @@ pub async fn app_load_test_profile(
                 .map(|p| p.path().to_path_buf())
             {
                 Some(path) => path,
-                None => return Ok(None),
+                None => {
+                    let state = app.state::<AppState>();
+                    let mut state = state.lock().await;
+                    if state.test_profile_watcher.take().is_some() {
+                        log::debug!("Stopped watching test profile");
+                    }
+                    return Ok(None);
+                }
             }
         }
     };
@@ -346,10 +358,11 @@ pub async fn app_load_test_profile(
     match Profile::load(&path) {
         Ok(profile) => {
             log::debug!("Loaded test profile: {:?}", profile);
-            let profile = vacs_signaling::protocol::vatsim::Profile::from(&profile);
+            let profile = vacs_signaling::protocol::profile::Profile::from(&profile);
             app.emit("signaling:test-profile", profile).ok();
         }
         Err(err) => {
+            log::warn!("Failed to load test profile: {err}");
             app.emit(
                 "error",
                 FrontendError::new(
@@ -360,6 +373,167 @@ pub async fn app_load_test_profile(
             .ok();
         }
     };
+
+    let mut state = app_state.lock().await;
+    if state.config.client.test_profile_watcher_delay_ms > 0
+        && let Some(parent) = path.parent()
+    {
+        let path_clone = path.clone();
+        let app = app.clone();
+
+        let debouncer = new_debouncer(
+            Duration::from_millis(state.config.client.test_profile_watcher_delay_ms),
+            None,
+            move |res: DebounceEventResult| match res {
+                Ok(events) => {
+                    if events.iter().any(|e| {
+                        matches!(e.kind, EventKind::Create(_) | EventKind::Modify(_))
+                            && e.paths.iter().any(|p| p == &path_clone)
+                    }) {
+                        log::debug!("Test profile changed, reloading");
+                        match Profile::load(&path_clone) {
+                            Ok(profile) => {
+                                log::debug!("Reloaded test profile: {:?}", profile);
+                                let profile =
+                                    vacs_signaling::protocol::profile::Profile::from(&profile);
+                                app.emit("signaling:test-profile", profile).ok();
+                            }
+                            Err(err) => {
+                                log::warn!("Failed to reload test profile: {err}");
+                                app.emit(
+                                    "error",
+                                    FrontendError::new(
+                                        "Profile error",
+                                        format!("Failed to reload test profile: {err}"),
+                                    ),
+                                )
+                                .ok();
+                            }
+                        }
+                    }
+                }
+                Err(err) => log::warn!(
+                    "Received error watching test profile parent directory for changes: {err:?}"
+                ),
+            },
+        );
+
+        match debouncer {
+            Ok(mut debouncer) => {
+                if let Err(err) = debouncer.watch(parent, RecursiveMode::NonRecursive) {
+                    log::warn!("Failed to start watcher for test profile: {err}");
+                } else {
+                    log::trace!(
+                        "Started watching parent directory {parent:?} for changes to test profile {path:?}"
+                    );
+                    state.test_profile_watcher = Some(debouncer);
+                }
+            }
+            Err(err) => {
+                log::error!("Failed to create debouncer: {err}");
+            }
+        }
+    }
+
+    Ok(Some(path))
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_unload_test_profile(app_state: State<'_, AppState>) -> Result<(), Error> {
+    let mut state = app_state.lock().await;
+    if state.test_profile_watcher.take().is_some() {
+        log::debug!("Stopped watching test profile");
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_get_client_page_settings(
+    app_state: State<'_, AppState>,
+) -> Result<FrontendClientPageSettings, Error> {
+    let config = {
+        let state = app_state.lock().await;
+        FrontendClientPageSettings::from(&state.config)
+    };
+    Ok(config)
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_set_selected_client_page_config(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    config_name: Option<String>,
+) -> Result<(), Error> {
+    let config: PersistedClientConfig = {
+        let mut state = app_state.lock().await;
+        state.config.client.selected_client_page_config = config_name;
+
+        state.config.client.clone().into()
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_load_extra_client_page_config(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+) -> Result<Option<PathBuf>, Error> {
+    log::debug!("Loading extra client page config");
+
+    let path = match rfd::AsyncFileDialog::new()
+        .set_title("Select a client page configuration file")
+        .add_filter("vacs client page config", &["toml"])
+        .pick_file()
+        .await
+        .map(|p| p.path().to_path_buf())
+    {
+        Some(path) => path,
+        None => return Ok(None),
+    };
+
+    log::debug!("Picked extra client page config file: {path:?}");
+
+    let persisted_client_config = {
+        let mut state = app_state.lock().await;
+        if state
+            .config
+            .client
+            .extra_client_page_config
+            .as_ref()
+            .is_some_and(|p| p == &path)
+        {
+            return Ok(Some(path));
+        }
+
+        state.config.client.extra_client_page_config = Some(path.to_string_lossy().to_string());
+        PersistedClientConfig::from(state.config.client.clone())
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    log::debug!("Reloading configuration");
+    let new_config = AppConfig::parse(&config_dir).context("Failed to reload configuration")?;
+
+    app_state.lock().await.config = new_config.clone();
+
+    let client_page_config = FrontendClientPageSettings::from(&new_config);
+    app.emit("signaling:client-page-config", client_page_config)
+        .ok();
 
     Ok(Some(path))
 }

@@ -76,7 +76,6 @@ function TelephoneDirectory() {
                             "px-2 py-1.5 border border-gray-700 bg-yellow-50 font-semibold rounded focus:border-blue-500 focus:outline-none placeholder:text-gray-500",
                             "disabled:brightness-90 disabled:cursor-not-allowed",
                         )}
-                        title="The address where TrackAudio is running. Accepts a hostname or IP address, with an optional port (e.g., '192.168.1.69' or '192.168.1.69:49080'). If you're running TrackAudio on the same machine as vacs, you can leave this value empty as it will automatically attempt to connect to TrackAudio on its default listener at 'localhost:49080'."
                         value={filter}
                         onChange={handleOnFilterChange}
                         onKeyDown={e => {
