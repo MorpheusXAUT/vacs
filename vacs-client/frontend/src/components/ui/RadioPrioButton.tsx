@@ -25,11 +25,17 @@ function RadioPrioButton() {
             setPrio(false);
         }
 
-        const unlisten = listen<boolean>("audio:implicit-radio-prio", event => {
+        const unlistenPrio = listen<boolean>("audio:radio-prio", event => {
+            setPrio(event.payload);
+        });
+        const unlistenImplicitPrio = listen<boolean>("audio:implicit-radio-prio", event => {
             setImplicitRadioPrio(event.payload);
         });
 
-        return () => unlisten.then(fn => fn());
+        return () => {
+            unlistenPrio.then(fn => fn());
+            unlistenImplicitPrio.then(fn => fn());
+        };
     }, [callDisplayType]);
 
     return (

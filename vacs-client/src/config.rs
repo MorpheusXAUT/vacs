@@ -653,14 +653,16 @@ impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
 
 /// Configuration for generic call control keybinds.
 ///
-/// These keybinds allow accepting and ending calls without needing to use the UI
-/// and can be used independently of the transmit mode.
+/// These keybinds allow accepting and ending calls as well as toggling radio prio without needing
+/// to use the UI and can be used independently of the transmit mode.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KeybindsConfig {
     /// Key code to accept an incoming call.
     pub accept_call: Option<Code>,
     /// Key code to end an active call.
     pub end_call: Option<Code>,
+    /// Key code to toggle radio prio during an active call.
+    pub toggle_radio_prio: Option<Code>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -668,6 +670,7 @@ pub struct KeybindsConfig {
 pub struct FrontendKeybindsConfig {
     pub accept_call: Option<String>,
     pub end_call: Option<String>,
+    pub toggle_radio_prio: Option<String>,
 }
 
 impl From<KeybindsConfig> for FrontendKeybindsConfig {
@@ -675,6 +678,7 @@ impl From<KeybindsConfig> for FrontendKeybindsConfig {
         Self {
             accept_call: config.accept_call.map(|c| c.to_string()),
             end_call: config.end_call.map(|c| c.to_string()),
+            toggle_radio_prio: config.toggle_radio_prio.map(|c| c.to_string()),
         }
     }
 }
@@ -696,6 +700,12 @@ impl TryFrom<FrontendKeybindsConfig> for KeybindsConfig {
                 .map(|s| s.parse::<Code>())
                 .transpose()
                 .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.end_call.unwrap_or_default()))))?,
+            toggle_radio_prio: value
+                .toggle_radio_prio
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.toggle_radio_prio.unwrap_or_default()))))?,
         })
     }
 }
