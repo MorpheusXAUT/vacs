@@ -5,11 +5,13 @@ export type KeybindType =
     | "PushToMute"
     | "RadioIntegration"
     | "AcceptCall"
-    | "EndCall";
+    | "EndCall"
+    | "ToggleRadioPrio";
 
 export type KeybindsConfig = {
     acceptCall: string | null;
     endCall: string | null;
+    toggleRadioPrio: string | null;
 };
 
 export function transmitModeToKeybind(mode: TransmitMode): KeybindType | null {
