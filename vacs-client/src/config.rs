@@ -749,6 +749,7 @@ impl From<FrontendCallConfig> for CallConfig {
 pub struct ClientPageSettings {
     /// Named configs for different client page configurations.
     /// Users can switch between configs in the UI.
+    #[serde(default)]
     pub configs: HashMap<String, ClientPageConfig>,
 }
 
