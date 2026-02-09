@@ -196,35 +196,3 @@ impl PartialOrd for Profile {
         self.id.partial_cmp(&other.id)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn testtest() {
-        let page = DirectAccessPage {
-            rows: 1,
-            content: DirectAccessPageContent::Keys {
-                keys: vec![DirectAccessKey {
-                    label: vec!["K1".to_string()],
-                    station_id: Some(StationId::from("S1")),
-                    page: None,
-                }],
-            },
-        };
-        let dings = serde_json::to_string_pretty(&page).unwrap();
-        println!("{dings}");
-
-        let page = DirectAccessPage {
-            rows: 1,
-            content: DirectAccessPageContent::ClientPage {
-                client_page: ClientPageConfig::default(),
-            },
-        };
-        let dings = serde_json::to_string_pretty(&page).unwrap();
-        println!("{dings}");
-
-        assert!(false)
-    }
-}
