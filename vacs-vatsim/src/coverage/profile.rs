@@ -4,13 +4,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use vacs_protocol::profile::client_page::{ClientPage, ClientPageConfig};
+use vacs_protocol::profile::client_page::ClientPageConfig;
 use vacs_protocol::profile::geo::{
     GeoNode, GeoPageButton, GeoPageContainer, GeoPageDivider, JustifyContent,
 };
 use vacs_protocol::profile::tabbed::Tab;
 use vacs_protocol::profile::{
-    DirectAccessKey, DirectAccessPage, Profile as ProtocolProfile, ProfileId, ProfileType,
+    DirectAccessKey, DirectAccessPage, DirectAccessPageContent, Profile as ProtocolProfile,
+    ProfileId, ProfileType,
 };
 use vacs_protocol::vatsim::StationId;
 
@@ -93,10 +94,46 @@ pub(super) struct GeoPageDividerRaw {
     pub oversize: Option<f64>,
 }
 
+/*
+{
+  "rows": 1,
+  "keys": [
+    {
+      "label": [
+        "K1"
+      ],
+      "stationId": "S1"
+    }
+  ]
+}
+{
+  "rows": 1,
+  "client_page": {
+    "priority": [
+      "*_FMP",
+      "*_CTR",
+      "*_APP",
+      "*_TWR",
+      "*_GND"
+    ],
+    "frequencies": "ShowAll",
+    "grouping": "FirAndIcao"
+  }
+}
+ */
+
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct DirectAccessPageRaw {
-    pub keys: Vec<DirectAccessKeyRaw>,
     pub rows: u8,
+    #[serde(flatten)]
+    pub content: DirectAccessPageContentRaw,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub(super) enum DirectAccessPageContentRaw {
+    Keys { keys: Vec<DirectAccessKeyRaw> },
+    ClientPage { client_page: ClientPageConfig },
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -106,8 +143,6 @@ pub(super) struct DirectAccessKeyRaw {
     pub station_id: Option<StationId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page: Option<DirectAccessPageRaw>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub client_page: Option<ClientPage>,
 }
 
 impl Profile {
@@ -297,22 +332,44 @@ impl StationIdCollector for GeoPageButton {
 
 impl ReferenceValidator<StationId> for DirectAccessPage {
     fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
-        for key in &self.keys {
-            key.validate_references(stations)?;
+        self.content.validate_references(stations)
+    }
+}
+
+impl ReferenceValidator<StationId> for DirectAccessPageContent {
+    fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
+        match self {
+            DirectAccessPageContent::Keys { keys } => {
+                for key in keys {
+                    key.validate_references(stations)?;
+                }
+                Ok(())
+            }
+            DirectAccessPageContent::ClientPage { .. } => Ok(()),
         }
-        Ok(())
     }
 }
 
 impl StationIdCollector for DirectAccessPage {
     fn collect_station_ids(&self, ids: &mut HashSet<StationId>) {
-        for key in &self.keys {
-            if let Some(station_id) = &key.station_id {
-                ids.insert(station_id.clone());
+        self.content.collect_station_ids(ids);
+    }
+}
+
+impl StationIdCollector for DirectAccessPageContent {
+    fn collect_station_ids(&self, ids: &mut HashSet<StationId>) {
+        match self {
+            DirectAccessPageContent::Keys { keys } => {
+                for key in keys {
+                    if let Some(station_id) = &key.station_id {
+                        ids.insert(station_id.clone());
+                    }
+                    if let Some(page) = &key.page {
+                        page.collect_station_ids(ids);
+                    }
+                }
             }
-            if let Some(page) = &key.page {
-                page.collect_station_ids(ids);
-            }
+            DirectAccessPageContent::ClientPage { .. } => {}
         }
     }
 }
@@ -347,9 +404,7 @@ impl Validator for TabRaw {
 
 impl ReferenceValidator<StationId> for Tab {
     fn validate_references(&self, stations: &HashSet<&StationId>) -> Result<(), CoverageError> {
-        for key in &self.page.keys {
-            key.validate_references(stations)?;
-        }
+        self.page.validate_references(stations)?;
         Ok(())
     }
 }
@@ -429,15 +484,26 @@ impl FromRaw<GeoPageDividerRaw> for GeoPageDivider {
 
 impl FromRaw<DirectAccessPageRaw> for DirectAccessPage {
     fn from_raw(raw: DirectAccessPageRaw) -> Result<Self, CoverageError> {
-        raw.validate()?;
         Ok(Self {
-            keys: raw
-                .keys
-                .into_iter()
-                .map(DirectAccessKey::try_from)
-                .collect::<Result<_, _>>()?,
             rows: raw.rows,
+            content: DirectAccessPageContent::from_raw(raw.content)?,
         })
+    }
+}
+
+impl FromRaw<DirectAccessPageContentRaw> for DirectAccessPageContent {
+    fn from_raw(raw: DirectAccessPageContentRaw) -> Result<Self, CoverageError> {
+        match raw {
+            DirectAccessPageContentRaw::Keys { keys } => Ok(DirectAccessPageContent::Keys {
+                keys: keys
+                    .into_iter()
+                    .map(DirectAccessKey::try_from)
+                    .collect::<Result<_, _>>()?,
+            }),
+            DirectAccessPageContentRaw::ClientPage { client_page } => {
+                Ok(DirectAccessPageContent::ClientPage { client_page })
+            }
+        }
     }
 }
 
@@ -449,7 +515,6 @@ impl TryFrom<DirectAccessKeyRaw> for DirectAccessKey {
             label: raw.label,
             station_id: raw.station_id,
             page: raw.page.map(DirectAccessPage::from_raw).transpose()?,
-            client_page: raw.client_page,
         })
     }
 }
@@ -662,10 +727,21 @@ impl Validator for DirectAccessPageRaw {
             }
             .into());
         }
-        for key in &self.keys {
-            key.validate()?;
+        self.content.validate()
+    }
+}
+
+impl Validator for DirectAccessPageContentRaw {
+    fn validate(&self) -> Result<(), CoverageError> {
+        match self {
+            DirectAccessPageContentRaw::Keys { keys } => {
+                for key in keys {
+                    key.validate()?;
+                }
+                Ok(())
+            }
+            DirectAccessPageContentRaw::ClientPage { client_page } => client_page.validate(),
         }
-        Ok(())
     }
 }
 
@@ -680,43 +756,20 @@ impl Validator for DirectAccessKeyRaw {
             .into());
         }
 
-        let defined = [
-            ("station_id", self.station_id.is_some()),
-            ("page", self.page.is_some()),
-            ("client_page", self.client_page.is_some()),
-        ]
-        .into_iter()
-        .filter_map(|(name, is_some)| is_some.then_some(name))
-        .collect::<Vec<_>>();
-        if defined.len() > 1 {
+        if self.station_id.is_some() && self.page.is_some() {
             return Err(ValidationError::MutuallyExclusive {
-                fields: defined.into_iter().map(|s| s.to_string()).collect(),
+                fields: ["station_id", "page"]
+                    .into_iter()
+                    .map(String::from)
+                    .collect(),
             }
             .into());
         }
 
         if let Some(page) = &self.page {
             page.validate()?;
-        } else if let Some(client_page) = &self.client_page {
-            client_page.validate()?;
         }
 
-        Ok(())
-    }
-}
-
-impl Validator for ClientPage {
-    fn validate(&self) -> Result<(), CoverageError> {
-        if self.rows == 0 {
-            return Err(ValidationError::OutOfRange {
-                field: "rows".to_string(),
-                value: self.rows.to_string(),
-                min: 1.to_string(),
-                max: None,
-            }
-            .into());
-        }
-        self.config.validate()?;
         Ok(())
     }
 }
@@ -767,9 +820,21 @@ impl std::fmt::Debug for GeoNodeRaw {
 impl std::fmt::Debug for DirectAccessPageRaw {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DirectAccessPageRaw")
-            .field("keys", &self.keys.len())
             .field("rows", &self.rows)
+            .field("content", &self.content)
             .finish()
+    }
+}
+
+impl std::fmt::Debug for DirectAccessPageContentRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Keys { keys } => f.debug_struct("Keys").field("keys", &keys.len()).finish(),
+            Self::ClientPage { client_page } => f
+                .debug_struct("ClientPage")
+                .field("client_page", client_page)
+                .finish(),
+        }
     }
 }
 
@@ -871,8 +936,8 @@ mod tests {
             tabs: vec![TabRaw {
                 label: "tab1".to_string(),
                 page: DirectAccessPageRaw {
-                    keys: vec![],
                     rows: 1,
+                    content: DirectAccessPageContentRaw::Keys { keys: vec![] },
                 },
             }],
         };
@@ -891,8 +956,8 @@ mod tests {
             label: vec!["L".to_string()],
             size: 10.0f64,
             page: Some(DirectAccessPageRaw {
-                keys: vec![],
                 rows: 1,
+                content: DirectAccessPageContentRaw::Keys { keys: vec![] },
             }),
         };
         assert!(valid.validate().is_ok());
@@ -901,8 +966,8 @@ mod tests {
             label: vec![],
             size: 10.0f64,
             page: Some(DirectAccessPageRaw {
-                keys: vec![],
                 rows: 1,
+                content: DirectAccessPageContentRaw::Keys { keys: vec![] },
             }),
         };
         assert_matches!(
@@ -919,8 +984,8 @@ mod tests {
             ],
             size: 10.0f64,
             page: Some(DirectAccessPageRaw {
-                keys: vec![],
                 rows: 1,
+                content: DirectAccessPageContentRaw::Keys { keys: vec![] },
             }),
         };
         assert_matches!(
@@ -932,8 +997,8 @@ mod tests {
             label: vec!["L".to_string()],
             size: -10.0f64,
             page: Some(DirectAccessPageRaw {
-                keys: vec![],
                 rows: 1,
+                content: DirectAccessPageContentRaw::Keys { keys: vec![] },
             }),
         };
         assert_matches!(
@@ -945,14 +1010,14 @@ mod tests {
     #[test]
     fn direct_access_page_validation() {
         let valid = DirectAccessPageRaw {
-            keys: vec![],
             rows: 1,
+            content: DirectAccessPageContentRaw::Keys { keys: vec![] },
         };
         assert!(valid.validate().is_ok());
 
         let invalid_rows = DirectAccessPageRaw {
-            keys: vec![],
             rows: 0,
+            content: DirectAccessPageContentRaw::Keys { keys: vec![] },
         };
         assert_matches!(
             invalid_rows.validate(),
@@ -966,7 +1031,6 @@ mod tests {
             label: vec!["L".to_string()],
             station_id: Some(StationId::from("S1")),
             page: None,
-            client_page: None,
         };
         assert!(valid.validate().is_ok());
 
@@ -974,20 +1038,20 @@ mod tests {
             label: vec!["L".to_string()],
             station_id: None,
             page: Some(DirectAccessPageRaw {
-                keys: vec![],
                 rows: 1,
+                content: DirectAccessPageContentRaw::Keys { keys: vec![] },
             }),
-            client_page: None,
         };
         assert!(valid.validate().is_ok());
 
         let valid = DirectAccessKeyRaw {
             label: vec!["L".to_string()],
             station_id: None,
-            page: None,
-            client_page: Some(ClientPage {
-                config: ClientPageConfig::default(),
+            page: Some(DirectAccessPageRaw {
                 rows: 1,
+                content: DirectAccessPageContentRaw::ClientPage {
+                    client_page: ClientPageConfig::default(),
+                },
             }),
         };
         assert!(valid.validate().is_ok());
@@ -996,48 +1060,14 @@ mod tests {
             label: vec!["L".to_string()],
             station_id: Some(StationId::from("S1")),
             page: Some(DirectAccessPageRaw {
-                keys: vec![],
                 rows: 1,
+                content: DirectAccessPageContentRaw::Keys { keys: vec![] },
             }),
-            client_page: None,
         };
         assert_matches!(
             invalid_fields.validate(),
             Err(CoverageError::Validation(ValidationError::MutuallyExclusive { fields }))
                 if fields.contains(&"station_id".to_string()) && fields.contains(&"page".to_string())
-        );
-
-        let invalid_fields = DirectAccessKeyRaw {
-            label: vec!["L".to_string()],
-            station_id: Some(StationId::from("S1")),
-            page: None,
-            client_page: Some(ClientPage {
-                config: ClientPageConfig::default(),
-                rows: 1,
-            }),
-        };
-        assert_matches!(
-            invalid_fields.validate(),
-            Err(CoverageError::Validation(ValidationError::MutuallyExclusive { fields }))
-                if fields.contains(&"station_id".to_string()) && fields.contains(&"client_page".to_string())
-        );
-
-        let invalid_fields = DirectAccessKeyRaw {
-            label: vec!["L".to_string()],
-            station_id: None,
-            page: Some(DirectAccessPageRaw {
-                keys: vec![],
-                rows: 1,
-            }),
-            client_page: Some(ClientPage {
-                config: ClientPageConfig::default(),
-                rows: 1,
-            }),
-        };
-        assert_matches!(
-            invalid_fields.validate(),
-            Err(CoverageError::Validation(ValidationError::MutuallyExclusive { fields }))
-                if fields.contains(&"page".to_string()) && fields.contains(&"client_page".to_string())
         );
     }
 
@@ -1062,40 +1092,40 @@ mod tests {
                         label: vec!["B1".to_string()],
                         size: 10.0,
                         page: Some(DirectAccessPageRaw {
-                            keys: vec![DirectAccessKeyRaw {
-                                label: vec!["K1".to_string()],
-                                station_id: Some(StationId::from("S1")),
-                                page: None,
-                                client_page: None,
-                            }],
                             rows: 1,
+                            content: DirectAccessPageContentRaw::Keys {
+                                keys: vec![DirectAccessKeyRaw {
+                                    label: vec!["K1".to_string()],
+                                    station_id: Some(StationId::from("S1")),
+                                    page: None,
+                                }],
+                            },
                         }),
                     }),
                     GeoNodeRaw::Button(GeoPageButtonRaw {
                         label: vec!["B2".to_string()],
                         size: 10.0,
                         page: Some(DirectAccessPageRaw {
-                            keys: vec![
-                                DirectAccessKeyRaw {
-                                    label: vec!["K2".to_string()],
-                                    station_id: Some(StationId::from("S2")),
-                                    page: None,
-                                    client_page: None,
-                                },
-                                DirectAccessKeyRaw {
-                                    label: vec!["K3".to_string()],
-                                    station_id: Some(StationId::from("S1")), // Duplicate
-                                    page: None,
-                                    client_page: None,
-                                },
-                                DirectAccessKeyRaw {
-                                    label: vec!["K4".to_string()],
-                                    station_id: None,
-                                    page: None,
-                                    client_page: None,
-                                },
-                            ],
                             rows: 1,
+                            content: DirectAccessPageContentRaw::Keys {
+                                keys: vec![
+                                    DirectAccessKeyRaw {
+                                        label: vec!["K2".to_string()],
+                                        station_id: Some(StationId::from("S2")),
+                                        page: None,
+                                    },
+                                    DirectAccessKeyRaw {
+                                        label: vec!["K3".to_string()],
+                                        station_id: Some(StationId::from("S1")), // Duplicate
+                                        page: None,
+                                    },
+                                    DirectAccessKeyRaw {
+                                        label: vec!["K4".to_string()],
+                                        station_id: None,
+                                        page: None,
+                                    },
+                                ],
+                            },
                         }),
                     }),
                 ],
@@ -1131,13 +1161,14 @@ mod tests {
                     label: vec!["L".to_string()],
                     size: 10.0,
                     page: Some(DirectAccessPageRaw {
-                        keys: vec![DirectAccessKeyRaw {
-                            label: vec!["K1".to_string()],
-                            station_id: Some(station_id.clone()),
-                            page: None,
-                            client_page: None,
-                        }],
                         rows: 1,
+                        content: DirectAccessPageContentRaw::Keys {
+                            keys: vec![DirectAccessKeyRaw {
+                                label: vec!["K1".to_string()],
+                                station_id: Some(station_id.clone()),
+                                page: None,
+                            }],
+                        },
                     }),
                 })],
             }),
@@ -1163,13 +1194,14 @@ mod tests {
                     label: vec!["L".to_string()],
                     size: 10.0,
                     page: Some(DirectAccessPageRaw {
-                        keys: vec![DirectAccessKeyRaw {
-                            label: vec!["K3".to_string()],
-                            station_id: Some(StationId::from("MISSING")),
-                            page: None,
-                            client_page: None,
-                        }],
                         rows: 1,
+                        content: DirectAccessPageContentRaw::Keys {
+                            keys: vec![DirectAccessKeyRaw {
+                                label: vec!["K3".to_string()],
+                                station_id: Some(StationId::from("MISSING")),
+                                page: None,
+                            }],
+                        },
                     }),
                 })],
             }),
@@ -1199,13 +1231,14 @@ mod tests {
                     label: vec!["L".to_string()],
                     size: 10.0,
                     page: Some(DirectAccessPageRaw {
-                        keys: vec![DirectAccessKeyRaw {
-                            label: vec!["K4".to_string()],
-                            station_id: None,
-                            page: None,
-                            client_page: None,
-                        }],
                         rows: 1,
+                        content: DirectAccessPageContentRaw::Keys {
+                            keys: vec![DirectAccessKeyRaw {
+                                label: vec!["K4".to_string()],
+                                station_id: None,
+                                page: None,
+                            }],
+                        },
                     }),
                 })],
             }),

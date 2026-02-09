@@ -2,9 +2,8 @@ pub mod client_page;
 pub mod geo;
 pub mod tabbed;
 
-use crate::profile::client_page::ClientPage;
-use crate::profile::geo::GeoPageContainer;
 use crate::profile::tabbed::Tab;
+use crate::profile::{client_page::ClientPageConfig, geo::GeoPageContainer};
 use crate::vatsim::StationId;
 use serde::{Deserialize, Serialize};
 
@@ -38,20 +37,40 @@ pub enum ProfileType {
     Tabbed(Vec<Tab>),
 }
 
-/// A page containing direct access keys.
+/// A page containing direct access keys for stations or clients.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DirectAccessPage {
-    /// The list of keys on this page.
-    ///
-    /// Will always be non-empty.
-    pub keys: Vec<DirectAccessKey>,
-
     /// The number of rows in the grid (> 0).
     ///
     /// The default layout is optimized for 6 rows. After a seventh row is added,
     /// the space in between the rows is slightly reduced and a scrollbar might
     /// appear automatically.
     pub rows: u8,
+
+    /// The content of the page.
+    #[serde(flatten)]
+    pub content: DirectAccessPageContent,
+}
+
+/// The content of a direct access page.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum DirectAccessPageContent {
+    /// A page containing a grid of direct access keys.
+    #[serde(rename_all = "camelCase")]
+    Keys {
+        /// The list of keys on this page.
+        ///
+        /// Will always be non-empty.
+        keys: Vec<DirectAccessKey>,
+    },
+    /// A specialized client page displaying a list of online clients.
+    #[serde(rename_all = "camelCase")]
+    ClientPage {
+        /// Configuration for the Client page.
+        client_page: ClientPageConfig,
+    },
 }
 
 /// A single key on a direct access page.
@@ -65,24 +84,17 @@ pub struct DirectAccessKey {
 
     /// The optional station ID associated with this key.
     ///
-    /// If [`DirectAccessKey::station_id`], [`DirectAccessKey::page`] and [`DirectAccessKey::client_page`] are `None`, the DA key will be displayed on the UI but will be non-functional.
-    /// This field is mutually exclusive with [`DirectAccessKey::page`] and [`DirectAccessKey::client_page`].
+    /// If [`DirectAccessKey::station_id`] and [`DirectAccessKey::page`] are `None`, the DA key will be displayed on the UI but will be non-functional.
+    /// This field is mutually exclusive with [`DirectAccessKey::page`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub station_id: Option<StationId>,
 
     /// The optional subpage associated with this key.
     ///
-    /// If [`DirectAccessKey::station_id`], [`DirectAccessKey::page`] and [`DirectAccessKey::client_page`] are `None`, the DA key will be displayed on the UI but will be non-functional.
-    /// This field is mutually exclusive with [`DirectAccessKey::station_id`] and [`DirectAccessKey::client_page`].
+    /// If [`DirectAccessKey::station_id`] and [`DirectAccessKey::page`] are `None`, the DA key will be displayed on the UI but will be non-functional.
+    /// This field is mutually exclusive with [`DirectAccessKey::station_id`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page: Option<DirectAccessPage>,
-
-    /// The optional client page associated with this key.
-    ///
-    /// If [`DirectAccessKey::station_id`], [`DirectAccessKey::page`] and [`DirectAccessKey::client_page`] are `None`, the DA key will be displayed on the UI but will be non-functional.
-    /// This field is mutually exclusive with [`DirectAccessKey::station_id`] and [`DirectAccessKey::page`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub client_page: Option<ClientPage>,
 }
 
 /// Trait alias for types that can be used as a profile reference in [`ActiveProfile`].
@@ -182,5 +194,37 @@ impl std::borrow::Borrow<String> for ProfileId {
 impl PartialOrd for Profile {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.id.partial_cmp(&other.id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn testtest() {
+        let page = DirectAccessPage {
+            rows: 1,
+            content: DirectAccessPageContent::Keys {
+                keys: vec![DirectAccessKey {
+                    label: vec!["K1".to_string()],
+                    station_id: Some(StationId::from("S1")),
+                    page: None,
+                }],
+            },
+        };
+        let dings = serde_json::to_string_pretty(&page).unwrap();
+        println!("{dings}");
+
+        let page = DirectAccessPage {
+            rows: 1,
+            content: DirectAccessPageContent::ClientPage {
+                client_page: ClientPageConfig::default(),
+            },
+        };
+        let dings = serde_json::to_string_pretty(&page).unwrap();
+        println!("{dings}");
+
+        assert!(false)
     }
 }
