@@ -7,19 +7,17 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-default = ["http", "vatsim", "ws"]
+default = []
 http = ["http-webrtc"]
 http-webrtc = []
+profile = ["vatsim"]
 vatsim = []
-ws = ["vatsim"]
+ws = ["profile", "vatsim"]
 
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
-
-[dev-dependencies]
-pretty_assertions = { workspace = true }
 
 [lints]
 workspace = true

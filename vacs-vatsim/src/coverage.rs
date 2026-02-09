@@ -61,6 +61,9 @@ pub enum ValidationError {
     #[error("referenced parent station `{parent}` for `{station}` does not exist")]
     MissingParent { station: String, parent: String },
 
+    #[error("fields {fields:?} are mutually exclusive")]
+    MutuallyExclusive { fields: Vec<String> },
+
     #[error("{0}")]
     Custom(String),
 }

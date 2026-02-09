@@ -1,4 +1,5 @@
-use crate::vatsim::{ActiveProfile, ClientId, PositionId, Profile, StationChange, StationId};
+use crate::profile::{ActiveProfile, Profile};
+use crate::vatsim::{ClientId, PositionId, StationChange, StationId};
 use crate::ws::server::ServerMessage;
 use serde::{Deserialize, Serialize};
 

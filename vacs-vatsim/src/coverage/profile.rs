@@ -4,10 +4,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use vacs_protocol::vatsim::{
-    DirectAccessKey, DirectAccessPage, GeoNode, GeoPageButton, GeoPageContainer, GeoPageDivider,
-    Profile as ProtocolProfile, ProfileId, ProfileType, StationId, Tab,
+use vacs_protocol::profile::client_page::{ClientPage, ClientPageConfig};
+use vacs_protocol::profile::geo::{
+    GeoNode, GeoPageButton, GeoPageContainer, GeoPageDivider, JustifyContent,
 };
+use vacs_protocol::profile::tabbed::Tab;
+use vacs_protocol::profile::{
+    DirectAccessKey, DirectAccessPage, Profile as ProtocolProfile, ProfileId, ProfileType,
+};
+use vacs_protocol::vatsim::StationId;
 
 static GEO_PAGE_CONTAINER_SIZE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\d+(%|rem)$").unwrap());
@@ -58,10 +63,10 @@ pub(super) struct GeoPageContainerRaw {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gap: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub justify_content: Option<vacs_protocol::vatsim::JustifyContent>,
+    pub justify_content: Option<JustifyContent>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub align_items: Option<vacs_protocol::vatsim::AlignItems>,
-    pub direction: vacs_protocol::vatsim::FlexDirection,
+    pub align_items: Option<vacs_protocol::profile::geo::AlignItems>,
+    pub direction: vacs_protocol::profile::geo::FlexDirection,
     pub children: Vec<GeoNodeRaw>,
 }
 
@@ -82,7 +87,7 @@ pub(super) struct GeoPageButtonRaw {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct GeoPageDividerRaw {
-    pub orientation: vacs_protocol::vatsim::GeoPageDividerOrientation,
+    pub orientation: vacs_protocol::profile::geo::GeoPageDividerOrientation,
     pub thickness: f64,
     pub color: String,
     pub oversize: Option<f64>,
@@ -97,10 +102,12 @@ pub(super) struct DirectAccessPageRaw {
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct DirectAccessKeyRaw {
     pub label: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub station_id: Option<StationId>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page: Option<DirectAccessPageRaw>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_page: Option<ClientPage>,
 }
 
 impl Profile {
@@ -442,6 +449,7 @@ impl TryFrom<DirectAccessKeyRaw> for DirectAccessKey {
             label: raw.label,
             station_id: raw.station_id,
             page: raw.page.map(DirectAccessPage::from_raw).transpose()?,
+            client_page: raw.client_page,
         })
     }
 }
@@ -671,17 +679,50 @@ impl Validator for DirectAccessKeyRaw {
             }
             .into());
         }
-        if self.station_id.is_some() && self.page.is_some() {
-            return Err(ValidationError::InvalidValue {
-                field: "page".to_string(),
-                value: "".to_string(),
-                reason: "cannot define both station_id and page".to_string(),
+
+        let defined = [
+            ("station_id", self.station_id.is_some()),
+            ("page", self.page.is_some()),
+            ("client_page", self.client_page.is_some()),
+        ]
+        .into_iter()
+        .filter_map(|(name, is_some)| is_some.then_some(name))
+        .collect::<Vec<_>>();
+        if defined.len() > 1 {
+            return Err(ValidationError::MutuallyExclusive {
+                fields: defined.into_iter().map(|s| s.to_string()).collect(),
             }
             .into());
         }
+
         if let Some(page) = &self.page {
             page.validate()?;
+        } else if let Some(client_page) = &self.client_page {
+            client_page.validate()?;
         }
+
+        Ok(())
+    }
+}
+
+impl Validator for ClientPage {
+    fn validate(&self) -> Result<(), CoverageError> {
+        if self.rows == 0 {
+            return Err(ValidationError::OutOfRange {
+                field: "rows".to_string(),
+                value: self.rows.to_string(),
+                min: 1.to_string(),
+                max: None,
+            }
+            .into());
+        }
+        self.config.validate()?;
+        Ok(())
+    }
+}
+
+impl Validator for ClientPageConfig {
+    fn validate(&self) -> Result<(), CoverageError> {
         Ok(())
     }
 }
@@ -765,6 +806,7 @@ mod tests {
     use super::*;
     use crate::coverage::{CoverageError, ValidationError};
     use pretty_assertions::assert_matches;
+    use vacs_protocol::profile::{client_page::ClientPageConfig, geo::FlexDirection};
 
     #[test]
     fn profile_raw_validation() {
@@ -781,7 +823,7 @@ mod tests {
                 gap: None,
                 justify_content: None,
                 align_items: None,
-                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                direction: FlexDirection::Row,
                 children: vec![GeoNodeRaw::Button(GeoPageButtonRaw {
                     label: vec!["L".to_string()],
                     size: 1.0,
@@ -814,7 +856,7 @@ mod tests {
             gap: None,
             justify_content: None,
             align_items: None,
-            direction: vacs_protocol::vatsim::FlexDirection::Row,
+            direction: FlexDirection::Row,
             children: vec![],
         });
         assert_matches!(
@@ -924,6 +966,7 @@ mod tests {
             label: vec!["L".to_string()],
             station_id: Some(StationId::from("S1")),
             page: None,
+            client_page: None,
         };
         assert!(valid.validate().is_ok());
 
@@ -932,6 +975,18 @@ mod tests {
             station_id: None,
             page: Some(DirectAccessPageRaw {
                 keys: vec![],
+                rows: 1,
+            }),
+            client_page: None,
+        };
+        assert!(valid.validate().is_ok());
+
+        let valid = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: None,
+            page: None,
+            client_page: Some(ClientPage {
+                config: ClientPageConfig::default(),
                 rows: 1,
             }),
         };
@@ -944,10 +999,45 @@ mod tests {
                 keys: vec![],
                 rows: 1,
             }),
+            client_page: None,
         };
         assert_matches!(
             invalid_fields.validate(),
-            Err(CoverageError::Validation(ValidationError::InvalidValue {field, reason, ..})) if field == "page" && reason == "cannot define both station_id and page"
+            Err(CoverageError::Validation(ValidationError::MutuallyExclusive { fields }))
+                if fields.contains(&"station_id".to_string()) && fields.contains(&"page".to_string())
+        );
+
+        let invalid_fields = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: Some(StationId::from("S1")),
+            page: None,
+            client_page: Some(ClientPage {
+                config: ClientPageConfig::default(),
+                rows: 1,
+            }),
+        };
+        assert_matches!(
+            invalid_fields.validate(),
+            Err(CoverageError::Validation(ValidationError::MutuallyExclusive { fields }))
+                if fields.contains(&"station_id".to_string()) && fields.contains(&"client_page".to_string())
+        );
+
+        let invalid_fields = DirectAccessKeyRaw {
+            label: vec!["L".to_string()],
+            station_id: None,
+            page: Some(DirectAccessPageRaw {
+                keys: vec![],
+                rows: 1,
+            }),
+            client_page: Some(ClientPage {
+                config: ClientPageConfig::default(),
+                rows: 1,
+            }),
+        };
+        assert_matches!(
+            invalid_fields.validate(),
+            Err(CoverageError::Validation(ValidationError::MutuallyExclusive { fields }))
+                if fields.contains(&"page".to_string()) && fields.contains(&"client_page".to_string())
         );
     }
 
@@ -966,7 +1056,7 @@ mod tests {
                 gap: None,
                 justify_content: None,
                 align_items: None,
-                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                direction: FlexDirection::Row,
                 children: vec![
                     GeoNodeRaw::Button(GeoPageButtonRaw {
                         label: vec!["B1".to_string()],
@@ -976,6 +1066,7 @@ mod tests {
                                 label: vec!["K1".to_string()],
                                 station_id: Some(StationId::from("S1")),
                                 page: None,
+                                client_page: None,
                             }],
                             rows: 1,
                         }),
@@ -989,16 +1080,19 @@ mod tests {
                                     label: vec!["K2".to_string()],
                                     station_id: Some(StationId::from("S2")),
                                     page: None,
+                                    client_page: None,
                                 },
                                 DirectAccessKeyRaw {
                                     label: vec!["K3".to_string()],
                                     station_id: Some(StationId::from("S1")), // Duplicate
                                     page: None,
+                                    client_page: None,
                                 },
                                 DirectAccessKeyRaw {
                                     label: vec!["K4".to_string()],
                                     station_id: None,
                                     page: None,
+                                    client_page: None,
                                 },
                             ],
                             rows: 1,
@@ -1032,7 +1126,7 @@ mod tests {
                 gap: None,
                 justify_content: None,
                 align_items: None,
-                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                direction: FlexDirection::Row,
                 children: vec![GeoNodeRaw::Button(GeoPageButtonRaw {
                     label: vec!["L".to_string()],
                     size: 10.0,
@@ -1041,6 +1135,7 @@ mod tests {
                             label: vec!["K1".to_string()],
                             station_id: Some(station_id.clone()),
                             page: None,
+                            client_page: None,
                         }],
                         rows: 1,
                     }),
@@ -1063,7 +1158,7 @@ mod tests {
                 gap: None,
                 justify_content: None,
                 align_items: None,
-                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                direction: FlexDirection::Row,
                 children: vec![GeoNodeRaw::Button(GeoPageButtonRaw {
                     label: vec!["L".to_string()],
                     size: 10.0,
@@ -1072,6 +1167,7 @@ mod tests {
                             label: vec!["K3".to_string()],
                             station_id: Some(StationId::from("MISSING")),
                             page: None,
+                            client_page: None,
                         }],
                         rows: 1,
                     }),
@@ -1098,7 +1194,7 @@ mod tests {
                 gap: None,
                 justify_content: None,
                 align_items: None,
-                direction: vacs_protocol::vatsim::FlexDirection::Row,
+                direction: FlexDirection::Row,
                 children: vec![GeoNodeRaw::Button(GeoPageButtonRaw {
                     label: vec!["L".to_string()],
                     size: 10.0,
@@ -1107,6 +1203,7 @@ mod tests {
                             label: vec!["K4".to_string()],
                             station_id: None,
                             page: None,
+                            client_page: None,
                         }],
                         rows: 1,
                     }),

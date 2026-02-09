@@ -28,6 +28,7 @@ cookie_store = { workspace = true }
 keyboard-types = { workspace = true }
 keyring = { workspace = true }
 log = { workspace = true }
+notify-debouncer-full = { workspace = true }
 parking_lot = { workspace = true }
 reqwest = { workspace = true }
 rfd = { workspace = true }

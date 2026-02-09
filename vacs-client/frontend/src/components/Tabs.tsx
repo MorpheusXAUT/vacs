@@ -99,7 +99,7 @@ function TabButton(props: TabButtonProps) {
             <button
                 className={clsx(
                     "absolute -top-[calc(0.5rem+2px)] h-[calc(100%+0.5rem+2px)] w-20 rounded-b-lg border-t-0 font-semibold flex justify-center items-center cursor-pointer",
-                    "border-4 outline-2 outline-gray-700 -outline-offset-2",
+                    "border-4 outline-2 outline-gray-700 -outline-offset-2 px-1.5",
                     props.active &&
                         !settingsOpen &&
                         "active-tab border-b-gray-300 bg-linear-0/oklch from-gray-300 to-[#B5BBC6]",
@@ -115,7 +115,7 @@ function TabButton(props: TabButtonProps) {
                     if (settingsOpen) navigate("/");
                 }}
             >
-                <p>{props.label}</p>
+                <p className="truncate">{props.label}</p>
             </button>
         </div>
     );
