@@ -1,30 +1,46 @@
 import {create} from "zustand/react";
 import {invokeStrict} from "../error.ts";
 import {CallConfig} from "../types/settings.ts";
-import {ClientPageConfig} from "../types/client.ts";
+import {ClientPageConfig, ClientPageSettings} from "../types/client.ts";
 
 type SettingsState = {
     callConfig: CallConfig;
-    clientPageConfig: ClientPageConfig;
+    selectedClientPageConfig: ClientPageConfig & {name: string};
+    clientPageConfigs: Record<string, ClientPageConfig>;
     setCallConfig: (config: CallConfig) => void;
-    setClientPageConfig: (config: ClientPageConfig) => void;
+    setClientPageConfig: (config: ClientPageConfig & {name: string}) => void;
+    setClientPageSettings: (settings: ClientPageSettings) => void;
+};
+
+const emptyClientPageConfig: ClientPageConfig = {
+    include: [],
+    exclude: [],
+    priority: ["*_FMP", "*_CTR", "*_APP", "*_TWR", "*_GND"],
+    frequencies: "ShowAll",
+    grouping: "FirAndIcao",
 };
 
 export const useSettingsStore = create<SettingsState>()(set => ({
     callConfig: {
         highlightIncomingCallTarget: true,
     },
-    clientPageConfig: {
-        include: [],
-        exclude: [],
-        priority: ["*_FMP", "*_CTR", "*_APP", "*_TWR", "*_GND"],
-        frequencies: "ShowAll",
-        grouping: "FirAndIcao",
-    },
+    selectedClientPageConfig: {...emptyClientPageConfig, name: "None"},
+    clientPageConfigs: {},
     setCallConfig: config => set({callConfig: config}),
     setClientPageConfig: config => {
-        console.log(config);
-        set({clientPageConfig: config});
+        set({selectedClientPageConfig: config});
+    },
+    setClientPageSettings: settings => {
+        set({clientPageConfigs: {None: emptyClientPageConfig, ...settings.configs}});
+
+        if (settings.selected !== undefined) {
+            const config = settings.configs[settings.selected];
+            if (config !== undefined) {
+                useSettingsStore
+                    .getState()
+                    .setClientPageConfig({...config, name: settings.selected});
+            }
+        }
     },
 }));
 
@@ -36,10 +52,11 @@ export async function fetchCallConfig() {
     } catch {}
 }
 
-export async function fetchClientPageConfig() {
+export async function fetchClientPageSettings() {
     try {
-        const clientPageConfig = await invokeStrict<ClientPageConfig>("app_get_client_page_config");
-
-        useSettingsStore.getState().setClientPageConfig(clientPageConfig);
+        const clientPageSettings = await invokeStrict<ClientPageSettings>(
+            "app_get_client_page_settings",
+        );
+        useSettingsStore.getState().setClientPageSettings(clientPageSettings);
     } catch {}
 }

@@ -23,6 +23,11 @@ export function splitDisplayName(name: string): [string, string] {
     return [parts.slice(0, parts.length - 1).join(" "), parts[parts.length - 1]];
 }
 
+export type ClientPageSettings = {
+    selected?: string;
+    configs: Record<string, ClientPageConfig>;
+};
+
 export type ClientPageConfig = {
     include: string[];
     exclude: string[];
@@ -31,8 +36,8 @@ export type ClientPageConfig = {
     grouping: ClientGroupMode;
 };
 
-type FrequencyDisplayMode = "ShowAll" | "HideAll";
-type ClientGroupMode = "None" | "Fir" | "FirAndIcao" | "Icao";
+export type FrequencyDisplayMode = "ShowAll" | "HideAll";
+export type ClientGroupMode = "None" | "Fir" | "FirAndIcao" | "Icao";
 
 function globToRegex(pattern: string): RegExp {
     const escaped = pattern

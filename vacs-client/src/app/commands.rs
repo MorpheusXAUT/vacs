@@ -3,7 +3,7 @@ use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_
 use crate::build::VersionInfo;
 use crate::config::{
     AppConfig, CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig,
-    FrontendClientPageConfig, Persistable, PersistedClientConfig,
+    FrontendClientPageSettings, Persistable, PersistedClientConfig,
 };
 use crate::error::{Error, FrontendError};
 use crate::platform::Capabilities;
@@ -450,14 +450,37 @@ pub async fn app_unload_test_profile(app_state: State<'_, AppState>) -> Result<(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn app_get_client_page_config(
+pub async fn app_get_client_page_settings(
     app_state: State<'_, AppState>,
-) -> Result<FrontendClientPageConfig, Error> {
+) -> Result<FrontendClientPageSettings, Error> {
     let config = {
         let state = app_state.lock().await;
-        FrontendClientPageConfig::from(state.config.client_page.clone())
+        FrontendClientPageSettings::from(&state.config)
     };
     Ok(config)
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_set_selected_client_page_config(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    config_name: Option<String>,
+) -> Result<(), Error> {
+    let config: PersistedClientConfig = {
+        let mut state = app_state.lock().await;
+        state.config.client.selected_client_page_config = config_name;
+
+        state.config.client.clone().into()
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -508,7 +531,7 @@ pub async fn app_load_extra_client_page_config(
 
     app_state.lock().await.config = new_config.clone();
 
-    let client_page_config = FrontendClientPageConfig::from(new_config.client_page);
+    let client_page_config = FrontendClientPageSettings::from(&new_config);
     app.emit("signaling:client-page-config", client_page_config)
         .ok();
 

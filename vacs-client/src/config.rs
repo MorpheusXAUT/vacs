@@ -7,7 +7,7 @@ use anyhow::Context;
 use config::{Config, Environment, File};
 use keyboard_types::Code;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -37,7 +37,8 @@ pub struct AppConfig {
     #[serde(alias = "webrtc")] // support for old naming scheme
     pub ice: IceConfig,
     pub client: ClientConfig,
-    pub client_page: ClientPageConfig,
+    #[serde(default)]
+    pub client_page: ClientPageSettings,
 }
 
 impl AppConfig {
@@ -260,6 +261,8 @@ pub struct ClientConfig {
     #[serde(default)]
     pub call: CallConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_client_page_config: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extra_client_page_config: Option<String>,
     pub test_profile_watcher_delay_ms: u64,
 }
@@ -279,6 +282,7 @@ impl Default for ClientConfig {
             ignored: HashSet::new(),
             keybinds: KeybindsConfig::default(),
             call: CallConfig::default(),
+            selected_client_page_config: None,
             extra_client_page_config: None,
             test_profile_watcher_delay_ms: 500,
         }
@@ -737,6 +741,34 @@ impl From<FrontendCallConfig> for CallConfig {
     fn from(frontend_call_config: FrontendCallConfig) -> Self {
         Self {
             highlight_incoming_call_target: frontend_call_config.highlight_incoming_call_target,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ClientPageSettings {
+    /// Named configs for different client page configurations.
+    /// Users can switch between configs in the UI.
+    pub configs: HashMap<String, ClientPageConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendClientPageSettings {
+    selected: Option<String>,
+    configs: HashMap<String, FrontendClientPageConfig>,
+}
+
+impl From<&AppConfig> for FrontendClientPageSettings {
+    fn from(config: &AppConfig) -> Self {
+        FrontendClientPageSettings {
+            selected: config.client.selected_client_page_config.clone(),
+            configs: config
+                .client_page
+                .configs
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone().into()))
+                .collect(),
         }
     }
 }

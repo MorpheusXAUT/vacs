@@ -32,7 +32,7 @@ import MainPage from "./pages/MainPage.tsx";
 import Tabs from "./components/Tabs.tsx";
 import {useProfileType} from "./stores/profile-store.ts";
 import Button from "./components/ui/Button.tsx";
-import {fetchCallConfig, fetchClientPageConfig} from "./stores/settings-store.ts";
+import {fetchCallConfig, fetchClientPageSettings} from "./stores/settings-store.ts";
 
 function App() {
     const connected = useConnectionStore(state => state.connectionState === "connected");
@@ -54,7 +54,7 @@ function App() {
 
         void fetchCapabilities();
         void fetchCallConfig();
-        void fetchClientPageConfig();
+        void fetchClientPageSettings();
 
         return () => {
             cleanups.forEach(cleanup => cleanup());

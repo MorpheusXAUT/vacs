@@ -1,6 +1,6 @@
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {useClientsStore} from "../stores/clients-store.ts";
-import {ClientInfo, ClientPageConfig, SessionInfo} from "../types/client.ts";
+import {ClientInfo, ClientPageSettings, SessionInfo} from "../types/client.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {
     IncomingCallListEntry,
@@ -39,7 +39,7 @@ export function setupSignalingListeners() {
     const {setProfile, reset: resetProfileStore} = useProfileStore.getState();
     const {open: openErrorOverlay, closeIfTitle: closeErrorOverlayIfTitle} =
         useErrorOverlayStore.getState();
-    const {setClientPageConfig} = useSettingsStore.getState();
+    const {setClientPageSettings} = useSettingsStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 
@@ -131,8 +131,8 @@ export function setupSignalingListeners() {
                 setProfile(event.payload);
                 navigate("/");
             }),
-            listen<ClientPageConfig>("signaling:client-page-config", event => {
-                setClientPageConfig(event.payload);
+            listen<ClientPageSettings>("signaling:client-page-config", event => {
+                setClientPageSettings(event.payload);
             }),
         );
     };

@@ -9,7 +9,7 @@ import {clsx} from "clsx";
 import {useSettingsStore} from "../stores/settings-store.ts";
 
 function FallbackProfile() {
-    const config = useSettingsStore(state => state.clientPageConfig);
+    const config = useSettingsStore(state => state.selectedClientPageConfig);
     const allClients = useClientsStore(state => state.clients);
     const {filter, setFilter} = useFilterStore();
 
