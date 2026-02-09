@@ -26,6 +26,7 @@ pub struct KeybindEngine {
     transmit_code: Option<Code>,
     accept_call_code: Option<Code>,
     end_call_code: Option<Code>,
+    toggle_radio_prio_code: Option<Code>,
     radio_config: RadioConfig,
     app: AppHandle,
     listener: RwLock<Option<DynKeybindListener>>,
@@ -54,6 +55,7 @@ impl KeybindEngine {
             transmit_code: Self::select_active_transmit_code(transmit_config),
             accept_call_code: Self::select_accept_call_code(call_control_config),
             end_call_code: Self::select_end_call_code(call_control_config),
+            toggle_radio_prio_code: Self::select_toggle_radio_prio_code(call_control_config),
             radio_config: radio_config.clone(),
             app,
             listener: RwLock::new(None),
@@ -72,7 +74,9 @@ impl KeybindEngine {
         if self.rx_task.is_some() {
             return Ok(());
         }
-        let has_call_controls = self.accept_call_code.is_some() || self.end_call_code.is_some();
+        let has_call_controls = self.accept_call_code.is_some()
+            || self.end_call_code.is_some()
+            || self.toggle_radio_prio_code.is_some();
 
         if self.mode == TransmitMode::VoiceActivation && !has_call_controls {
             log::trace!(
@@ -141,6 +145,7 @@ impl KeybindEngine {
 
         self.accept_call_code = Self::select_accept_call_code(keybinds_config);
         self.end_call_code = Self::select_end_call_code(keybinds_config);
+        self.toggle_radio_prio_code = Self::select_toggle_radio_prio_code(keybinds_config);
 
         self.reset_input_state();
 
@@ -197,6 +202,10 @@ impl KeybindEngine {
         }
     }
 
+    pub fn call_active(&self) -> bool {
+        self.call_active.load(Ordering::Relaxed)
+    }
+
     pub fn set_radio_prio(&self, prio: bool) {
         let prev_prio = self.radio_prio.swap(prio, Ordering::Relaxed);
         if !prio && prev_prio && self.pressed.load(Ordering::Relaxed) {
@@ -220,6 +229,10 @@ impl KeybindEngine {
             }
             _ => {}
         }
+    }
+
+    pub fn radio_prio(&self) -> bool {
+        self.radio_prio.load(Ordering::Relaxed) || self.implicit_radio_prio.load(Ordering::Relaxed)
     }
 
     pub fn should_attach_input_muted(&self) -> bool {
@@ -288,14 +301,15 @@ impl KeybindEngine {
 
     async fn handle_call_control_event(
         app: &AppHandle,
-        code: Code,
-        accept_call: Option<Code>,
-        end_call: Option<Code>,
+        code: &Code,
+        accept_call: &Option<Code>,
+        end_call: &Option<Code>,
+        toggle_radio_prio: &Option<Code>,
     ) {
         let shared_call_controls = accept_call == end_call;
 
         if shared_call_controls
-            && (accept_call.is_some_and(|c| c == code) || end_call.is_some_and(|c| c == code))
+            && (accept_call.is_some_and(|c| c == *code) || end_call.is_some_and(|c| c == *code))
         {
             log::trace!("Shared call control key pressed");
 
@@ -315,7 +329,7 @@ impl KeybindEngine {
                     _ => {}
                 }
             }
-        } else if accept_call.is_some_and(|c| c == code) {
+        } else if accept_call.is_some_and(|c| c == *code) {
             log::trace!("Accept call key pressed");
 
             let state = app.state::<AppState>();
@@ -326,7 +340,7 @@ impl KeybindEngine {
                 Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
                 _ => {}
             }
-        } else if end_call.is_some_and(|c| c == code) {
+        } else if end_call.is_some_and(|c| c == *code) {
             log::trace!("End call key pressed");
 
             let state = app.state::<AppState>();
@@ -337,6 +351,18 @@ impl KeybindEngine {
                 Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
                 _ => {}
             }
+        } else if toggle_radio_prio.is_some_and(|c| c == *code) {
+            log::trace!("Toggle radio prio key pressed");
+
+            let keybind_engine = app.state::<KeybindEngineHandle>();
+            let keybind_engine = keybind_engine.read().await;
+
+            if keybind_engine.call_active() {
+                let prio = !keybind_engine.radio_prio();
+                log::trace!("Toggled radio prio {}", if prio { "on" } else { "off" });
+                keybind_engine.set_radio_prio(prio);
+                app.emit("audio:radio-prio", prio).ok();
+            }
         }
     }
 
@@ -345,8 +371,13 @@ impl KeybindEngine {
         let transmit = self.transmit_code;
         let accept_call = self.accept_call_code;
         let end_call = self.end_call_code;
+        let toggle_radio_prio = self.toggle_radio_prio_code;
 
-        if transmit.is_none() && accept_call.is_none() && end_call.is_none() {
+        if transmit.is_none()
+            && accept_call.is_none()
+            && end_call.is_none()
+            && toggle_radio_prio.is_none()
+        {
             return;
         }
 
@@ -374,7 +405,7 @@ impl KeybindEngine {
                         let Some(event) = res else { break; };
 
                         if event.state == KeyState::Down {
-                            Self::handle_call_control_event(&app, event.code, accept_call, end_call).await;
+                            Self::handle_call_control_event(&app, &event.code, &accept_call, &end_call, &toggle_radio_prio).await;
                         }
 
                         if transmit.is_none_or(|c| c != event.code) {
@@ -511,6 +542,18 @@ impl KeybindEngine {
         }
 
         config.end_call
+    }
+
+    #[inline]
+    fn select_toggle_radio_prio_code(config: &KeybindsConfig) -> Option<Code> {
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            // Wayland Code Mapping Strategy:
+            // Same as with the transmit code, we define our global shortcuts on OS level.
+            return Some(Code::F31);
+        }
+
+        config.toggle_radio_prio
     }
 
     #[inline]

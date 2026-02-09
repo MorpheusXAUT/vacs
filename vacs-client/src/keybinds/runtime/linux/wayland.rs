@@ -24,6 +24,7 @@
 //! represented as a single `keyboard_types::Code`. To work around this, we map each
 //! transmit mode to a unique function key:
 //!
+//! - `ToggleRadioPrio` → `Code::F31`
 //! - `CallControl` → `Code::F32`
 //! - `PushToTalk` → `Code::F33`
 //! - `PushToMute` → `Code::F34`
@@ -61,6 +62,7 @@ pub enum PortalShortcutId {
     PushToMute,
     RadioIntegration,
     CallControl,
+    ToggleRadioPrio,
 }
 
 impl PortalShortcutId {
@@ -70,6 +72,7 @@ impl PortalShortcutId {
             PortalShortcutId::PushToMute => "push_to_mute",
             PortalShortcutId::RadioIntegration => "radio_integration",
             PortalShortcutId::CallControl => "call_control",
+            PortalShortcutId::ToggleRadioPrio => "toggle_radio_prio",
         }
     }
 
@@ -79,6 +82,7 @@ impl PortalShortcutId {
             PortalShortcutId::PushToMute => "Push-to-mute (mute microphone while held)",
             PortalShortcutId::RadioIntegration => "Radio Integration",
             PortalShortcutId::CallControl => "Call Control (end active/accept next)",
+            PortalShortcutId::ToggleRadioPrio => "Toggle Radio Priority (during active call)",
         }
     }
 
@@ -88,6 +92,7 @@ impl PortalShortcutId {
             PortalShortcutId::PushToMute,
             PortalShortcutId::RadioIntegration,
             PortalShortcutId::CallControl,
+            PortalShortcutId::ToggleRadioPrio,
         ]
     }
 
@@ -111,6 +116,7 @@ impl FromStr for PortalShortcutId {
             "push_to_mute" => Ok(PortalShortcutId::PushToMute),
             "radio_integration" => Ok(PortalShortcutId::RadioIntegration),
             "call_control" => Ok(PortalShortcutId::CallControl),
+            "toggle_radio_prio" => Ok(PortalShortcutId::ToggleRadioPrio),
             _ => Err(format!("unknown portal shortcut id {s}")),
         }
     }
@@ -151,6 +157,7 @@ impl From<PortalShortcutId> for NewShortcut {
 impl From<PortalShortcutId> for Code {
     fn from(value: PortalShortcutId) -> Self {
         match value {
+            PortalShortcutId::ToggleRadioPrio => Code::F31,
             PortalShortcutId::CallControl => Code::F32,
             PortalShortcutId::PushToTalk => Code::F33,
             PortalShortcutId::PushToMute => Code::F34,
@@ -163,6 +170,7 @@ impl TryFrom<Code> for PortalShortcutId {
     type Error = String;
     fn try_from(value: Code) -> Result<Self, Self::Error> {
         match value {
+            Code::F31 => Ok(PortalShortcutId::ToggleRadioPrio),
             Code::F32 => Ok(PortalShortcutId::CallControl),
             Code::F33 => Ok(PortalShortcutId::PushToTalk),
             Code::F34 => Ok(PortalShortcutId::PushToMute),
@@ -180,6 +188,7 @@ impl From<Keybind> for PortalShortcutId {
             Keybind::RadioIntegration => PortalShortcutId::RadioIntegration,
             Keybind::AcceptCall => PortalShortcutId::CallControl,
             Keybind::EndCall => PortalShortcutId::CallControl,
+            Keybind::ToggleRadioPrio => PortalShortcutId::ToggleRadioPrio,
         }
     }
 }
