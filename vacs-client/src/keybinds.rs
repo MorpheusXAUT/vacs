@@ -35,4 +35,5 @@ pub enum Keybind {
     RadioIntegration,
     AcceptCall,
     EndCall,
+    ToggleRadioPrio,
 }

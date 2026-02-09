@@ -20,6 +20,7 @@ async function codeToKeybind(code: string | null): Promise<Keybind> {
 function HotkeysConfigPage() {
     const [acceptCall, setAcceptCall] = useState<Keybind | undefined>(undefined);
     const [endCall, setEndCall] = useState<Keybind | undefined>(undefined);
+    const [toggleRadioPrio, setToggleRadioPrio] = useState<Keybind | undefined>(undefined);
 
     useEffect(() => {
         const fetchConfig = async () => {
@@ -27,6 +28,7 @@ function HotkeysConfigPage() {
                 const config = await invokeStrict<KeybindsConfig>("keybinds_get_keybinds_config");
                 setAcceptCall(await codeToKeybind(config.acceptCall));
                 setEndCall(await codeToKeybind(config.endCall));
+                setToggleRadioPrio(await codeToKeybind(config.toggleRadioPrio));
             } catch {}
         };
 
@@ -52,6 +54,12 @@ function HotkeysConfigPage() {
                             label="End active call"
                             keybind={endCall}
                             setKeybind={setEndCall}
+                        />
+                        <KeybindField
+                            type="ToggleRadioPrio"
+                            label="Toggle RADIO PRIO"
+                            keybind={toggleRadioPrio}
+                            setKeybind={setToggleRadioPrio}
                         />
                     </div>
                 </div>
