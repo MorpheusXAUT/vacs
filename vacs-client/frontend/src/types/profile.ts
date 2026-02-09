@@ -1,4 +1,5 @@
 import {ProfileId, StationId} from "./generic.ts";
+import {ClientPageConfig} from "./client.ts";
 
 export type SessionProfile = {
     type: "changed" | "unchanged";
@@ -50,7 +51,8 @@ export type GeoPageDivider = {
 };
 
 export type DirectAccessPage = {
-    keys: DirectAccessKey[];
+    keys?: DirectAccessKey[];
+    clientPage?: ClientPageConfig;
     rows: number; // > 0
 };
 

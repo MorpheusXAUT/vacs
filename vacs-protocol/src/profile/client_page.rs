@@ -87,20 +87,6 @@ pub struct ClientPageConfig {
     pub grouping: ClientGroupMode,
 }
 
-/// A specialized client page, displaying all connected clients (independent of their covered position/stations)
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct ClientPage {
-    /// Configuration for the Client page.
-    pub config: ClientPageConfig,
-
-    /// The number of rows in the grid (> 0).
-    ///
-    /// The default layout is optimized for 6 rows. After a seventh row is added,
-    /// the space in between the rows is slightly reduced and a scrollbar might
-    /// appear automatically.
-    pub rows: u8,
-}
-
 impl Default for ClientPageConfig {
     fn default() -> Self {
         Self {
