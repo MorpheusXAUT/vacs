@@ -125,7 +125,7 @@ export function setupSignalingListeners() {
             }),
             listen<Profile>("signaling:test-profile", event => {
                 setConnectionState("test");
-                resetProfileStore();
+                resetProfileStore(false);
                 setProfile(event.payload);
                 navigate("/");
             }),
