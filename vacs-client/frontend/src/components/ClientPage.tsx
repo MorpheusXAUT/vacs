@@ -1,15 +1,17 @@
 import {useClientsStore} from "../stores/clients-store.ts";
 import DirectAccessClientKey from "./ui/DirectAccessClientKey.tsx";
 import {useMemo} from "preact/hooks";
-import {ClientInfo, filterAndSortClients} from "../types/client.ts";
+import {ClientInfo, ClientPageConfig, filterAndSortClients} from "../types/client.ts";
 import {useFilterStore} from "../stores/filter-store.ts";
 import Button from "./ui/Button.tsx";
 import {useCallStore} from "../stores/call-store.ts";
 import {clsx} from "clsx";
-import {useSettingsStore} from "../stores/settings-store.ts";
 
-function FallbackProfile() {
-    const config = useSettingsStore(state => state.selectedClientPageConfig);
+type ClientPageProps = {
+    config: ClientPageConfig;
+};
+
+function ClientPage({config}: ClientPageProps) {
     const allClients = useClientsStore(state => state.clients);
     const {filter, setFilter} = useFilterStore();
 
@@ -47,54 +49,42 @@ function FallbackProfile() {
 
     const renderGroups = (groups: string[]) => {
         return groups.map((group, index) => (
-            <FallbackProfileGroupKey key={index} group={group} setFilter={setFilter} />
+            <ClientPageGroupKey key={index} group={group} setFilter={setFilter} />
         ));
     };
 
-    const render = () => {
-        if (filter === "OTHER") {
-            return renderClients(clients.filter(client => !client.displayName.includes("_")));
-        }
+    if (filter === "OTHER") {
+        return renderClients(clients.filter(client => !client.displayName.includes("_")));
+    }
 
-        switch (config.grouping) {
-            case "Fir":
-            case "Icao": {
-                if (filter !== "") {
-                    return renderClients(
-                        clients.filter(client => client.displayName.startsWith(filter)),
-                    );
-                }
-
-                const slice = config.grouping === "Fir" ? 2 : 4;
-                return renderGroups(getGroups(clients, slice));
-            }
-            case "FirAndIcao": {
-                if (filter === "") {
-                    return renderGroups(getGroups(clients, 2));
-                } else if (filter.length === 2) {
-                    return renderGroups(getGroups(clients, 4, filter));
-                }
+    switch (config.grouping) {
+        case "Fir":
+        case "Icao": {
+            if (filter !== "") {
                 return renderClients(
                     clients.filter(client => client.displayName.startsWith(filter)),
                 );
             }
-            case undefined:
-            case "None":
-            default:
-                return renderClients(clients);
-        }
-    };
 
-    return (
-        <div className="w-full h-full overflow-auto">
-            <div className="w-min min-h-full py-3 px-2 grid grid-flow-col grid-rows-6 gap-2">
-                {render()}
-            </div>
-        </div>
-    );
+            const slice = config.grouping === "Fir" ? 2 : 4;
+            return renderGroups(getGroups(clients, slice));
+        }
+        case "FirAndIcao": {
+            if (filter === "") {
+                return renderGroups(getGroups(clients, 2));
+            } else if (filter.length === 2) {
+                return renderGroups(getGroups(clients, 4, filter));
+            }
+            return renderClients(clients.filter(client => client.displayName.startsWith(filter)));
+        }
+        case undefined:
+        case "None":
+        default:
+            return renderClients(clients);
+    }
 }
 
-function FallbackProfileGroupKey({
+function ClientPageGroupKey({
     group,
     setFilter,
 }: {
@@ -154,4 +144,4 @@ function FallbackProfileGroupKey({
     );
 }
 
-export default FallbackProfile;
+export default ClientPage;

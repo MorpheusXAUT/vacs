@@ -78,7 +78,7 @@ export function directAccessPageToStationKeys(
     const result: DirectAccessKey[] = [];
 
     function visit(page: DirectAccessPage | undefined) {
-        if (page === undefined) return;
+        if (page === undefined || page.keys === undefined) return;
 
         for (const key of page.keys) {
             if (key.stationId !== undefined) result.push(key);
