@@ -12,6 +12,8 @@ use crate::config::AppConfig;
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::{KeybindEngine, KeybindEngineHandle};
 use crate::signaling::auth::TauriTokenProvider;
+use notify_debouncer_full::notify::RecommendedWatcher;
+use notify_debouncer_full::{Debouncer, RecommendedCache};
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -35,6 +37,7 @@ pub struct AppStateInner {
     held_calls: HashMap<CallId, Call>,  // call_id -> call
     outgoing_call_id: Option<CallId>,   // peer_id
     incoming_call_ids: HashSet<CallId>, // peer_id
+    pub test_profile_watcher: Option<Debouncer<RecommendedWatcher, RecommendedCache>>,
 }
 
 pub type AppState = TokioMutex<AppStateInner>;
@@ -75,6 +78,7 @@ impl AppStateInner {
             held_calls: HashMap::new(),
             outgoing_call_id: None,
             incoming_call_ids: HashSet::new(),
+            test_profile_watcher: None,
         })
     }
 

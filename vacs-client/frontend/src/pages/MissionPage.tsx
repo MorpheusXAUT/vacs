@@ -5,6 +5,7 @@ import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {invokeStrict} from "../error.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
 import {navigate} from "wouter/use-browser-location";
+import {invoke} from "@tauri-apps/api/core";
 
 function MissionPage() {
     const enableTestProfile = useConnectionStore(
@@ -27,12 +28,15 @@ function MissionPage() {
         await invokeStrict("app_load_test_profile", {path: testProfilePath});
     });
 
-    const handleUnloadClick = () => {
+    const handleUnloadClick = useAsyncDebounce(async () => {
+        try {
+            void invoke("app_unload_test_profile");
+        } catch {}
         setConnectionState("disconnected");
         resetProfileStore();
         setTestProfilePath(undefined);
         navigate("/");
-    };
+    });
 
     return (
         <div className="z-10 absolute h-[calc(100%+5rem+5rem+3px-0.5rem)] w-[calc(100%+3px)] translate-y-[calc(-4.75rem-1px)] translate-x-[calc(-1*(1px))] bg-blue-700 border-t-0 px-2 pb-2 flex flex-col overflow-auto rounded">

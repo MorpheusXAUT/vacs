@@ -37,7 +37,8 @@ export function setupSignalingListeners() {
     const {setConnectionState, setConnectionInfo, setPositionsToSelect} =
         useConnectionStore.getState();
     const {setProfile, reset: resetProfileStore} = useProfileStore.getState();
-    const {open: openErrorOverlay} = useErrorOverlayStore.getState();
+    const {open: openErrorOverlay, closeIfTitle: closeErrorOverlayIfTitle} =
+        useErrorOverlayStore.getState();
     const {setClientPageConfig} = useSettingsStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
@@ -124,6 +125,7 @@ export function setupSignalingListeners() {
                 updateCallInCallList(event.payload);
             }),
             listen<Profile>("signaling:test-profile", event => {
+                closeErrorOverlayIfTitle("Profile error");
                 setConnectionState("test");
                 resetProfileStore(false);
                 setProfile(event.payload);

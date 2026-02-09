@@ -50,6 +50,7 @@ log = "0.4.29"
 lru = "0.16.3"
 metrics = "0.24.2"
 nonzero_ext = "0.3.0"
+notify-debouncer-full = "0.7.0"
 objc2-core-foundation = "0.3.1"
 objc2-core-graphics = "0.3.1"
 oauth2 = { version = "5.0.0", default-features = false }

@@ -8,7 +8,10 @@ use crate::config::{
 use crate::error::{Error, FrontendError};
 use crate::platform::Capabilities;
 use anyhow::Context;
+use notify_debouncer_full::notify::{EventKind, RecursiveMode};
+use notify_debouncer_full::{DebounceEventResult, new_debouncer};
 use std::path::PathBuf;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 use vacs_vatsim::coverage::profile::Profile;
 
@@ -326,6 +329,7 @@ pub async fn app_set_call_config(
 #[vacs_macros::log_err]
 pub async fn app_load_test_profile(
     app: AppHandle,
+    app_state: State<'_, AppState>,
     path: Option<String>,
 ) -> Result<Option<PathBuf>, Error> {
     let path = match path {
@@ -339,7 +343,14 @@ pub async fn app_load_test_profile(
                 .map(|p| p.path().to_path_buf())
             {
                 Some(path) => path,
-                None => return Ok(None),
+                None => {
+                    let state = app.state::<AppState>();
+                    let mut state = state.lock().await;
+                    if state.test_profile_watcher.take().is_some() {
+                        log::debug!("Stopped watching test profile");
+                    }
+                    return Ok(None);
+                }
             }
         }
     };
@@ -351,6 +362,7 @@ pub async fn app_load_test_profile(
             app.emit("signaling:test-profile", profile).ok();
         }
         Err(err) => {
+            log::warn!("Failed to load test profile: {err}");
             app.emit(
                 "error",
                 FrontendError::new(
@@ -362,7 +374,78 @@ pub async fn app_load_test_profile(
         }
     };
 
+    let mut state = app_state.lock().await;
+    if state.config.client.test_profile_watcher_delay_ms > 0
+        && let Some(parent) = path.parent()
+    {
+        let path_clone = path.clone();
+        let app = app.clone();
+
+        let debouncer = new_debouncer(
+            Duration::from_millis(state.config.client.test_profile_watcher_delay_ms),
+            None,
+            move |res: DebounceEventResult| match res {
+                Ok(events) => {
+                    if events.iter().any(|e| {
+                        matches!(e.kind, EventKind::Create(_) | EventKind::Modify(_))
+                            && e.paths.iter().any(|p| p == &path_clone)
+                    }) {
+                        log::debug!("Test profile changed, reloading");
+                        match Profile::load(&path_clone) {
+                            Ok(profile) => {
+                                log::debug!("Reloaded test profile: {:?}", profile);
+                                let profile =
+                                    vacs_signaling::protocol::profile::Profile::from(&profile);
+                                app.emit("signaling:test-profile", profile).ok();
+                            }
+                            Err(err) => {
+                                log::warn!("Failed to reload test profile: {err}");
+                                app.emit(
+                                    "error",
+                                    FrontendError::new(
+                                        "Profile error",
+                                        format!("Failed to reload test profile: {err}"),
+                                    ),
+                                )
+                                .ok();
+                            }
+                        }
+                    }
+                }
+                Err(err) => log::warn!(
+                    "Received error watching test profile parent directory for changes: {err:?}"
+                ),
+            },
+        );
+
+        match debouncer {
+            Ok(mut debouncer) => {
+                if let Err(err) = debouncer.watch(parent, RecursiveMode::NonRecursive) {
+                    log::warn!("Failed to start watcher for test profile: {err}");
+                } else {
+                    log::trace!(
+                        "Started watching parent directory {parent:?} for changes to test profile {path:?}"
+                    );
+                    state.test_profile_watcher = Some(debouncer);
+                }
+            }
+            Err(err) => {
+                log::error!("Failed to create debouncer: {err}");
+            }
+        }
+    }
+
     Ok(Some(path))
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_unload_test_profile(app_state: State<'_, AppState>) -> Result<(), Error> {
+    let mut state = app_state.lock().await;
+    if state.test_profile_watcher.take().is_some() {
+        log::debug!("Stopped watching test profile");
+    }
+    Ok(())
 }
 
 #[tauri::command]

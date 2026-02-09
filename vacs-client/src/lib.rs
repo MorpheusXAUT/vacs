@@ -131,6 +131,7 @@ pub fn run() {
             app::commands::app_set_always_on_top,
             app::commands::app_set_call_config,
             app::commands::app_set_fullscreen,
+            app::commands::app_unload_test_profile,
             app::commands::app_update,
             audio::commands::audio_get_devices,
             audio::commands::audio_get_hosts,

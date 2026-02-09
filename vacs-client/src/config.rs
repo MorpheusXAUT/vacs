@@ -261,6 +261,7 @@ pub struct ClientConfig {
     pub call: CallConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extra_client_page_config: Option<String>,
+    pub test_profile_watcher_delay_ms: u64,
 }
 
 impl Default for ClientConfig {
@@ -279,6 +280,7 @@ impl Default for ClientConfig {
             keybinds: KeybindsConfig::default(),
             call: CallConfig::default(),
             extra_client_page_config: None,
+            test_profile_watcher_delay_ms: 500,
         }
     }
 }

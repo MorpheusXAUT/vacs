@@ -8,9 +8,10 @@ type ErrorOverlayState = {
     timeoutId?: number;
     open: (title: string, message: string, isNonCritical: boolean, timeout?: number) => void;
     close: () => void;
+    closeIfTitle: (title: string) => void;
 };
 
-const CLOSED_OVERLAY: Omit<ErrorOverlayState, "open" | "close"> = {
+const CLOSED_OVERLAY: Omit<ErrorOverlayState, "open" | "close" | "closeIfTitle"> = {
     visible: false,
     title: "",
     message: "",
@@ -42,5 +43,9 @@ export const useErrorOverlayStore = create<ErrorOverlayState>()((set, get) => ({
         }
 
         set(CLOSED_OVERLAY);
+    },
+    closeIfTitle: (title: string) => {
+        if (!get().visible || get().title !== title) return;
+        get().close();
     },
 }));
