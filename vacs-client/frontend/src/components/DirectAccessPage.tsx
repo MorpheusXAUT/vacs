@@ -6,6 +6,7 @@ import ButtonLabel from "./ui/ButtonLabel.tsx";
 import Button from "./ui/Button.tsx";
 import {useProfileStore} from "../stores/profile-store.ts";
 import {useCallState} from "../hooks/call-state-hook.ts";
+import ClientPage from "./ClientPage.tsx";
 
 type DirectAccessPageProps = {
     data: DirectAccessPageModel;
@@ -14,31 +15,36 @@ type DirectAccessPageProps = {
 function DirectAccessPage({data}: DirectAccessPageProps) {
     const style: CSSProperties = {
         gridTemplateRows: `repeat(${data.rows}, 1fr)`,
-        gridAutoFlow: "column",
     };
 
     return (
         <div className="w-full h-full overflow-auto">
-            <div className="w-min min-h-full py-3 px-2 grid gap-2" style={style}>
-                {data.keys.map((key, index) =>
-                    key.page !== undefined ? (
-                        <DirectAccessSubpageKey
-                            key={index}
-                            label={key.label}
-                            page={key.page}
-                            parent={data}
-                        />
-                    ) : (
-                        <DirectAccessStationKey
-                            key={index}
-                            data={key}
-                            className={
-                                data.rows !== undefined && data.rows > 6
-                                    ? "leading-4!"
-                                    : "leading-4.5!"
-                            }
-                        />
-                    ),
+            <div className="w-min min-h-full py-3 px-2 grid grid-flow-col gap-2" style={style}>
+                {data.keys !== undefined ? (
+                    data.keys.map((key, index) =>
+                        key.page !== undefined ? (
+                            <DirectAccessSubpageKey
+                                key={index}
+                                label={key.label}
+                                page={key.page}
+                                parent={data}
+                            />
+                        ) : (
+                            <DirectAccessStationKey
+                                key={index}
+                                data={key}
+                                className={
+                                    data.rows !== undefined && data.rows > 6
+                                        ? "leading-4!"
+                                        : "leading-4.5!"
+                                }
+                            />
+                        ),
+                    )
+                ) : data.clientPage !== undefined ? (
+                    <ClientPage config={data.clientPage} />
+                ) : (
+                    <></>
                 )}
             </div>
         </div>
