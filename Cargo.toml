@@ -50,6 +50,7 @@ log = "0.4.29"
 lru = "0.16.3"
 metrics = "0.24.2"
 nonzero_ext = "0.3.0"
+notify-debouncer-full = "0.7.0"
 objc2-core-foundation = "0.3.1"
 objc2-core-graphics = "0.3.1"
 oauth2 = { version = "5.0.0", default-features = false }
@@ -94,7 +95,7 @@ url = "2.5.8"
 uuid = { version = "1.21.0", features = ["v7", "serde"] }
 vacs-audio = { path = "vacs-audio" }
 vacs-macros = { path = "vacs-macros" }
-vacs-protocol = { path = "vacs-protocol", default-features = false }
+vacs-protocol = { path = "vacs-protocol" }
 vacs-server = { path = "vacs-server" }
 vacs-signaling = { path = "vacs-signaling" }
 vacs-vatsim = { path = "vacs-vatsim", default-features = false }

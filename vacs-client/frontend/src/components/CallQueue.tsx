@@ -8,9 +8,10 @@ import {DirectAccessKey} from "../types/profile.ts";
 import {ComponentChild} from "preact";
 import {ClientId, PositionId, StationId} from "../types/generic.ts";
 import {useAuthStore} from "../stores/auth-store.ts";
-import {splitDisplayName} from "../types/client-info.ts";
+import {ClientInfo, splitDisplayName} from "../types/client.ts";
 import {clsx} from "clsx";
 import ButtonLabel from "./ui/ButtonLabel.tsx";
+import {useClientsStore} from "../stores/clients-store.ts";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -21,6 +22,7 @@ function CallQueue() {
     );
     const stationKeys = useProfileStationKeys();
     const cid = useAuthStore(state => state.cid);
+    const clients = useClientsStore(state => state.clients);
 
     const handleCallDisplayClick = async (call: Call) => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {
@@ -84,7 +86,7 @@ function CallQueue() {
                             cdColor === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
                         )}
                     >
-                        {callDisplayLabel(callDisplay.call, cid, stationKeys)}
+                        {callDisplayLabel(callDisplay.call, cid, stationKeys, clients)}
                     </Button>
                 </div>
             ) : (
@@ -107,6 +109,7 @@ function CallQueue() {
                         call.source.positionId,
                         call.source.clientId,
                         stationKeys,
+                        clients,
                     )}
                 </Button>
             ))}
@@ -121,14 +124,22 @@ function callDisplayLabel(
     call: Call,
     cid: ClientId | undefined,
     stationKeys: DirectAccessKey[],
+    clients: ClientInfo[],
 ): ComponentChild {
     return call.source.clientId === cid
-        ? callLabel(call.target.station, call.target.position, call.target.client, stationKeys)
+        ? callLabel(
+              call.target.station,
+              call.target.position,
+              call.target.client,
+              stationKeys,
+              clients,
+          )
         : callLabel(
               call.source.stationId,
               call.source.positionId,
               call.source.clientId,
               stationKeys,
+              clients,
           );
 }
 
@@ -137,6 +148,7 @@ const callLabel = (
     positionId: PositionId | undefined,
     clientId: ClientId | undefined,
     stationKeys: DirectAccessKey[],
+    clients: ClientInfo[],
 ): ComponentChild => {
     if (stationId !== undefined) {
         const station = stationKeys.find(key => key.stationId === stationId);
@@ -147,7 +159,11 @@ const callLabel = (
     } else if (positionId !== undefined) {
         return callsignLabel(positionId);
     }
-    return callsignLabel(clientId ?? "");
+    return callsignLabel(
+        clientId !== undefined
+            ? (clients.find(client => client.id === clientId)?.displayName ?? clientId)
+            : "",
+    );
 };
 
 function callsignLabel(name: string): ComponentChild {

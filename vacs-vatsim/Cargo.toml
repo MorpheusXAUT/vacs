@@ -11,7 +11,7 @@ default = []
 test-utils = []
 data-feed = ["dep:async-trait", "dep:parking_lot", "dep:reqwest"]
 slurper = ["dep:bytes", "dep:csv", "dep:reqwest"]
-coverage = ["dep:regex", "dep:serde_json", "dep:toml"]
+coverage = ["dep:regex", "dep:serde_json", "dep:toml", "vacs-protocol/profile"]
 
 [dependencies]
 async-trait = { workspace = true, optional = true }
@@ -25,7 +25,7 @@ serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }
 toml = { workspace = true, optional = true }
 tracing = { workspace = true }
-vacs-protocol = { workspace = true, default-features = false, features = ["vatsim"] }
+vacs-protocol = { workspace = true, features = ["vatsim"] }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true, features = ["unstable"] }

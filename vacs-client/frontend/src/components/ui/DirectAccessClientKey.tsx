@@ -1,74 +1,82 @@
-// import {ClientInfo, splitDisplayName} from "../../types/client-info.ts";
-// import Button from "./Button.tsx";
-// import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
-// import {invokeStrict} from "../../error.ts";
-// import {startCall, useCallStore} from "../../stores/call-store.ts";
-// import {ClientId} from "../../types/generic.ts";
-//
-// type DAKeyProps = {
-//     client: ClientInfo;
-// };
-//
-// function DirectAccessClientKey({client}: DAKeyProps) {
-//     const blink = useCallStore(state => state.blink);
-//     const callDisplay = useCallStore(state => state.callDisplay);
-//     const incomingCalls = useCallStore(state => state.incomingCalls);
-//     const {acceptCall, endCall, dismissRejectedCall, dismissErrorCall} = useCallStore(
-//         state => state.actions,
-//     );
-//
-//     const isCalling = incomingCalls.some(peer => peer.id === client.id);
-//     const beingCalled = callDisplay?.type === "outgoing" && callDisplay.peer.id === client.id;
-//     const inCall = callDisplay?.type === "accepted" && callDisplay.peer.id === client.id;
-//     const isRejected = callDisplay?.type === "rejected" && callDisplay.peer.id === client.id;
-//     const isError = callDisplay?.type === "error" && callDisplay.peer.id === client.id;
-//
-//     const handleClick = useAsyncDebounce(async () => {
-//         if (isCalling) {
-//             if (callDisplay !== undefined) return;
-//
-//             try {
-//                 await invokeStrict("signaling_accept_call", {callId: client.id});
-//             } catch {}
-//         } else if (beingCalled || inCall) {
-//             try {
-//                 await invokeStrict("signaling_end_call", {callId: client.id});
-//                 endCall();
-//             } catch {}
-//         } else if (isRejected) {
-//             dismissRejectedCall();
-//         } else if (isError) {
-//             dismissErrorCall();
-//         } else if (callDisplay === undefined) {
-//             await startCall({client: client.id as ClientId}); // TODO
-//         }
-//     });
-//
-//     const [stationName, stationType] = splitDisplayName(client);
-//     const showFrequency = client.frequency !== "";
-//
-//     return (
-//         <Button
-//             color={
-//                 inCall
-//                     ? "green"
-//                     : (isCalling || isRejected) && blink
-//                       ? "green"
-//                       : isError && blink
-//                         ? "red"
-//                         : "gray"
-//             }
-//             className="w-25 h-full rounded leading-4.5! p-1.5"
-//             highlight={beingCalled || isRejected ? "green" : undefined}
-//             onClick={handleClick}
-//         >
-//             <p className="w-full truncate" title={client.displayName}>
-//                 {stationName}
-//             </p>
-//             {stationType !== "" && <p>{stationType}</p>}
-//             {showFrequency && <p title={client.frequency}>{client.frequency}</p>}
-//         </Button>
-//     );
-// }
-//
-// export default DirectAccessClientKey;
+import {ClientInfo, ClientPageConfig, splitDisplayName} from "../../types/client.ts";
+import Button from "./Button.tsx";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {invokeStrict} from "../../error.ts";
+import {startCall, useCallStore} from "../../stores/call-store.ts";
+import {clsx} from "clsx";
+
+type DAKeyProps = {
+    client: ClientInfo;
+    config: ClientPageConfig | undefined;
+};
+
+function DirectAccessClientKey({client, config}: DAKeyProps) {
+    const blink = useCallStore(state => state.blink);
+    const callDisplay = useCallStore(state => state.callDisplay);
+    const incomingCalls = useCallStore(state => state.incomingCalls);
+    const {endCall, dismissRejectedCall, dismissErrorCall} = useCallStore(state => state.actions);
+
+    const incomingCall = incomingCalls.find(call => call.source.clientId === client.id);
+    const isCalling = incomingCall !== undefined;
+    const beingCalled =
+        callDisplay?.type === "outgoing" && callDisplay.call.target.client === client.id;
+    const involved =
+        callDisplay !== undefined &&
+        (callDisplay.call.target.client === client.id ||
+            callDisplay.call.source.clientId === client.id);
+    const inCall = callDisplay?.type === "accepted" && involved;
+    const isRejected = callDisplay?.type === "rejected" && involved;
+    const isError = callDisplay?.type === "error" && involved;
+
+    const handleClick = useAsyncDebounce(async () => {
+        if (isCalling) {
+            if (callDisplay !== undefined) return;
+
+            try {
+                await invokeStrict("signaling_accept_call", {callId: incomingCall.callId});
+            } catch {}
+        } else if (beingCalled || inCall) {
+            try {
+                await invokeStrict("signaling_end_call", {callId: callDisplay.call.callId});
+                endCall();
+            } catch {}
+        } else if (isRejected) {
+            dismissRejectedCall();
+        } else if (isError) {
+            dismissErrorCall();
+        } else if (callDisplay === undefined) {
+            await startCall({client: client.id});
+        }
+    });
+
+    const [stationName, stationType] = splitDisplayName(client.displayName);
+    const showFrequency = client.frequency !== "" && config?.frequencies === "ShowAll";
+
+    const color = inCall
+        ? "green"
+        : (isCalling || isRejected) && blink
+          ? "green"
+          : isError && blink
+            ? "red"
+            : "gray";
+
+    return (
+        <Button
+            color={color}
+            className={clsx(
+                "w-25 h-full rounded leading-4.5!",
+                color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
+            )}
+            highlight={beingCalled || isRejected ? "green" : undefined}
+            onClick={handleClick}
+        >
+            <p className="w-full truncate" title={client.displayName}>
+                {stationName}
+            </p>
+            {stationType !== "" && <p>{stationType}</p>}
+            {showFrequency && <p title={client.frequency}>{client.frequency}</p>}
+        </Button>
+    );
+}
+
+export default DirectAccessClientKey;

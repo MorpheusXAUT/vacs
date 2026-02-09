@@ -5,9 +5,8 @@ use std::collections::{HashMap, HashSet};
 use tokio::sync::broadcast::error::SendError;
 use tokio::sync::{RwLock, broadcast, mpsc};
 use tracing::instrument;
-use vacs_protocol::vatsim::{
-    ActiveProfile, ClientId, PositionId, ProfileId, StationChange, StationId,
-};
+use vacs_protocol::profile::{ActiveProfile, ProfileId};
+use vacs_protocol::vatsim::{ClientId, PositionId, StationChange, StationId};
 use vacs_protocol::ws::server;
 use vacs_protocol::ws::server::{ClientInfo, DisconnectReason, ServerMessage, StationInfo};
 use vacs_vatsim::coverage::network::{Network, RelevantStations};

@@ -9,7 +9,8 @@ use crate::coverage::{
     CoverageError, IoError, ReferenceValidator, StructureError, ValidationError,
 };
 use std::collections::{HashMap, HashSet};
-use vacs_protocol::vatsim::{ActiveProfile, PositionId, ProfileId, StationChange, StationId};
+use vacs_protocol::profile::{ActiveProfile, ProfileId};
+use vacs_protocol::vatsim::{PositionId, StationChange, StationId};
 
 #[derive(Clone, Default)]
 pub struct Network {

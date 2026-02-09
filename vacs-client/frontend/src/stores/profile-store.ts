@@ -20,7 +20,7 @@ type ProfileState = {
     setSubpage: (page: DirectAccessPage, parent: DirectAccessPage) => void;
     navigateParentPage: () => void;
     setTestProfilePath: (path: string | undefined) => void;
-    reset: () => void;
+    reset: (resetTestProfilePath?: boolean) => void;
 };
 
 export const useProfileStore = create<ProfileState>()((set, get, store) => ({
@@ -36,7 +36,11 @@ export const useProfileStore = create<ProfileState>()((set, get, store) => ({
         set({page: {current: parent, parent: undefined}});
     },
     setTestProfilePath: path => set({testProfilePath: path}),
-    reset: () => set(store.getInitialState()),
+    reset: (resetTestProfilePath = true) =>
+        set({
+            ...store.getInitialState(),
+            testProfilePath: resetTestProfilePath ? undefined : get().testProfilePath,
+        }),
 }));
 
 export const useProfileType = (): "geo" | "tabbed" | "unknown" | undefined => {

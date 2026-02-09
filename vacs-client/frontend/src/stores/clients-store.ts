@@ -1,4 +1,4 @@
-import {ClientInfo} from "../types/client-info.ts";
+import {ClientInfo} from "../types/client.ts";
 import {create} from "zustand/react";
 import {ClientId} from "../types/generic.ts";
 

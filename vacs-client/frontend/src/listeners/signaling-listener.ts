@@ -1,6 +1,6 @@
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {useClientsStore} from "../stores/clients-store.ts";
-import {ClientInfo, SessionInfo} from "../types/client-info.ts";
+import {ClientInfo, ClientPageSettings, SessionInfo} from "../types/client.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {
     IncomingCallListEntry,
@@ -16,6 +16,7 @@ import {Call} from "../types/call.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 import {Profile} from "../types/profile.ts";
 import {navigate} from "wouter/use-browser-location";
+import {useSettingsStore} from "../stores/settings-store.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, removeClient} = useClientsStore.getState();
@@ -36,7 +37,9 @@ export function setupSignalingListeners() {
     const {setConnectionState, setConnectionInfo, setPositionsToSelect} =
         useConnectionStore.getState();
     const {setProfile, reset: resetProfileStore} = useProfileStore.getState();
-    const {open: openErrorOverlay} = useErrorOverlayStore.getState();
+    const {open: openErrorOverlay, closeIfTitle: closeErrorOverlayIfTitle} =
+        useErrorOverlayStore.getState();
+    const {setClientPageSettings} = useSettingsStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 
@@ -64,6 +67,7 @@ export function setupSignalingListeners() {
                 resetCallStore();
                 clearCallList();
                 resetProfileStore();
+                // TODO reset filter
             }),
             listen<PositionId[]>("signaling:ambiguous-position", event => {
                 setConnectionState("connecting");
@@ -121,10 +125,14 @@ export function setupSignalingListeners() {
                 updateCallInCallList(event.payload);
             }),
             listen<Profile>("signaling:test-profile", event => {
+                closeErrorOverlayIfTitle("Profile error");
                 setConnectionState("test");
-                resetProfileStore();
+                resetProfileStore(false);
                 setProfile(event.payload);
                 navigate("/");
+            }),
+            listen<ClientPageSettings>("signaling:client-page-config", event => {
+                setClientPageSettings(event.payload);
             }),
         );
     };
