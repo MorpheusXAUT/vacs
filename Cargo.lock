@@ -8499,6 +8499,7 @@ dependencies = [
  "pretty_assertions",
  "regex",
  "reqwest",
+ "rustls",
  "semver",
  "serde",
  "serde_json",
