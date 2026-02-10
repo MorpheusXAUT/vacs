@@ -27,6 +27,7 @@ const AUDIO_STREAM_ERROR_CHANNEL_SIZE: usize = 32;
 pub enum SourceType {
     Opus,
     Ring,
+    PriorityRing,
     Ringback,
     RingbackOneshot,
     Click,
@@ -43,7 +44,7 @@ impl SourceType {
             SourceType::Opus => {
                 unimplemented!("Cannot create waveform source for Opus SourceType")
             }
-            SourceType::Ring => WaveformSource::new(
+            SourceType::Ring => WaveformSource::single(
                 WaveformTone::new(497.0, Waveform::Triangle, 0.2),
                 Duration::from_secs_f32(1.69),
                 None,
@@ -52,7 +53,29 @@ impl SourceType {
                 output_channels,
                 volume,
             ),
-            SourceType::Ringback => WaveformSource::new(
+            SourceType::PriorityRing => WaveformSource::new(
+                [
+                    (
+                        WaveformTone::new(769.0, Waveform::Sine, 0.2),
+                        Duration::from_millis(120),
+                    ),
+                    (
+                        WaveformTone::new(628.0, Waveform::Triangle, 0.13),
+                        Duration::from_millis(80),
+                    ),
+                    (
+                        WaveformTone::new(492.0, Waveform::Triangle, 0.08),
+                        Duration::from_millis(90),
+                    ),
+                ]
+                .repeat(4),
+                None,
+                Duration::from_millis(10),
+                sample_rate,
+                output_channels,
+                volume,
+            ),
+            SourceType::Ringback => WaveformSource::single(
                 WaveformTone::new(425.0, Waveform::Sine, 0.2),
                 Duration::from_secs(1),
                 Some(Duration::from_secs(4)),
@@ -61,7 +84,7 @@ impl SourceType {
                 output_channels,
                 volume,
             ),
-            SourceType::RingbackOneshot => WaveformSource::new(
+            SourceType::RingbackOneshot => WaveformSource::single(
                 WaveformTone::new(425.0, Waveform::Sine, 0.2),
                 Duration::from_secs(1),
                 None,
@@ -70,7 +93,7 @@ impl SourceType {
                 2,
                 volume,
             ),
-            SourceType::Click => WaveformSource::new(
+            SourceType::Click => WaveformSource::single(
                 WaveformTone::new(4000.0, Waveform::Sine, 0.2),
                 Duration::from_millis(20),
                 None,
@@ -422,6 +445,15 @@ impl AudioManager {
             SourceType::Ring,
             output.add_audio_source(Box::new(SourceType::into_waveform_source(
                 SourceType::Ring,
+                sample_rate,
+                channels,
+                audio_config.chime_volume,
+            ))),
+        );
+        source_ids.insert(
+            SourceType::PriorityRing,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::PriorityRing,
                 sample_rate,
                 channels,
                 audio_config.chime_volume,

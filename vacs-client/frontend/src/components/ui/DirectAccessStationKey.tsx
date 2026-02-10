@@ -1,5 +1,5 @@
 import {DirectAccessKey} from "../../types/profile.ts";
-import Button from "./Button.tsx";
+import Button, {ButtonColor, ButtonHighlightColor} from "./Button.tsx";
 import {clsx} from "clsx";
 import {useStationsStore} from "../../stores/stations-store.ts";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
@@ -29,6 +29,7 @@ function DirectAccessStationKey({
     const setTemporaryStationSource = useStationsStore(state => state.setTemporarySource);
 
     const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
+    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
 
     const hasStationId = stationId !== undefined;
     const station = hasStationId && stations.get(stationId);
@@ -99,24 +100,48 @@ function DirectAccessStationKey({
         }
     });
 
-    const color = inCall
-        ? "green"
-        : (isCalling || isRejected) && blink
-          ? "green"
-          : isError && blink
-            ? "red"
-            : isTarget
-              ? "sage"
-              : temporaryStationSource === stationId && temporaryStationSource !== undefined
-                ? "peach"
-                : defaultStationSource === stationId && defaultStationSource !== undefined
-                  ? "honey"
-                  : "gray";
+    const outgoingPrio = callDisplay?.call.prio === true && enablePrio;
+    const incomingPrio = incomingCall?.prio === true && enablePrio;
+
+    const color: ButtonColor = inCall
+        ? outgoingPrio
+            ? "yellow"
+            : "green"
+        : isCalling && blink
+          ? incomingPrio
+              ? "yellow"
+              : "green"
+          : isCalling && !blink
+            ? "gray"
+            : beingCalled && outgoingPrio && blink
+              ? "yellow"
+              : beingCalled && outgoingPrio && !blink
+                ? "gray"
+                : isRejected && blink
+                  ? "green"
+                  : isError && blink
+                    ? "red"
+                    : isTarget
+                      ? "sage"
+                      : temporaryStationSource === stationId && temporaryStationSource !== undefined
+                        ? "peach"
+                        : defaultStationSource === stationId && defaultStationSource !== undefined
+                          ? "honey"
+                          : "gray";
+
+    const highlight: ButtonHighlightColor | undefined =
+        isCalling && incomingPrio
+            ? blink
+                ? "green"
+                : "gray"
+            : beingCalled || isRejected || (inCall && outgoingPrio)
+              ? "green"
+              : undefined;
 
     return (
         <Button
             color={color}
-            highlight={beingCalled || isRejected ? "green" : undefined}
+            highlight={highlight}
             disabled={stationId === undefined || !online}
             className={clsx(
                 className,

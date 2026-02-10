@@ -25,6 +25,7 @@ async fn call_offer_answer() {
                     station_id: None,
                 },
                 target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client1")),
+                prio: false,
             },
         ))
         .await

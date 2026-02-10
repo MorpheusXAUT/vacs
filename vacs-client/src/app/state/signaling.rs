@@ -171,6 +171,7 @@ impl AppStateSignalingExt for AppStateInner {
         let found = self.incoming_call_ids.remove(call_id);
         if self.incoming_call_ids.is_empty() {
             self.audio_manager.read().stop(SourceType::Ring);
+            self.audio_manager.read().stop(SourceType::PriorityRing);
         }
         found
     }
@@ -346,6 +347,7 @@ impl AppStateSignalingExt for AppStateInner {
         self.remove_incoming_call_id(&call_id);
 
         self.audio_manager.read().stop(SourceType::Ring);
+        self.audio_manager.read().stop(SourceType::PriorityRing);
 
         app.emit("signaling:accept-incoming-call", call_id).ok();
 
@@ -442,6 +444,7 @@ impl AppStateInner {
                     ref call_id,
                     ref source,
                     ref target,
+                    ref prio,
                 },
             ) => {
                 let caller_id = &source.client_id;
@@ -479,7 +482,11 @@ impl AppStateInner {
                 state.add_incoming_call_id(call_id);
                 app.emit("signaling:call-invite", msg).ok();
 
-                state.audio_manager.read().restart(SourceType::Ring);
+                if *prio && !state.config.client.call.disable_priority_calls {
+                    state.audio_manager.read().restart(SourceType::PriorityRing);
+                } else {
+                    state.audio_manager.read().restart(SourceType::Ring);
+                }
             }
             ServerMessage::CallAccept(
                 ref msg @ shared::CallAccept {
@@ -847,6 +854,7 @@ impl AppStateInner {
         {
             let mut audio_manager = self.audio_manager.write();
             audio_manager.stop(SourceType::Ring);
+            audio_manager.stop(SourceType::PriorityRing);
             audio_manager.stop(SourceType::Ringback);
 
             audio_manager.detach_call_output();

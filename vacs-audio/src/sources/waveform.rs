@@ -3,7 +3,7 @@ use crate::sources::AudioSource;
 use std::time::Duration;
 use tracing::instrument;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Waveform {
     Sine,
     Triangle,
@@ -11,7 +11,7 @@ pub enum Waveform {
     Sawtooth,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WaveformTone {
     pub freq: f32, // Hz
     pub form: Waveform,
@@ -24,8 +24,103 @@ impl WaveformTone {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WaveformSegment {
+    Tone(WaveformTone, Duration),
+    Silence(Duration),
+}
+
+impl WaveformSegment {
+    pub fn new(tone: WaveformTone, duration: Duration) -> Self {
+        Self::Tone(tone, duration)
+    }
+
+    pub fn pause(duration: Duration) -> Self {
+        Self::Silence(duration)
+    }
+
+    pub fn duration(&self) -> Duration {
+        match self {
+            Self::Tone(_, d) => *d,
+            Self::Silence(d) => *d,
+        }
+    }
+}
+
+impl From<(WaveformTone, Duration)> for WaveformSegment {
+    fn from((tone, duration): (WaveformTone, Duration)) -> Self {
+        Self::Tone(tone, duration)
+    }
+}
+
+impl From<Duration> for WaveformSegment {
+    fn from(duration: Duration) -> Self {
+        Self::Silence(duration)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WaveformSequence {
+    pub segments: Vec<WaveformSegment>,
+}
+
+impl From<Vec<(WaveformTone, Duration)>> for WaveformSequence {
+    fn from(tones: Vec<(WaveformTone, Duration)>) -> Self {
+        Self {
+            segments: tones.into_iter().map(WaveformSegment::from).collect(),
+        }
+    }
+}
+
+impl From<Vec<WaveformSegment>> for WaveformSequence {
+    fn from(segments: Vec<WaveformSegment>) -> Self {
+        Self { segments }
+    }
+}
+
+impl From<WaveformSegment> for WaveformSequence {
+    fn from(segment: WaveformSegment) -> Self {
+        Self {
+            segments: vec![segment],
+        }
+    }
+}
+
+impl WaveformSequence {
+    pub fn new(segments: Vec<WaveformSegment>) -> Self {
+        Self { segments }
+    }
+
+    pub fn single(tone: WaveformTone, duration: Duration) -> Self {
+        Self {
+            segments: vec![WaveformSegment::new(tone, duration)],
+        }
+    }
+
+    pub fn repeat(self, n: usize) -> Self {
+        let mut new_segments = Vec::with_capacity(self.segments.len() * n);
+        for _ in 0..n {
+            new_segments.extend(self.segments.clone());
+        }
+        Self {
+            segments: new_segments,
+        }
+    }
+
+    pub fn concat(mut self, other: impl Into<WaveformSequence>) -> Self {
+        self.segments.extend(other.into().segments);
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PreparedSegment {
+    tone: Option<WaveformTone>,
+    samples: usize,
+}
+
 pub struct WaveformSource {
-    tone: WaveformTone,
+    segments: Vec<PreparedSegment>,
 
     output_channels: usize, // >= 1
     volume: f32,            // 0.0 - 1.0
@@ -39,37 +134,51 @@ pub struct WaveformSource {
     restarting: bool,
 
     sample_rate: f32,
-    tone_samples: usize,    // duration of tone in samples
-    silence_samples: usize, // duration of silence in samples
-    restart_samples: usize, // duration of restart silence in samples
+    total_tone_samples: usize, // duration of all tones in samples
+    silence_samples: usize,    // duration of silence in samples
+    restart_samples: usize,    // duration of restart silence in samples
     looped: bool,
 
+    current_segment_idx: usize,
+    segment_elapsed: usize,
     cycle_pos: usize, // position inside cycle
 }
 
 impl WaveformSource {
     pub fn new(
-        tone: WaveformTone,
-        tone_dur: Duration,
+        sequence: impl Into<WaveformSequence>,
         pause_dur: Option<Duration>,
         fade_dur: Duration,
         sample_rate: f32,
         output_channels: usize,
         volume: f32,
     ) -> Self {
-        assert!(tone.freq > 0.0, "Tone frequency must be greater than 0");
-        assert!(tone.amp > 0.0, "Tone amplitude must be greater than 0");
-        assert!(
-            tone_dur > Duration::new(0, 0),
-            "Tone duration must be greater than 0"
-        );
-        assert!(
-            fade_dur > Duration::new(0, 0),
-            "Fade duration must be greater than 0"
-        );
+        let sequence = sequence.into();
+        let mut segments = Vec::with_capacity(sequence.segments.len());
+        let mut total_tone_samples = 0;
+
+        for seg in sequence.segments {
+            let (tone, duration) = match seg {
+                WaveformSegment::Tone(t, d) => {
+                    assert!(t.freq > 0.0, "Tone frequency must be greater than 0");
+                    assert!(t.amp > 0.0, "Tone amplitude must be greater than 0");
+                    (Some(t), d)
+                }
+                WaveformSegment::Silence(d) => (None, d),
+            };
+
+            assert!(
+                duration > Duration::new(0, 0),
+                "Segment duration must be greater than 0"
+            );
+
+            let samples = (duration.as_secs_f32() * sample_rate) as usize;
+            total_tone_samples += samples;
+            segments.push(PreparedSegment { tone, samples });
+        }
 
         Self {
-            tone,
+            segments,
 
             output_channels: output_channels.max(1),
             volume: volume.clamp(0.0, 1.0),
@@ -83,21 +192,49 @@ impl WaveformSource {
             restarting: false,
 
             sample_rate,
-            tone_samples: (tone_dur.as_secs_f32() * sample_rate) as usize,
+            total_tone_samples,
             silence_samples: pause_dur.map_or(0, |p| (p.as_secs_f32() * sample_rate) as usize),
             restart_samples: (TARGET_SAMPLE_RATE / 10) as usize,
             looped: pause_dur.is_some(),
 
+            current_segment_idx: 0,
+            segment_elapsed: 0,
             cycle_pos: 0,
         }
     }
 
+    pub fn single(
+        tone: WaveformTone,
+        duration: Duration,
+        pause_dur: Option<Duration>,
+        fade_dur: Duration,
+        sample_rate: f32,
+        output_channels: usize,
+        volume: f32,
+    ) -> Self {
+        Self::new(
+            WaveformSequence::single(tone, duration),
+            pause_dur,
+            fade_dur,
+            sample_rate,
+            output_channels,
+            volume,
+        )
+    }
+
     fn generate_waveform(&self) -> f32 {
-        let time = self.cycle_pos as f32 / self.sample_rate;
-        let phase = (time * self.tone.freq).rem_euclid(1.0);
-        match self.tone.form {
+        let segment = &self.segments[self.current_segment_idx];
+        let tone = match segment.tone {
+            Some(t) => t,
+            None => return 0.0,
+        };
+
+        // Reset phase at the start of each segment
+        let time = self.segment_elapsed as f32 / self.sample_rate;
+        let phase = (time * tone.freq).rem_euclid(1.0);
+        match tone.form {
             Waveform::Sine => {
-                let t = 2.0 * std::f32::consts::PI * self.tone.freq * time;
+                let t = 2.0 * std::f32::consts::PI * tone.freq * time;
                 t.sin()
             }
             Waveform::Triangle => 1.0 - 4.0 * (phase - 0.5).abs(),
@@ -112,29 +249,37 @@ impl WaveformSource {
         }
     }
 
-    fn generate_envelope(&self) -> f32 {
+    fn generate_release_envelope(&self) -> f32 {
         if self.releasing {
+            if self.release_samples == 0 {
+                return 0.0;
+            }
             let rel = self.env_pos.min(self.release_samples);
             1.0 - rel as f32 / self.release_samples as f32
         } else {
-            // Check if we're near the end of the beep and need to apply release envelope
-            let remaining_samples = self.tone_samples - self.cycle_pos;
-            if remaining_samples <= self.release_samples {
-                // Apply release envelope for natural end of beep
-                let release_progress = self.release_samples - remaining_samples;
-                let rel_amp = 1.0 - release_progress as f32 / self.release_samples as f32;
-
-                // Also apply attack envelope if we're still in attack phase
-                let att = self.env_pos.min(self.attack_samples);
-                let att_amp = att as f32 / self.attack_samples as f32;
-
-                att_amp.min(rel_amp)
-            } else {
-                // Normal attack envelope
-                let att = self.env_pos.min(self.attack_samples);
-                att as f32 / self.attack_samples as f32
-            }
+            1.0
         }
+    }
+
+    fn generate_segment_envelope(&self) -> f32 {
+        let segment_len = self.segments[self.current_segment_idx].samples;
+        let remaining = segment_len.saturating_sub(self.segment_elapsed);
+
+        // Fade In (Attack)
+        let start_val = if self.attack_samples > 0 {
+            (self.segment_elapsed as f32 / self.attack_samples as f32).min(1.0)
+        } else {
+            1.0
+        };
+
+        // Fade Out (Release)
+        let end_val = if self.release_samples > 0 {
+            (remaining as f32 / self.release_samples as f32).min(1.0)
+        } else {
+            1.0
+        };
+
+        start_val.min(end_val)
     }
 }
 
@@ -148,15 +293,32 @@ impl AudioSource for WaveformSource {
         for frame in output.chunks_mut(self.output_channels) {
             let mut sample = 0.0;
 
-            // Only generate tone if cycle_pos is inside tone cycle (0->tone_samples)
-            if self.cycle_pos < self.tone_samples {
+            // Only generate tone if cycle_pos is inside tone cycle (0->total_tone_samples)
+            if self.cycle_pos < self.total_tone_samples {
                 // Generate tone
-                sample = self.generate_waveform();
+                let mut segment_val = self.generate_waveform();
 
                 // Apply envelope
-                sample *= self.generate_envelope();
+                segment_val *= self.generate_segment_envelope();
+                segment_val *= self.generate_release_envelope();
+
+                let segment_amp = self.segments[self.current_segment_idx]
+                    .tone
+                    .map_or(0.0, |t| t.amp);
+                sample = segment_val * segment_amp;
 
                 self.env_pos += 1;
+
+                // Advance inside segment
+                self.segment_elapsed += 1;
+                if self.segment_elapsed >= self.segments[self.current_segment_idx].samples {
+                    // Move to next segment if available
+                    if self.current_segment_idx + 1 < self.segments.len() {
+                        self.current_segment_idx += 1;
+                        self.segment_elapsed = 0;
+                    }
+                    // Else we are at the end of the last segment, next cycle_pos increment will handle the transition to silence/restart
+                }
             } else if self.releasing && !self.restarting {
                 // Stop if playing silence, releasing and not restarting
                 self.active = false;
@@ -166,14 +328,14 @@ impl AudioSource for WaveformSource {
 
             // Mix into the output buffer
             for s in frame.iter_mut() {
-                *s += sample * self.tone.amp * self.volume;
+                *s += sample * self.volume;
             }
 
             // Advance cycle position
             self.cycle_pos += 1;
 
             // Cycle length is either tone+silence or tone+restart
-            let cycle_len = self.tone_samples
+            let cycle_len = self.total_tone_samples
                 + if self.restarting {
                     self.restart_samples
                 } else {
@@ -187,10 +349,15 @@ impl AudioSource for WaveformSource {
                     self.releasing = false;
                     self.cycle_pos = 0;
                     self.env_pos = 0;
+                    // Reset segment state
+                    self.current_segment_idx = 0;
+                    self.segment_elapsed = 0;
                 } else if self.looped {
                     // Reset cycle
                     self.cycle_pos = 0;
                     self.env_pos = 0;
+                    self.current_segment_idx = 0;
+                    self.segment_elapsed = 0;
                 } else {
                     // Stop
                     self.active = false;
@@ -205,7 +372,9 @@ impl AudioSource for WaveformSource {
                 if self.restarting {
                     // Set cycle position after tone, so that the restart silence is immediately applied,
                     // even if we initiated the restart during the tone.
-                    self.cycle_pos = self.tone_samples;
+                    self.cycle_pos = self.total_tone_samples;
+                    self.current_segment_idx = self.segments.len().saturating_sub(1);
+                    self.segment_elapsed = self.segments.last().map_or(0, |s| s.samples);
                 } else {
                     // Stop
                     self.active = false;
@@ -215,11 +384,7 @@ impl AudioSource for WaveformSource {
         }
     }
 
-    #[instrument(level = "trace", skip(self), fields(
-        tone = self.tone.freq,
-        form = ?self.tone.form,
-        amp = self.tone.amp,
-    ))]
+    #[instrument(level = "trace", skip(self), fields(segments = ?self.segments))]
     fn start(&mut self) {
         tracing::trace!("Starting waveform source");
         self.active = true;
@@ -227,13 +392,11 @@ impl AudioSource for WaveformSource {
         self.restarting = false;
         self.env_pos = 0;
         self.cycle_pos = 0;
+        self.current_segment_idx = 0;
+        self.segment_elapsed = 0;
     }
 
-    #[instrument(level = "trace", skip(self), fields(
-        tone = self.tone.freq,
-        form = ?self.tone.form,
-        amp = self.tone.amp,
-    ))]
+    #[instrument(level = "trace", skip(self), fields(segments = ?self.segments))]
     fn stop(&mut self) {
         tracing::trace!("Stopping waveform source");
         // If we are currently releasing, we ignore the call to stop.
@@ -245,11 +408,7 @@ impl AudioSource for WaveformSource {
         }
     }
 
-    #[instrument(level = "trace", skip(self), fields(
-        tone = self.tone.freq,
-        form = ?self.tone.form,
-        amp = self.tone.amp,
-    ))]
+    #[instrument(level = "trace", skip(self), fields(segments = ?self.segments))]
     fn restart(&mut self) {
         tracing::trace!("Restarting waveform source");
         if self.active {
@@ -260,11 +419,7 @@ impl AudioSource for WaveformSource {
         }
     }
 
-    #[instrument(level = "trace", skip(self), fields(
-        tone = self.tone.freq,
-        form = ?self.tone.form,
-        amp = self.tone.amp,
-    ))]
+    #[instrument(level = "trace", skip(self), fields(segments = ?self.segments))]
     fn set_volume(&mut self, volume: f32) {
         tracing::trace!("Setting volume for waveform source");
         self.volume = volume.clamp(0.0, 1.0);

@@ -23,6 +23,7 @@ const emptyClientPageConfig: ClientPageConfig = {
 export const useSettingsStore = create<SettingsState>()(set => ({
     callConfig: {
         highlightIncomingCallTarget: true,
+        disablePriorityCalls: false,
     },
     selectedClientPageConfig: {...emptyClientPageConfig, name: "None"},
     clientPageConfigs: {},
