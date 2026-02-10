@@ -11,7 +11,7 @@ function CallConfigPage() {
         <div className="absolute top-0 z-10 h-full w-2/5 bg-blue-700 border-t-0 px-2 pb-2 flex flex-col">
             <p className="w-full text-white bg-blue-700 font-semibold text-center">Call Config</p>
             <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col overflow-y-auto">
-                <div className="w-full py-3 px-4 grow border-b-2 border-zinc-200">
+                <div className="w-full py-3 px-4 grow border-b-2 border-zinc-200 flex flex-col gap-3">
                     <div className="w-full flex justify-between items-center">
                         <label htmlFor="display-call-target">Highlight incoming target</label>
                         <Checkbox
@@ -31,6 +31,30 @@ function CallConfigPage() {
                                     setCallConfig({
                                         ...callConfig,
                                         highlightIncomingCallTarget: !next,
+                                    });
+                                }
+                            }}
+                        />
+                    </div>
+                    <div className="w-full flex justify-between items-center">
+                        <label htmlFor="disable-priority-calls">Disable priority calls</label>
+                        <Checkbox
+                            name="disable-priority-calls"
+                            checked={callConfig.disablePriorityCalls}
+                            onChange={async e => {
+                                const next = e.currentTarget.checked;
+                                const config = {
+                                    ...callConfig,
+                                    disablePriorityCalls: next,
+                                };
+
+                                try {
+                                    await invokeStrict("app_set_call_config", {callConfig: config});
+                                    setCallConfig(config);
+                                } catch {
+                                    setCallConfig({
+                                        ...callConfig,
+                                        disablePriorityCalls: !next,
                                     });
                                 }
                             }}

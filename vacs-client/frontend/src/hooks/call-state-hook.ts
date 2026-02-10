@@ -4,20 +4,23 @@ import {DirectAccessPage} from "../types/profile.ts";
 import {Call} from "../types/call.ts";
 import {ClientId, StationId} from "../types/generic.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
-import {ButtonColor} from "../components/ui/Button.tsx";
+import {ButtonColor, ButtonHighlightColor} from "../components/ui/Button.tsx";
 
 export function useCallState(page: DirectAccessPage | undefined) {
     const blink = useCallStore(state => state.blink);
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
     const cid = useAuthStore(state => state.cid);
+
     const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
+    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
 
     const stationIds = directAccessPageToStationIds(page);
 
-    const isCalling = incomingCalls.some(
+    const incomingCall = incomingCalls.find(
         call => call.source.stationId !== undefined && stationIds.includes(call.source.stationId),
     );
+    const isCalling = incomingCall !== undefined;
     const beingCalled =
         callDisplay?.type === "outgoing" &&
         callDisplay.call.target.station !== undefined &&
@@ -36,17 +39,41 @@ export function useCallState(page: DirectAccessPage | undefined) {
                 callDisplay.call.target.station !== undefined &&
                 stationIds.includes(callDisplay.call.target.station)));
 
-    const color: ButtonColor = inCall
-        ? "green"
-        : (isCalling || isRejected) && blink
-          ? "green"
-          : isError && blink
-            ? "red"
-            : isTarget
-              ? "sage"
-              : "gray";
+    const outgoingPrio = callDisplay?.call.prio === true && enablePrio;
+    const incomingPrio = incomingCall?.prio === true && enablePrio;
 
-    return {isCalling, beingCalled, inCall, isRejected, isError, isTarget, color, blink};
+    const color: ButtonColor = inCall
+        ? outgoingPrio
+            ? "yellow"
+            : "green"
+        : isCalling && blink
+          ? incomingPrio
+              ? "yellow"
+              : "green"
+          : isCalling && !blink
+            ? "gray"
+            : beingCalled && outgoingPrio && blink
+              ? "yellow"
+              : beingCalled && outgoingPrio && !blink
+                ? "gray"
+                : isRejected && blink
+                  ? "green"
+                  : isError && blink
+                    ? "red"
+                    : isTarget
+                      ? "sage"
+                      : "gray";
+
+    const highlight: ButtonHighlightColor | undefined =
+        isCalling && incomingPrio
+            ? blink
+                ? "green"
+                : "gray"
+            : beingCalled || isRejected || (inCall && outgoingPrio)
+              ? "green"
+              : undefined;
+
+    return {isCalling, beingCalled, inCall, isRejected, isError, isTarget, color, highlight, blink};
 }
 
 function callInvolvesButtonStations(

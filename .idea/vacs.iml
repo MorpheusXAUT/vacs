@@ -15,6 +15,7 @@
       <sourceFolder url="file://$MODULE_DIR$/vacs-signaling/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/vacs-client/frontend/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vacs-macros/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vacs-audio/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

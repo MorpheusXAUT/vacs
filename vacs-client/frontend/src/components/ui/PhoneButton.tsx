@@ -4,10 +4,16 @@ import {navigate} from "wouter/use-browser-location";
 import {useFilterStore} from "../../stores/filter-store.ts";
 import {useProfileStore, useProfileType} from "../../stores/profile-store.ts";
 import {clsx} from "clsx";
+import {useSettingsStore} from "../../stores/settings-store.ts";
 
 function PhoneButton() {
     const blink = useCallStore(state => state.blink);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
+    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
+    const callDisplayPrio =
+        useCallStore(state => state.callDisplay?.call.prio === true) && enablePrio;
+    const incomingPrio =
+        useCallStore(state => state.incomingCalls.some(call => call.prio)) && enablePrio;
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
     const navigateParentPage = useProfileStore(state => state.navigateParentPage);
@@ -18,17 +24,28 @@ function PhoneButton() {
         <Button
             color={
                 callDisplayType === "accepted"
-                    ? "green"
+                    ? callDisplayPrio
+                        ? "yellow"
+                        : "green"
                     : callDisplayType === "outgoing"
-                      ? "gray"
+                      ? callDisplayPrio
+                          ? blink
+                              ? "yellow"
+                              : "gray"
+                          : "gray"
                       : blink
                         ? callDisplayType === "error"
                             ? "red"
-                            : "green"
+                            : incomingPrio
+                              ? "yellow"
+                              : "green"
                         : "gray"
             }
             highlight={
-                callDisplayType === "outgoing" || callDisplayType === "rejected"
+                callDisplayType === "outgoing" ||
+                callDisplayType === "rejected" ||
+                (incomingPrio && blink) ||
+                (callDisplayType === "accepted" && callDisplayPrio)
                     ? "green"
                     : undefined
             }

@@ -79,6 +79,7 @@ pub async fn signaling_start_call(
     audio_manager: State<'_, AudioManagerHandle>,
     target: CallTarget,
     source: CallSource,
+    prio: bool,
 ) -> Result<CallId, Error> {
     log::debug!("Starting call with {target:?} as {source:?}");
 
@@ -90,6 +91,7 @@ pub async fn signaling_start_call(
             call_id,
             target,
             source,
+            prio,
         })
         .await?;
 
