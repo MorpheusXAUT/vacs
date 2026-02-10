@@ -220,6 +220,7 @@ pub async fn audio_set_volume(
         }
         VolumeType::Chime => {
             audio_manager.set_output_volume(SourceType::Ring, volume);
+            audio_manager.set_output_volume(SourceType::PriorityRing, volume);
             state.config.audio.chime_volume = volume;
         }
     }
