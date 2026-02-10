@@ -1,6 +1,6 @@
 export type CallConfig = {
     highlightIncomingCallTarget: boolean;
-    disablePriorityCalls: boolean;
+    enablePriorityCalls: boolean;
     enableCallStartSound: boolean;
     enableCallEndSound: boolean;
 };

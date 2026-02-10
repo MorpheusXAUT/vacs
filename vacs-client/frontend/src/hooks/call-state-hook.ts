@@ -13,7 +13,7 @@ export function useCallState(page: DirectAccessPage | undefined) {
     const cid = useAuthStore(state => state.cid);
 
     const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
-    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
+    const enablePrio = useSettingsStore(state => state.callConfig.enablePriorityCalls);
 
     const stationIds = directAccessPageToStationIds(page);
 

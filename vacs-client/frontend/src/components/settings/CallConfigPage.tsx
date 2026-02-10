@@ -21,9 +21,9 @@ function CallConfigPage() {
                         setCallConfig={setCallConfig}
                     />
                     <CallConfigEntry
-                        label="Disable priority calls"
-                        name="disable-priority-calls"
-                        property="disablePriorityCalls"
+                        label="Enable priority calls"
+                        name="enable-priority-calls"
+                        property="enablePriorityCalls"
                         callConfig={callConfig}
                         setCallConfig={setCallConfig}
                     />

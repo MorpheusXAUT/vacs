@@ -8,7 +8,7 @@ import {useSettingsStore} from "../stores/settings-store.ts";
 function FunctionKeys() {
     const prio = useCallStore(state => state.prio);
     const setPrio = useCallStore(state => state.actions.setPrio);
-    const disablePrio = useSettingsStore(state => state.callConfig.disablePriorityCalls);
+    const disablePrio = useSettingsStore(state => !state.callConfig.enablePriorityCalls);
 
     return (
         <div className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:shrink-0">

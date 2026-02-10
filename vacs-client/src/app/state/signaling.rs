@@ -482,7 +482,7 @@ impl AppStateInner {
                 state.add_incoming_call_id(call_id);
                 app.emit("signaling:call-invite", msg).ok();
 
-                if *prio && !state.config.client.call.disable_priority_calls {
+                if *prio && state.config.client.call.enable_priority_calls {
                     state.audio_manager.read().restart(SourceType::PriorityRing);
                 } else {
                     state.audio_manager.read().restart(SourceType::Ring);

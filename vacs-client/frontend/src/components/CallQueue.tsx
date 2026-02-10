@@ -24,7 +24,7 @@ function CallQueue() {
     const stationKeys = useProfileStationKeys();
     const cid = useAuthStore(state => state.cid);
     const clients = useClientsStore(state => state.clients);
-    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
+    const enablePrio = useSettingsStore(state => state.callConfig.enablePriorityCalls);
 
     const handleCallDisplayClick = async (call: Call) => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {
