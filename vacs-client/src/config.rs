@@ -715,18 +715,22 @@ impl TryFrom<FrontendKeybindsConfig> for KeybindsConfig {
 pub struct CallConfig {
     /// Toggles highlighting of incoming call target DA keys.
     pub highlight_incoming_call_target: bool,
+    /// Disables the priority call ringtone and visual highlighting. Priority calls will still be received, but not handled differently.
+    pub disable_priority_calls: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FrontendCallConfig {
     pub highlight_incoming_call_target: bool,
+    pub disable_priority_calls: bool,
 }
 
 impl Default for CallConfig {
     fn default() -> Self {
         Self {
             highlight_incoming_call_target: true,
+            disable_priority_calls: false,
         }
     }
 }
@@ -735,6 +739,7 @@ impl Default for FrontendCallConfig {
     fn default() -> Self {
         Self {
             highlight_incoming_call_target: true,
+            disable_priority_calls: false,
         }
     }
 }
@@ -743,6 +748,7 @@ impl From<CallConfig> for FrontendCallConfig {
     fn from(call_config: CallConfig) -> Self {
         Self {
             highlight_incoming_call_target: call_config.highlight_incoming_call_target,
+            disable_priority_calls: call_config.disable_priority_calls,
         }
     }
 }
@@ -751,6 +757,7 @@ impl From<FrontendCallConfig> for CallConfig {
     fn from(frontend_call_config: FrontendCallConfig) -> Self {
         Self {
             highlight_incoming_call_target: frontend_call_config.highlight_incoming_call_target,
+            disable_priority_calls: frontend_call_config.disable_priority_calls,
         }
     }
 }
