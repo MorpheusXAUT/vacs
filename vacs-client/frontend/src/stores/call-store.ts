@@ -115,21 +115,21 @@ export const useCallStore = create<CallState>()((set, get) => ({
         },
         removeCall: (callId, callEnd) => {
             const incomingCalls = get().incomingCalls.filter(info => info.callId !== callId);
+            let callDisplay = get().callDisplay;
 
-            if (shouldStopBlinking(incomingCalls.length, get().callDisplay)) {
-                clearTimeout(get().blinkTimeoutId);
-                set({blink: false, blinkTimeoutId: undefined, incomingCalls: []});
-            } else {
-                set({incomingCalls});
-            }
-
-            const callDisplay = get().callDisplay;
             if (
                 callDisplay?.call.callId === callId &&
                 callDisplay?.type !== "error" &&
                 (!callEnd || callDisplay?.type !== "outgoing")
             ) {
-                set({callDisplay: undefined});
+                callDisplay = undefined;
+            }
+
+            if (shouldStopBlinking(incomingCalls.length, callDisplay)) {
+                clearTimeout(get().blinkTimeoutId);
+                set({blink: false, blinkTimeoutId: undefined, incomingCalls: [], callDisplay});
+            } else {
+                set({incomingCalls, callDisplay});
             }
         },
         rejectCall: callId => {
