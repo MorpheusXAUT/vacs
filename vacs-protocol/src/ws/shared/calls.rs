@@ -48,6 +48,7 @@ pub struct CallInvite {
     pub call_id: CallId,
     pub source: CallSource,
     pub target: CallTarget,
+    pub prio: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

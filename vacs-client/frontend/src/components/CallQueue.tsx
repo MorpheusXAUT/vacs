@@ -49,13 +49,19 @@ function CallQueue() {
     };
 
     const cdColor =
-        callDisplay?.type === "accepted"
-            ? "green"
-            : callDisplay?.type === "rejected" && blink
+        callDisplay?.type === "accepted" && callDisplay.call.prio
+            ? "yellow"
+            : callDisplay?.type === "accepted" && !callDisplay.call.prio
               ? "green"
-              : callDisplay?.type === "error" && blink
-                ? "red"
-                : "gray";
+              : callDisplay?.type === "outgoing" && callDisplay.call.prio && blink
+                ? "yellow"
+                : callDisplay?.type === "outgoing" && callDisplay.call.prio && !blink
+                  ? "green"
+                  : callDisplay?.type === "rejected" && blink
+                    ? "green"
+                    : callDisplay?.type === "error" && blink
+                      ? "red"
+                      : "gray";
 
     return (
         <div
@@ -75,7 +81,9 @@ function CallQueue() {
                     <Button
                         color={cdColor}
                         highlight={
-                            callDisplay.type === "outgoing" || callDisplay.type === "rejected"
+                            callDisplay.type === "outgoing" ||
+                            callDisplay.type === "rejected" ||
+                            (callDisplay.type === "accepted" && callDisplay.call.prio)
                                 ? "green"
                                 : undefined
                         }
@@ -94,25 +102,35 @@ function CallQueue() {
             )}
 
             {/*Answer Keys*/}
-            {incomingCalls.map((call, idx) => (
-                <Button
-                    key={idx}
-                    color={blink ? "green" : "gray"}
-                    className={clsx(
-                        "h-16 text-sm [&_p]:leading-3.5",
-                        !blink ? "p-1.5" : "p-[calc(0.375rem+1px)]",
-                    )}
-                    onClick={() => handleAnswerKeyClick(call)}
-                >
-                    {callLabel(
-                        call.source.stationId,
-                        call.source.positionId,
-                        call.source.clientId,
-                        stationKeys,
-                        clients,
-                    )}
-                </Button>
-            ))}
+            {incomingCalls.map((call, idx) => {
+                const color = blink
+                    ? call.prio
+                        ? "yellow"
+                        : "green"
+                    : call.prio
+                      ? "green"
+                      : "gray";
+                return (
+                    <Button
+                        key={idx}
+                        color={color}
+                        highlight={call.prio ? (blink ? "green" : "gray") : undefined}
+                        className={clsx(
+                            "h-16 text-sm [&_p]:leading-3.5",
+                            color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
+                        )}
+                        onClick={() => handleAnswerKeyClick(call)}
+                    >
+                        {callLabel(
+                            call.source.stationId,
+                            call.source.positionId,
+                            call.source.clientId,
+                            stationKeys,
+                            clients,
+                        )}
+                    </Button>
+                );
+            })}
             {Array.from(Array(Math.max(5 - incomingCalls.length, 0)).keys()).map(idx => (
                 <div key={idx} className="w-full h-16 border rounded-md"></div>
             ))}

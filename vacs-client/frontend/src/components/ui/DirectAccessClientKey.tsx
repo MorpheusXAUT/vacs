@@ -1,5 +1,5 @@
 import {ClientInfo, ClientPageConfig, splitDisplayName} from "../../types/client.ts";
-import Button from "./Button.tsx";
+import Button, {ButtonColor, ButtonHighlightColor} from "./Button.tsx";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeStrict} from "../../error.ts";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
@@ -52,13 +52,36 @@ function DirectAccessClientKey({client, config}: DAKeyProps) {
     const [stationName, stationType] = splitDisplayName(client.displayName);
     const showFrequency = client.frequency !== "" && config?.frequencies === "ShowAll";
 
-    const color = inCall
-        ? "green"
-        : (isCalling || isRejected) && blink
-          ? "green"
-          : isError && blink
-            ? "red"
-            : "gray";
+    const color: ButtonColor = inCall
+        ? callDisplay.call.prio
+            ? "yellow"
+            : "green"
+        : isCalling && blink
+          ? incomingCall.prio
+              ? "yellow"
+              : "green"
+          : isCalling && !blink
+            ? incomingCall.prio
+                ? "green"
+                : "gray"
+            : beingCalled && callDisplay.call.prio && blink
+              ? "yellow"
+              : beingCalled && callDisplay.call.prio && !blink
+                ? "green"
+                : isRejected && blink
+                  ? "green"
+                  : isError && blink
+                    ? "red"
+                    : "gray";
+
+    const highlight: ButtonHighlightColor | undefined =
+        isCalling && incomingCall.prio
+            ? blink
+                ? "green"
+                : "gray"
+            : beingCalled || isRejected || (inCall && callDisplay.call.prio)
+              ? "green"
+              : undefined;
 
     return (
         <Button
@@ -67,7 +90,7 @@ function DirectAccessClientKey({client, config}: DAKeyProps) {
                 "w-25 h-full rounded leading-4.5!",
                 color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",
             )}
-            highlight={beingCalled || isRejected ? "green" : undefined}
+            highlight={highlight}
             onClick={handleClick}
         >
             <p className="w-full truncate" title={client.displayName}>

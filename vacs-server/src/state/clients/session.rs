@@ -690,6 +690,7 @@ mod tests {
                     station_id: None,
                 },
                 target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+                prio: false,
             })
         );
 

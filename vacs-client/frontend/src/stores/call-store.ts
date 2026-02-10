@@ -23,6 +23,7 @@ type CallState = {
     blinkTimeoutId: number | undefined;
     callDisplay?: CallDisplay;
     incomingCalls: Call[];
+    prio: boolean;
     actions: {
         setOutgoingCall: (call: Call) => void;
         acceptIncomingCall: (callId: CallId) => void;
@@ -35,6 +36,7 @@ type CallState = {
         errorCall: (id: CallId, reason: string) => void;
         dismissErrorCall: () => void;
         setConnectionState: (id: CallId, connectionState: ConnectionState) => void;
+        setPrio: (prio: boolean) => void;
         reset: () => void;
     };
 };
@@ -45,8 +47,13 @@ export const useCallStore = create<CallState>()((set, get) => ({
     callDisplay: undefined,
     incomingCalls: [],
     connecting: false,
+    prio: false,
     actions: {
         setOutgoingCall: call => {
+            if (call.prio && get().blinkTimeoutId === undefined) {
+                startBlink(set);
+            }
+
             set({callDisplay: {type: "outgoing", call, connectionState: undefined}});
         },
         acceptIncomingCall: callId => {
@@ -57,7 +64,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
 
             if (shouldStopBlinking(incomingCalls.length, get().callDisplay)) {
                 clearTimeout(get().blinkTimeoutId);
-                set({blink: false, blinkTimeoutId: undefined, incomingCalls: []});
+                set({blink: false, blinkTimeoutId: undefined});
             }
 
             set({
@@ -75,16 +82,26 @@ export const useCallStore = create<CallState>()((set, get) => ({
 
             if (callDisplay?.type !== "outgoing" || callDisplay.call.callId !== callId) return;
 
+            const nextCallDisplay: CallDisplay = {
+                ...callDisplay,
+                type: "accepted",
+                targetClientId,
+                connectionState: "connecting",
+            };
+            if (shouldStopBlinking(get().incomingCalls.length, nextCallDisplay)) {
+                clearTimeout(get().blinkTimeoutId);
+                set({blink: false, blinkTimeoutId: undefined});
+            }
+
             set({
-                callDisplay: {
-                    ...callDisplay,
-                    type: "accepted",
-                    targetClientId,
-                    connectionState: "connecting",
-                },
+                callDisplay: nextCallDisplay,
             });
         },
         endCall: () => {
+            if (shouldStopBlinking(get().incomingCalls.length, undefined)) {
+                clearTimeout(get().blinkTimeoutId);
+                set({blink: false, blinkTimeoutId: undefined});
+            }
             set({callDisplay: undefined});
         },
         addIncomingCall: call => {
@@ -185,6 +202,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
 
             set({callDisplay: {...callDisplay, connectionState}});
         },
+        setPrio: prio => set({prio}),
         reset: () => {
             clearTimeout(get().blinkTimeoutId);
             set({
@@ -201,7 +219,9 @@ const shouldStopBlinking = (incomingCallsLength: number, callDisplay?: CallDispl
     return (
         incomingCallsLength === 0 &&
         (callDisplay === undefined ||
-            (callDisplay.type !== "rejected" && callDisplay.type !== "error"))
+            (callDisplay.type !== "rejected" &&
+                callDisplay.type !== "error" &&
+                callDisplay.type === "accepted"))
     );
 };
 
@@ -245,7 +265,8 @@ export const startCall = async (target: CallTarget) => {
 
     const {info} = useConnectionStore.getState();
     const {addOutgoingCall: addOutgoingCallToCallList} = useCallListStore.getState().actions;
-    const {setOutgoingCall} = useCallStore.getState().actions;
+    const {prio} = useCallStore.getState();
+    const {setOutgoingCall, setPrio} = useCallStore.getState().actions;
     const {defaultSource, temporarySource, setTemporarySource} = useStationsStore.getState();
 
     let stationId: StationId | undefined;
@@ -263,8 +284,9 @@ export const startCall = async (target: CallTarget) => {
     };
 
     try {
-        const callId = await invokeStrict<CallId>("signaling_start_call", {source, target});
-        setOutgoingCall({callId, source, target});
+        const callId = await invokeStrict<CallId>("signaling_start_call", {source, target, prio});
+        setOutgoingCall({callId, source, target, prio});
+        setPrio(false);
         addOutgoingCallToCallList({callId, target});
     } catch {}
 };

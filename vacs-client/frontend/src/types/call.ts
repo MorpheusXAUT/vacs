@@ -16,6 +16,7 @@ export type Call = {
     callId: CallId;
     source: CallSource;
     target: CallTarget;
+    prio: boolean;
 };
 
 export function callSourceToTarget(source: CallSource): CallTarget {

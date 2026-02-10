@@ -25,6 +25,7 @@ async fn call_offer() -> anyhow::Result<()> {
                     station_id: None,
                 },
                 target: CallTarget::Client(client2.id().clone()),
+                prio: false,
             },
         ))
         .await?;
@@ -147,6 +148,7 @@ async fn call_offer_answer() -> anyhow::Result<()> {
                     station_id: None,
                 },
                 target: CallTarget::Client(client2.id().clone()),
+                prio: false,
             },
         ))
         .await?;
@@ -286,6 +288,7 @@ async fn target_not_found() -> anyhow::Result<()> {
                     station_id: None,
                 },
                 target: CallTarget::Client(ClientId::from("client69")),
+                prio: false,
             },
         ))
         .await?;

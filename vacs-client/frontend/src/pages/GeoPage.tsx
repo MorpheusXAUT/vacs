@@ -96,13 +96,13 @@ type GeoPageButtonProps = {
 };
 
 function GeoPageButton({button}: GeoPageButtonProps) {
-    const {beingCalled, isRejected, color} = useCallState(button.page);
+    const {color, highlight} = useCallState(button.page);
     const setSelectedPage = useProfileStore(state => state.setPage);
 
     return (
         <Button
             color={color}
-            highlight={beingCalled || isRejected ? "green" : undefined}
+            highlight={highlight}
             className={clsx(
                 "aspect-square w-auto! rounded-none! overflow-hidden",
                 color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",

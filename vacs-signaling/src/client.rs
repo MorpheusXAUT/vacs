@@ -945,6 +945,7 @@ mod tests {
                 station_id: None,
             },
             target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+            prio: false,
         });
         let serialized = tungstenite::Message::from(ClientMessage::serialize(&msg).unwrap());
 
@@ -1018,6 +1019,7 @@ mod tests {
                     station_id: None,
                 },
                 target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+                prio: false,
             });
 
             let result = client_clone.send(msg.clone()).await;
@@ -1098,6 +1100,7 @@ mod tests {
                 station_id: None,
             },
             target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+            prio: false,
         });
 
         let task = tokio::spawn(async move {
@@ -1151,6 +1154,7 @@ mod tests {
                 station_id: None,
             },
             target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+            prio: false,
         });
 
         let task = tokio::spawn(async move {
@@ -1179,6 +1183,7 @@ mod tests {
                 station_id: None,
             },
             target: vacs_protocol::ws::shared::CallTarget::Client(ClientId::from("client2")),
+            prio: false,
         });
 
         let client_clone = client.clone();

@@ -8,6 +8,7 @@ import {clsx} from "clsx";
 function PhoneButton() {
     const blink = useCallStore(state => state.blink);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
+    const callDisplayPrio = useCallStore(state => state.callDisplay?.call.prio === true);
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
     const navigateParentPage = useProfileStore(state => state.navigateParentPage);
@@ -20,7 +21,11 @@ function PhoneButton() {
                 callDisplayType === "accepted"
                     ? "green"
                     : callDisplayType === "outgoing"
-                      ? "gray"
+                      ? callDisplayPrio
+                          ? blink
+                              ? "yellow"
+                              : "green"
+                          : "gray"
                       : blink
                         ? callDisplayType === "error"
                             ? "red"
@@ -28,7 +33,9 @@ function PhoneButton() {
                         : "gray"
             }
             highlight={
-                callDisplayType === "outgoing" || callDisplayType === "rejected"
+                callDisplayType === "outgoing" ||
+                callDisplayType === "rejected" ||
+                (callDisplayType === "accepted" && callDisplayPrio)
                     ? "green"
                     : undefined
             }
