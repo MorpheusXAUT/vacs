@@ -4,6 +4,7 @@ import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeStrict} from "../../error.ts";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {clsx} from "clsx";
+import {useSettingsStore} from "../../stores/settings-store.ts";
 
 type DAKeyProps = {
     client: ClientInfo;
@@ -15,6 +16,7 @@ function DirectAccessClientKey({client, config}: DAKeyProps) {
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
     const {endCall, dismissRejectedCall, dismissErrorCall} = useCallStore(state => state.actions);
+    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
 
     const incomingCall = incomingCalls.find(call => call.source.clientId === client.id);
     const isCalling = incomingCall !== undefined;
@@ -52,19 +54,22 @@ function DirectAccessClientKey({client, config}: DAKeyProps) {
     const [stationName, stationType] = splitDisplayName(client.displayName);
     const showFrequency = client.frequency !== "" && config?.frequencies === "ShowAll";
 
+    const outgoingPrio = callDisplay?.call.prio === true && enablePrio;
+    const incomingPrio = incomingCall?.prio === true && enablePrio;
+
     const color: ButtonColor = inCall
-        ? callDisplay.call.prio
+        ? outgoingPrio
             ? "yellow"
             : "green"
         : isCalling && blink
-          ? incomingCall.prio
+          ? incomingPrio
               ? "yellow"
               : "green"
           : isCalling && !blink
             ? "gray"
-            : beingCalled && callDisplay.call.prio && blink
+            : beingCalled && outgoingPrio && blink
               ? "yellow"
-              : beingCalled && callDisplay.call.prio && !blink
+              : beingCalled && outgoingPrio && !blink
                 ? "gray"
                 : isRejected && blink
                   ? "green"
@@ -73,11 +78,11 @@ function DirectAccessClientKey({client, config}: DAKeyProps) {
                     : "gray";
 
     const highlight: ButtonHighlightColor | undefined =
-        isCalling && incomingCall.prio
+        isCalling && incomingPrio
             ? blink
                 ? "green"
                 : "gray"
-            : beingCalled || isRejected || (inCall && callDisplay.call.prio)
+            : beingCalled || isRejected || (inCall && outgoingPrio)
               ? "green"
               : undefined;
 

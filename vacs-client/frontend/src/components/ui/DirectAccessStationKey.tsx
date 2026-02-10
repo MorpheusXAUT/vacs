@@ -29,6 +29,7 @@ function DirectAccessStationKey({
     const setTemporaryStationSource = useStationsStore(state => state.setTemporarySource);
 
     const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
+    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
 
     const hasStationId = stationId !== undefined;
     const station = hasStationId && stations.get(stationId);
@@ -99,19 +100,22 @@ function DirectAccessStationKey({
         }
     });
 
+    const outgoingPrio = callDisplay?.call.prio === true && enablePrio;
+    const incomingPrio = incomingCall?.prio === true && enablePrio;
+
     const color: ButtonColor = inCall
-        ? callDisplay.call.prio
+        ? outgoingPrio
             ? "yellow"
             : "green"
         : isCalling && blink
-          ? incomingCall.prio
+          ? incomingPrio
               ? "yellow"
               : "green"
           : isCalling && !blink
             ? "gray"
-            : beingCalled && callDisplay.call.prio && blink
+            : beingCalled && outgoingPrio && blink
               ? "yellow"
-              : beingCalled && callDisplay.call.prio && !blink
+              : beingCalled && outgoingPrio && !blink
                 ? "gray"
                 : isRejected && blink
                   ? "green"
@@ -126,11 +130,11 @@ function DirectAccessStationKey({
                           : "gray";
 
     const highlight: ButtonHighlightColor | undefined =
-        isCalling && incomingCall.prio
+        isCalling && incomingPrio
             ? blink
                 ? "green"
                 : "gray"
-            : beingCalled || isRejected || (inCall && callDisplay.call.prio)
+            : beingCalled || isRejected || (inCall && outgoingPrio)
               ? "green"
               : undefined;
 

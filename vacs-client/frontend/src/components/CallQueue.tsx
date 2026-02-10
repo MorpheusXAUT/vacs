@@ -12,6 +12,7 @@ import {ClientInfo, splitDisplayName} from "../types/client.ts";
 import {clsx} from "clsx";
 import ButtonLabel from "./ui/ButtonLabel.tsx";
 import {useClientsStore} from "../stores/clients-store.ts";
+import {useSettingsStore} from "../stores/settings-store.ts";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -23,6 +24,7 @@ function CallQueue() {
     const stationKeys = useProfileStationKeys();
     const cid = useAuthStore(state => state.cid);
     const clients = useClientsStore(state => state.clients);
+    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
 
     const handleCallDisplayClick = async (call: Call) => {
         if (callDisplay?.type === "accepted" || callDisplay?.type === "outgoing") {
@@ -48,14 +50,16 @@ function CallQueue() {
         }
     };
 
+    const cdPrio = callDisplay?.call.prio === true && enablePrio;
+
     const cdColor =
-        callDisplay?.type === "accepted" && callDisplay.call.prio
+        callDisplay?.type === "accepted" && cdPrio
             ? "yellow"
-            : callDisplay?.type === "accepted" && !callDisplay.call.prio
+            : callDisplay?.type === "accepted" && !cdPrio
               ? "green"
-              : callDisplay?.type === "outgoing" && callDisplay.call.prio && blink
+              : callDisplay?.type === "outgoing" && cdPrio && blink
                 ? "yellow"
-                : callDisplay?.type === "outgoing" && callDisplay.call.prio && !blink
+                : callDisplay?.type === "outgoing" && cdPrio && !blink
                   ? "gray"
                   : callDisplay?.type === "rejected" && blink
                     ? "green"
@@ -83,7 +87,7 @@ function CallQueue() {
                         highlight={
                             callDisplay.type === "outgoing" ||
                             callDisplay.type === "rejected" ||
-                            (callDisplay.type === "accepted" && callDisplay.call.prio)
+                            (callDisplay.type === "accepted" && cdPrio)
                                 ? "green"
                                 : undefined
                         }
@@ -103,12 +107,12 @@ function CallQueue() {
 
             {/*Answer Keys*/}
             {incomingCalls.map((call, idx) => {
-                const color = blink ? (call.prio ? "yellow" : "green") : "gray";
+                const color = blink ? (call.prio && enablePrio ? "yellow" : "green") : "gray";
                 return (
                     <Button
                         key={idx}
                         color={color}
-                        highlight={call.prio ? (blink ? "green" : "gray") : undefined}
+                        highlight={call.prio && enablePrio ? (blink ? "green" : "gray") : undefined}
                         className={clsx(
                             "h-16 text-sm [&_p]:leading-3.5",
                             color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",

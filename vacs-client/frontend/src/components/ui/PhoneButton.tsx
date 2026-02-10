@@ -4,12 +4,16 @@ import {navigate} from "wouter/use-browser-location";
 import {useFilterStore} from "../../stores/filter-store.ts";
 import {useProfileStore, useProfileType} from "../../stores/profile-store.ts";
 import {clsx} from "clsx";
+import {useSettingsStore} from "../../stores/settings-store.ts";
 
 function PhoneButton() {
     const blink = useCallStore(state => state.blink);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
-    const callDisplayPrio = useCallStore(state => state.callDisplay?.call.prio === true);
-    const incomingPrio = useCallStore(state => state.incomingCalls.some(call => call.prio));
+    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
+    const callDisplayPrio =
+        useCallStore(state => state.callDisplay?.call.prio === true) && enablePrio;
+    const incomingPrio =
+        useCallStore(state => state.incomingCalls.some(call => call.prio)) && enablePrio;
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
     const navigateParentPage = useProfileStore(state => state.navigateParentPage);

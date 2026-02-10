@@ -3,14 +3,20 @@ import wrenchAndDriver from "../assets/wrench-and-driver.svg";
 import mission from "../assets/mission.svg";
 import LinkButton from "./ui/LinkButton.tsx";
 import {useCallStore} from "../stores/call-store.ts";
+import {useSettingsStore} from "../stores/settings-store.ts";
 
 function FunctionKeys() {
     const prio = useCallStore(state => state.prio);
     const setPrio = useCallStore(state => state.actions.setPrio);
+    const disablePrio = useSettingsStore(state => state.callConfig.disablePriorityCalls);
 
     return (
         <div className="h-20 w-full flex flex-row gap-2 justify-between p-2 [&>button]:shrink-0">
-            <Button color={prio ? "blue" : "cyan"} onClick={() => setPrio(!prio)}>
+            <Button
+                color={prio ? "blue" : "cyan"}
+                onClick={() => setPrio(!prio)}
+                disabled={disablePrio}
+            >
                 PRIO
             </Button>
             <Button color="cyan" className="text-slate-400" disabled={true}>
