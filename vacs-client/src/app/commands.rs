@@ -1,5 +1,6 @@
 use crate::app::state::AppState;
 use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog};
+use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::build::VersionInfo;
 use crate::config::{
     AppConfig, CLIENT_SETTINGS_FILE_NAME, ClientConfig, FrontendCallConfig,
@@ -308,10 +309,21 @@ pub async fn app_get_call_config(
 pub async fn app_set_call_config(
     app: AppHandle,
     app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     call_config: FrontendCallConfig,
 ) -> Result<(), Error> {
     let persisted_client_config: PersistedClientConfig = {
         let mut state = app_state.lock().await;
+
+        if call_config.enable_call_start_sound && !state.config.client.call.enable_call_start_sound
+        {
+            audio_manager.read().restart(SourceType::CallStart);
+        } else if call_config.enable_call_end_sound
+            && !state.config.client.call.enable_call_end_sound
+        {
+            audio_manager.read().restart(SourceType::CallEnd);
+        }
+
         state.config.client.call = call_config.into();
         state.config.client.clone().into()
     };

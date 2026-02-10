@@ -9,7 +9,7 @@ import {useSettingsStore} from "../../stores/settings-store.ts";
 function PhoneButton() {
     const blink = useCallStore(state => state.blink);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
-    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
+    const enablePrio = useSettingsStore(state => state.callConfig.enablePriorityCalls);
     const callDisplayPrio =
         useCallStore(state => state.callDisplay?.call.prio === true) && enablePrio;
     const incomingPrio =

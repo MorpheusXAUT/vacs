@@ -29,7 +29,7 @@ function DirectAccessStationKey({
     const setTemporaryStationSource = useStationsStore(state => state.setTemporarySource);
 
     const highlightTarget = useSettingsStore(state => state.callConfig.highlightIncomingCallTarget);
-    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
+    const enablePrio = useSettingsStore(state => state.callConfig.enablePriorityCalls);
 
     const hasStationId = stationId !== undefined;
     const station = hasStationId && stations.get(stationId);

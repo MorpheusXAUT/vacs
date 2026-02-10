@@ -17,6 +17,7 @@ import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
 import {Profile} from "../types/profile.ts";
 import {navigate} from "wouter/use-browser-location";
 import {useSettingsStore} from "../stores/settings-store.ts";
+import {useFilterStore} from "../stores/filter-store.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, removeClient} = useClientsStore.getState();
@@ -39,6 +40,7 @@ export function setupSignalingListeners() {
     const {setProfile, reset: resetProfileStore} = useProfileStore.getState();
     const {open: openErrorOverlay, closeIfTitle: closeErrorOverlayIfTitle} =
         useErrorOverlayStore.getState();
+    const {setFilter} = useFilterStore.getState();
     const {setClientPageSettings} = useSettingsStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
@@ -67,7 +69,7 @@ export function setupSignalingListeners() {
                 resetCallStore();
                 clearCallList();
                 resetProfileStore();
-                // TODO reset filter
+                setFilter("");
             }),
             listen<PositionId[]>("signaling:ambiguous-position", event => {
                 setConnectionState("connecting");
