@@ -24,6 +24,8 @@ export const useSettingsStore = create<SettingsState>()(set => ({
     callConfig: {
         highlightIncomingCallTarget: true,
         disablePriorityCalls: false,
+        enableCallStartSound: true,
+        enableCallEndSound: true,
     },
     selectedClientPageConfig: {...emptyClientPageConfig, name: "None"},
     clientPageConfigs: {},

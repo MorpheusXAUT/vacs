@@ -717,6 +717,10 @@ pub struct CallConfig {
     pub highlight_incoming_call_target: bool,
     /// Disables the priority call ringtone and visual highlighting. Priority calls will still be received, but not handled differently.
     pub disable_priority_calls: bool,
+    /// Enables sound effect when a call is established
+    pub enable_call_start_sound: bool,
+    /// Enables sound effect when the call is ended
+    pub enable_call_end_sound: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -724,6 +728,8 @@ pub struct CallConfig {
 pub struct FrontendCallConfig {
     pub highlight_incoming_call_target: bool,
     pub disable_priority_calls: bool,
+    pub enable_call_start_sound: bool,
+    pub enable_call_end_sound: bool,
 }
 
 impl Default for CallConfig {
@@ -731,6 +737,8 @@ impl Default for CallConfig {
         Self {
             highlight_incoming_call_target: true,
             disable_priority_calls: false,
+            enable_call_start_sound: true,
+            enable_call_end_sound: true,
         }
     }
 }
@@ -740,6 +748,8 @@ impl Default for FrontendCallConfig {
         Self {
             highlight_incoming_call_target: true,
             disable_priority_calls: false,
+            enable_call_start_sound: true,
+            enable_call_end_sound: true,
         }
     }
 }
@@ -749,6 +759,8 @@ impl From<CallConfig> for FrontendCallConfig {
         Self {
             highlight_incoming_call_target: call_config.highlight_incoming_call_target,
             disable_priority_calls: call_config.disable_priority_calls,
+            enable_call_start_sound: call_config.enable_call_start_sound,
+            enable_call_end_sound: call_config.enable_call_end_sound,
         }
     }
 }
@@ -758,6 +770,8 @@ impl From<FrontendCallConfig> for CallConfig {
         Self {
             highlight_incoming_call_target: frontend_call_config.highlight_incoming_call_target,
             disable_priority_calls: frontend_call_config.disable_priority_calls,
+            enable_call_start_sound: frontend_call_config.enable_call_start_sound,
+            enable_call_end_sound: frontend_call_config.enable_call_end_sound,
         }
     }
 }

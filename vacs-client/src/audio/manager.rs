@@ -31,6 +31,8 @@ pub enum SourceType {
     Ringback,
     RingbackOneshot,
     Click,
+    CallStart,
+    CallEnd,
 }
 
 impl SourceType {
@@ -98,6 +100,40 @@ impl SourceType {
                 Duration::from_millis(20),
                 None,
                 Duration::from_millis(1),
+                sample_rate,
+                output_channels,
+                volume,
+            ),
+            SourceType::CallStart => WaveformSource::new(
+                vec![
+                    (
+                        WaveformTone::new(600.0, Waveform::Sine, 0.2),
+                        Duration::from_millis(100),
+                    ),
+                    (
+                        WaveformTone::new(900.0, Waveform::Sine, 0.15),
+                        Duration::from_millis(100),
+                    ),
+                ],
+                None,
+                Duration::from_millis(10),
+                sample_rate,
+                output_channels,
+                volume,
+            ),
+            SourceType::CallEnd => WaveformSource::new(
+                vec![
+                    (
+                        WaveformTone::new(650.0, Waveform::Sine, 0.2),
+                        Duration::from_millis(100),
+                    ),
+                    (
+                        WaveformTone::new(450.0, Waveform::Sine, 0.15),
+                        Duration::from_millis(100),
+                    ),
+                ],
+                None,
+                Duration::from_millis(10),
                 sample_rate,
                 output_channels,
                 volume,
@@ -484,6 +520,24 @@ impl AudioManager {
                 sample_rate,
                 channels,
                 audio_config.click_volume,
+            ))),
+        );
+        source_ids.insert(
+            SourceType::CallStart,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::CallStart,
+                sample_rate,
+                channels,
+                audio_config.output_device_volume,
+            ))),
+        );
+        source_ids.insert(
+            SourceType::CallEnd,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::CallEnd,
+                sample_rate,
+                channels,
+                audio_config.output_device_volume,
             ))),
         );
 
