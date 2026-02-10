@@ -16,7 +16,7 @@ function DirectAccessClientKey({client, config}: DAKeyProps) {
     const callDisplay = useCallStore(state => state.callDisplay);
     const incomingCalls = useCallStore(state => state.incomingCalls);
     const {endCall, dismissRejectedCall, dismissErrorCall} = useCallStore(state => state.actions);
-    const enablePrio = useSettingsStore(state => !state.callConfig.disablePriorityCalls);
+    const enablePrio = useSettingsStore(state => state.callConfig.enablePriorityCalls);
 
     const incomingCall = incomingCalls.find(call => call.source.clientId === client.id);
     const isCalling = incomingCall !== undefined;

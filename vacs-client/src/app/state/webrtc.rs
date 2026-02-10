@@ -1,5 +1,6 @@
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::{AppState, AppStateInner, sealed};
+use crate::audio::manager::SourceType;
 use crate::config::{ENCODED_AUDIO_FRAME_BUFFER_SIZE, ICE_CONFIG_EXPIRY_LEEWAY};
 use crate::error::{CallError, Error};
 use anyhow::Context;
@@ -156,6 +157,11 @@ impl AppStateWebrtcExt for AppStateInner {
 
                                 let app_state = app.state::<AppState>();
                                 let mut state = app_state.lock().await;
+
+                                if state.config.client.call.enable_call_end_sound {
+                                    state.audio_manager.read().restart(SourceType::CallEnd);
+                                }
+
                                 state.cleanup_call(&call_id).await;
                                 app.emit("signaling:call-end", &call_id).ok();
                             }
@@ -374,6 +380,10 @@ impl AppStateInner {
             ) {
                 log::warn!("Failed to attach input device to audio manager: {err:?}");
                 return Err(err);
+            }
+
+            if self.config.client.call.enable_call_start_sound {
+                audio_manager.restart(SourceType::CallStart);
             }
 
             log::info!("Successfully established call to peer");

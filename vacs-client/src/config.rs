@@ -715,22 +715,30 @@ impl TryFrom<FrontendKeybindsConfig> for KeybindsConfig {
 pub struct CallConfig {
     /// Toggles highlighting of incoming call target DA keys.
     pub highlight_incoming_call_target: bool,
-    /// Disables the priority call ringtone and visual highlighting. Priority calls will still be received, but not handled differently.
-    pub disable_priority_calls: bool,
+    /// Enables the priority call ringtone and visual highlighting. If disabled, Priority calls will still be received, but not handled differently.
+    pub enable_priority_calls: bool,
+    /// Enables sound effect when a call is established
+    pub enable_call_start_sound: bool,
+    /// Enables sound effect when the call is ended
+    pub enable_call_end_sound: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FrontendCallConfig {
     pub highlight_incoming_call_target: bool,
-    pub disable_priority_calls: bool,
+    pub enable_priority_calls: bool,
+    pub enable_call_start_sound: bool,
+    pub enable_call_end_sound: bool,
 }
 
 impl Default for CallConfig {
     fn default() -> Self {
         Self {
             highlight_incoming_call_target: true,
-            disable_priority_calls: false,
+            enable_priority_calls: true,
+            enable_call_start_sound: true,
+            enable_call_end_sound: true,
         }
     }
 }
@@ -739,7 +747,9 @@ impl Default for FrontendCallConfig {
     fn default() -> Self {
         Self {
             highlight_incoming_call_target: true,
-            disable_priority_calls: false,
+            enable_priority_calls: true,
+            enable_call_start_sound: true,
+            enable_call_end_sound: true,
         }
     }
 }
@@ -748,7 +758,9 @@ impl From<CallConfig> for FrontendCallConfig {
     fn from(call_config: CallConfig) -> Self {
         Self {
             highlight_incoming_call_target: call_config.highlight_incoming_call_target,
-            disable_priority_calls: call_config.disable_priority_calls,
+            enable_priority_calls: call_config.enable_priority_calls,
+            enable_call_start_sound: call_config.enable_call_start_sound,
+            enable_call_end_sound: call_config.enable_call_end_sound,
         }
     }
 }
@@ -757,7 +769,9 @@ impl From<FrontendCallConfig> for CallConfig {
     fn from(frontend_call_config: FrontendCallConfig) -> Self {
         Self {
             highlight_incoming_call_target: frontend_call_config.highlight_incoming_call_target,
-            disable_priority_calls: frontend_call_config.disable_priority_calls,
+            enable_priority_calls: frontend_call_config.enable_priority_calls,
+            enable_call_start_sound: frontend_call_config.enable_call_start_sound,
+            enable_call_end_sound: frontend_call_config.enable_call_end_sound,
         }
     }
 }
