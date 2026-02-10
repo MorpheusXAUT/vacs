@@ -9,6 +9,7 @@ function PhoneButton() {
     const blink = useCallStore(state => state.blink);
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
     const callDisplayPrio = useCallStore(state => state.callDisplay?.call.prio === true);
+    const incomingPrio = useCallStore(state => state.incomingCalls.some(call => call.prio));
     const setFilter = useFilterStore(state => state.setFilter);
     const setSelectedPage = useProfileStore(state => state.setPage);
     const navigateParentPage = useProfileStore(state => state.navigateParentPage);
@@ -19,22 +20,27 @@ function PhoneButton() {
         <Button
             color={
                 callDisplayType === "accepted"
-                    ? "green"
+                    ? callDisplayPrio
+                        ? "yellow"
+                        : "green"
                     : callDisplayType === "outgoing"
                       ? callDisplayPrio
                           ? blink
                               ? "yellow"
-                              : "green"
+                              : "gray"
                           : "gray"
                       : blink
                         ? callDisplayType === "error"
                             ? "red"
-                            : "green"
+                            : incomingPrio
+                              ? "yellow"
+                              : "green"
                         : "gray"
             }
             highlight={
                 callDisplayType === "outgoing" ||
                 callDisplayType === "rejected" ||
+                (incomingPrio && blink) ||
                 (callDisplayType === "accepted" && callDisplayPrio)
                     ? "green"
                     : undefined

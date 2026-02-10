@@ -56,7 +56,7 @@ function CallQueue() {
               : callDisplay?.type === "outgoing" && callDisplay.call.prio && blink
                 ? "yellow"
                 : callDisplay?.type === "outgoing" && callDisplay.call.prio && !blink
-                  ? "green"
+                  ? "gray"
                   : callDisplay?.type === "rejected" && blink
                     ? "green"
                     : callDisplay?.type === "error" && blink
@@ -103,13 +103,7 @@ function CallQueue() {
 
             {/*Answer Keys*/}
             {incomingCalls.map((call, idx) => {
-                const color = blink
-                    ? call.prio
-                        ? "yellow"
-                        : "green"
-                    : call.prio
-                      ? "green"
-                      : "gray";
+                const color = blink ? (call.prio ? "yellow" : "green") : "gray";
                 return (
                     <Button
                         key={idx}

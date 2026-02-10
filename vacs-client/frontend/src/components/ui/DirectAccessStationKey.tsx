@@ -108,13 +108,11 @@ function DirectAccessStationKey({
               ? "yellow"
               : "green"
           : isCalling && !blink
-            ? incomingCall.prio
-                ? "green"
-                : "gray"
+            ? "gray"
             : beingCalled && callDisplay.call.prio && blink
               ? "yellow"
               : beingCalled && callDisplay.call.prio && !blink
-                ? "green"
+                ? "gray"
                 : isRejected && blink
                   ? "green"
                   : isError && blink
