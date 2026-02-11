@@ -1,5 +1,6 @@
 # vacs - VATSIM ATC Communication System
 
+[![Phare badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fstatus.vacs.network%2Fshield-badges%2Fstatus.json&style=flat)](https://status.vacs.network)
 [![Discord](https://img.shields.io/badge/Discord-chat-blue?style=flat&logo=discord)](https://discord.gg/yu2nyCKU3R)
 
 `vacs` is an open-source, cross-platform **Ground-To-Ground Voice Communication System for VATSIM**, meant to provide a seamless coordination experience for virtual air traffic controllers.
@@ -105,6 +106,7 @@ If you encounter any issues or have questions about `vacs`, please use one of th
 -   **Bug reports**: [open an issue](https://github.com/MorpheusXAUT/vacs/issues/new?template=bug_report.md) on our [issue tracker](https://github.com/MorpheusXAUT/vacs/issues) using the [`Bug report` template](https://github.com/MorpheusXAUT/vacs/issues/new?template=bug_report.md)
 -   **Feature requests**: check out our [project status board](https://github.com/users/MorpheusXAUT/projects/2) and [open an issue](https://github.com/MorpheusXAUT/vacs/issues/new?template=feature_request.md) on our [issue tracker](https://github.com/MorpheusXAUT/vacs/issues) using the [`Feature request` template](https://github.com/MorpheusXAUT/vacs/issues/new?template=feature_request.md)
 -   **Questions & discussions**: start a conversation on our [discussion forum](https://github.com/MorpheusXAUT/vacs/discussions)
+-   **System Status**: check our [status page](https://status.vacs.network) for real-time uptime monitoring and incident updates
 
 Please search existing issues and discussions before creating a new one to avoid duplicates.
 
