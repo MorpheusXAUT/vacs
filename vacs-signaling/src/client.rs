@@ -3,7 +3,7 @@ use crate::error::{SignalingError, SignalingRuntimeError, UntilInstant};
 use crate::matcher::ResponseMatcher;
 use crate::transport::{SignalingReceiver, SignalingSender, SignalingTransport};
 use parking_lot::Mutex;
-use rand::{Rng, SeedableRng};
+use rand::RngExt;
 use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -705,7 +705,7 @@ impl Default for RetryStrategy {
         Self {
             base: Duration::from_millis(100),
             cap: Duration::from_secs(5),
-            rng: rand::rngs::StdRng::from_os_rng(),
+            rng: rand::make_rng(),
         }
     }
 }
