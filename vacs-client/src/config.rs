@@ -124,15 +124,15 @@ impl Default for BackendConfig {
     fn default() -> Self {
         Self {
             base_url: if cfg!(debug_assertions) {
-                "https://vacs-dev.gusch.jetzt"
+                "https://dev.vacs.network"
             } else {
-                "https://vacs.gusch.jetzt"
+                "https://vacs.network"
             }
             .to_string(),
             ws_url: if cfg!(debug_assertions) {
-                "wss://vacs-dev.gusch.jetzt/ws"
+                "wss://dev.vacs.network/ws"
             } else {
-                "wss://vacs.gusch.jetzt/ws"
+                "wss://vacs.network/ws"
             }
             .to_string(),
             endpoints: BackendEndpointsConfigs::default(),

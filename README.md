@@ -133,11 +133,11 @@ However, we still provide the required server binaries in the form of a [Docker 
 
 ### Production environment
 
-By default, all released `vacs` clients will connect to the production server located at `https://vacs.gusch.jetzt` (with the WebSocket endpoint available at `wss://vacs.gusch.jetzt/ws`). This server will always run the latest stable version available.
+By default, all released `vacs` clients will connect to the production server located at `https://vacs.network` (with the WebSocket endpoint available at `wss://vacs.network/ws`). This server will always run the latest stable version available.
 
 ### Development environment
 
-In addition to the production server, we also provide a development server running on `https://vacs-dev.gusch.jetzt` (`wss://vacs-dev.gusch.jetzt/ws`) that can be used to test new changes before deploying them to production. Furthermore, the dev server does not require live VATSIM credentials but uses the [VATSIM Connect Sandbox environment](https://vatsim.dev/services/connect/sandbox) and its associated credentials. No active VATSIM connection is required to connect to the dev server.
+In addition to the production server, we also provide a development server running on `https://dev.vacs.network` (`wss://dev.vacs.network/ws`) that can be used to test new changes before deploying them to production. Furthermore, the dev server does not require live VATSIM credentials but uses the [VATSIM Connect Sandbox environment](https://vatsim.dev/services/connect/sandbox) and its associated credentials. No active VATSIM connection is required to connect to the dev server.
 
 ## Privacy & data handling
 
