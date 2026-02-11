@@ -82,7 +82,7 @@ tempfile = "3.23.0"
 test-log = { version = "0.2.19", features = ["trace"] }
 thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread", "macros", "signal", "sync", "time"] }
-tokio-tungstenite = { version = "0.28.0", features = ["rustls"] }
+tokio-tungstenite = { version = "0.28.0", features = ["rustls", "rustls-tls-native-roots"] }
 tokio-util = "0.7.18"
 toml = "1.0.2"
 tower-http = "0.6.8"
