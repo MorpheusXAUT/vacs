@@ -7,6 +7,7 @@ import {useRoute} from "wouter";
 import {navigate} from "wouter/use-browser-location";
 import {Tab} from "../types/profile.ts";
 import cycle from "../assets/cycle.svg";
+import ButtonLabel from "./ui/ButtonLabel.tsx";
 
 function Tabs() {
     const tabs = useProfileStore(state => state.profile?.tabbed);
@@ -85,7 +86,7 @@ function daSwitchLabel(offset: number, tabsLength: number) {
 }
 
 type TabButtonProps = {
-    label: string | undefined;
+    label: string[] | undefined;
     active?: boolean;
     onClick?: () => void;
 };
@@ -98,8 +99,8 @@ function TabButton(props: TabButtonProps) {
         <div className="w-20 relative">
             <button
                 className={clsx(
-                    "absolute -top-[calc(0.5rem+2px)] h-[calc(100%+0.5rem+2px)] w-20 rounded-b-lg border-t-0 font-semibold flex justify-center items-center cursor-pointer",
-                    "border-4 outline-2 outline-gray-700 -outline-offset-2 px-1.5",
+                    "absolute -top-[calc(0.5rem+2px)] h-[calc(100%+0.5rem+2px)] w-20 rounded-b-lg border-t-0 font-semibold cursor-pointer leading-5",
+                    "border-4 outline-2 outline-gray-700 -outline-offset-2 px-1.5 flex flex-col justify-center items-center c",
                     props.active &&
                         !settingsOpen &&
                         "active-tab border-b-gray-300 bg-linear-0/oklch from-gray-300 to-[#B5BBC6]",
@@ -115,9 +116,7 @@ function TabButton(props: TabButtonProps) {
                     if (settingsOpen) navigate("/");
                 }}
             >
-                <p className="truncate" title={props.label}>
-                    {props.label}
-                </p>
+                {props.label && <ButtonLabel label={props.label} />}
             </button>
         </div>
     );

@@ -18,7 +18,7 @@ export type Profile = {
 };
 
 export type Tab = {
-    label: string;
+    label: string[];
     page: DirectAccessPage;
 };
 

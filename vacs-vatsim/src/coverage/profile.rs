@@ -41,7 +41,8 @@ pub(super) enum ProfileTypeRaw {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct TabRaw {
-    pub label: String,
+    #[serde(deserialize_with = "vacs_protocol::profile::string_or_vec")]
+    pub label: Vec<String>,
     pub page: DirectAccessPageRaw,
 }
 
@@ -81,6 +82,7 @@ pub(super) enum GeoNodeRaw {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct GeoPageButtonRaw {
+    #[serde(deserialize_with = "vacs_protocol::profile::string_or_vec")]
     pub label: Vec<String>,
     pub size: f64,
     pub page: Option<DirectAccessPageRaw>,
@@ -93,34 +95,6 @@ pub(super) struct GeoPageDividerRaw {
     pub color: String,
     pub oversize: Option<f64>,
 }
-
-/*
-{
-  "rows": 1,
-  "keys": [
-    {
-      "label": [
-        "K1"
-      ],
-      "stationId": "S1"
-    }
-  ]
-}
-{
-  "rows": 1,
-  "client_page": {
-    "priority": [
-      "*_FMP",
-      "*_CTR",
-      "*_APP",
-      "*_TWR",
-      "*_GND"
-    ],
-    "frequencies": "ShowAll",
-    "grouping": "FirAndIcao"
-  }
-}
- */
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct DirectAccessPageRaw {
@@ -138,6 +112,7 @@ pub(super) enum DirectAccessPageContentRaw {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct DirectAccessKeyRaw {
+    #[serde(deserialize_with = "vacs_protocol::profile::string_or_vec")]
     pub label: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub station_id: Option<StationId>,
@@ -391,9 +366,16 @@ impl ReferenceValidator<StationId> for DirectAccessKey {
 
 impl Validator for TabRaw {
     fn validate(&self) -> Result<(), CoverageError> {
-        if self.label.is_empty() {
+        if self.label.is_empty() || self.label.iter().all(|s| s.is_empty()) {
             return Err(ValidationError::Empty {
                 field: "label".to_string(),
+            }
+            .into());
+        } else if self.label.len() > 3 {
+            return Err(ValidationError::InvalidValue {
+                field: "label".to_string(),
+                value: format!("{:?}", self.label),
+                reason: "cannot have more than 3 lines".to_string(),
             }
             .into());
         }
@@ -934,7 +916,7 @@ mod tests {
     fn profile_type_tabbed_validation() {
         let valid = ProfileTypeRaw::Tabbed {
             tabs: vec![TabRaw {
-                label: "tab1".to_string(),
+                label: vec!["tab1".to_string()],
                 page: DirectAccessPageRaw {
                     rows: 1,
                     content: DirectAccessPageContentRaw::Keys { keys: vec![] },
@@ -947,6 +929,25 @@ mod tests {
         assert_matches!(
             empty.validate(),
             Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "tabs"
+        );
+
+        let long_label = ProfileTypeRaw::Tabbed {
+            tabs: vec![TabRaw {
+                label: vec![
+                    "tab1".to_string(),
+                    "tab2".to_string(),
+                    "tab3".to_string(),
+                    "tab4".to_string(),
+                ],
+                page: DirectAccessPageRaw {
+                    rows: 1,
+                    content: DirectAccessPageContentRaw::Keys { keys: vec![] },
+                },
+            }],
+        };
+        assert_matches!(
+            long_label.validate(),
+            Err(CoverageError::Validation(ValidationError::InvalidValue { field, .. })) if field == "label"
         );
     }
 
@@ -1245,5 +1246,197 @@ mod tests {
         };
         let profile_none = Profile::from_raw(raw_none).expect("Should be valid");
         assert!(profile_none.validate_references(&valid_stations).is_ok());
+    }
+
+    #[test]
+    fn tab_deserialization_string() {
+        let json = r#"{
+            "label": "My Tab",
+            "page": {
+                "rows": 1,
+                "keys": []
+            }
+        }"#;
+        let tab: TabRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(tab.label, vec!["My Tab".to_string()]);
+    }
+
+    #[test]
+    fn tab_deserialization_vec_1_to_3() {
+        // 1 element
+        let json = r#"{
+            "label": ["Line 1"],
+            "page": { "rows": 1, "keys": [] }
+        }"#;
+        let tab: TabRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(tab.label, vec!["Line 1".to_string()]);
+
+        // 3 elements
+        let json = r#"{
+            "label": ["Line 1", "Line 2", "Line 3"],
+            "page": { "rows": 1, "keys": [] }
+        }"#;
+        let tab: TabRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(
+            tab.label,
+            vec![
+                "Line 1".to_string(),
+                "Line 2".to_string(),
+                "Line 3".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn tab_validation_bounds() {
+        // Empty vec (0 elements) - invalid
+        let json = r#"{
+            "label": [],
+            "page": { "rows": 1, "keys": [] }
+        }"#;
+        let tab: TabRaw = serde_json::from_str(json).expect("valid structure");
+        assert_matches!(
+            tab.validate(),
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "label"
+        );
+
+        // Too many elements (4) - invalid
+        let json = r#"{
+            "label": ["1", "2", "3", "4"],
+            "page": { "rows": 1, "keys": [] }
+        }"#;
+        let tab: TabRaw = serde_json::from_str(json).expect("valid structure");
+        assert_matches!(
+            tab.validate(),
+            Err(CoverageError::Validation(ValidationError::InvalidValue { field, .. })) if field == "label"
+        );
+    }
+
+    #[test]
+    fn direct_access_key_deserialization_string() {
+        let json = r#"{
+            "label": "My Key"
+        }"#;
+        let key: DirectAccessKeyRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(key.label, vec!["My Key".to_string()]);
+    }
+
+    #[test]
+    fn direct_access_key_deserialization_vec_0_to_3() {
+        // 0 elements
+        let json = r#"{
+            "label": []
+        }"#;
+        let key: DirectAccessKeyRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(key.label, Vec::<String>::new());
+        assert!(key.validate().is_ok());
+
+        // 3 elements
+        let json = r#"{
+            "label": ["1", "2", "3"]
+        }"#;
+        let key: DirectAccessKeyRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(
+            key.label,
+            vec!["1".to_string(), "2".to_string(), "3".to_string()]
+        );
+        assert!(key.validate().is_ok());
+    }
+
+    #[test]
+    fn direct_access_key_validation_bounds() {
+        // Too many elements (4) - invalid
+        let json = r#"{
+            "label": ["1", "2", "3", "4"]
+        }"#;
+        let key: DirectAccessKeyRaw = serde_json::from_str(json).expect("valid structure");
+        assert_matches!(
+            key.validate(),
+            Err(CoverageError::Validation(ValidationError::InvalidValue { field, .. })) if field == "label"
+        );
+    }
+
+    #[test]
+    fn tab_deserialization_empty_string() {
+        let json = r#"{
+            "label": "",
+            "page": {
+                "rows": 1,
+                "keys": []
+            }
+        }"#;
+        // Should deserialize to empty vector, which then fails validation because Tab requires 1-3 lines
+        let tab: TabRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(tab.label, Vec::<String>::new());
+        assert_matches!(
+            tab.validate(),
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "label"
+        );
+
+        let json = r#"{
+            "label": [""],
+            "page": {
+                "rows": 1,
+                "keys": []
+            }
+        }"#;
+        // Should deserialize to vector with only empty string, which then fails validation because Tab requires 1-3 lines
+        let tab: TabRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(tab.label, vec!["".to_string()]);
+        assert_matches!(
+            tab.validate(),
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "label"
+        );
+    }
+
+    #[test]
+    fn direct_access_key_deserialization_empty_string() {
+        let json = r#"{
+            "label": ""
+        }"#;
+        // Should deserialize to empty vector, which is valid for DA key
+        let key: DirectAccessKeyRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(key.label, Vec::<String>::new());
+        assert!(key.validate().is_ok());
+    }
+
+    #[test]
+    fn geo_page_button_deserialization_string() {
+        let json = r#"{
+            "label": "My Button",
+            "size": 10.0
+        }"#;
+        let button: GeoPageButtonRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(button.label, vec!["My Button".to_string()]);
+        assert!(button.validate().is_ok());
+    }
+
+    #[test]
+    fn geo_page_button_deserialization_vec() {
+        let json = r#"{
+            "label": ["1", "2", "3"],
+            "size": 10.0
+        }"#;
+        let button: GeoPageButtonRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(
+            button.label,
+            vec!["1".to_string(), "2".to_string(), "3".to_string()]
+        );
+        assert!(button.validate().is_ok());
+    }
+
+    #[test]
+    fn geo_page_button_deserialization_empty_string() {
+        let json = r#"{
+            "label": "",
+            "size": 10.0
+        }"#;
+        // Should deserialize to empty vector, which fails GeoPageButton validation (requires >= 1 line)
+        let button: GeoPageButtonRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(button.label, Vec::<String>::new());
+        assert_matches!(
+            button.validate(),
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "label"
+        );
     }
 }
