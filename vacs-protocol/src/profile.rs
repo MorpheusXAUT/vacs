@@ -80,6 +80,7 @@ pub struct DirectAccessKey {
     /// The text label displayed on the key.
     ///
     /// Will always contain between 0 and 3 lines of text.
+    #[serde(deserialize_with = "string_or_vec")]
     pub label: Vec<String>,
 
     /// The optional station ID associated with this key.
@@ -95,6 +96,29 @@ pub struct DirectAccessKey {
     /// This field is mutually exclusive with [`DirectAccessKey::station_id`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page: Option<DirectAccessPage>,
+}
+
+pub fn string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Label {
+        One(String),
+        Many(Vec<String>),
+    }
+
+    Ok(match Label::deserialize(deserializer)? {
+        Label::One(s) => {
+            if s.trim().is_empty() {
+                Vec::new()
+            } else {
+                vec![s]
+            }
+        }
+        Label::Many(v) => v,
+    })
 }
 
 /// Trait alias for types that can be used as a profile reference in [`ActiveProfile`].
