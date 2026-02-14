@@ -366,7 +366,7 @@ impl ReferenceValidator<StationId> for DirectAccessKey {
 
 impl Validator for TabRaw {
     fn validate(&self) -> Result<(), CoverageError> {
-        if self.label.is_empty() {
+        if self.label.is_empty() || self.label.iter().all(|s| s.is_empty()) {
             return Err(ValidationError::Empty {
                 field: "label".to_string(),
             }
@@ -1368,6 +1368,21 @@ mod tests {
         // Should deserialize to empty vector, which then fails validation because Tab requires 1-3 lines
         let tab: TabRaw = serde_json::from_str(json).expect("valid json");
         assert_eq!(tab.label, Vec::<String>::new());
+        assert_matches!(
+            tab.validate(),
+            Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "label"
+        );
+
+        let json = r#"{
+            "label": [""],
+            "page": {
+                "rows": 1,
+                "keys": []
+            }
+        }"#;
+        // Should deserialize to vector with only empty string, which then fails validation because Tab requires 1-3 lines
+        let tab: TabRaw = serde_json::from_str(json).expect("valid json");
+        assert_eq!(tab.label, vec!["".to_string()]);
         assert_matches!(
             tab.validate(),
             Err(CoverageError::Validation(ValidationError::Empty { field })) if field == "label"
