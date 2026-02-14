@@ -115,7 +115,9 @@ function TabButton(props: TabButtonProps) {
                     if (settingsOpen) navigate("/");
                 }}
             >
-                <p className="truncate">{props.label}</p>
+                <p className="truncate" title={props.label}>
+                    {props.label}
+                </p>
             </button>
         </div>
     );
