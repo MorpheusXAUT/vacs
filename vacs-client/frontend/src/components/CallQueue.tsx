@@ -13,6 +13,7 @@ import {clsx} from "clsx";
 import ButtonLabel from "./ui/ButtonLabel.tsx";
 import {useClientsStore} from "../stores/clients-store.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
+import {getCallStateColors} from "../utils/call-state-colors.ts";
 
 function CallQueue() {
     const blink = useCallStore(state => state.blink);
@@ -52,20 +53,16 @@ function CallQueue() {
 
     const cdPrio = callDisplay?.call.prio === true && enablePrio;
 
-    const cdColor =
-        callDisplay?.type === "accepted" && cdPrio
-            ? "yellow"
-            : callDisplay?.type === "accepted" && !cdPrio
-              ? "green"
-              : callDisplay?.type === "outgoing" && cdPrio && blink
-                ? "yellow"
-                : callDisplay?.type === "outgoing" && cdPrio && !blink
-                  ? "gray"
-                  : callDisplay?.type === "rejected" && blink
-                    ? "green"
-                    : callDisplay?.type === "error" && blink
-                      ? "red"
-                      : "gray";
+    const {color: cdColor, highlight: cdHighlight} = getCallStateColors({
+        inCall: callDisplay?.type === "accepted",
+        isCalling: false,
+        beingCalled: callDisplay?.type === "outgoing",
+        isRejected: callDisplay?.type === "rejected",
+        isError: callDisplay?.type === "error",
+        outgoingPrio: cdPrio,
+        incomingPrio: false,
+        blink,
+    });
 
     return (
         <div
@@ -84,13 +81,7 @@ function CallQueue() {
                     )}
                     <Button
                         color={cdColor}
-                        highlight={
-                            callDisplay.type === "outgoing" ||
-                            callDisplay.type === "rejected" ||
-                            (callDisplay.type === "accepted" && cdPrio)
-                                ? "green"
-                                : undefined
-                        }
+                        highlight={cdHighlight}
                         softDisabled={true}
                         onClick={() => handleCallDisplayClick(callDisplay.call)}
                         className={clsx(
@@ -107,12 +98,22 @@ function CallQueue() {
 
             {/*Answer Keys*/}
             {incomingCalls.map((call, idx) => {
-                const color = blink ? (call.prio && enablePrio ? "yellow" : "green") : "gray";
+                const incomingPrio = call.prio && enablePrio;
+                const {color, highlight} = getCallStateColors({
+                    inCall: false,
+                    isCalling: true,
+                    beingCalled: false,
+                    isRejected: false,
+                    isError: false,
+                    outgoingPrio: false,
+                    incomingPrio,
+                    blink,
+                });
                 return (
                     <Button
                         key={idx}
                         color={color}
-                        highlight={call.prio && enablePrio ? (blink ? "green" : "gray") : undefined}
+                        highlight={highlight}
                         className={clsx(
                             "h-16 text-sm [&_p]:leading-3.5",
                             color === "gray" ? "p-1.5" : "p-[calc(0.375rem+1px)]",

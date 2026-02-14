@@ -1,5 +1,5 @@
 import {DirectAccessKey} from "../../types/profile.ts";
-import Button, {ButtonColor, ButtonHighlightColor} from "./Button.tsx";
+import Button from "./Button.tsx";
 import {clsx} from "clsx";
 import {useStationsStore} from "../../stores/stations-store.ts";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
@@ -7,6 +7,7 @@ import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeSafe, invokeStrict} from "../../error.ts";
 import ButtonLabel from "./ButtonLabel.tsx";
 import {useSettingsStore} from "../../stores/settings-store.ts";
+import {getCallStateColors} from "../../utils/call-state-colors.ts";
 
 type DirectAccessStationKeyProps = {
     data: DirectAccessKey;
@@ -103,40 +104,20 @@ function DirectAccessStationKey({
     const outgoingPrio = callDisplay?.call.prio === true && enablePrio;
     const incomingPrio = incomingCall?.prio === true && enablePrio;
 
-    const color: ButtonColor = inCall
-        ? outgoingPrio
-            ? "yellow"
-            : "green"
-        : isCalling && blink
-          ? incomingPrio
-              ? "yellow"
-              : "green"
-          : isCalling && !blink
-            ? "gray"
-            : beingCalled && outgoingPrio && blink
-              ? "yellow"
-              : beingCalled && outgoingPrio && !blink
-                ? "gray"
-                : isRejected && blink
-                  ? "green"
-                  : isError && blink
-                    ? "red"
-                    : isTarget
-                      ? "sage"
-                      : temporaryStationSource === stationId && temporaryStationSource !== undefined
-                        ? "peach"
-                        : defaultStationSource === stationId && defaultStationSource !== undefined
-                          ? "honey"
-                          : "gray";
-
-    const highlight: ButtonHighlightColor | undefined =
-        isCalling && incomingPrio
-            ? blink
-                ? "green"
-                : "gray"
-            : beingCalled || isRejected || (inCall && outgoingPrio)
-              ? "green"
-              : undefined;
+    const {color, highlight} = getCallStateColors({
+        inCall,
+        isCalling,
+        beingCalled,
+        isRejected,
+        isError,
+        isTarget,
+        outgoingPrio,
+        incomingPrio,
+        blink,
+        temporarySource:
+            temporaryStationSource === stationId && temporaryStationSource !== undefined,
+        defaultSource: defaultStationSource === stationId && defaultStationSource !== undefined,
+    });
 
     return (
         <Button
