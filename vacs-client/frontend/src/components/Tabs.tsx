@@ -6,6 +6,7 @@ import {useProfileStore} from "../stores/profile-store.ts";
 import {useRoute} from "wouter";
 import {navigate} from "wouter/use-browser-location";
 import {Tab} from "../types/profile.ts";
+import cycle from "../assets/cycle.svg";
 
 function Tabs() {
     const tabs = useProfileStore(state => state.profile?.tabbed);
@@ -53,11 +54,10 @@ function Tabs() {
                         });
                     }}
                 >
-                    <p>
-                        &lt;-&gt;
-                        <br />
-                        DA {daSwitchLabel(offset, tabs.length)}
-                    </p>
+                    <div className="w-full h-full flex flex-col items-center">
+                        <img src={cycle} alt="<->" className="w-9 h-9" />
+                        <p className="">DA {daSwitchLabel(offset, tabs.length)}</p>
+                    </div>
                 </Button>
             )}
             {visibleTabs.map((tab, index) => (
