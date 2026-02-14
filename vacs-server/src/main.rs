@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::watch;
+use tracing_subscriber::Layer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vacs_server::auth::layer::setup_auth_layer;
 use vacs_server::build::BuildInfo;
@@ -24,17 +25,23 @@ async fn main() -> anyhow::Result<()> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!(
-                    "{}=trace,vacs_=trace,tower_http=debug,tower_sessions=debug,axum::rejection=trace",
-                    env!("CARGO_CRATE_NAME")
-                )
-                .into()
-            }),
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        format!(
+            "{}=trace,vacs_=trace,tower_http=debug,tower_sessions=debug,axum::rejection=trace",
+            env!("CARGO_CRATE_NAME")
         )
-        .with(tracing_subscriber::fmt::layer())
+        .into()
+    });
+
+    let fmt_layer = if std::env::var("RUST_LOG_JSON").is_ok() {
+        tracing_subscriber::fmt::layer().json().boxed()
+    } else {
+        tracing_subscriber::fmt::layer().boxed()
+    };
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer)
         .init();
 
     let build_info = BuildInfo::gather();
