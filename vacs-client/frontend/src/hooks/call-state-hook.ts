@@ -4,7 +4,7 @@ import {DirectAccessPage} from "../types/profile.ts";
 import {Call} from "../types/call.ts";
 import {ClientId, StationId} from "../types/generic.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
-import {ButtonColor, ButtonHighlightColor} from "../components/ui/Button.tsx";
+import {getCallStateColors} from "../utils/call-state-colors.ts";
 
 export function useCallState(page: DirectAccessPage | undefined) {
     const blink = useCallStore(state => state.blink);
@@ -42,36 +42,17 @@ export function useCallState(page: DirectAccessPage | undefined) {
     const outgoingPrio = callDisplay?.call.prio === true && enablePrio;
     const incomingPrio = incomingCall?.prio === true && enablePrio;
 
-    const color: ButtonColor = inCall
-        ? outgoingPrio
-            ? "yellow"
-            : "green"
-        : isCalling && blink
-          ? incomingPrio
-              ? "yellow"
-              : "green"
-          : isCalling && !blink
-            ? "gray"
-            : beingCalled && outgoingPrio && blink
-              ? "yellow"
-              : beingCalled && outgoingPrio && !blink
-                ? "gray"
-                : isRejected && blink
-                  ? "green"
-                  : isError && blink
-                    ? "red"
-                    : isTarget
-                      ? "sage"
-                      : "gray";
-
-    const highlight: ButtonHighlightColor | undefined =
-        isCalling && incomingPrio
-            ? blink
-                ? "green"
-                : "gray"
-            : beingCalled || isRejected || (inCall && outgoingPrio)
-              ? "green"
-              : undefined;
+    const {color, highlight} = getCallStateColors({
+        inCall,
+        isCalling,
+        beingCalled,
+        isRejected,
+        isError,
+        isTarget,
+        outgoingPrio,
+        incomingPrio,
+        blink,
+    });
 
     return {isCalling, beingCalled, inCall, isRejected, isError, isTarget, color, highlight, blink};
 }
