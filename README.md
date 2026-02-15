@@ -3,7 +3,7 @@
 [![Phare badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fstatus.vacs.network%2Fshield-badges%2Fstatus.json&style=flat)](https://status.vacs.network)
 [![Discord](https://img.shields.io/badge/Discord-chat-blue?style=flat&logo=discord)](https://discord.gg/yu2nyCKU3R)
 
-`vacs` is an open-source, cross-platform **Ground-To-Ground Voice Communication System for VATSIM**, meant to provide a seamless coordination experience for virtual air traffic controllers.
+**vacs** <small>([/vɐks/](https://ipa-reader.com/?text=v%C9%90ks&voice=Brian))</small> is an open-source, cross-platform **Ground-To-Ground Voice Communication System for VATSIM**, meant to provide a seamless coordination experience for virtual air traffic controllers.
 
 We aim to modernize VATSIM controller-to-controller coordination by providing a low-latency and easy-to-use voice communication system.
 
