@@ -66,7 +66,7 @@ function CallQueue() {
 
     return (
         <div
-            className="flex flex-col-reverse gap-2.5 pt-3 pr-px overflow-y-auto"
+            className="flex flex-col-reverse gap-2.5 pt-3 pr-px overflow-y-auto [&>button]:shrink-0"
             style={{scrollbarWidth: "none"}}
         >
             {/*Call Display*/}
@@ -93,7 +93,7 @@ function CallQueue() {
                     </Button>
                 </div>
             ) : (
-                <div className="w-full h-16 border rounded-md"></div>
+                <div className="w-full h-16 shrink-0 border rounded-md"></div>
             )}
 
             {/*Answer Keys*/}
@@ -131,7 +131,7 @@ function CallQueue() {
                 );
             })}
             {Array.from(Array(Math.max(5 - incomingCalls.length, 0)).keys()).map(idx => (
-                <div key={idx} className="w-full h-16 border rounded-md"></div>
+                <div key={idx} className="w-full h-16 shrink-0 border rounded-md"></div>
             ))}
         </div>
     );
