@@ -33,12 +33,14 @@ import Tabs from "./components/Tabs.tsx";
 import {useProfileType} from "./stores/profile-store.ts";
 import Button from "./components/ui/Button.tsx";
 import {fetchCallConfig, fetchClientPageSettings} from "./stores/settings-store.ts";
+import {useZoomHotkey} from "./hooks/zoom-hotkey-hook.ts";
 
 function App() {
     const connected = useConnectionStore(state => state.connectionState === "connected");
     const testing = useConnectionStore(state => state.connectionState === "test");
     const authStatus = useAuthStore(state => state.status);
     const profileType = useProfileType();
+    useZoomHotkey();
 
     useEffect(() => {
         void invoke("app_frontend_ready");
