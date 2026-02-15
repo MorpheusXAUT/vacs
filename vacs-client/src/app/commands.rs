@@ -275,6 +275,10 @@ pub async fn app_reset_window_size(
             .set_size(ClientConfig::default_window_size(&window)?)
             .context("Failed to reset window size")?;
 
+        window
+            .set_zoom(1.0)
+            .context("Failed to reset window zoom")?;
+
         #[cfg(target_os = "linux")]
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
