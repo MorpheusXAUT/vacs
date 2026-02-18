@@ -2,13 +2,13 @@ name: Release Please
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Target branch to prepare releases from (leave empty for default behavior).'
+        description: "Target branch to prepare releases from (leave empty for default behavior)."
         required: false
-        default: ''
+        default: ""
         type: string
 
 permissions: {}
@@ -26,8 +26,8 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          permission-pull-requests: write
-          permission-contents: write
+          owner: ${{ github.repository_owner }}
+          repository: vacs
 
       - uses: googleapis/release-please-action@v4.4.0
         id: release
@@ -51,7 +51,8 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          permission-contents: write
+          owner: ${{ github.repository_owner }}
+          repository: vacs
 
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -66,7 +67,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2.8.2
         with:
-          shared-key: 'ubuntu-22.04-x86_64'
+          shared-key: "ubuntu-22.04-x86_64"
 
       - name: Update cargo workspace lockfile
         run: cargo update -w
@@ -75,8 +76,8 @@ jobs:
         if: contains(join(matrix.pr.files, ','), 'vacs-client')
         uses: actions/setup-node@v6.2.0
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
+          node-version: "lts/*"
+          cache: "npm"
           cache-dependency-path: |
             vacs-client/package-lock.json
             vacs-client/frontend/package-lock.json
@@ -91,7 +92,7 @@ jobs:
           git config user.name "vacs-bot[bot]"
           git config user.email "248978301+vacs-bot[bot]@users.noreply.github.com"
           git add Cargo.lock vacs-client/package-lock.json
-          
+
           if ! git diff --staged --quiet; then
             git commit -m "chore(lockfile): refresh cargo & npm lockfiles after version bumps"
             git push
