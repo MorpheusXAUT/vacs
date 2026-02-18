@@ -1,4 +1,4 @@
-import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
+import {useErrorOverlayStore} from "../../stores/error-overlay-store.ts";
 import {clsx} from "clsx";
 
 function ErrorOverlay() {

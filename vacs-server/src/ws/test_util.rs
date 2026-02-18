@@ -4,9 +4,9 @@ use crate::metrics::guards::ClientConnectionGuard;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
 use crate::state::AppState;
+use crate::state::clients::session::ClientSession;
 use crate::store::Store;
 use crate::store::memory::MemoryStore;
-use crate::ws::ClientSession;
 use axum::extract::ws;
 use futures_util::{Sink, Stream};
 use std::collections::HashMap;
@@ -14,7 +14,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::sync::{Mutex, broadcast, mpsc, watch};
-use vacs_protocol::ws::{ClientInfo, SignalingMessage};
+use vacs_protocol::profile::{ActiveProfile, ProfileId};
+use vacs_protocol::vatsim::{ClientId, PositionId};
+use vacs_protocol::ws::server::{ClientInfo, ServerMessage};
+use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::mock::MockDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
@@ -77,13 +80,21 @@ pub struct TestSetup {
     pub mock_sink: MockSink,
     pub websocket_tx: Arc<Mutex<mpsc::Sender<ws::Message>>>,
     pub websocket_rx: Arc<Mutex<mpsc::Receiver<ws::Message>>>,
-    pub rx: mpsc::Receiver<SignalingMessage>,
-    pub broadcast_rx: broadcast::Receiver<SignalingMessage>,
+    pub rx: mpsc::Receiver<ServerMessage>,
+    pub broadcast_rx: broadcast::Receiver<ServerMessage>,
     pub shutdown_tx: watch::Sender<()>,
+    pub coverage_dir: tempfile::TempDir,
+}
+
+impl Default for TestSetup {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestSetup {
     pub fn new() -> Self {
+        let coverage_dir = tempfile::tempdir().unwrap();
         let mut vatsim_users = HashMap::new();
         for i in 0..=5 {
             vatsim_users.insert(format!("token{i}"), format!("client{i}"));
@@ -96,6 +107,7 @@ impl TestSetup {
                 slurper_base_url: Default::default(),
                 controller_update_interval: Default::default(),
                 data_feed_url: Default::default(),
+                coverage_dir: coverage_dir.path().to_str().unwrap().to_string(),
             },
             ..Default::default()
         };
@@ -106,17 +118,24 @@ impl TestSetup {
             Store::Memory(MemoryStore::default()),
             SlurperClient::new("http://localhost:12345").unwrap(),
             mock_data_feed.clone(),
+            Network::load_from_dir(coverage_dir.path()).unwrap(),
             RateLimiters::default(),
             shutdown_rx,
             Arc::new(StunOnlyProvider::default()),
         ));
         let client_info = ClientInfo {
-            id: "client1".to_string(),
+            id: ClientId::from("client1"),
+            position_id: Some(PositionId::from("position1")),
             display_name: "Client 1".to_string(),
             frequency: "100.000".to_string(),
         };
         let (tx, rx) = mpsc::channel(10);
-        let session = ClientSession::new(client_info, tx, ClientConnectionGuard::default());
+        let session = ClientSession::new(
+            client_info,
+            ActiveProfile::Specific(ProfileId::from("profile1")),
+            tx,
+            ClientConnectionGuard::default(),
+        );
         let (websocket_tx, websocket_rx) = mpsc::channel(100);
         let mock_stream = MockStream::new(vec![]);
         let mock_sink = MockSink::new(websocket_tx.clone());
@@ -132,6 +151,7 @@ impl TestSetup {
             rx,
             broadcast_rx,
             shutdown_tx,
+            coverage_dir,
         }
     }
 
@@ -143,9 +163,28 @@ impl TestSetup {
     pub async fn register_client(
         &self,
         client_info: ClientInfo,
-    ) -> (ClientSession, mpsc::Receiver<SignalingMessage>) {
+    ) -> (ClientSession, mpsc::Receiver<ServerMessage>) {
         self.app_state
-            .register_client(client_info, ClientConnectionGuard::default())
+            .register_client(
+                client_info,
+                ActiveProfile::Specific(ProfileId::from("profile1")),
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .expect("Failed to register client")
+    }
+
+    pub async fn register_client_with_profile(
+        &self,
+        client_info: ClientInfo,
+        active_profile: ActiveProfile<ProfileId>,
+    ) -> (ClientSession, mpsc::Receiver<ServerMessage>) {
+        self.app_state
+            .register_client(
+                client_info,
+                active_profile,
+                ClientConnectionGuard::default(),
+            )
             .await
             .expect("Failed to register client")
     }
@@ -153,7 +192,7 @@ impl TestSetup {
     pub async fn register_clients(
         &self,
         client_ids: Vec<ClientInfo>,
-    ) -> HashMap<String, (ClientSession, mpsc::Receiver<SignalingMessage>)> {
+    ) -> HashMap<String, (ClientSession, mpsc::Receiver<ServerMessage>)> {
         futures_util::future::join_all(client_ids.into_iter().map(|client_id| async move {
             (
                 client_id.id.to_string(),
@@ -170,29 +209,43 @@ impl TestSetup {
     }
 
     pub fn spawn_session_handle_interaction(
-        mut self,
-        client_info: ClientInfo,
-    ) -> tokio::task::JoinHandle<()> {
-        tokio::spawn(async move {
-            self.session
+        self,
+    ) -> (tokio::task::JoinHandle<()>, watch::Sender<()>) {
+        let TestSetup {
+            app_state,
+            mut session,
+            mock_stream,
+            mock_sink,
+            mut broadcast_rx,
+            mut rx,
+            shutdown_tx,
+            ..
+        } = self;
+
+        let mut shutdown_rx = shutdown_tx.subscribe();
+
+        let handle = tokio::spawn(async move {
+            session
                 .handle_interaction(
-                    &self.app_state,
-                    self.mock_stream,
-                    self.mock_sink,
-                    &mut self.broadcast_rx,
-                    &mut self.rx,
-                    &mut self.shutdown_tx.subscribe(),
-                    client_info,
+                    &app_state,
+                    mock_stream,
+                    mock_sink,
+                    &mut broadcast_rx,
+                    &mut rx,
+                    &mut shutdown_rx,
                 )
                 .await;
-        })
+        });
+
+        (handle, shutdown_tx)
     }
 }
 
 pub fn create_client_info(id: u8) -> ClientInfo {
     ClientInfo {
-        id: format!("client{}", id),
-        display_name: format!("Client {}", id),
-        frequency: format!("{}00.000", id),
+        id: ClientId::from(format!("client{id}")),
+        position_id: Some(PositionId::from(format!("position{id}"))),
+        display_name: format!("Client {id}"),
+        frequency: format!("{id}00.000"),
     }
 }

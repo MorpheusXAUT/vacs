@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::watch;
+use tracing_subscriber::Layer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vacs_server::auth::layer::setup_auth_layer;
 use vacs_server::build::BuildInfo;
@@ -14,22 +15,33 @@ use vacs_server::routes::{create_app, create_metrics_app};
 use vacs_server::state::AppState;
 use vacs_server::store::Store;
 use vacs_server::store::redis::RedisStore;
+use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::VatsimDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!(
-                    "{}=trace,vacs_=trace,tower_http=debug,tower_sessions=debug,axum::rejection=trace",
-                    env!("CARGO_CRATE_NAME")
-                )
-                .into()
-            }),
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        format!(
+            "{}=trace,vacs_=trace,tower_http=debug,tower_sessions=debug,axum::rejection=trace",
+            env!("CARGO_CRATE_NAME")
         )
-        .with(tracing_subscriber::fmt::layer())
+        .into()
+    });
+
+    let fmt_layer = if std::env::var("RUST_LOG_JSON").is_ok() {
+        tracing_subscriber::fmt::layer().json().boxed()
+    } else {
+        tracing_subscriber::fmt::layer().boxed()
+    };
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer)
         .init();
 
     let build_info = BuildInfo::gather();
@@ -54,12 +66,17 @@ async fn main() -> anyhow::Result<()> {
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
 
+    tracing::info!(path = ?config.vatsim.coverage_dir, "Loading network coverage data");
+    let network = Network::load_from_dir(&config.vatsim.coverage_dir)
+        .map_err(|err| anyhow::anyhow!("Failed to load network coverage data: {err:?}"))?;
+
     let app_state = Arc::new(AppState::new(
         config.clone(),
         updates,
         Store::Redis(redis_store),
         slurper,
         data_feed,
+        network,
         rate_limiters,
         shutdown_rx.clone(),
         ice_config_provider,

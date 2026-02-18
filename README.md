@@ -1,8 +1,9 @@
 # vacs - VATSIM ATC Communication System
 
+[![Phare badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fstatus.vacs.network%2Fshield-badges%2Fstatus.json&style=flat)](https://status.vacs.network)
 [![Discord](https://img.shields.io/badge/Discord-chat-blue?style=flat&logo=discord)](https://discord.gg/yu2nyCKU3R)
 
-`vacs` is an open-source, cross-platform **Ground-To-Ground Voice Communication System for VATSIM**, meant to provide a seamless coordination experience for virtual air traffic controllers.
+**vacs** <small>([/vɐks/](https://ipa-reader.com/?text=v%C9%90ks&voice=Brian))</small> is an open-source, cross-platform **Ground-To-Ground Voice Communication System for VATSIM**, meant to provide a seamless coordination experience for virtual air traffic controllers.
 
 We aim to modernize VATSIM controller-to-controller coordination by providing a low-latency and easy-to-use voice communication system.
 
@@ -105,6 +106,7 @@ If you encounter any issues or have questions about `vacs`, please use one of th
 -   **Bug reports**: [open an issue](https://github.com/MorpheusXAUT/vacs/issues/new?template=bug_report.md) on our [issue tracker](https://github.com/MorpheusXAUT/vacs/issues) using the [`Bug report` template](https://github.com/MorpheusXAUT/vacs/issues/new?template=bug_report.md)
 -   **Feature requests**: check out our [project status board](https://github.com/users/MorpheusXAUT/projects/2) and [open an issue](https://github.com/MorpheusXAUT/vacs/issues/new?template=feature_request.md) on our [issue tracker](https://github.com/MorpheusXAUT/vacs/issues) using the [`Feature request` template](https://github.com/MorpheusXAUT/vacs/issues/new?template=feature_request.md)
 -   **Questions & discussions**: start a conversation on our [discussion forum](https://github.com/MorpheusXAUT/vacs/discussions)
+-   **System Status**: check our [status page](https://status.vacs.network) for real-time uptime monitoring and incident updates
 
 Please search existing issues and discussions before creating a new one to avoid duplicates.
 
@@ -133,11 +135,11 @@ However, we still provide the required server binaries in the form of a [Docker 
 
 ### Production environment
 
-By default, all released `vacs` clients will connect to the production server located at `https://vacs.gusch.jetzt` (with the WebSocket endpoint available at `wss://vacs.gusch.jetzt/ws`). This server will always run the latest stable version available.
+By default, all released `vacs` clients will connect to the production server located at `https://vacs.network` (with the WebSocket endpoint available at `wss://vacs.network/ws`). This server will always run the latest stable version available.
 
 ### Development environment
 
-In addition to the production server, we also provide a development server running on `https://vacs-dev.gusch.jetzt` (`wss://vacs-dev.gusch.jetzt/ws`) that can be used to test new changes before deploying them to production. Furthermore, the dev server does not require live VATSIM credentials but uses the [VATSIM Connect Sandbox environment](https://vatsim.dev/services/connect/sandbox) and its associated credentials. No active VATSIM connection is required to connect to the dev server.
+In addition to the production server, we also provide a development server running on `https://dev.vacs.network` (`wss://dev.vacs.network/ws`) that can be used to test new changes before deploying them to production. Furthermore, the dev server does not require live VATSIM credentials but uses the [VATSIM Connect Sandbox environment](https://vatsim.dev/services/connect/sandbox) and its associated credentials. No active VATSIM connection is required to connect to the dev server.
 
 ## Privacy & data handling
 

@@ -2,7 +2,7 @@ use crate::app::state::AppState;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::{AudioManagerHandle, SourceType};
 use crate::audio::{AudioDevices, AudioHosts, AudioVolumes, VolumeType};
-use crate::config::{AUDIO_SETTINGS_FILE_NAME, Persistable, PersistedAudioConfig};
+use crate::config::{AUDIO_SETTINGS_FILE_NAME, AudioConfig, Persistable, PersistedAudioConfig};
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use std::time::Duration;
@@ -45,7 +45,7 @@ pub async fn audio_set_host(
 ) -> Result<(), Error> {
     let mut state = app_state.lock().await;
 
-    if state.active_call_peer_id().is_some() {
+    if state.active_call_id().is_some() {
         return Err(AudioError::Other(anyhow::anyhow!(
             "Cannot set audio host while call is active"
         ))
@@ -85,43 +85,11 @@ pub async fn audio_get_devices(
     log::info!("Getting audio devices (type: {:?})", device_type);
 
     let state = app_state.lock().await;
-
-    let host = state.config.audio.host_name.clone();
-    let host = host.as_deref();
-    let (preferred, picked) = match device_type {
-        DeviceType::Input => {
-            let preferred = state
-                .config
-                .audio
-                .input_device_name
-                .clone()
-                .unwrap_or_default();
-            let picked =
-                DeviceSelector::picked_device_name(DeviceType::Input, host, Some(&preferred))?;
-            (preferred, picked)
-        }
-        DeviceType::Output => {
-            let preferred = state
-                .config
-                .audio
-                .output_device_name
-                .clone()
-                .unwrap_or_default();
-            let picked = audio_manager.read().output_device_name();
-            (preferred, picked)
-        }
-    };
-    drop(state);
-
-    let default = DeviceSelector::default_device_name(device_type, host)?;
-    let devices: Vec<String> = DeviceSelector::all_device_names(device_type, host)?;
-
-    Ok(AudioDevices {
-        preferred,
-        picked,
-        default,
-        all: devices,
-    })
+    get_audio_devices(
+        device_type,
+        &state.config.audio,
+        audio_manager.read().output_device_name(),
+    )
 }
 
 #[tauri::command]
@@ -132,11 +100,11 @@ pub async fn audio_set_device(
     audio_manager: State<'_, AudioManagerHandle>,
     device_type: DeviceType,
     device_name: String,
-) -> Result<(), Error> {
+) -> Result<AudioDevices, Error> {
     let mut state = app_state.lock().await;
     let mut audio_manager = audio_manager.write();
 
-    if state.active_call_peer_id().is_some() {
+    if state.active_call_id().is_some() {
         return Err(AudioError::Other(anyhow::anyhow!(
             "Cannot set audio device while call is active"
         ))
@@ -159,7 +127,7 @@ pub async fn audio_set_device(
     );
 
     let device_name = Some(device_name).filter(|x| !x.is_empty());
-    let persisted_audio_config: PersistedAudioConfig = {
+    let (persisted_audio_config, audio_devices): (PersistedAudioConfig, AudioDevices) = {
         match device_type {
             DeviceType::Input => state.config.audio.input_device_name = device_name,
             DeviceType::Output => {
@@ -171,6 +139,12 @@ pub async fn audio_set_device(
                 state.config.audio = audio_config;
             }
         }
+
+        let audio_devices = get_audio_devices(
+            device_type,
+            &state.config.audio,
+            audio_manager.output_device_name(),
+        )?;
 
         if reattach_input_level_meter {
             log::trace!("Re-attaching input level meter after switching input device");
@@ -184,7 +158,7 @@ pub async fn audio_set_device(
             )?;
         }
 
-        state.config.audio.clone().into()
+        (state.config.audio.clone().into(), audio_devices)
     };
 
     let config_dir = app
@@ -193,7 +167,7 @@ pub async fn audio_set_device(
         .expect("Cannot get config directory");
     persisted_audio_config.persist(&config_dir, AUDIO_SETTINGS_FILE_NAME)?;
 
-    Ok(())
+    Ok(audio_devices)
 }
 
 #[tauri::command]
@@ -238,6 +212,8 @@ pub async fn audio_set_volume(
             audio_manager.set_output_volume(SourceType::Opus, volume);
             audio_manager.set_output_volume(SourceType::Ringback, volume);
             audio_manager.set_output_volume(SourceType::RingbackOneshot, volume);
+            audio_manager.set_output_volume(SourceType::CallStart, volume);
+            audio_manager.set_output_volume(SourceType::CallEnd, volume);
             state.config.audio.output_device_volume = volume;
         }
         VolumeType::Click => {
@@ -246,6 +222,7 @@ pub async fn audio_set_volume(
         }
         VolumeType::Chime => {
             audio_manager.set_output_volume(SourceType::Ring, volume);
+            audio_manager.set_output_volume(SourceType::PriorityRing, volume);
             state.config.audio.chime_volume = volume;
         }
     }
@@ -335,4 +312,35 @@ pub async fn audio_set_radio_prio(
 ) -> Result<(), Error> {
     keybind_engine.read().await.set_radio_prio(prio);
     Ok(())
+}
+
+fn get_audio_devices(
+    device_type: DeviceType,
+    audio_config: &AudioConfig,
+    picked_output_device: String,
+) -> Result<AudioDevices, Error> {
+    let host = audio_config.host_name.clone();
+    let host = host.as_deref();
+    let (preferred, picked) = match device_type {
+        DeviceType::Input => {
+            let preferred = audio_config.input_device_name.clone().unwrap_or_default();
+            let picked =
+                DeviceSelector::picked_device_name(DeviceType::Input, host, Some(&preferred))?;
+            (preferred, picked)
+        }
+        DeviceType::Output => {
+            let preferred = audio_config.output_device_name.clone().unwrap_or_default();
+            (preferred, picked_output_device)
+        }
+    };
+
+    let default = DeviceSelector::default_device_name(device_type, host)?;
+    let devices: Vec<String> = DeviceSelector::all_device_names(device_type, host)?;
+
+    Ok(AudioDevices {
+        preferred,
+        picked,
+        default,
+        all: devices,
+    })
 }

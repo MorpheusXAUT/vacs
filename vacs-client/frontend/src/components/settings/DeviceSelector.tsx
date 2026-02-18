@@ -17,43 +17,45 @@ function DeviceSelector(props: DeviceSelectorProps) {
 
     const callDisplayType = useCallStore(state => state.callDisplay?.type);
 
+    const setAudioDevices = (audioDevices: AudioDevices) => {
+        const isFallback =
+            audioDevices.preferred.length !== 0 && audioDevices.preferred !== audioDevices.picked;
+        const defaultDevice = {
+            value: "",
+            text: `Default (${audioDevices.default})`,
+            className: "text-initial",
+        };
+
+        let deviceList: SelectOption[] = audioDevices.all.map(deviceName => ({
+            value: deviceName,
+            text: deviceName,
+            className:
+                isFallback && deviceName === audioDevices.picked
+                    ? "text-green-700"
+                    : "text-initial",
+        }));
+
+        deviceList = [defaultDevice, ...deviceList];
+        if (isFallback) {
+            deviceList.push({
+                value: audioDevices.preferred,
+                text: audioDevices.preferred,
+                hidden: true,
+                disabled: true,
+            });
+        }
+
+        setIsFallback(isFallback);
+        setDevice(audioDevices.preferred);
+        setDevices(deviceList);
+    };
+
     const fetchDevices = useCallback(async () => {
         try {
             const audioDevices = await invokeStrict<AudioDevices>("audio_get_devices", {
                 deviceType: props.deviceType,
             });
-
-            const isFallback =
-                audioDevices.preferred.length !== 0 &&
-                audioDevices.preferred !== audioDevices.picked;
-            const defaultDevice = {
-                value: "",
-                text: `Default (${audioDevices.default})`,
-                className: "text-initial",
-            };
-
-            let deviceList: SelectOption[] = audioDevices.all.map(deviceName => ({
-                value: deviceName,
-                text: deviceName,
-                className:
-                    isFallback && deviceName === audioDevices.picked
-                        ? "text-green-700"
-                        : "text-initial",
-            }));
-
-            deviceList = [defaultDevice, ...deviceList];
-            if (isFallback) {
-                deviceList.push({
-                    value: audioDevices.preferred,
-                    text: audioDevices.preferred,
-                    hidden: true,
-                    disabled: true,
-                });
-            }
-
-            setIsFallback(isFallback);
-            setDevice(audioDevices.preferred);
-            setDevices(deviceList);
+            setAudioDevices(audioDevices);
         } catch {}
     }, [props.deviceType]);
 
@@ -63,11 +65,11 @@ function DeviceSelector(props: DeviceSelectorProps) {
         setDevice(new_device);
 
         try {
-            await invokeStrict("audio_set_device", {
+            const audioDevices = await invokeStrict<AudioDevices>("audio_set_device", {
                 deviceType: props.deviceType,
                 deviceName: new_device,
             });
-            await fetchDevices();
+            setAudioDevices(audioDevices);
         } catch {
             setDevice(previousDeviceName);
         }
@@ -84,7 +86,7 @@ function DeviceSelector(props: DeviceSelectorProps) {
             </p>
             <Select
                 name={props.deviceType}
-                className={clsx("mb-1", isFallback && "text-red-500 disabled:!text-[#B34F5C]")}
+                className={clsx("mb-1", isFallback && "text-red-500 disabled:text-[#B34F5C]!")}
                 options={devices}
                 selected={device}
                 onChange={handleOnChange}

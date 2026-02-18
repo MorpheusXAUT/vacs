@@ -1,9 +1,9 @@
 use crate::metrics::guards::CallAttemptOutcome;
 use crate::release::catalog::BundleType;
 use vacs_protocol::http::version::ReleaseChannel;
-use vacs_protocol::ws::{
-    CallErrorReason, DisconnectReason, ErrorReason, LoginFailureReason, SignalingMessage,
-};
+use vacs_protocol::ws::client::ClientMessage;
+use vacs_protocol::ws::server::{DisconnectReason, LoginFailureReason, ServerMessage};
+use vacs_protocol::ws::shared::{CallErrorReason, ErrorReason};
 
 pub trait AsMetricLabel {
     fn as_metric_label(&self) -> &'static str;
@@ -14,6 +14,7 @@ impl AsMetricLabel for DisconnectReason {
         match self {
             DisconnectReason::Terminated => "terminated",
             DisconnectReason::NoActiveVatsimConnection => "no_active_vatsim_connection",
+            DisconnectReason::AmbiguousVatsimPosition(_) => "ambiguous_vatsim_position",
         }
     }
 }
@@ -34,6 +35,8 @@ impl AsMetricLabel for LoginFailureReason {
             LoginFailureReason::DuplicateId => "duplicate_id",
             LoginFailureReason::InvalidCredentials => "invalid_credentials",
             LoginFailureReason::NoActiveVatsimConnection => "no_active_vatsim_connection",
+            LoginFailureReason::AmbiguousVatsimPosition(_) => "ambiguous_vatsim_position",
+            LoginFailureReason::InvalidVatsimPosition => "invalid_vatsim_position",
             LoginFailureReason::Timeout => "timeout",
             LoginFailureReason::IncompatibleProtocolVersion => "incompatible_protocol_version",
         }
@@ -50,10 +53,12 @@ impl AsMetricLabel for CallAttemptOutcome {
             CallAttemptOutcome::Error(CallErrorReason::AudioFailure) => "error_audio_failure",
             CallAttemptOutcome::Error(CallErrorReason::AutoHangup) => "error_auto_hangup",
             CallAttemptOutcome::Error(CallErrorReason::WebrtcFailure) => "error_webrtc_failure",
+            CallAttemptOutcome::Error(CallErrorReason::CallActive) => "error_call_active",
             CallAttemptOutcome::Error(CallErrorReason::CallFailure) => "error_call_failure",
             CallAttemptOutcome::Error(CallErrorReason::SignalingFailure) => {
                 "error_signaling_failure"
             }
+            CallAttemptOutcome::Error(CallErrorReason::TargetNotFound) => "error_target_not_found",
             CallAttemptOutcome::Error(CallErrorReason::Other) => "error_other",
         }
     }
@@ -80,28 +85,48 @@ impl AsMetricLabel for BundleType {
     }
 }
 
-impl AsMetricLabel for SignalingMessage {
+impl AsMetricLabel for ClientMessage {
     fn as_metric_label(&self) -> &'static str {
         match self {
-            SignalingMessage::Login { .. } => "login",
-            SignalingMessage::LoginFailure { .. } => "login_failure",
-            SignalingMessage::Logout => "logout",
-            SignalingMessage::CallInvite { .. } => "call_invite",
-            SignalingMessage::ClientInfo { .. } => "client_info",
-            SignalingMessage::CallAccept { .. } => "call_accept",
-            SignalingMessage::CallReject { .. } => "call_reject",
-            SignalingMessage::CallOffer { .. } => "call_offer",
-            SignalingMessage::CallAnswer { .. } => "call_answer",
-            SignalingMessage::CallEnd { .. } => "call_end",
-            SignalingMessage::CallError { .. } => "call_error",
-            SignalingMessage::CallIceCandidate { .. } => "call_ice_candidate",
-            SignalingMessage::PeerNotFound { .. } => "peer_not_found",
-            SignalingMessage::ClientConnected { .. } => "client_connected",
-            SignalingMessage::ClientDisconnected { .. } => "client_disconnected",
-            SignalingMessage::ListClients => "list_clients",
-            SignalingMessage::ClientList { .. } => "client_list",
-            SignalingMessage::Error { .. } => "error",
-            SignalingMessage::Disconnected { .. } => "disconnected",
+            ClientMessage::Login(_) => "login",
+            ClientMessage::Logout => "logout",
+            ClientMessage::CallInvite(_) => "call_invite",
+            ClientMessage::CallAccept(_) => "call_accept",
+            ClientMessage::CallReject(_) => "call_reject",
+            ClientMessage::CallEnd(_) => "call_end",
+            ClientMessage::CallError(_) => "call_error",
+            ClientMessage::WebrtcOffer(_) => "webrtc_offer",
+            ClientMessage::WebrtcAnswer(_) => "webrtc_answer",
+            ClientMessage::WebrtcIceCandidate(_) => "webrtc_ice_candidate",
+            ClientMessage::ListClients => "list_clients",
+            ClientMessage::ListStations => "list_stations",
+            ClientMessage::Disconnect => "disconnect",
+            ClientMessage::Error(_) => "error",
+        }
+    }
+}
+
+impl AsMetricLabel for ServerMessage {
+    fn as_metric_label(&self) -> &'static str {
+        match self {
+            ServerMessage::LoginFailure(_) => "login_failure",
+            ServerMessage::CallInvite(_) => "call_invite",
+            ServerMessage::CallAccept(_) => "call_accept",
+            ServerMessage::CallEnd(_) => "call_end",
+            ServerMessage::CallCancelled(_) => "call_cancelled",
+            ServerMessage::CallError(_) => "call_error",
+            ServerMessage::WebrtcOffer(_) => "webrtc_offer",
+            ServerMessage::WebrtcAnswer(_) => "webrtc_answer",
+            ServerMessage::WebrtcIceCandidate(_) => "webrtc_ice_candidate",
+            ServerMessage::ClientInfo(_) => "client_info",
+            ServerMessage::SessionInfo(_) => "session_info",
+            ServerMessage::ClientConnected(_) => "client_connected",
+            ServerMessage::ClientDisconnected(_) => "client_disconnected",
+            ServerMessage::ClientList(_) => "client_list",
+            ServerMessage::StationList(_) => "station_list",
+            ServerMessage::StationChanges(_) => "station_changes",
+            ServerMessage::Disconnected(_) => "disconnected",
+            ServerMessage::Error(_) => "error",
         }
     }
 }
@@ -114,6 +139,7 @@ impl AsMetricLabel for ErrorReason {
             ErrorReason::PeerConnection => "peer_connection",
             ErrorReason::UnexpectedMessage(_) => "unexpected_message",
             ErrorReason::RateLimited { .. } => "rate_limited",
+            ErrorReason::ClientNotFound => "client_not_found",
         }
     }
 }

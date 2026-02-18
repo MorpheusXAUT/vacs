@@ -2,36 +2,45 @@ import Clock from "./components/Clock.tsx";
 import InfoGrid from "./components/InfoGrid.tsx";
 import FunctionKeys from "./components/FunctionKeys.tsx";
 import CallQueue from "./components/CallQueue.tsx";
-import Button from "./components/ui/Button.tsx";
 import {useEffect} from "preact/hooks";
 import {invoke} from "@tauri-apps/api/core";
 import {Route, Switch} from "wouter";
 import LoginPage from "./pages/LoginPage.tsx";
 import {useAuthStore} from "./stores/auth-store.ts";
 import {setupAuthListeners} from "./listeners/auth-listener.ts";
-import DAKeyArea from "./components/DAKeyArea.tsx";
 import ConnectPage from "./pages/ConnectPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import telephone from "./assets/telephone.svg";
-import ErrorOverlay from "./components/ErrorOverlay.tsx";
+import ErrorOverlay from "./components/overlays/ErrorOverlay.tsx";
 import {invokeSafe} from "./error.ts";
 import {setupErrorListeners} from "./listeners/error-listener.ts";
 import MissionPage from "./pages/MissionPage.tsx";
 import TelephonePage from "./pages/TelephonePage.tsx";
 import LinkButton from "./components/ui/LinkButton.tsx";
 import {setupSignalingListeners} from "./listeners/signaling-listener.ts";
-import {fetchStationsConfig, useSignalingStore} from "./stores/signaling-store.ts";
 import PhoneButton from "./components/ui/PhoneButton.tsx";
 import RadioPrioButton from "./components/ui/RadioPrioButton.tsx";
 import EndButton from "./components/ui/EndButton.tsx";
 import {setupWebrtcListeners} from "./listeners/webrtc-listener.ts";
-import UpdateOverlay from "./components/UpdateOverlay.tsx";
+import UpdateOverlay from "./components/overlays/UpdateOverlay.tsx";
 import {fetchCapabilities} from "./stores/capabilities-store.ts";
 import RadioButton from "./components/ui/RadioButton.tsx";
+import ConnectionTerminateOverlay from "./components/overlays/ConnectionTerminateOverlay.tsx";
+import {useConnectionStore} from "./stores/connection-store.ts";
+import PositionSelectOverlay from "./components/overlays/PositionSelectOverlay.tsx";
+import MainPage from "./pages/MainPage.tsx";
+import Tabs from "./components/Tabs.tsx";
+import {useProfileType} from "./stores/profile-store.ts";
+import Button from "./components/ui/Button.tsx";
+import {fetchCallConfig, fetchClientPageSettings} from "./stores/settings-store.ts";
+import {useZoomHotkey} from "./hooks/zoom-hotkey-hook.ts";
 
 function App() {
-    const connected = useSignalingStore(state => state.connectionState === "connected");
+    const connected = useConnectionStore(state => state.connectionState === "connected");
+    const testing = useConnectionStore(state => state.connectionState === "test");
     const authStatus = useAuthStore(state => state.status);
+    const profileType = useProfileType();
+    useZoomHotkey();
 
     useEffect(() => {
         void invoke("app_frontend_ready");
@@ -46,7 +55,8 @@ function App() {
         void invokeSafe("auth_check_session");
 
         void fetchCapabilities();
-        void fetchStationsConfig();
+        void fetchCallConfig();
+        void fetchClientPageSettings();
 
         return () => {
             cleanups.forEach(cleanup => cleanup());
@@ -64,17 +74,17 @@ function App() {
                 <FunctionKeys />
                 <div className="flex flex-row w-full h-[calc(100%-10rem)] pl-1">
                     {/* Main Area */}
-                    <div className="relative h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l-1 border-t-1 border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
+                    <div className="relative h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l border-t border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
                         <Switch>
                             <Route path="/settings" component={SettingsPage} nest />
                             <Route path="/mission" component={MissionPage} />
                             <Route path="/" nest>
                                 {authStatus === "loading" ? (
                                     <></>
-                                ) : authStatus === "unauthenticated" ? (
+                                ) : authStatus === "unauthenticated" && !testing ? (
                                     <LoginPage />
-                                ) : connected ? (
-                                    <DAKeyArea />
+                                ) : connected || testing ? (
+                                    <MainPage />
                                 ) : (
                                     <ConnectPage />
                                 )}
@@ -96,20 +106,39 @@ function App() {
                     </div>
                 </div>
                 {/* Bottom Button Row */}
-                <div className="h-20 w-full p-2 pl-4 flex flex-row justify-between gap-20">
+                <div className="h-20 w-full p-2 pl-4 flex flex-row justify-between">
                     <div className="h-full flex flex-row gap-3">
-                        <RadioButton />
-                        <Button color="cyan" className="text-xl text-slate-400" disabled={true}>
-                            CPL
-                        </Button>
-                        <RadioPrioButton />
-                        <PhoneButton />
+                        {profileType === "tabbed" ? (
+                            <>
+                                <RadioButton />
+                                <PhoneButton />
+                                <RadioPrioButton />
+                            </>
+                        ) : (
+                            <>
+                                <RadioButton />
+                                <Button
+                                    color="cyan"
+                                    className="text-xl text-slate-400"
+                                    disabled={true}
+                                >
+                                    CPL
+                                </Button>
+                                <RadioPrioButton />
+                                <PhoneButton />
+                            </>
+                        )}
                     </div>
-                    <EndButton />
+                    <div className="h-full flex flex-row gap-5">
+                        {(connected || testing) && profileType === "tabbed" && <Tabs />}
+                        <EndButton />
+                    </div>
                 </div>
             </div>
             <ErrorOverlay />
             <UpdateOverlay />
+            <ConnectionTerminateOverlay />
+            <PositionSelectOverlay />
         </div>
     );
 }

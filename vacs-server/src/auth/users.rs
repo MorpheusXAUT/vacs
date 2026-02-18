@@ -9,14 +9,15 @@ use oauth2::{
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
+use vacs_protocol::vatsim::ClientId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
-    pub cid: String,
+    pub cid: ClientId,
 }
 
 impl AuthUser for User {
-    type Id = String;
+    type Id = ClientId;
 
     fn id(&self) -> Self::Id {
         self.cid.clone()
@@ -121,7 +122,7 @@ impl AuthnBackend for Backend {
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
         tracing::trace!(?user_id, "Getting user");
         Ok(Some(User {
-            cid: user_id.to_string(),
+            cid: user_id.clone(),
         }))
     }
 }
@@ -135,7 +136,7 @@ struct ConnectUserDetails {
 
 #[derive(Deserialize, Debug, Clone)]
 struct ConnectUserDetailsData {
-    cid: String,
+    cid: ClientId,
 }
 
 // Wrapper for reqwest::Client to implement oauth2::AsyncHttpClient.
@@ -190,7 +191,7 @@ pub mod mock {
                     format!("token{i}"),
                     ConnectUserDetails {
                         data: ConnectUserDetailsData {
-                            cid: format!("cid{i}"),
+                            cid: ClientId::from(format!("cid{i}")),
                         },
                     },
                 );
@@ -234,7 +235,7 @@ pub mod mock {
             user_id: &UserId<Self>,
         ) -> Result<Option<Self::User>, Self::Error> {
             Ok(Some(User {
-                cid: user_id.to_string(),
+                cid: user_id.clone(),
             }))
         }
     }

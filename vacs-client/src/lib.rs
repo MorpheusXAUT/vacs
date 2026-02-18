@@ -53,6 +53,12 @@ pub fn run() {
         .setup(|app| {
             log::info!("{:?}", VersionInfo::gather());
 
+            if rustls::crypto::aws_lc_rs::default_provider().install_default().is_err()  {
+                log::error!("Failed to install rustls crypto provider");
+                open_fatal_error_dialog(app.handle(), "Failed to install rustls crypto provider");
+                return Err(anyhow::anyhow!("Failed to install rustls crypto provider").into());
+            }
+
             #[cfg(target_os = "macos")]
             {
                 let handle = app.handle().clone();
@@ -115,13 +121,19 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app::commands::app_check_for_update,
             app::commands::app_frontend_ready,
+            app::commands::app_get_call_config,
+            app::commands::app_get_client_page_settings,
+            app::commands::app_load_extra_client_page_config,
+            app::commands::app_load_test_profile,
             app::commands::app_open_folder,
-            app::commands::app_pick_extra_stations_config,
             app::commands::app_platform_capabilities,
             app::commands::app_quit,
             app::commands::app_reset_window_size,
             app::commands::app_set_always_on_top,
+            app::commands::app_set_call_config,
             app::commands::app_set_fullscreen,
+            app::commands::app_set_selected_client_page_config,
+            app::commands::app_unload_test_profile,
             app::commands::app_update,
             audio::commands::audio_get_devices,
             audio::commands::audio_get_hosts,
@@ -152,9 +164,7 @@ pub fn run() {
             signaling::commands::signaling_disconnect,
             signaling::commands::signaling_end_call,
             signaling::commands::signaling_get_ignored_clients,
-            signaling::commands::signaling_get_stations_config,
             signaling::commands::signaling_remove_ignored_client,
-            signaling::commands::signaling_set_selected_stations_config_profile,
             signaling::commands::signaling_start_call,
             signaling::commands::signaling_terminate,
         ])

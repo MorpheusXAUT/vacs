@@ -1,36 +1,36 @@
 import Button from "../ui/Button.tsx";
-import {CallListItem, useCallListStore} from "../../stores/call-list-store.ts";
+import {CallListItem, useCallListArray, useCallListStore} from "../../stores/call-list-store.ts";
 import {clsx} from "clsx";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useState} from "preact/hooks";
 import List from "../ui/List.tsx";
-import {useSignalingStore} from "../../stores/signaling-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {invokeSafe} from "../../error.ts";
+import {useConnectionStore} from "../../stores/connection-store.ts";
 
 function CallList() {
-    const calls = useCallListStore(state => state.callList);
+    const calls = useCallListArray();
     const {clearCallList} = useCallListStore(state => state.actions);
     const callDisplay = useCallStore(state => state.callDisplay);
     const [selectedCall, setSelectedCall] = useState<number>(0);
 
-    const connected = useSignalingStore(state => state.connectionState === "connected");
+    const connected = useConnectionStore(state => state.connectionState === "connected");
 
     const handleIgnoreClick = useAsyncDebounce(async () => {
-        const peerId: string | undefined = calls[selectedCall]?.number;
+        const peerId = calls[selectedCall]?.clientId;
         if (peerId === undefined || callDisplay !== undefined) return;
         await invokeSafe<boolean>("signaling_add_ignored_client", {clientId: peerId});
     });
 
     const handleCallClick = useAsyncDebounce(async () => {
-        const peerId: string | undefined = calls[selectedCall]?.number;
-        if (peerId === undefined || callDisplay !== undefined) return;
-        await startCall(peerId);
+        const target = calls[selectedCall]?.target;
+        if (target === undefined || callDisplay !== undefined) return;
+        await startCall(target);
     });
 
-    function callRow(index: number, isSelected: boolean, onClick: () => void) {
+    const callRow = (index: number, isSelected: boolean, onClick: () => void) => {
         return <CallRow call={calls[index]} isSelected={isSelected} onClick={onClick} />;
-    }
+    };
 
     return (
         <div className="w-[37.5rem] h-full flex flex-col gap-3 p-3">
@@ -56,7 +56,7 @@ function CallList() {
                 <div className="flex gap-2">
                     <Button
                         color="gray"
-                        disabled={calls[selectedCall]?.number === undefined}
+                        disabled={calls[selectedCall]?.clientId === undefined}
                         onClick={handleIgnoreClick}
                     >
                         <p>
@@ -68,7 +68,7 @@ function CallList() {
                     <Button
                         color="gray"
                         className="w-56 text-xl"
-                        disabled={!connected || calls[selectedCall]?.number === undefined}
+                        disabled={!connected || calls[selectedCall]?.target === undefined}
                         onClick={handleCallClick}
                     >
                         Call
@@ -107,7 +107,7 @@ function CallRow(props: CallRowProps) {
                 className={clsx("px-0.5 flex items-center font-semibold", color)}
                 onClick={props.onClick}
             >
-                {props.call?.number ?? ""}
+                {props.call?.clientId ?? ""}
             </div>
         </>
     );

@@ -87,7 +87,11 @@ pub async fn keybinds_set_binding(
         return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
     }
 
-    let code = code.as_ref().map(|s| s.parse::<Code>()).transpose().map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", code.unwrap_or_default()))))?;
+    let code = code
+        .as_ref()
+        .map(|s| s.parse::<Code>())
+        .transpose()
+        .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", code.unwrap_or_default()))))?;
 
     let persisted_client_config: PersistedClientConfig = {
         let mut state = app_state.lock().await;
@@ -97,6 +101,7 @@ pub async fn keybinds_set_binding(
         match keybind {
             Keybind::AcceptCall => keybinds_config.accept_call = code,
             Keybind::EndCall => keybinds_config.end_call = code,
+            Keybind::ToggleRadioPrio => keybinds_config.toggle_radio_prio = code,
             _ => {}
         }
 

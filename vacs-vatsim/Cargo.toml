@@ -9,19 +9,27 @@ publish.workspace = true
 [features]
 default = []
 test-utils = []
+data-feed = ["dep:async-trait", "dep:parking_lot", "dep:reqwest"]
+slurper = ["dep:bytes", "dep:csv", "dep:reqwest"]
+coverage = ["dep:regex", "dep:serde_json", "dep:toml", "vacs-protocol/profile"]
 
 [dependencies]
-anyhow = { workspace = true }
-async-trait = { workspace = true }
-bytes = { workspace = true }
-csv = { workspace = true }
-parking_lot = { workspace = true }
-reqwest = { workspace = true, features = ["json"] }
+async-trait = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+csv = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
+reqwest = { workspace = true, features = ["json"], optional = true }
 serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true }
+toml = { workspace = true, optional = true }
 tracing = { workspace = true }
+vacs-protocol = { workspace = true, features = ["vatsim"] }
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }
+pretty_assertions = { workspace = true, features = ["unstable"] }
+tempfile = { workspace = true }
 test-log = { workspace = true }
 tokio = { workspace = true }
 wiremock = { workspace = true }

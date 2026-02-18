@@ -15,6 +15,10 @@ use std::time::Duration;
 use tauri::{AppHandle, LogicalSize, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
+use vacs_signaling::protocol::profile::client_page::{
+    ClientGroupMode, ClientPageConfig, FrequencyDisplayMode,
+};
+use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
 
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -22,7 +26,7 @@ pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
 pub const DEFAULT_SETTINGS_FILE_NAME: &str = "config.toml";
 pub const AUDIO_SETTINGS_FILE_NAME: &str = "audio.toml";
 pub const CLIENT_SETTINGS_FILE_NAME: &str = "client.toml";
-pub const STATIONS_SETTINGS_FILE_NAME: &str = "stations.toml";
+pub const CLIENT_PAGE_SETTINGS_FILE_NAME: &str = "client_page.toml";
 pub const ENCODED_AUDIO_FRAME_BUFFER_SIZE: usize = 512;
 pub const ICE_CONFIG_EXPIRY_LEEWAY: Duration = Duration::from_mins(15);
 
@@ -33,7 +37,8 @@ pub struct AppConfig {
     #[serde(alias = "webrtc")] // support for old naming scheme
     pub ice: IceConfig,
     pub client: ClientConfig,
-    pub stations: StationsConfig,
+    #[serde(default)]
+    pub client_page: ClientPageSettings,
 }
 
 impl AppConfig {
@@ -63,13 +68,13 @@ impl AppConfig {
             .add_source(
                 File::with_name(
                     config_dir
-                        .join(STATIONS_SETTINGS_FILE_NAME)
+                        .join(CLIENT_PAGE_SETTINGS_FILE_NAME)
                         .to_str()
                         .expect("Failed to get local config path"),
                 )
                 .required(false),
             )
-            .add_source(File::with_name(STATIONS_SETTINGS_FILE_NAME).required(false))
+            .add_source(File::with_name(CLIENT_PAGE_SETTINGS_FILE_NAME).required(false))
             .add_source(
                 File::with_name(
                     config_dir
@@ -88,36 +93,18 @@ impl AppConfig {
             .try_deserialize()
             .context("Failed to deserialize preliminary config")?;
 
-        if let Some(extra_config_path) = preliminary_config.client.extra_stations_config {
-            log::info!("Loading extra stations config from: {}", extra_config_path);
+        if let Some(extra_client_page_config) = preliminary_config.client.extra_client_page_config {
+            log::info!("Loading extra client page config from {extra_client_page_config}");
             builder = builder
-                .add_source(File::with_name(&extra_config_path).required(false))
-                // Re-add environment variables to ensure they still take precedence
+                .add_source(File::with_name(&extra_client_page_config).required(false))
                 .add_source(Environment::with_prefix("vacs_client"));
         }
 
-        let mut config: AppConfig = builder
+        let config: AppConfig = builder
             .build()
             .context("Failed to build config")?
             .try_deserialize()
             .context("Failed to deserialize config")?;
-
-        // Migration of legacy selected stations profile previously stored in stations.toml
-        if let Some(legacy_profile) = config.stations.legacy_selected_profile.take()
-            && config.client.selected_stations_profile == "Default"
-            && legacy_profile != "Default"
-        {
-            log::info!(
-                "Migrating legacy selected_stations_profile '{legacy_profile}' to client config"
-            );
-            config.client.selected_stations_profile = legacy_profile;
-
-            let persisted_client_config = PersistedClientConfig::from(config.client.clone());
-            if let Err(err) = persisted_client_config.persist(config_dir, CLIENT_SETTINGS_FILE_NAME)
-            {
-                log::error!("Failed to persist migrated client config: {err}");
-            }
-        }
 
         Ok(config)
     }
@@ -129,25 +116,28 @@ pub struct BackendConfig {
     pub ws_url: String,
     pub endpoints: BackendEndpointsConfigs,
     pub timeout_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dev_position_id: Option<PositionId>,
 }
 
 impl Default for BackendConfig {
     fn default() -> Self {
         Self {
             base_url: if cfg!(debug_assertions) {
-                "https://vacs-dev.gusch.jetzt"
+                "https://dev.vacs.network"
             } else {
-                "https://vacs.gusch.jetzt"
+                "https://vacs.network"
             }
             .to_string(),
             ws_url: if cfg!(debug_assertions) {
-                "wss://vacs-dev.gusch.jetzt/ws"
+                "wss://dev.vacs.network/ws"
             } else {
-                "wss://vacs.gusch.jetzt/ws"
+                "wss://vacs.network/ws"
             }
             .to_string(),
             endpoints: BackendEndpointsConfigs::default(),
             timeout_ms: 2000,
+            dev_position_id: None,
         }
     }
 }
@@ -250,7 +240,9 @@ impl From<AudioConfig> for PersistedAudioConfig {
 pub struct ClientConfig {
     pub always_on_top: bool,
     pub fullscreen: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub position: Option<PhysicalPosition<i32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<PhysicalSize<u32>>,
     pub release_channel: ReleaseChannel,
     pub signaling_auto_reconnect: bool,
@@ -263,11 +255,16 @@ pub struct ClientConfig {
     /// by the client. This does **not** completely block communications with ignored
     /// parties as the (local) user can still actively initiate calls to them.
     #[serde(default, skip_serializing_if = "HashSet::is_empty")]
-    pub ignored: HashSet<String>,
-    pub extra_stations_config: Option<String>,
-    pub selected_stations_profile: String,
+    pub ignored: HashSet<ClientId>,
     #[serde(default)]
     pub keybinds: KeybindsConfig,
+    #[serde(default)]
+    pub call: CallConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_client_page_config: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra_client_page_config: Option<String>,
+    pub test_profile_watcher_delay_ms: u64,
 }
 
 impl Default for ClientConfig {
@@ -283,9 +280,11 @@ impl Default for ClientConfig {
             radio: RadioConfig::default(),
             auto_hangup_seconds: 60,
             ignored: HashSet::new(),
-            extra_stations_config: None,
-            selected_stations_profile: "Default".to_string(),
             keybinds: KeybindsConfig::default(),
+            call: CallConfig::default(),
+            selected_client_page_config: None,
+            extra_client_page_config: None,
+            test_profile_watcher_delay_ms: 500,
         }
     }
 }
@@ -654,14 +653,16 @@ impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
 
 /// Configuration for generic call control keybinds.
 ///
-/// These keybinds allow accepting and ending calls without needing to use the UI
-/// and can be used independently of the transmit mode.
+/// These keybinds allow accepting and ending calls as well as toggling radio prio without needing
+/// to use the UI and can be used independently of the transmit mode.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KeybindsConfig {
     /// Key code to accept an incoming call.
     pub accept_call: Option<Code>,
     /// Key code to end an active call.
     pub end_call: Option<Code>,
+    /// Key code to toggle radio prio during an active call.
+    pub toggle_radio_prio: Option<Code>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -669,6 +670,7 @@ pub struct KeybindsConfig {
 pub struct FrontendKeybindsConfig {
     pub accept_call: Option<String>,
     pub end_call: Option<String>,
+    pub toggle_radio_prio: Option<String>,
 }
 
 impl From<KeybindsConfig> for FrontendKeybindsConfig {
@@ -676,6 +678,7 @@ impl From<KeybindsConfig> for FrontendKeybindsConfig {
         Self {
             accept_call: config.accept_call.map(|c| c.to_string()),
             end_call: config.end_call.map(|c| c.to_string()),
+            toggle_radio_prio: config.toggle_radio_prio.map(|c| c.to_string()),
         }
     }
 }
@@ -697,7 +700,136 @@ impl TryFrom<FrontendKeybindsConfig> for KeybindsConfig {
                 .map(|s| s.parse::<Code>())
                 .transpose()
                 .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.end_call.unwrap_or_default()))))?,
+            toggle_radio_prio: value
+                .toggle_radio_prio
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.toggle_radio_prio.unwrap_or_default()))))?,
         })
+    }
+}
+
+/// Various settings regarding calls.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallConfig {
+    /// Toggles highlighting of incoming call target DA keys.
+    pub highlight_incoming_call_target: bool,
+    /// Enables the priority call ringtone and visual highlighting. If disabled, Priority calls will still be received, but not handled differently.
+    pub enable_priority_calls: bool,
+    /// Enables sound effect when a call is established
+    pub enable_call_start_sound: bool,
+    /// Enables sound effect when the call is ended
+    pub enable_call_end_sound: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendCallConfig {
+    pub highlight_incoming_call_target: bool,
+    pub enable_priority_calls: bool,
+    pub enable_call_start_sound: bool,
+    pub enable_call_end_sound: bool,
+}
+
+impl Default for CallConfig {
+    fn default() -> Self {
+        Self {
+            highlight_incoming_call_target: true,
+            enable_priority_calls: true,
+            enable_call_start_sound: true,
+            enable_call_end_sound: true,
+        }
+    }
+}
+
+impl Default for FrontendCallConfig {
+    fn default() -> Self {
+        Self {
+            highlight_incoming_call_target: true,
+            enable_priority_calls: true,
+            enable_call_start_sound: true,
+            enable_call_end_sound: true,
+        }
+    }
+}
+
+impl From<CallConfig> for FrontendCallConfig {
+    fn from(call_config: CallConfig) -> Self {
+        Self {
+            highlight_incoming_call_target: call_config.highlight_incoming_call_target,
+            enable_priority_calls: call_config.enable_priority_calls,
+            enable_call_start_sound: call_config.enable_call_start_sound,
+            enable_call_end_sound: call_config.enable_call_end_sound,
+        }
+    }
+}
+
+impl From<FrontendCallConfig> for CallConfig {
+    fn from(frontend_call_config: FrontendCallConfig) -> Self {
+        Self {
+            highlight_incoming_call_target: frontend_call_config.highlight_incoming_call_target,
+            enable_priority_calls: frontend_call_config.enable_priority_calls,
+            enable_call_start_sound: frontend_call_config.enable_call_start_sound,
+            enable_call_end_sound: frontend_call_config.enable_call_end_sound,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ClientPageSettings {
+    /// Named configs for different client page configurations.
+    /// Users can switch between configs in the UI.
+    #[serde(default)]
+    pub configs: HashMap<String, ClientPageConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendClientPageSettings {
+    selected: Option<String>,
+    configs: HashMap<String, FrontendClientPageConfig>,
+}
+
+impl From<&AppConfig> for FrontendClientPageSettings {
+    fn from(config: &AppConfig) -> Self {
+        FrontendClientPageSettings {
+            selected: config.client.selected_client_page_config.clone(),
+            configs: config
+                .client_page
+                .configs
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone().into()))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendClientPageConfig {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+    pub priority: Vec<String>,
+    pub frequencies: FrequencyDisplayMode,
+    pub grouping: ClientGroupMode,
+}
+
+impl Default for FrontendClientPageConfig {
+    fn default() -> Self {
+        Self::from(ClientPageConfig::default())
+    }
+}
+
+impl From<ClientPageConfig> for FrontendClientPageConfig {
+    fn from(client_page_config: ClientPageConfig) -> Self {
+        Self {
+            include: client_page_config.include,
+            exclude: client_page_config.exclude,
+            priority: client_page_config.priority,
+            frequencies: client_page_config.frequencies,
+            grouping: client_page_config.grouping,
+        }
     }
 }
 
@@ -709,202 +841,6 @@ pub struct PersistedClientConfig {
 impl From<ClientConfig> for PersistedClientConfig {
     fn from(client: ClientConfig) -> Self {
         Self { client }
-    }
-}
-
-/// Configuration for how stations are handled client-side.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StationsConfig {
-    #[serde(alias = "selected_profile", default, skip_serializing)]
-    pub legacy_selected_profile: Option<String>,
-
-    /// Named profiles for different station filtering configurations.
-    /// Users can switch between profiles in the UI.
-    pub profiles: HashMap<String, StationsProfileConfig>,
-}
-
-impl Default for StationsConfig {
-    fn default() -> Self {
-        let mut profiles = HashMap::new();
-        profiles.insert("Default".to_string(), StationsProfileConfig::default());
-        Self {
-            legacy_selected_profile: None,
-            profiles,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendStationsConfig {
-    pub selected_profile: String,
-    pub profiles: HashMap<String, FrontendStationsProfileConfig>,
-}
-
-impl From<StationsConfig> for FrontendStationsConfig {
-    fn from(stations_config: StationsConfig) -> Self {
-        Self {
-            selected_profile: stations_config
-                .legacy_selected_profile
-                .unwrap_or("Default".to_string()),
-            profiles: stations_config
-                .profiles
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        }
-    }
-}
-
-/// Mode for controlling how frequencies are displayed on DA keys.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub enum FrequencyDisplayMode {
-    /// Always show frequencies for all stations.
-    #[default]
-    ShowAll,
-    /// Hide frequencies only for stations that have an alias defined.
-    HideAliased,
-    /// Hide frequencies for all stations.
-    HideAll,
-}
-
-/// Mode for controlling how DA keys are grouped.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub enum StationsGroupMode {
-    /// Don't group.
-    #[default]
-    None,
-    /// Group by the first two letters (FIR) of the display name.
-    Fir,
-    /// First, group by the first two letters (FIR), then by the first four letters (ICAO code) of the display name.
-    FirAndIcao,
-    /// Group by the first four letters (ICAO code) of the display name.
-    Icao,
-}
-
-/// Config profile for how stations are filtered, prioritized and displayed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StationsProfileConfig {
-    /// Optional list of callsign patterns to include.
-    ///
-    /// - If this list is empty, all stations are eligible to be shown (subject to `exclude`).
-    /// - If this list is not empty, only stations matching at least one pattern are eligible to be shown.
-    ///
-    /// Glob syntax is supported: `"LO*"`, `"LOWW_*"`, `"*_APP"`, …
-    /// Matching is case-insensitive.
-    ///
-    /// Example:
-    ///   `["LO*", "EDDM_*", "EDMM_*"]`
-    #[serde(default)]
-    pub include: Vec<String>,
-
-    /// Optional list of callsign patterns to exclude.
-    ///
-    /// - Stations matching any pattern here are never shown, even if they match an `include` rule.
-    ///
-    /// Glob syntax is supported: `"LO*"`, `"LOWW_*"`, `"*_APP"`, …
-    /// Matching is case-insensitive.
-    ///
-    /// Example:
-    ///   `["*_TWR", "*_GND", "*_DEL"]`
-    #[serde(default)]
-    pub exclude: Vec<String>,
-
-    /// Optional ordered list of callsign patterns used to assign priority.
-    ///
-    /// The *first* matching pattern in the list determines the station's
-    /// priority bucket. Earlier entries = higher priority.
-    ///
-    /// Glob syntax is supported: `"LO*"`, `"LOWW_*"`, `"*_APP"`, …
-    /// Matching is case-insensitive.
-    ///
-    /// Example:
-    ///   `["LOVV_*", "LOWW_*_APP", "LOWW_*_TWR", "LOWW_*"]`
-    #[serde(default)]
-    pub priority: Vec<String>,
-
-    /// Optional alias mapping of frequencies to custom display names.
-    ///
-    /// - If a station's frequency matches a key in this map, the corresponding display name will be
-    ///   used instead of the one received from VATSIM.
-    /// - **Important**: Display names should follow the same underscore-separated format as VATSIM
-    ///   callsigns (e.g., `Station_Name_TYPE`) to ensure proper filtering, sorting and display.
-    ///   The last part after the final underscore is used as the station type.
-    /// - Frequency mapping is exact (no wildcard support).
-    ///
-    /// This is useful for:
-    /// - Customizing station names if the VATSIM callsign doesn't match the sector's desired display name
-    /// - Using local language or abbreviations (e.g., "Wien" instead of "LOWW")
-    /// - Providing a "stable" list of stations even when relieve/personalized callsigns are used
-    ///
-    /// Example:
-    /// ```toml
-    /// [stations.profiles.Default.aliases]
-    /// "132.600" = "AC_CTR"
-    /// "124.400" = "FIC_CTR"
-    /// ```
-    #[serde(default)]
-    pub aliases: HashMap<String, String>,
-
-    /// Control how frequencies are displayed on the DA keys.
-    ///
-    /// - `ShowAll`: Show frequency for all stations (default).
-    /// - `HideAliased`: Hide frequency if the station has an alias mapping.
-    /// - `HideAll`: Never show frequencies.
-    #[serde(default)]
-    pub frequencies: FrequencyDisplayMode,
-
-    /// Control how DA keys are grouped.
-    ///
-    /// - `None`: Don't group.
-    /// - `Fir`: Group by the first two letters (FIR) of the display name.
-    /// - `FirAndIcao`: First, group by the first two letters (FIR), then by the first four letters
-    ///   (ICAO code) of the display name.
-    /// - `Icao`: Group by the first four letters (ICAO code) of the display name.
-    #[serde(default)]
-    pub grouping: StationsGroupMode,
-}
-
-impl Default for StationsProfileConfig {
-    fn default() -> Self {
-        Self {
-            include: vec![],
-            exclude: vec![],
-            priority: vec![
-                "*_FMP".to_string(),
-                "*_CTR".to_string(),
-                "*_APP".to_string(),
-                "*_TWR".to_string(),
-                "*_GND".to_string(),
-            ],
-            aliases: HashMap::new(),
-            frequencies: FrequencyDisplayMode::default(),
-            grouping: StationsGroupMode::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendStationsProfileConfig {
-    pub include: Vec<String>,
-    pub exclude: Vec<String>,
-    pub priority: Vec<String>,
-    pub aliases: HashMap<String, String>,
-    pub frequencies: FrequencyDisplayMode,
-    pub grouping: StationsGroupMode,
-}
-
-impl From<StationsProfileConfig> for FrontendStationsProfileConfig {
-    fn from(stations_profile_config: StationsProfileConfig) -> Self {
-        Self {
-            include: stations_profile_config.include,
-            exclude: stations_profile_config.exclude,
-            priority: stations_profile_config.priority,
-            aliases: stations_profile_config.aliases,
-            frequencies: stations_profile_config.frequencies,
-            grouping: stations_profile_config.grouping,
-        }
     }
 }
 

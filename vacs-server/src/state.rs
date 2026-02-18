@@ -1,3 +1,6 @@
+pub mod calls;
+pub mod clients;
+
 use crate::config;
 use crate::config::AppConfig;
 use crate::ice::provider::IceConfigProvider;
@@ -5,32 +8,35 @@ use crate::metrics::ErrorMetrics;
 use crate::metrics::guards::ClientConnectionGuard;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
+use crate::state::calls::CallManager;
+use crate::state::clients::{ClientManager, ClientSession};
 use crate::store::{Store, StoreBackend};
-use crate::ws::ClientSession;
-use crate::ws::calls::CallStateManager;
 use anyhow::Context;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, broadcast, mpsc, watch};
+use tokio::sync::{broadcast, mpsc, watch};
 use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::{Instrument, instrument};
 use uuid::Uuid;
-use vacs_protocol::ws::{ClientInfo, DisconnectReason, ErrorReason, SignalingMessage};
+use vacs_protocol::profile::{ActiveProfile, ProfileId};
+use vacs_protocol::vatsim::{ClientId, PositionId};
+use vacs_protocol::ws::server::{ClientInfo, DisconnectReason, ServerMessage, StationInfo};
+use vacs_protocol::ws::shared::{Error, ErrorReason};
+use vacs_vatsim::ControllerInfo;
+use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::DataFeed;
 use vacs_vatsim::slurper::SlurperClient;
-use vacs_vatsim::{ControllerInfo, FacilityType};
 
 pub struct AppState {
     pub config: AppConfig,
     pub updates: UpdateChecker,
-    pub call_state: CallStateManager,
+    pub calls: CallManager,
+    pub clients: ClientManager,
     pub ice_config_provider: Arc<dyn IceConfigProvider>,
     store: Store,
-    /// Key: CID
-    clients: RwLock<HashMap<String, ClientSession>>,
-    broadcast_tx: broadcast::Sender<SignalingMessage>,
+    broadcast_tx: broadcast::Sender<ServerMessage>,
     slurper: SlurperClient,
     data_feed: Arc<dyn DataFeed>,
     rate_limiters: RateLimiters,
@@ -45,6 +51,7 @@ impl AppState {
         store: Store,
         slurper: SlurperClient,
         data_feed: Arc<dyn DataFeed>,
+        network: Network,
         rate_limiters: RateLimiters,
         shutdown_rx: watch::Receiver<()>,
         ice_config_provider: Arc<dyn IceConfigProvider>,
@@ -55,8 +62,8 @@ impl AppState {
             updates,
             ice_config_provider,
             store,
-            clients: RwLock::new(HashMap::new()),
-            call_state: CallStateManager::new(),
+            calls: CallManager::new(),
+            clients: ClientManager::new(broadcast_tx.clone(), network),
             broadcast_tx,
             slurper,
             data_feed,
@@ -67,7 +74,7 @@ impl AppState {
 
     pub fn get_client_receivers(
         &self,
-    ) -> (broadcast::Receiver<SignalingMessage>, watch::Receiver<()>) {
+    ) -> (broadcast::Receiver<ServerMessage>, watch::Receiver<()>) {
         (self.broadcast_tx.subscribe(), self.shutdown_rx.clone())
     }
 
@@ -75,36 +82,15 @@ impl AppState {
     pub async fn register_client(
         &self,
         client_info: ClientInfo,
+        active_profile: ActiveProfile<ProfileId>,
         client_connection_guard: ClientConnectionGuard,
-    ) -> anyhow::Result<(ClientSession, mpsc::Receiver<SignalingMessage>)> {
+    ) -> anyhow::Result<(ClientSession, mpsc::Receiver<ServerMessage>)> {
         tracing::trace!("Registering client");
 
-        let client_id = client_info.id.clone();
-        if self.clients.read().await.contains_key(&client_id) {
-            tracing::trace!("Client already exists");
-            anyhow::bail!("Client already exists");
-        }
-
-        let (tx, rx) = mpsc::channel(config::CLIENT_CHANNEL_CAPACITY);
-        let client = ClientSession::new(client_info, tx, client_connection_guard);
-
-        self.clients
-            .write()
-            .await
-            .insert(client_id.to_string(), client.clone());
-
-        if self.broadcast_tx.receiver_count() > 0 {
-            tracing::trace!("Broadcasting client connected message");
-            if let Err(err) = self.broadcast_tx.send(SignalingMessage::ClientConnected {
-                client: client.client_info.clone(),
-            }) {
-                tracing::warn!(?err, "Failed to broadcast client connected message");
-            }
-        } else {
-            tracing::debug!(
-                "No other broadcast receivers subscribed, skipping client connected message"
-            );
-        }
+        let (client, rx) = self
+            .clients
+            .add_client(client_info, active_profile, client_connection_guard)
+            .await?;
 
         tracing::trace!("Client registered");
         Ok((client, rx))
@@ -113,102 +99,59 @@ impl AppState {
     #[instrument(level = "debug", skip(self))]
     pub async fn unregister_client(
         &self,
-        client_id: &str,
+        client_id: &ClientId,
         disconnect_reason: Option<DisconnectReason>,
     ) {
         tracing::trace!("Unregistering client");
 
-        let Some(client) = self.clients.write().await.remove(client_id) else {
-            tracing::debug!("Client not found in client list, skipping unregister");
-            return;
-        };
+        self.clients
+            .remove_client(client_id.clone(), disconnect_reason)
+            .await;
 
-        client.disconnect(disconnect_reason);
-
-        self.call_state.cleanup_client_calls(client_id);
-
-        if self.broadcast_tx.receiver_count() > 1 {
-            tracing::trace!("Broadcasting client disconnected message");
-            if let Err(err) = self
-                .broadcast_tx
-                .send(SignalingMessage::ClientDisconnected {
-                    id: client_id.to_string(),
-                })
-            {
-                tracing::warn!(?err, "Failed to broadcast client disconnected message");
-            }
-        } else {
-            tracing::debug!(
-                "No other broadcast receivers subscribed, skipping client disconnected message"
-            );
-        }
+        self.calls.cleanup_client_calls(self, client_id).await;
 
         tracing::debug!("Client unregistered");
     }
 
-    pub async fn list_clients(&self) -> Vec<ClientInfo> {
-        let mut clients: Vec<ClientInfo> = self
-            .clients
-            .read()
-            .await
-            .values()
-            .map(|c| c.client_info.clone())
-            .collect();
-
-        clients.sort_by(|a, b| a.id.cmp(&b.id));
-        clients
+    pub async fn list_clients(&self, self_client_id: Option<&ClientId>) -> Vec<ClientInfo> {
+        self.clients.list_clients(self_client_id).await
     }
 
-    pub async fn list_clients_without_self(&self, self_client_id: &str) -> Vec<ClientInfo> {
-        self.list_clients()
-            .await
-            .into_iter()
-            .filter(|c| c.id != self_client_id)
-            .collect()
-    }
-
-    pub async fn get_client(&self, client_id: &str) -> Option<ClientSession> {
-        self.clients.read().await.get(client_id).cloned()
-    }
-
-    pub async fn send_message_to_peer(
+    pub async fn list_stations(
         &self,
-        client: &ClientSession,
-        peer_id: &str,
-        message: SignalingMessage,
-    ) {
-        match self.get_client(peer_id).await {
-            Some(peer) => {
-                tracing::trace!(?peer_id, "Sending message to peer");
-                if let Err(err) = peer.send_message(message).await {
-                    tracing::warn!(?err, "Failed to send message to peer");
+        active_profile: &ActiveProfile<ProfileId>,
+        self_position_id: Option<&PositionId>,
+    ) -> Vec<StationInfo> {
+        self.clients
+            .list_stations(active_profile, self_position_id)
+            .await
+    }
+
+    pub async fn get_client(&self, client_id: &ClientId) -> Option<ClientSession> {
+        self.clients.get_client(client_id).await
+    }
+
+    #[tracing::instrument(level = "trace", skip(self, message))]
+    pub async fn send_message(
+        &self,
+        client_id: &ClientId,
+        message: impl Into<ServerMessage>,
+    ) -> Result<(), Error> {
+        match self.get_client(client_id).await {
+            Some(client) => {
+                tracing::trace!("Sending message to client");
+                if let Err(err) = client.send_message(message).await {
+                    tracing::warn!(?err, "Failed to send message to client");
                     ErrorMetrics::error(&ErrorReason::PeerConnection);
-                    if let Err(e) = client
-                        .send_message(SignalingMessage::Error {
-                            reason: ErrorReason::PeerConnection,
-                            peer_id: Some(peer_id.to_string()),
-                        })
-                        .await
-                    {
-                        tracing::warn!(?peer_id, orig_err = ?err, err = ?e, "Failed to send error message to client");
-                    }
+                    Err(Error::new(ErrorReason::PeerConnection).with_client_id(client_id.clone()))
+                } else {
+                    Ok(())
                 }
             }
             None => {
-                tracing::warn!(peer_id, "Peer not found");
+                tracing::warn!("Client not found");
                 ErrorMetrics::peer_not_found();
-                if let Err(err) = client
-                    .send_message(SignalingMessage::PeerNotFound {
-                        peer_id: peer_id.to_string(),
-                    })
-                    .await
-                {
-                    tracing::warn!(
-                        ?peer_id,
-                        ?err,
-                        "Failed to send peer not found message to client"
-                    );
-                }
+                Err(Error::new(ErrorReason::ClientNotFound).with_client_id(client_id.clone()))
             }
         }
     }
@@ -217,7 +160,7 @@ impl AppState {
     pub async fn generate_ws_auth_token(&self, cid: &str) -> anyhow::Result<String> {
         tracing::debug!("Generating web socket auth token");
 
-        let token = Uuid::new_v4().to_string();
+        let token = Uuid::now_v7().to_string();
 
         tracing::trace!("Storing web socket auth token");
         self.store
@@ -234,7 +177,7 @@ impl AppState {
     }
 
     #[instrument(level = "debug", skip_all, err)]
-    pub async fn verify_ws_auth_token(&self, token: &str) -> anyhow::Result<String> {
+    pub async fn verify_ws_auth_token(&self, token: &str) -> anyhow::Result<ClientId> {
         tracing::debug!("Verifying web socket auth token");
 
         match self.store.get(format!("ws.token.{token}").as_str()).await {
@@ -250,16 +193,22 @@ impl AppState {
     #[instrument(level = "debug", skip(self), err)]
     pub async fn get_vatsim_controller_info(
         &self,
-        cid: &str,
+        cid: &ClientId,
     ) -> anyhow::Result<Option<ControllerInfo>> {
         tracing::debug!("Retrieving connection info from VATSIM slurper");
-        self.slurper.get_controller_info(cid).await
+        self.slurper
+            .get_controller_info(cid)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(level = "debug", skip(self), err)]
     pub async fn get_vatsim_controllers(&self) -> anyhow::Result<Vec<ControllerInfo>> {
         tracing::debug!("Retrieving controller info from VATSIM data feed");
-        self.data_feed.fetch_controller_info().await
+        self.data_feed
+            .fetch_controller_info()
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(level = "debug", skip(state))]
@@ -282,7 +231,7 @@ impl AppState {
                             break;
                         }
                         _ = ticker.tick() => {
-                            if state.clients.read().await.is_empty() {
+                            if state.clients.is_empty().await {
                                 tracing::trace!("No clients connected, skipping controller update");
                                 continue;
                             }
@@ -299,121 +248,29 @@ impl AppState {
         )
     }
 
+    pub async fn force_update_controllers(state: &Arc<AppState>) -> anyhow::Result<()> {
+        let mut pending_disconnect = HashSet::new();
+        Self::update_vatsim_controllers(state, &mut pending_disconnect).await
+    }
+
     async fn update_vatsim_controllers(
         state: &Arc<AppState>,
-        pending_disconnect: &mut HashSet<String>,
+        pending_disconnect: &mut HashSet<ClientId>,
     ) -> anyhow::Result<()> {
         let controllers = state.get_vatsim_controllers().await?;
-        let current: HashMap<String, ControllerInfo> = controllers
+        let current: HashMap<ClientId, ControllerInfo> = controllers
             .into_iter()
+            .filter(|c| !c.callsign.ends_with("_SUP"))
             .map(|c| (c.cid.clone(), c))
             .collect();
 
-        let mut updates: Vec<SignalingMessage> = Vec::new();
-        let mut disconnected_clients: Vec<String> = Vec::new();
+        let disconnected_clients = state
+            .clients
+            .sync_vatsim_state(&current, pending_disconnect)
+            .await;
 
-        fn flag_or_disconnect_controller(
-            cid: &str,
-            pending_disconnect: &mut HashSet<String>,
-            disconnected_clients: &mut Vec<String>,
-        ) {
-            if pending_disconnect.remove(cid) {
-                tracing::trace!(
-                    ?cid,
-                    "No active VATSIM connection found after grace period, disconnecting client and sending broadcast"
-                );
-                disconnected_clients.push(cid.to_string());
-            } else {
-                tracing::trace!(
-                    ?cid,
-                    "Client not found in data feed, but active VATSIM connection is required, marking for disconnect"
-                );
-                pending_disconnect.insert(cid.to_string());
-            }
-        }
-
-        {
-            let mut clients = state.clients.write().await;
-            for (cid, session) in clients.iter_mut() {
-                tracing::trace!(?cid, ?session, "Checking session for client info update");
-
-                match current.get(cid) {
-                    Some(controller) if controller.facility_type == FacilityType::Unknown => {
-                        flag_or_disconnect_controller(
-                            cid,
-                            pending_disconnect,
-                            &mut disconnected_clients,
-                        );
-                    }
-                    Some(controller) => {
-                        if pending_disconnect.remove(cid) {
-                            tracing::trace!(
-                                ?cid,
-                                "Found active VATSIM connection for client again, removing pending disconnect"
-                            );
-                        }
-
-                        let mut changed = false;
-                        if session.client_info.display_name != controller.callsign {
-                            tracing::trace!(
-                                ?cid,
-                                old = ?session.client_info.display_name,
-                                new = ?controller.callsign,
-                                "Controller display name changed, updating"
-                            );
-                            session.client_info.display_name = controller.callsign.clone();
-                            changed = true;
-                        }
-                        if session.client_info.frequency != controller.frequency {
-                            tracing::trace!(
-                                ?cid,
-                                old = ?session.client_info.frequency,
-                                new = ?controller.frequency,
-                                "Controller frequency changed, updating"
-                            );
-                            session.client_info.frequency = controller.frequency.clone();
-                            changed = true;
-                        }
-
-                        if changed {
-                            tracing::trace!(?cid, ?session, "Client info updated, broadcasting");
-                            updates.push(SignalingMessage::ClientInfo {
-                                own: false,
-                                info: session.client_info.clone(),
-                            });
-                        } else {
-                            tracing::trace!(
-                                ?cid,
-                                ?session,
-                                ?controller,
-                                "Client info not updated, skipping"
-                            );
-                        }
-                    }
-                    None => flag_or_disconnect_controller(
-                        cid,
-                        pending_disconnect,
-                        &mut disconnected_clients,
-                    ),
-                }
-            }
-        }
-
-        for cid in &disconnected_clients {
-            state
-                .unregister_client(cid, Some(DisconnectReason::NoActiveVatsimConnection))
-                .await;
-            updates.push(SignalingMessage::ClientDisconnected {
-                id: cid.to_string(),
-            });
-        }
-
-        if state.broadcast_tx.receiver_count() > 0 {
-            for msg in updates {
-                if let Err(err) = state.broadcast_tx.send(msg) {
-                    tracing::warn!(?err, "Failed to broadcast client info update");
-                }
-            }
+        for (cid, disconnect_reason) in disconnected_clients {
+            state.unregister_client(&cid, Some(disconnect_reason)).await;
         }
 
         Ok(())

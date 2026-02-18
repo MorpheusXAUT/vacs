@@ -1,3 +1,4 @@
+use crate::vatsim::ClientId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -13,5 +14,5 @@ pub struct AuthExchangeToken {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct UserInfo {
-    pub cid: String,
+    pub cid: ClientId,
 }

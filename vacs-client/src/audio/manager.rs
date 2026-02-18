@@ -18,7 +18,8 @@ use vacs_audio::sources::opus::OpusSource;
 use vacs_audio::sources::waveform::{Waveform, WaveformSource, WaveformTone};
 use vacs_audio::stream::capture::{CaptureStream, InputLevel};
 use vacs_audio::stream::playback::PlaybackStream;
-use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
+use vacs_signaling::protocol::ws::shared;
+use vacs_signaling::protocol::ws::shared::CallErrorReason;
 
 const AUDIO_STREAM_ERROR_CHANNEL_SIZE: usize = 32;
 
@@ -26,9 +27,12 @@ const AUDIO_STREAM_ERROR_CHANNEL_SIZE: usize = 32;
 pub enum SourceType {
     Opus,
     Ring,
+    PriorityRing,
     Ringback,
     RingbackOneshot,
     Click,
+    CallStart,
+    CallEnd,
 }
 
 impl SourceType {
@@ -42,7 +46,7 @@ impl SourceType {
             SourceType::Opus => {
                 unimplemented!("Cannot create waveform source for Opus SourceType")
             }
-            SourceType::Ring => WaveformSource::new(
+            SourceType::Ring => WaveformSource::single(
                 WaveformTone::new(497.0, Waveform::Triangle, 0.2),
                 Duration::from_secs_f32(1.69),
                 None,
@@ -51,7 +55,29 @@ impl SourceType {
                 output_channels,
                 volume,
             ),
-            SourceType::Ringback => WaveformSource::new(
+            SourceType::PriorityRing => WaveformSource::new(
+                [
+                    (
+                        WaveformTone::new(769.0, Waveform::Sine, 0.2),
+                        Duration::from_millis(120),
+                    ),
+                    (
+                        WaveformTone::new(628.0, Waveform::Triangle, 0.13),
+                        Duration::from_millis(80),
+                    ),
+                    (
+                        WaveformTone::new(492.0, Waveform::Triangle, 0.08),
+                        Duration::from_millis(90),
+                    ),
+                ]
+                .repeat(4),
+                None,
+                Duration::from_millis(10),
+                sample_rate,
+                output_channels,
+                volume,
+            ),
+            SourceType::Ringback => WaveformSource::single(
                 WaveformTone::new(425.0, Waveform::Sine, 0.2),
                 Duration::from_secs(1),
                 Some(Duration::from_secs(4)),
@@ -60,7 +86,7 @@ impl SourceType {
                 output_channels,
                 volume,
             ),
-            SourceType::RingbackOneshot => WaveformSource::new(
+            SourceType::RingbackOneshot => WaveformSource::single(
                 WaveformTone::new(425.0, Waveform::Sine, 0.2),
                 Duration::from_secs(1),
                 None,
@@ -69,11 +95,45 @@ impl SourceType {
                 2,
                 volume,
             ),
-            SourceType::Click => WaveformSource::new(
+            SourceType::Click => WaveformSource::single(
                 WaveformTone::new(4000.0, Waveform::Sine, 0.2),
                 Duration::from_millis(20),
                 None,
                 Duration::from_millis(1),
+                sample_rate,
+                output_channels,
+                volume,
+            ),
+            SourceType::CallStart => WaveformSource::new(
+                vec![
+                    (
+                        WaveformTone::new(600.0, Waveform::Sine, 0.2),
+                        Duration::from_millis(100),
+                    ),
+                    (
+                        WaveformTone::new(900.0, Waveform::Sine, 0.15),
+                        Duration::from_millis(100),
+                    ),
+                ],
+                None,
+                Duration::from_millis(10),
+                sample_rate,
+                output_channels,
+                volume,
+            ),
+            SourceType::CallEnd => WaveformSource::new(
+                vec![
+                    (
+                        WaveformTone::new(650.0, Waveform::Sine, 0.2),
+                        Duration::from_millis(100),
+                    ),
+                    (
+                        WaveformTone::new(450.0, Waveform::Sine, 0.15),
+                        Duration::from_millis(100),
+                    ),
+                ],
+                None,
+                Duration::from_millis(10),
                 sample_rate,
                 output_channels,
                 volume,
@@ -143,27 +203,26 @@ impl AudioManager {
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                if let Some(peer_id) = state.active_call_peer_id().cloned() {
-                    log::debug!(
-                        "Ending active call with peer {peer_id} due to capture stream error"
-                    );
+                if let Some(call_id) = state.active_call_id().cloned() {
+                    log::debug!("Ending active call {call_id} due to capture stream error");
 
-                    state.cleanup_call(&peer_id).await;
+                    state.cleanup_call(&call_id).await;
                     if let Err(err) = state
-                        .send_signaling_message(SignalingMessage::CallError {
-                            peer_id: peer_id.clone(),
+                        .send_signaling_message(shared::CallError {
+                            call_id,
                             reason: CallErrorReason::AudioFailure,
+                            message: None,
                         })
                         .await
                     {
                         log::warn!("Failed to send call end signaling message: {:?}", err);
                     };
-                    state.set_outgoing_call_peer_id(None);
+                    state.set_outgoing_call_id(None);
                     app.state::<AudioManagerHandle>()
                         .read()
                         .stop(SourceType::Ringback);
 
-                    app.emit("signaling:call-end", &peer_id).ok();
+                    app.emit("signaling:call-end", &call_id).ok();
                 }
 
                 app.emit::<FrontendError>("error", Error::from(err).into())
@@ -367,27 +426,26 @@ impl AudioManager {
                         anyhow::anyhow!("Audio output device failed to start irrecoverably, check your audio settings and restart the application.")
                     ))).into()).ok();
                 } else {
-                    if let Some(peer_id) = state.active_call_peer_id().cloned() {
-                        log::debug!(
-                            "Ending active call with peer {peer_id} due to playback stream error"
-                        );
+                    if let Some(call_id) = state.active_call_id().cloned() {
+                        log::debug!("Ending active call {call_id} due to playback stream error");
 
-                        state.cleanup_call(&peer_id).await;
+                        state.cleanup_call(&call_id).await;
                         if let Err(err) = state
-                            .send_signaling_message(SignalingMessage::CallError {
-                                peer_id: peer_id.clone(),
+                            .send_signaling_message(shared::CallError {
+                                call_id,
                                 reason: CallErrorReason::AudioFailure,
+                                message: None,
                             })
                             .await
                         {
                             log::warn!("Failed to send call end signaling message: {:?}", err);
                         };
-                        state.set_outgoing_call_peer_id(None);
+                        state.set_outgoing_call_id(None);
                         app.state::<AudioManagerHandle>()
                             .read()
                             .stop(SourceType::Ringback);
 
-                        app.emit("signaling:call-end", &peer_id).ok();
+                        app.emit("signaling:call-end", &call_id).ok();
                     }
 
                     if let Err(err) = app
@@ -429,6 +487,15 @@ impl AudioManager {
             ))),
         );
         source_ids.insert(
+            SourceType::PriorityRing,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::PriorityRing,
+                sample_rate,
+                channels,
+                audio_config.chime_volume,
+            ))),
+        );
+        source_ids.insert(
             SourceType::Ringback,
             output.add_audio_source(Box::new(SourceType::into_waveform_source(
                 SourceType::Ringback,
@@ -453,6 +520,24 @@ impl AudioManager {
                 sample_rate,
                 channels,
                 audio_config.click_volume,
+            ))),
+        );
+        source_ids.insert(
+            SourceType::CallStart,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::CallStart,
+                sample_rate,
+                channels,
+                audio_config.output_device_volume,
+            ))),
+        );
+        source_ids.insert(
+            SourceType::CallEnd,
+            output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                SourceType::CallEnd,
+                sample_rate,
+                channels,
+                audio_config.output_device_volume,
             ))),
         );
 

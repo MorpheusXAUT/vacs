@@ -4,9 +4,10 @@ import {clsx} from "clsx";
 import {startCall, useCallStore} from "../../stores/call-store.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {TargetedEvent} from "preact";
-import {useSignalingStore} from "../../stores/signaling-store.ts";
 import {useAuthStore} from "../../stores/auth-store.ts";
-import {useCallListStore} from "../../stores/call-list-store.ts";
+import {useLastDialledClientId} from "../../stores/call-list-store.ts";
+import {useConnectionStore} from "../../stores/connection-store.ts";
+import {ClientId} from "../../types/generic.ts";
 
 const DIAL_BUTTONS: {digit: string; chars: string}[] = [
     {digit: "1", chars: ""},
@@ -28,11 +29,9 @@ function DialPad() {
     const ownId = useAuthStore(state => state.cid);
     const isDialInputEmpty = dialInput === "";
     const isDialInputOwnId = dialInput === ownId;
-    const isConnected = useSignalingStore(state => state.connectionState === "connected");
+    const isConnected = useConnectionStore(state => state.connectionState === "connected");
     const callDisplay = useCallStore(state => state.callDisplay);
-    const lastDialledPeerId = useCallListStore(
-        state => state.callList.find(item => item.type === "OUT")?.number,
-    );
+    const lastDialledPeerId = useLastDialledClientId();
 
     const handleChange = (event: TargetedEvent<HTMLInputElement>) => {
         if (event.target instanceof HTMLInputElement) {
@@ -48,9 +47,9 @@ function DialPad() {
         }
     };
 
-    const handleStartCall = useAsyncDebounce(async (peerId: string | undefined) => {
-        if (peerId === undefined || callDisplay !== undefined) return;
-        await startCall(peerId);
+    const handleStartCall = useAsyncDebounce(async (clientId: ClientId | undefined) => {
+        if (clientId === undefined || callDisplay !== undefined) return;
+        await startCall({client: clientId});
     });
 
     return (
@@ -91,6 +90,9 @@ function DialPad() {
                         "focus:border-red-500 focus:outline-none",
                     )}
                     onChange={handleChange}
+                    onKeyPress={event =>
+                        event.key === "Enter" && handleStartCall(dialInput as ClientId)
+                    }
                     value={dialInput}
                 />
                 <div className="grid grid-cols-3 gap-3 [&>button]:w-27 mb-3">
@@ -124,7 +126,7 @@ function DialPad() {
                               : undefined
                     }
                     disabled={isDialInputEmpty || isDialInputOwnId || !isConnected}
-                    onClick={() => handleStartCall(dialInput)}
+                    onClick={() => handleStartCall(dialInput as ClientId)}
                 >
                     Call
                 </Button>

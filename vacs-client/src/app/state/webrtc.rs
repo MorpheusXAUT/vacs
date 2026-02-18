@@ -1,5 +1,6 @@
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::{AppState, AppStateInner, sealed};
+use crate::audio::manager::SourceType;
 use crate::config::{ENCODED_AUDIO_FRAME_BUFFER_SIZE, ICE_CONFIG_EXPIRY_LEEWAY};
 use crate::error::{CallError, Error};
 use anyhow::Context;
@@ -11,19 +12,22 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
-use vacs_signaling::protocol::ws::{CallErrorReason, SignalingMessage};
+use vacs_signaling::protocol::vatsim::ClientId;
+use vacs_signaling::protocol::ws::shared;
+use vacs_signaling::protocol::ws::shared::{CallErrorReason, CallId};
 use vacs_webrtc::error::WebrtcError;
 use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
 
 #[derive(Debug)]
 pub struct UnansweredCallGuard {
-    pub peer_id: String,
+    pub call_id: CallId,
     pub cancel: CancellationToken,
     pub handle: JoinHandle<()>,
 }
 
 pub struct Call {
-    pub(super) peer_id: String,
+    pub(super) call_id: CallId,
+    pub(super) peer_id: ClientId,
     peer: Peer,
 }
 
@@ -39,21 +43,22 @@ pub trait AppStateWebrtcExt: sealed::Sealed {
     async fn init_call(
         &mut self,
         app: AppHandle,
-        peer_id: String,
+        call_id: CallId,
+        peer_id: ClientId,
         offer_sdp: Option<String>,
     ) -> Result<String, Error>;
-    async fn accept_call_answer(&self, peer_id: &str, answer_sdp: String) -> Result<(), Error>;
-    async fn set_remote_ice_candidate(&self, peer_id: &str, candidate: String);
-    async fn cleanup_call(&mut self, peer_id: &str) -> bool;
+    async fn accept_call_answer(&self, peer_id: &ClientId, answer_sdp: String)
+    -> Result<(), Error>;
+    async fn set_remote_ice_candidate(&self, call_id: &CallId, candidate: String);
+    async fn cleanup_call(&mut self, call_id: &CallId) -> bool;
     fn emit_call_error(
         &self,
         app: &AppHandle,
-        peer_id: String,
+        call_id: CallId,
         is_local: bool,
         reason: CallErrorReason,
     );
-    fn active_call_peer_id(&self) -> Option<&String>;
-    fn outgoing_call_peer_id(&self) -> Option<&String>;
+    fn active_call_id(&self) -> Option<&CallId>;
     fn set_ice_config(&mut self, config: IceConfig);
     fn is_ice_config_expired(&self) -> bool;
 }
@@ -62,7 +67,8 @@ impl AppStateWebrtcExt for AppStateInner {
     async fn init_call(
         &mut self,
         app: AppHandle,
-        peer_id: String,
+        call_id: CallId,
+        peer_id: ClientId,
         offer_sdp: Option<String>,
     ) -> Result<String, Error> {
         if self.active_call.is_some() {
@@ -95,26 +101,23 @@ impl AppStateWebrtcExt for AppStateInner {
 
                                 let app_state = app.state::<AppState>();
                                 let mut state = app_state.lock().await;
-                                if let Err(err) =
-                                    state.on_peer_connected(&app, &peer_id_clone).await
+                                if let Err(err) = state
+                                    .on_peer_connected(&app, &call_id, &peer_id_clone)
+                                    .await
                                 {
                                     let reason: CallErrorReason = err.into();
-                                    state.cleanup_call(&peer_id_clone).await;
+                                    state.cleanup_call(&call_id).await;
                                     if let Err(err) = state
-                                        .send_signaling_message(SignalingMessage::CallError {
-                                            peer_id: peer_id_clone.clone(),
-                                            reason: reason.clone(),
+                                        .send_signaling_message(shared::CallError {
+                                            call_id,
+                                            reason,
+                                            message: None,
                                         })
                                         .await
                                     {
                                         log::warn!("Failed to send call message: {err:?}");
                                     }
-                                    state.emit_call_error(
-                                        &app,
-                                        peer_id_clone.clone(),
-                                        true,
-                                        reason,
-                                    );
+                                    state.emit_call_error(&app, call_id, true, reason);
                                 }
                             }
                             PeerConnectionState::Disconnected => {
@@ -132,18 +135,18 @@ impl AppStateWebrtcExt for AppStateInner {
                                     audio_manager.detach_input_device();
                                 }
 
-                                app.emit("webrtc:call-disconnected", &peer_id_clone).ok();
+                                app.emit("webrtc:call-disconnected", &call_id).ok();
                             }
                             PeerConnectionState::Failed => {
                                 log::info!("Connection to peer failed");
 
                                 let app_state = app.state::<AppState>();
                                 let mut state = app_state.lock().await;
-                                state.cleanup_call(&peer_id_clone).await;
+                                state.cleanup_call(&call_id).await;
 
                                 state.emit_call_error(
                                     &app,
-                                    peer_id_clone.clone(),
+                                    call_id,
                                     true,
                                     CallErrorReason::WebrtcFailure,
                                 );
@@ -154,8 +157,13 @@ impl AppStateWebrtcExt for AppStateInner {
 
                                 let app_state = app.state::<AppState>();
                                 let mut state = app_state.lock().await;
-                                state.cleanup_call(&peer_id_clone).await;
-                                app.emit("signaling:call-end", &peer_id_clone).ok();
+
+                                if state.config.client.call.enable_call_end_sound {
+                                    state.audio_manager.read().restart(SourceType::CallEnd);
+                                }
+
+                                state.cleanup_call(&call_id).await;
+                                app.emit("signaling:call-end", &call_id).ok();
                             }
                             state => {
                                 log::trace!("Received connection state: {state:?}");
@@ -164,9 +172,17 @@ impl AppStateWebrtcExt for AppStateInner {
                         PeerEvent::IceCandidate(candidate) => {
                             let app_state = app.state::<AppState>();
                             let mut state = app_state.lock().await;
+
+                            let Some(own_client_id) = state.client_id.as_ref().cloned() else {
+                                log::warn!("Cannot send ICE candidate without own client ID");
+                                return;
+                            };
+
                             if let Err(err) = state
-                                .send_signaling_message(SignalingMessage::CallIceCandidate {
-                                    peer_id: peer_id_clone.clone(),
+                                .send_signaling_message(shared::WebrtcIceCandidate {
+                                    call_id,
+                                    from_client_id: own_client_id,
+                                    to_client_id: peer_id_clone.clone(),
                                     candidate,
                                 })
                                 .await
@@ -190,14 +206,22 @@ impl AppStateWebrtcExt for AppStateInner {
             log::trace!("WebRTC events task finished");
         });
 
-        self.active_call = Some(Call { peer_id, peer });
+        self.active_call = Some(Call {
+            call_id,
+            peer_id,
+            peer,
+        });
 
         Ok(sdp)
     }
 
-    async fn accept_call_answer(&self, peer_id: &str, answer_sdp: String) -> Result<(), Error> {
+    async fn accept_call_answer(
+        &self,
+        peer_id: &ClientId,
+        answer_sdp: String,
+    ) -> Result<(), Error> {
         if let Some(call) = &self.active_call {
-            if call.peer_id == peer_id {
+            if call.peer_id == *peer_id {
                 call.peer.accept_answer(answer_sdp).await?;
                 return Ok(());
             } else {
@@ -210,15 +234,15 @@ impl AppStateWebrtcExt for AppStateInner {
         Err(WebrtcError::NoCallActive.into())
     }
 
-    async fn set_remote_ice_candidate(&self, peer_id: &str, candidate: String) {
+    async fn set_remote_ice_candidate(&self, call_id: &CallId, candidate: String) {
         let res = if let Some(call) = &self.active_call
-            && call.peer_id == peer_id
+            && call.call_id == *call_id
         {
             call.peer.add_remote_ice_candidate(candidate).await
-        } else if let Some(call) = self.held_calls.get(peer_id) {
+        } else if let Some(call) = self.held_calls.get(call_id) {
             call.peer.add_remote_ice_candidate(candidate).await
         } else {
-            Err(anyhow::anyhow!("Unknown peer {peer_id}").into())
+            Err(anyhow::anyhow!("Unknown call {call_id:?}").into())
         };
 
         if let Err(err) = res {
@@ -226,13 +250,13 @@ impl AppStateWebrtcExt for AppStateInner {
         }
     }
 
-    async fn cleanup_call(&mut self, peer_id: &str) -> bool {
+    async fn cleanup_call(&mut self, call_id: &CallId) -> bool {
         log::debug!(
-            "Cleaning up call with peer {peer_id} (active: {:?})",
+            "Cleaning up call {call_id:?} (active: {:?})",
             self.active_call.as_ref()
         );
         let res = if let Some(call) = &mut self.active_call
-            && call.peer_id == peer_id
+            && call.call_id == *call_id
         {
             {
                 let mut audio_manager = self.audio_manager.write();
@@ -245,10 +269,10 @@ impl AppStateWebrtcExt for AppStateInner {
             let result = call.peer.close().await;
             self.active_call = None;
             result
-        } else if let Some(mut call) = self.held_calls.remove(peer_id) {
+        } else if let Some(mut call) = self.held_calls.remove(call_id) {
             call.peer.close().await
         } else {
-            Err(anyhow::anyhow!("Unknown peer {peer_id}").into())
+            Err(anyhow::anyhow!("Unknown call {call_id:?}").into())
         };
 
         if let Err(err) = &res {
@@ -262,23 +286,19 @@ impl AppStateWebrtcExt for AppStateInner {
     fn emit_call_error(
         &self,
         app: &AppHandle,
-        peer_id: String,
+        call_id: CallId,
         is_local: bool,
         reason: CallErrorReason,
     ) {
         app.emit(
             "webrtc:call-error",
-            CallError::new(peer_id, is_local, reason),
+            CallError::new(call_id, is_local, reason),
         )
         .ok();
     }
 
-    fn active_call_peer_id(&self) -> Option<&String> {
-        self.active_call.as_ref().map(|call| &call.peer_id)
-    }
-
-    fn outgoing_call_peer_id(&self) -> Option<&String> {
-        self.outgoing_call_peer_id.as_ref()
+    fn active_call_id(&self) -> Option<&CallId> {
+        self.active_call.as_ref().map(|call| &call.call_id)
     }
 
     fn set_ice_config(&mut self, config: IceConfig) {
@@ -315,9 +335,14 @@ impl AppStateWebrtcExt for AppStateInner {
 }
 
 impl AppStateInner {
-    async fn on_peer_connected(&mut self, app: &AppHandle, peer_id: &str) -> Result<(), Error> {
+    async fn on_peer_connected(
+        &mut self,
+        app: &AppHandle,
+        call_id: &CallId,
+        peer_id: &ClientId,
+    ) -> Result<(), Error> {
         if let Some(call) = &mut self.active_call
-            && call.peer_id == peer_id
+            && call.peer_id == *peer_id
         {
             let (output_tx, output_rx) = mpsc::channel(ENCODED_AUDIO_FRAME_BUFFER_SIZE);
             let (input_tx, input_rx) = mpsc::channel(ENCODED_AUDIO_FRAME_BUFFER_SIZE);
@@ -357,13 +382,17 @@ impl AppStateInner {
                 return Err(err);
             }
 
+            if self.config.client.call.enable_call_start_sound {
+                audio_manager.restart(SourceType::CallStart);
+            }
+
             log::info!("Successfully established call to peer");
-            app.emit("webrtc:call-connected", peer_id).ok();
+            app.emit("webrtc:call-connected", call_id).ok();
         } else {
             log::debug!("Peer connected is not the active call, checking held calls");
-            if self.held_calls.contains_key(peer_id) {
+            if self.held_calls.contains_key(call_id) {
                 log::info!("Held peer connection with peer {peer_id} reconnected");
-                app.emit("webrtc:call-connected", peer_id).ok();
+                app.emit("webrtc:call-connected", call_id).ok();
             } else {
                 log::debug!("Peer {peer_id} is not held, ignoring");
             }

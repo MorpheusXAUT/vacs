@@ -1,48 +1,85 @@
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
-import {useSignalingStore} from "../stores/signaling-store.ts";
-import {ClientInfo} from "../types/client-info.ts";
+import {useClientsStore} from "../stores/clients-store.ts";
+import {ClientInfo, ClientPageSettings, SessionInfo} from "../types/client.ts";
 import {useCallStore} from "../stores/call-store.ts";
+import {
+    IncomingCallListEntry,
+    CallListUpdate,
+    useCallListStore,
+} from "../stores/call-list-store.ts";
+import {useConnectionStore} from "../stores/connection-store.ts";
+import {CallId, ClientId, PositionId} from "../types/generic.ts";
+import {useProfileStore} from "../stores/profile-store.ts";
+import {StationChange, StationInfo} from "../types/station.ts";
+import {useStationsStore} from "../stores/stations-store.ts";
+import {Call} from "../types/call.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
-import {useCallListStore} from "../stores/call-list-store.ts";
-import {StationsConfig} from "../types/stations.ts";
+import {Profile} from "../types/profile.ts";
+import {navigate} from "wouter/use-browser-location";
+import {useSettingsStore} from "../stores/settings-store.ts";
+import {useFilterStore} from "../stores/filter-store.ts";
 
 export function setupSignalingListeners() {
-    const {
-        setConnectionState,
-        setClientInfo,
-        setClients,
-        addClient,
-        getClientInfo,
-        removeClient,
-        setStationsConfig,
-    } = useSignalingStore.getState();
+    const {setClients, addClient, removeClient} = useClientsStore.getState();
+    const {setStations, addStationChanges, reset: resetStationsStore} = useStationsStore.getState();
     const {
         addIncomingCall,
-        removePeer,
-        rejectPeer,
-        acceptCall,
+        removeCall,
+        rejectCall,
+        acceptIncomingCall,
+        setOutgoingCallAccepted,
         reset: resetCallStore,
     } = useCallStore.getState().actions;
-    const {open: openErrorOverlay} = useErrorOverlayStore.getState();
-    const {addCall: addCallToCallList, clearCallList} = useCallListStore.getState().actions;
+    const {
+        addIncomingCall: addIncomingCallToCallList,
+        updateCall: updateCallInCallList,
+        clearCallList,
+    } = useCallListStore.getState().actions;
+    const {setConnectionState, setConnectionInfo, setPositionsToSelect} =
+        useConnectionStore.getState();
+    const {setProfile, reset: resetProfileStore} = useProfileStore.getState();
+    const {open: openErrorOverlay, closeIfTitle: closeErrorOverlayIfTitle} =
+        useErrorOverlayStore.getState();
+    const {setFilter} = useFilterStore.getState();
+    const {setClientPageSettings} = useSettingsStore.getState();
 
     const unlistenFns: Promise<UnlistenFn>[] = [];
 
     const init = () => {
         unlistenFns.push(
-            listen<ClientInfo>("signaling:connected", event => {
+            listen<SessionInfo>("signaling:connected", event => {
                 setConnectionState("connected");
-                setClientInfo(event.payload);
+                setConnectionInfo(event.payload.client);
+                if (
+                    event.payload.profile.type === "changed" &&
+                    event.payload.profile.activeProfile !== undefined &&
+                    event.payload.profile.activeProfile.profile !== undefined
+                ) {
+                    setProfile(event.payload.profile.activeProfile.profile);
+                }
             }),
             listen("signaling:reconnecting", () => {
                 setConnectionState("connecting");
             }),
             listen("signaling:disconnected", () => {
                 setConnectionState("disconnected");
-                setClientInfo({displayName: "", frequency: ""});
+                setConnectionInfo({displayName: "", positionId: undefined, frequency: ""});
                 setClients([]);
+                resetStationsStore();
                 resetCallStore();
                 clearCallList();
+                resetProfileStore();
+                setFilter("");
+            }),
+            listen<PositionId[]>("signaling:ambiguous-position", event => {
+                setConnectionState("connecting");
+                setPositionsToSelect(event.payload);
+            }),
+            listen<StationInfo[]>("signaling:station-list", event => {
+                setStations(event.payload);
+            }),
+            listen<StationChange[]>("signaling:station-changes", event => {
+                addStationChanges(event.payload);
             }),
             listen<ClientInfo[]>("signaling:client-list", event => {
                 setClients(event.payload);
@@ -50,51 +87,54 @@ export function setupSignalingListeners() {
             listen<ClientInfo>("signaling:client-connected", event => {
                 addClient(event.payload);
             }),
-            listen<string>("signaling:client-disconnected", event => {
+            listen<ClientId>("signaling:client-disconnected", event => {
                 removeClient(event.payload);
-                removePeer(event.payload);
             }),
-            listen<string>("signaling:call-invite", event => {
-                addIncomingCall(getClientInfo(event.payload));
-            }),
-            listen<string>("signaling:call-accept", event => {
-                acceptCall(getClientInfo(event.payload));
-            }),
-            listen<string>("signaling:call-end", event => {
-                removePeer(event.payload, true);
-            }),
-            listen<string>("signaling:force-call-end", event => {
-                removePeer(event.payload);
-            }),
-            listen<string>("signaling:call-reject", event => {
-                rejectPeer(event.payload);
-            }),
-            listen<string>("signaling:peer-not-found", event => {
+            listen<ClientId>("signaling:client-not-found", event => {
                 removeClient(event.payload);
-                removePeer(event.payload);
                 openErrorOverlay(
-                    "Peer not found",
-                    `Cannot find peer with CID ${event.payload}`,
+                    "Client not found",
+                    `Server cannot find a client with CID ${event.payload}`,
                     false,
                     5000,
                 );
             }),
-            listen<{incoming: boolean; peerId: string}>("signaling:add-to-call-list", event => {
-                const clientInfo = getClientInfo(event.payload.peerId);
-                addCallToCallList({
-                    type: event.payload.incoming ? "IN" : "OUT",
-                    time: new Date().toLocaleString("de-AT", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: "UTC",
-                    }),
-                    name: clientInfo.displayName,
-                    number: event.payload.peerId,
-                });
+            listen<Call>("signaling:call-invite", event => {
+                addIncomingCall(event.payload);
             }),
-            listen<StationsConfig>("signaling:stations-config", event => {
-                console.log("Received stations config:", event.payload);
-                setStationsConfig(event.payload);
+            listen<CallId>("signaling:accept-incoming-call", event => {
+                acceptIncomingCall(event.payload);
+            }),
+            listen<{callId: CallId; acceptingClientId: ClientId}>(
+                "signaling:outgoing-call-accepted",
+                event => {
+                    setOutgoingCallAccepted(event.payload.callId, event.payload.acceptingClientId);
+                },
+            ),
+            listen<CallId>("signaling:call-end", event => {
+                removeCall(event.payload, true);
+            }),
+            listen<CallId>("signaling:force-call-end", event => {
+                removeCall(event.payload);
+            }),
+            listen<CallId>("signaling:call-reject", event => {
+                rejectCall(event.payload);
+            }),
+            listen<IncomingCallListEntry>("signaling:add-incoming-to-call-list", event => {
+                addIncomingCallToCallList(event.payload);
+            }),
+            listen<CallListUpdate>("signaling:update-call-list", event => {
+                updateCallInCallList(event.payload);
+            }),
+            listen<Profile>("signaling:test-profile", event => {
+                closeErrorOverlayIfTitle("Profile error");
+                setConnectionState("test");
+                resetProfileStore(false);
+                setProfile(event.payload);
+                navigate("/");
+            }),
+            listen<ClientPageSettings>("signaling:client-page-config", event => {
+                setClientPageSettings(event.payload);
             }),
         );
     };
