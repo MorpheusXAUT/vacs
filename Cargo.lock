@@ -7829,9 +7829,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.0.2+spec-1.1.0"
+version = "1.0.3+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1dfefef6a142e93f346b64c160934eb13b5594b84ab378133ac6815cb2bd57f"
+checksum = "c7614eaf19ad818347db24addfa201729cf2a9b6fdfd9eb0ab870fcacc606c0c"
 dependencies = [
  "indexmap 2.11.4",
  "serde_core",
@@ -8462,7 +8462,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
- "toml 1.0.2+spec-1.1.0",
+ "toml 1.0.3+spec-1.1.0",
  "trackaudio",
  "url",
  "vacs-audio",
@@ -8526,7 +8526,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
- "toml 1.0.2+spec-1.1.0",
+ "toml 1.0.3+spec-1.1.0",
  "tower-http",
  "tower-sessions",
  "tower-sessions-redis-store",
@@ -8574,7 +8574,7 @@ dependencies = [
  "test-log",
  "thiserror 2.0.18",
  "tokio",
- "toml 1.0.2+spec-1.1.0",
+ "toml 1.0.3+spec-1.1.0",
  "tracing",
  "vacs-protocol",
  "wiremock",
