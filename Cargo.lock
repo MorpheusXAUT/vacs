@@ -8559,7 +8559,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-vatsim"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "bytes",
