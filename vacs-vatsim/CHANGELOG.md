@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.0.0](https://github.com/MorpheusXAUT/vacs/compare/vacs-vatsim-v0.2.1...vacs-vatsim-v1.0.0) (2026-02-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* implement station coverage calculations and calling ([#452](https://github.com/MorpheusXAUT/vacs/issues/452))
+* overhaul UI with geo/tabbed layout and station-based calling ([#531](https://github.com/MorpheusXAUT/vacs/issues/531))
+
+### Features
+
+* add priority calls ([#504](https://github.com/MorpheusXAUT/vacs/issues/504)) ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* implement station coverage calculations and calling ([#452](https://github.com/MorpheusXAUT/vacs/issues/452)) ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* overhaul UI with geo/tabbed layout and station-based calling ([#531](https://github.com/MorpheusXAUT/vacs/issues/531)) ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** add call start and end sounds ([#505](https://github.com/MorpheusXAUT/vacs/issues/505)) ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** add keybind for toggling radio prio ([#500](https://github.com/MorpheusXAUT/vacs/issues/500)) ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** add window zoom hotkeys ([#522](https://github.com/MorpheusXAUT/vacs/issues/522)) ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** implement telephone directory ([#490](https://github.com/MorpheusXAUT/vacs/issues/490)) ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+
+
+### Bug Fixes
+
+* **vacs-client:** fix error while switching to exclusive audio device ([#498](https://github.com/MorpheusXAUT/vacs/issues/498)) ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** prevent call queue from shrinking ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-server:** ignore datafeed SUP connection ([#480](https://github.com/MorpheusXAUT/vacs/issues/480)) ([384131b](https://github.com/MorpheusXAUT/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+
 ## [0.2.1](https://github.com/MorpheusXAUT/vacs/compare/vacs-vatsim-v0.2.0...vacs-vatsim-v0.2.1) (2025-12-05)
 
 
