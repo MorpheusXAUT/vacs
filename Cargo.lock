@@ -214,9 +214,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
 
 [[package]]
 name = "arbitrary"
@@ -8407,7 +8407,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-audio"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "audioadapter-buffers",
@@ -8428,7 +8428,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-client"
-version = "1.3.1"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "ashpd",
@@ -8484,7 +8484,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-protocol"
-version = "1.1.0"
+version = "2.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -8493,7 +8493,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-server"
-version = "1.1.1"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8540,7 +8540,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-signaling"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -8559,7 +8559,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-vatsim"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8582,7 +8582,7 @@ dependencies = [
 
 [[package]]
 name = "vacs-webrtc"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "serde_json",

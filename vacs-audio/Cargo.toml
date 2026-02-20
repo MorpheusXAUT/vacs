@@ -1,6 +1,6 @@
 [package]
 name = "vacs-audio"
-version = "0.3.0"
+version = "1.0.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
