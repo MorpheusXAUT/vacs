@@ -19,7 +19,7 @@ repository = "https://github.com/MorpheusXAUT/vacs"
 publish = false
 
 [workspace.dependencies]
-anyhow = "1.0.101"
+anyhow = "1.0.102"
 # we **NEED** to keep the ashpd version and especially feature flags 100% identical to the ones rfd currently uses,
 # otherwise our deep-link IPC suddenly breaks under Linux. Don't ask why. And especially don't ask how long it took to
 # figure this out.
