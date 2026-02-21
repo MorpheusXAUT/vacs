@@ -21,6 +21,7 @@ pub struct ClientManager {
     clients: RwLock<HashMap<ClientId, ClientSession>>,
     online_positions: RwLock<HashMap<PositionId, HashSet<ClientId>>>,
     online_stations: RwLock<HashMap<StationId, PositionId>>,
+    vatsim_only_positions: RwLock<HashSet<PositionId>>,
 }
 
 impl ClientManager {
@@ -31,6 +32,7 @@ impl ClientManager {
             clients: RwLock::new(HashMap::new()),
             online_positions: RwLock::new(HashMap::new()),
             online_stations: RwLock::new(HashMap::new()),
+            vatsim_only_positions: RwLock::new(HashSet::new()),
         }
     }
 
@@ -69,6 +71,55 @@ impl ClientManager {
 
     pub fn network(&self) -> &Network {
         &self.network
+    }
+
+    /// Transforms station changes to only include changes visible to vacs clients.
+    /// Stations covered solely by VATSIM-only positions are not callable, so:
+    /// - `Online` for a VATSIM-only position is dropped
+    /// - `Offline` for a station whose *previous* covering position was VATSIM-only is dropped
+    ///   (clients never knew it was online)
+    /// - `Handoff` to a VATSIM-only position becomes `Offline` (station leaves vacs coverage)
+    /// - `Handoff` from a VATSIM-only position becomes `Online` (station enters vacs coverage)
+    fn client_visible_changes(
+        changes: &[StationChange],
+        online_positions: &HashMap<PositionId, HashSet<ClientId>>,
+    ) -> Vec<StationChange> {
+        changes
+            .iter()
+            .filter_map(|change| match change {
+                StationChange::Online { position_id, .. } => {
+                    if online_positions.contains_key(position_id) {
+                        Some(change.clone())
+                    } else {
+                        None
+                    }
+                }
+                StationChange::Handoff {
+                    station_id,
+                    from_position_id,
+                    to_position_id,
+                } => {
+                    let from_vacs = online_positions.contains_key(from_position_id);
+                    let to_vacs = online_positions.contains_key(to_position_id);
+                    match (from_vacs, to_vacs) {
+                        // vacs -> vacs: normal handoff
+                        (true, true) => Some(change.clone()),
+                        // vacs -> VATSIM-only: station leaves vacs coverage
+                        (true, false) => Some(StationChange::Offline {
+                            station_id: station_id.clone(),
+                        }),
+                        // VATSIM-only -> vacs: station enters vacs coverage
+                        (false, true) => Some(StationChange::Online {
+                            station_id: station_id.clone(),
+                            position_id: to_position_id.clone(),
+                        }),
+                        // VATSIM-only -> VATSIM-only: invisible to clients
+                        (false, false) => None,
+                    }
+                }
+                StationChange::Offline { .. } => Some(change.clone()),
+            })
+            .collect()
     }
 
     #[instrument(level = "debug", skip(self, client_connection_guard), err)]
@@ -120,10 +171,14 @@ impl ClientManager {
                 Vec::new()
             } else {
                 tracing::trace!(?position_id, "Adding position to online positions list");
-                let current_positions = online_positions.keys().collect::<HashSet<_>>();
-                let changes =
+                let vatsim_only = self.vatsim_only_positions.read().await;
+                let all_positions: HashSet<&PositionId> =
+                    online_positions.keys().chain(vatsim_only.iter()).collect();
+                let all_changes =
                     self.network
-                        .coverage_changes(None, Some(position_id), &current_positions);
+                        .coverage_changes(None, Some(position_id), &all_positions);
+                drop(vatsim_only);
+
                 online_positions
                     .insert(position_id.clone(), HashSet::from([client_info.id.clone()]));
 
@@ -131,9 +186,9 @@ impl ClientManager {
                     ?position_id,
                     "Updating online stations list after position addition"
                 );
-                self.update_online_stations(&changes).await;
+                self.update_online_stations(&all_changes).await;
 
-                changes
+                Self::client_visible_changes(&all_changes, &online_positions)
             }
         } else {
             tracing::trace!(
@@ -176,10 +231,13 @@ impl ClientManager {
                 if online_positions.get(position_id).unwrap().len() == 1 {
                     tracing::trace!(?position_id, "Removing position from online positions list");
 
-                    let current_positions = online_positions.keys().collect::<HashSet<_>>();
-                    let changes_vec =
-                        self.network
-                            .coverage_changes(Some(position_id), None, &current_positions);
+                    let vatsim_only = self.vatsim_only_positions.read().await;
+                    let before_all: HashSet<&PositionId> =
+                        online_positions.keys().chain(vatsim_only.iter()).collect();
+                    let mut after_all = before_all.clone();
+                    after_all.remove(position_id);
+                    let all_changes = self.network.coverage_diff(&before_all, &after_all);
+                    drop(vatsim_only);
 
                     online_positions.remove(position_id);
 
@@ -187,9 +245,12 @@ impl ClientManager {
                         ?position_id,
                         "Updating online stations list after position removal"
                     );
-                    self.update_online_stations(&changes_vec).await;
+                    self.update_online_stations(&all_changes).await;
 
-                    changes.extend(changes_vec);
+                    changes.extend(Self::client_visible_changes(
+                        &all_changes,
+                        &online_positions,
+                    ));
                 } else {
                     tracing::trace!(
                         ?position_id,
@@ -221,6 +282,14 @@ impl ClientManager {
             tracing::warn!(?err, "Failed to broadcast client disconnected message");
         }
 
+        if self.clients.read().await.is_empty() {
+            tracing::debug!(
+                "Last client disconnected, clearing VATSIM-only positions and online stations"
+            );
+            self.vatsim_only_positions.write().await.clear();
+            self.online_stations.write().await.clear();
+        }
+
         self.broadcast_station_changes(&changes).await;
 
         tracing::debug!("Client removed");
@@ -247,10 +316,12 @@ impl ClientManager {
     ) -> Vec<StationInfo> {
         let relevant_stations = self.network.relevant_stations(profile);
         let online_stations = self.online_stations.read().await;
+        let online_positions = self.online_positions.read().await;
 
         let mut stations: Vec<StationInfo> = match relevant_stations {
             RelevantStations::All => online_stations
                 .iter()
+                .filter(|(_, position_id)| online_positions.contains_key(*position_id))
                 .map(|(id, controller)| {
                     let own = self_position_id
                         .map(|self_pos| controller == self_pos)
@@ -264,14 +335,16 @@ impl ClientManager {
             RelevantStations::Subset(ids) => ids
                 .iter()
                 .filter_map(|id| {
-                    online_stations.get(id).map(|controller| {
-                        let own = self_position_id
-                            .map(|self_pos| controller == self_pos)
-                            .unwrap_or(false);
-                        StationInfo {
-                            id: id.clone(),
-                            own,
-                        }
+                    online_stations.get(id).and_then(|controller| {
+                        online_positions.contains_key(controller).then(|| {
+                            let own = self_position_id
+                                .map(|self_pos| controller == self_pos)
+                                .unwrap_or(false);
+                            StationInfo {
+                                id: id.clone(),
+                                own,
+                            }
+                        })
                     })
                 })
                 .collect(),
@@ -316,6 +389,7 @@ impl ClientManager {
         &self,
         controllers: &HashMap<ClientId, ControllerInfo>,
         pending_disconnect: &mut HashSet<ClientId>,
+        require_active_connection: bool,
     ) -> Vec<(ClientId, DisconnectReason)> {
         let mut updates: Vec<ServerMessage> = Vec::new();
         let mut disconnected_clients: Vec<(ClientId, DisconnectReason)> = Vec::new();
@@ -324,7 +398,13 @@ impl ClientManager {
         {
             let mut clients = self.clients.write().await;
             let mut online_positions = self.online_positions.write().await;
-            let start_online_positions = online_positions.keys().cloned().collect::<HashSet<_>>();
+            let mut vatsim_only = self.vatsim_only_positions.write().await;
+
+            let start_all_positions: HashSet<PositionId> = online_positions
+                .keys()
+                .chain(vatsim_only.iter())
+                .cloned()
+                .collect();
             let mut positions_changed = false;
 
             fn disconnect_or_mark_pending(
@@ -353,18 +433,22 @@ impl ClientManager {
 
                 match controllers.get(cid) {
                     Some(controller) if controller.facility_type == FacilityType::Unknown => {
-                        disconnect_or_mark_pending(
-                            cid,
-                            pending_disconnect,
-                            &mut disconnected_clients,
-                        );
+                        if require_active_connection {
+                            disconnect_or_mark_pending(
+                                cid,
+                                pending_disconnect,
+                                &mut disconnected_clients,
+                            );
+                        }
                     }
                     None => {
-                        disconnect_or_mark_pending(
-                            cid,
-                            pending_disconnect,
-                            &mut disconnected_clients,
-                        );
+                        if require_active_connection {
+                            disconnect_or_mark_pending(
+                                cid,
+                                pending_disconnect,
+                                &mut disconnected_clients,
+                            );
+                        }
                     }
                     Some(controller) => {
                         if pending_disconnect.remove(cid) {
@@ -482,16 +566,48 @@ impl ClientManager {
                 }
             }
 
+            let vacs_client_ids: HashSet<&ClientId> = clients.keys().collect();
+            let mut new_vatsim_only: HashSet<PositionId> = HashSet::new();
+
+            for (cid, controller) in controllers {
+                if controller.facility_type == FacilityType::Unknown
+                    || vacs_client_ids.contains(cid)
+                {
+                    continue;
+                }
+                let positions = self.network.find_positions(
+                    &controller.callsign,
+                    &controller.frequency,
+                    controller.facility_type,
+                );
+                if positions.len() == 1 && !online_positions.contains_key(&positions[0].id) {
+                    new_vatsim_only.insert(positions[0].id.clone());
+                }
+            }
+
+            if *vatsim_only != new_vatsim_only {
+                tracing::debug!(
+                    before = vatsim_only.len(),
+                    after = new_vatsim_only.len(),
+                    "VATSIM-only positions changed"
+                );
+                *vatsim_only = new_vatsim_only;
+                positions_changed = true;
+            }
+
             if positions_changed {
                 tracing::debug!("Online positions changed, calculating coverage changes");
-                let start_online_positions = start_online_positions.iter().collect::<HashSet<_>>();
-                let end_online_positions = online_positions.keys().collect::<HashSet<_>>();
+                let start_all = start_all_positions.iter().collect::<HashSet<_>>();
+                let end_all: HashSet<&PositionId> =
+                    online_positions.keys().chain(vatsim_only.iter()).collect();
 
-                let changes = self
-                    .network
-                    .coverage_diff(&start_online_positions, &end_online_positions);
-                self.update_online_stations(&changes).await;
-                coverage_changes.extend(changes);
+                let all_changes = self.network.coverage_diff(&start_all, &end_all);
+                self.update_online_stations(&all_changes).await;
+
+                coverage_changes.extend(Self::client_visible_changes(
+                    &all_changes,
+                    &online_positions,
+                ));
             }
         }
 
