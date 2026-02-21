@@ -1,20 +1,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "plugins": [
-    "cargo-workspace",
-    "node-workspace"
-  ],
   "separate-pull-requests": true,
   "include-component-in-tag": true,
   "include-v-in-tag": true,
   "tag-separator": "-",
   "packages": {
-    "vacs-audio": {
-      "release-type": "rust",
-      "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-audio",
-      "skip-github-release": true
-    },
     "vacs-client": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
@@ -32,40 +22,10 @@
         }
       ]
     },
-    "vacs-macros": {
-      "release-type": "rust",
-      "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-macros",
-      "skip-github-release": true
-    },
-    "vacs-protocol": {
-      "release-type": "rust",
-      "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-protocol",
-      "skip-github-release": true
-    },
     "vacs-server": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
       "extra-label": "crate: vacs-server",
-      "skip-github-release": true
-    },
-    "vacs-signaling": {
-      "release-type": "rust",
-      "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-signaling",
-      "skip-github-release": true
-    },
-    "vacs-vatsim": {
-      "release-type": "rust",
-      "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-vatsim",
-      "skip-github-release": true
-    },
-    "vacs-webrtc": {
-      "release-type": "rust",
-      "changelog-path": "CHANGELOG.md",
-      "extra-label": "crate: vacs-webrtc",
       "skip-github-release": true
     }
   }
