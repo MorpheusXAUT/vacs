@@ -143,7 +143,7 @@ impl Default for BackendConfig {
 }
 
 impl BackendConfig {
-    pub fn endpoint_url(&self, endpoint: BackendEndpoint) -> String {
+    pub fn endpoint_url(&self, endpoint: &BackendEndpoint) -> String {
         let path = match endpoint {
             BackendEndpoint::InitAuth => &self.endpoints.init_auth,
             BackendEndpoint::ExchangeCode => &self.endpoints.exchange_code,
@@ -167,6 +167,15 @@ pub enum BackendEndpoint {
     TerminateWsSession,
     VersionUpdateCheck,
     IceConfig,
+}
+
+impl BackendEndpoint {
+    pub const fn timeout(&self) -> Option<Duration> {
+        match self {
+            Self::ExchangeCode => Some(Duration::from_secs(2)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
