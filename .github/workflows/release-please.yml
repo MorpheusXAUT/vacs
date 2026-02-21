@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Generate GitHub token
-        uses: actions/create-github-app-token@v2.2.1
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         id: generate-token
         with:
           app-id: ${{ secrets.APP_ID }}
@@ -29,7 +29,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           repository: vacs
 
-      - uses: googleapis/release-please-action@v4.4.0
+      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: release
         with:
           target-branch: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref != '' && github.event.inputs.ref || github.ref_name }}
@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Generate GitHub token
-        uses: actions/create-github-app-token@v2.2.1
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         id: generate-token
         with:
           app-id: ${{ secrets.APP_ID }}
@@ -55,7 +55,7 @@ jobs:
           repository: vacs
 
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ matrix.pr.headBranchName }}
           fetch-depth: 0
@@ -65,7 +65,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2.8.2
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
         with:
           shared-key: "ubuntu-22.04-x86_64"
 
@@ -74,7 +74,7 @@ jobs:
 
       - name: Setup Node (LTS)
         if: contains(join(matrix.pr.files, ','), 'vacs-client')
-        uses: actions/setup-node@v6.2.0
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: "lts/*"
           cache: "npm"
