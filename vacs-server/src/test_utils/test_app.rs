@@ -40,6 +40,7 @@ impl TestApp {
                 slurper_base_url: Default::default(),
                 controller_update_interval: Default::default(),
                 data_feed_url: Default::default(),
+                data_feed_timeout: Default::default(),
                 coverage_dir: Default::default(),
             },
             ..Default::default()

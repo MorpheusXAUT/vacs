@@ -8,7 +8,6 @@ use std::time::{Duration, Instant};
 use tracing::instrument;
 use vacs_protocol::vatsim::ClientId;
 
-const DATA_FEED_DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(1);
 const DATA_FEED_DEFAULT_CACHE_TTL: Duration = Duration::from_secs(15);
 
 #[derive(Debug)]
@@ -20,10 +19,10 @@ pub struct VatsimDataFeed {
 }
 
 impl VatsimDataFeed {
-    pub fn new(url: &str) -> Result<Self> {
+    pub fn new(url: &str, timeout: Duration) -> Result<Self> {
         let client = reqwest::ClientBuilder::new()
             .user_agent(crate::APP_USER_AGENT)
-            .timeout(DATA_FEED_DEFAULT_HTTP_TIMEOUT)
+            .timeout(timeout)
             .build()
             .map_err(DataFeedError::from)?;
 

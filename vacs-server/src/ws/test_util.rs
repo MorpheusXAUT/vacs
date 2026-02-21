@@ -107,6 +107,7 @@ impl TestSetup {
                 slurper_base_url: Default::default(),
                 controller_update_interval: Default::default(),
                 data_feed_url: Default::default(),
+                data_feed_timeout: Default::default(),
                 coverage_dir: coverage_dir.path().to_str().unwrap().to_string(),
             },
             ..Default::default()
