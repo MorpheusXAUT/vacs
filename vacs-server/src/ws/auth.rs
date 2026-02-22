@@ -105,6 +105,7 @@ async fn process_login_request(
             ActiveProfile::Custom
         } else {
             position
+                .as_ref()
                 .and_then(|p| {
                     p.profile_id
                         .as_ref()
@@ -115,7 +116,7 @@ async fn process_login_request(
 
         let client_info = ClientInfo {
             id: cid.clone(),
-            position_id: position.map(|p| p.id.clone()),
+            position_id: position.map(|p| p.id),
             display_name: cid.to_string(),
             frequency: "".to_string(),
         };
@@ -166,9 +167,9 @@ async fn resolve_vatsim_position(
                     None
                 } else if positions.len() == 1 {
                     tracing::trace!(?cid, ?controller_info, position = ?positions[0], "Found matching position");
-                    Some(positions[0])
+                    Some(&positions[0])
                 } else if let Some(target_pid) = position_id.as_ref() {
-                    if let Some(position) = positions.into_iter().find(|p| &p.id == target_pid) {
+                    if let Some(position) = positions.iter().find(|p| &p.id == target_pid) {
                         tracing::trace!(
                             ?cid,
                             ?controller_info,

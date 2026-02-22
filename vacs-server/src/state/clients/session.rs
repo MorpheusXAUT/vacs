@@ -203,7 +203,7 @@ impl ClientSession {
                     ActiveProfile::Specific(profile_id) => {
                         let profile = app_state.clients.get_profile(Some(profile_id));
                         profile
-                            .map(|p| SessionProfile::Changed(ActiveProfile::Specific(p.into())))
+                            .map(|p| SessionProfile::Changed(ActiveProfile::Specific((&p).into())))
                             .unwrap_or(SessionProfile::Changed(ActiveProfile::None))
                     }
                     ActiveProfile::Custom => SessionProfile::Changed(ActiveProfile::Custom),

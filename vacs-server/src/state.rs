@@ -311,4 +311,8 @@ impl AppState {
     pub fn rate_limiters(&self) -> &RateLimiters {
         &self.rate_limiters
     }
+
+    pub fn replace_network(&self, network: Network) {
+        self.clients.replace_network(network);
+    }
 }

@@ -17,7 +17,7 @@ use vacs_vatsim::{ControllerInfo, FacilityType};
 #[derive(Debug)]
 pub struct ClientManager {
     broadcast_tx: broadcast::Sender<ServerMessage>,
-    network: Network,
+    network: parking_lot::RwLock<Network>,
     clients: RwLock<HashMap<ClientId, ClientSession>>,
     online_positions: RwLock<HashMap<PositionId, HashSet<ClientId>>>,
     online_stations: RwLock<HashMap<StationId, PositionId>>,
@@ -28,7 +28,7 @@ impl ClientManager {
     pub fn new(broadcast_tx: broadcast::Sender<ServerMessage>, network: Network) -> Self {
         Self {
             broadcast_tx,
-            network,
+            network: parking_lot::RwLock::new(network),
             clients: RwLock::new(HashMap::new()),
             online_positions: RwLock::new(HashMap::new()),
             online_stations: RwLock::new(HashMap::new()),
@@ -37,20 +37,31 @@ impl ClientManager {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub fn find_positions(&self, controller_info: &ControllerInfo) -> Vec<&Position> {
-        self.network.find_positions(
-            &controller_info.callsign,
-            &controller_info.frequency,
-            controller_info.facility_type,
-        )
+    pub fn find_positions(&self, controller_info: &ControllerInfo) -> Vec<Position> {
+        self.network
+            .read()
+            .find_positions(
+                &controller_info.callsign,
+                &controller_info.frequency,
+                controller_info.facility_type,
+            )
+            .into_iter()
+            .cloned()
+            .collect()
     }
 
-    pub fn get_profile(&self, profile_id: Option<&ProfileId>) -> Option<&Profile> {
-        profile_id.and_then(|profile_id| self.network.get_profile(profile_id))
+    pub fn get_profile(&self, profile_id: Option<&ProfileId>) -> Option<Profile> {
+        profile_id.and_then(|profile_id| self.network.read().get_profile(profile_id).cloned())
     }
 
-    pub fn get_position(&self, position_id: Option<&PositionId>) -> Option<&Position> {
-        position_id.and_then(|position_id| self.network.get_position(position_id))
+    pub fn get_position(&self, position_id: Option<&PositionId>) -> Option<Position> {
+        position_id.and_then(|position_id| self.network.read().get_position(position_id).cloned())
+    }
+
+    pub fn replace_network(&self, network: Network) {
+        tracing::info!(?network, "Replacing network coverage data");
+        *self.network.write() = network;
+        tracing::info!("Network coverage data replaced");
     }
 
     pub async fn clients_for_position(&self, position_id: &PositionId) -> HashSet<ClientId> {
@@ -67,10 +78,6 @@ impl ClientManager {
             return HashSet::new();
         };
         self.clients_for_position(&position_id).await
-    }
-
-    pub fn network(&self) -> &Network {
-        &self.network
     }
 
     /// Transforms station changes to only include changes visible to vacs clients.
@@ -203,9 +210,11 @@ impl ClientManager {
                 } else {
                     let all_positions: HashSet<&PositionId> =
                         online_positions.keys().chain(vatsim_only.iter()).collect();
-                    let all_changes =
-                        self.network
-                            .coverage_changes(None, Some(position_id), &all_positions);
+                    let all_changes = self.network.read().coverage_changes(
+                        None,
+                        Some(position_id),
+                        &all_positions,
+                    );
                     drop(vatsim_only);
 
                     online_positions
@@ -266,7 +275,7 @@ impl ClientManager {
                         online_positions.keys().chain(vatsim_only.iter()).collect();
                     let mut after_all = before_all.clone();
                     after_all.remove(position_id);
-                    let all_changes = self.network.coverage_diff(&before_all, &after_all);
+                    let all_changes = self.network.read().coverage_diff(&before_all, &after_all);
                     drop(vatsim_only);
 
                     online_positions.remove(position_id);
@@ -344,12 +353,21 @@ impl ClientManager {
         profile: &ActiveProfile<ProfileId>,
         self_position_id: Option<&PositionId>,
     ) -> Vec<StationInfo> {
-        let relevant_stations = self.network.relevant_stations(profile);
+        // Resolve relevant station IDs synchronously to avoid holding parking_lot
+        // lock across await points
+        let relevant_station_ids = {
+            let network = self.network.read();
+            match network.relevant_stations(profile) {
+                RelevantStations::All => None,
+                RelevantStations::Subset(ids) => Some(ids.clone()),
+                RelevantStations::None => return Vec::new(),
+            }
+        };
         let online_stations = self.online_stations.read().await;
         let online_positions = self.online_positions.read().await;
 
-        let mut stations: Vec<StationInfo> = match relevant_stations {
-            RelevantStations::All => online_stations
+        let mut stations: Vec<StationInfo> = match relevant_station_ids {
+            None => online_stations
                 .iter()
                 .filter(|(_, position_id)| online_positions.contains_key(*position_id))
                 .map(|(id, controller)| {
@@ -362,7 +380,7 @@ impl ClientManager {
                     }
                 })
                 .collect(),
-            RelevantStations::Subset(ids) => ids
+            Some(ids) => ids
                 .iter()
                 .filter_map(|id| {
                     online_stations.get(id).and_then(|controller| {
@@ -378,7 +396,6 @@ impl ClientManager {
                     })
                 })
                 .collect(),
-            RelevantStations::None => Vec::new(),
         };
 
         stations.sort_by(|a, b| a.id.cmp(&b.id));
@@ -497,11 +514,17 @@ impl ClientManager {
                             );
 
                             let old_position_id = session.position_id().cloned();
-                            let new_positions = self.network.find_positions(
-                                &controller.callsign,
-                                &controller.frequency,
-                                controller.facility_type,
-                            );
+                            let new_positions: Vec<Position> = self
+                                .network
+                                .read()
+                                .find_positions(
+                                    &controller.callsign,
+                                    &controller.frequency,
+                                    controller.facility_type,
+                                )
+                                .into_iter()
+                                .cloned()
+                                .collect();
 
                             let new_position = if new_positions.len() > 1 {
                                 tracing::info!(
@@ -519,7 +542,7 @@ impl ClientManager {
                                 ));
                                 continue;
                             } else if new_positions.len() == 1 {
-                                Some(new_positions[0])
+                                Some(&new_positions[0])
                             } else {
                                 None
                             };
@@ -569,10 +592,13 @@ impl ClientManager {
                                     }
                                 }
 
-                                let session_profile = session.update_active_profile(
-                                    new_position.and_then(|p| p.profile_id.clone()),
-                                    &self.network,
-                                );
+                                let session_profile = {
+                                    let network = self.network.read();
+                                    session.update_active_profile(
+                                        new_position.and_then(|p| p.profile_id.clone()),
+                                        &network,
+                                    )
+                                };
 
                                 if let Err(err) = session
                                     .send_message(server::SessionInfo {
@@ -605,11 +631,17 @@ impl ClientManager {
                 {
                     continue;
                 }
-                let positions = self.network.find_positions(
-                    &controller.callsign,
-                    &controller.frequency,
-                    controller.facility_type,
-                );
+                let positions: Vec<Position> = self
+                    .network
+                    .read()
+                    .find_positions(
+                        &controller.callsign,
+                        &controller.frequency,
+                        controller.facility_type,
+                    )
+                    .into_iter()
+                    .cloned()
+                    .collect();
                 if positions.len() == 1 && !online_positions.contains_key(&positions[0].id) {
                     new_vatsim_only.insert(positions[0].id.clone());
                 }
@@ -631,7 +663,7 @@ impl ClientManager {
                 let end_all: HashSet<&PositionId> =
                     online_positions.keys().chain(vatsim_only.iter()).collect();
 
-                let all_changes = self.network.coverage_diff(&start_all, &end_all);
+                let all_changes = self.network.read().coverage_diff(&start_all, &end_all);
                 self.update_online_stations(&all_changes).await;
 
                 coverage_changes.extend(Self::client_visible_changes(
@@ -706,11 +738,19 @@ impl ClientManager {
             {
                 cached_changes.clone()
             } else {
-                let relevant_stations = self.network.relevant_stations(profile);
+                let relevant_station_ids = {
+                    let network = self.network.read();
+                    match network.relevant_stations(profile) {
+                        RelevantStations::All => None,
+                        RelevantStations::Subset(ids) => Some(ids.clone()),
+                        RelevantStations::None => Some(HashSet::new()),
+                    }
+                };
 
-                let filtered_changes = match relevant_stations {
-                    RelevantStations::All => changes.to_vec(),
-                    RelevantStations::Subset(relevant_ids) => changes
+                let filtered_changes = match relevant_station_ids {
+                    None => changes.to_vec(),
+                    Some(relevant_ids) if relevant_ids.is_empty() => Vec::new(),
+                    Some(relevant_ids) => changes
                         .iter()
                         .filter(|change| {
                             let station_id = match change {
@@ -722,7 +762,6 @@ impl ClientManager {
                         })
                         .cloned()
                         .collect(),
-                    RelevantStations::None => Vec::new(),
                 };
 
                 filtered_changes_cache.insert(profile.clone(), filtered_changes.clone());
