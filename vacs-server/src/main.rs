@@ -7,6 +7,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vacs_server::auth::layer::setup_auth_layer;
 use vacs_server::build::BuildInfo;
 use vacs_server::config::AppConfig;
+use vacs_server::dataset::DatasetManager;
 use vacs_server::metrics::setup_prometheus_metric_layer;
 use vacs_server::ratelimit::RateLimiters;
 use vacs_server::release::UpdateChecker;
@@ -69,9 +70,37 @@ async fn main() -> anyhow::Result<()> {
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
 
-    tracing::info!(path = ?config.vatsim.coverage_dir, "Loading network coverage data");
-    let network = Network::load_from_dir(&config.vatsim.coverage_dir)
-        .map_err(|err| anyhow::anyhow!("Failed to load network coverage data: {err:?}"))?;
+    // Set up the dataset manager for fetching updates from GitHub (if configured).
+    let dataset_manager = match &config.admin.dataset {
+        Some(dataset_config) => {
+            Some(DatasetManager::new(dataset_config, &config.vatsim.coverage_dir).await?)
+        }
+        None => {
+            tracing::info!("No dataset repository configured, skipping GitHub sync");
+            None
+        }
+    };
+
+    // Try syncing from GitHub first; fall back to loading from disk.
+    let network = match &dataset_manager {
+        Some(dm) => match dm.sync_on_startup().await? {
+            Some(network) => {
+                tracing::info!("Using freshly downloaded dataset from GitHub");
+                network
+            }
+            None => {
+                tracing::info!(path = ?config.vatsim.coverage_dir, "Remote dataset matches local copy, loading from disk");
+                Network::load_from_dir(&config.vatsim.coverage_dir).map_err(|err| {
+                    anyhow::anyhow!("Failed to load network coverage data: {err:?}")
+                })?
+            }
+        },
+        None => {
+            tracing::info!(path = ?config.vatsim.coverage_dir, "Loading network coverage data from disk");
+            Network::load_from_dir(&config.vatsim.coverage_dir)
+                .map_err(|err| anyhow::anyhow!("Failed to load network coverage data: {err:?}"))?
+        }
+    };
 
     let app_state = Arc::new(AppState::new(
         config.clone(),
@@ -83,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
         rate_limiters,
         shutdown_rx.clone(),
         ice_config_provider,
+        dataset_manager,
     ));
 
     let auth_layer = setup_auth_layer(&config, redis_pool).await?;

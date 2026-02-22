@@ -33,7 +33,7 @@ pub enum CatalogConfig {
         owner: String,
         repo: String,
         #[serde(default)]
-        credentials: Option<github::GitHubCredentials>,
+        credentials: Option<crate::config::GitHubCredentials>,
         #[serde(default = "github::default_release_cache_ttl")]
         release_cache_ttl: Duration,
         #[serde(default = "github::default_signature_cache_ttl")]

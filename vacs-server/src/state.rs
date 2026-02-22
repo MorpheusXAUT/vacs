@@ -3,6 +3,7 @@ pub mod clients;
 
 use crate::config;
 use crate::config::AppConfig;
+use crate::dataset::DatasetManager;
 use crate::ice::provider::IceConfigProvider;
 use crate::metrics::ErrorMetrics;
 use crate::metrics::guards::ClientConnectionGuard;
@@ -34,6 +35,7 @@ pub struct AppState {
     pub updates: UpdateChecker,
     pub calls: CallManager,
     pub clients: ClientManager,
+    pub dataset: Option<DatasetManager>,
     pub ice_config_provider: Arc<dyn IceConfigProvider>,
     store: Store,
     broadcast_tx: broadcast::Sender<ServerMessage>,
@@ -55,6 +57,7 @@ impl AppState {
         rate_limiters: RateLimiters,
         shutdown_rx: watch::Receiver<()>,
         ice_config_provider: Arc<dyn IceConfigProvider>,
+        dataset: Option<DatasetManager>,
     ) -> Self {
         let (broadcast_tx, _) = broadcast::channel(config::BROADCAST_CHANNEL_CAPACITY);
         Self {
@@ -64,6 +67,7 @@ impl AppState {
             store,
             calls: CallManager::new(),
             clients: ClientManager::new(broadcast_tx.clone(), network),
+            dataset,
             broadcast_tx,
             slurper,
             data_feed,

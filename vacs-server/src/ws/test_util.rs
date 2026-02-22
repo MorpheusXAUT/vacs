@@ -123,6 +123,7 @@ impl TestSetup {
             RateLimiters::default(),
             shutdown_rx,
             Arc::new(StunOnlyProvider::default()),
+            None,
         ));
         let client_info = ClientInfo {
             id: ClientId::from("client1"),
