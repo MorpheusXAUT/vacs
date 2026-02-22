@@ -1,3 +1,4 @@
+mod admin;
 mod auth;
 mod root;
 mod version;
@@ -31,6 +32,7 @@ where
     S: SessionStore + Send + Sync + 'static + Clone,
 {
     let app = Router::new()
+        .nest("/admin", admin::routes())
         .nest("/auth", auth::routes())
         .nest("/ws", ws::routes().merge(crate::ws::routes()))
         .nest("/version", version::routes())
