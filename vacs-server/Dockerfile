@@ -22,12 +22,12 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry \
 FROM debian:13.3-slim AS runtime
 
 LABEL org.opencontainers.image.title="vacs-server" \
-      org.opencontainers.image.description="VATSIM ATC Comm System – Signaling Server" \
-      org.opencontainers.image.url="https://github.com/MorpheusXAUT/vacs" \
+      org.opencontainers.image.description="VATSIM ATC Comm System - Signaling Server" \
+      org.opencontainers.image.url="https://vacs.network" \
       org.opencontainers.image.documentation="https://github.com/MorpheusXAUT/vacs#readme" \
       org.opencontainers.image.source="https://github.com/MorpheusXAUT/vacs" \
       org.opencontainers.image.vendor="vacs" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="Apache-2.0 OR MIT"
 
 # Create a non-root user and group
 RUN useradd -m -u 10001 -U vacs
@@ -40,7 +40,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 VOLUME ["/etc/vacs-server"]
-RUN mkdir -p /etc/vacs-server && chown -R vacs:vacs /etc/vacs-server
+RUN mkdir -p /etc/vacs-server/data/coverage && chown -R vacs:vacs /etc/vacs-server
 
 COPY --from=builder /usr/src/vacs/target/release/vacs-server /usr/local/bin/vacs-server
 

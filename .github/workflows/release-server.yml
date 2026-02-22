@@ -3,17 +3,17 @@ name: Release • vacs-server
 on:
   push:
     tags:
-      - 'vacs-server-v*.*.*'
+      - "vacs-server-v*.*.*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (1.2.3, v1.2.3, or vacs-server-v1.2.3)'
+        description: "Version to publish (1.2.3, v1.2.3, or vacs-server-v1.2.3)"
         required: true
         type: string
       ref:
-        description: 'Git ref to build (branch/tag/SHA). Empty = default branch tip.'
+        description: "Git ref to build (branch/tag/SHA). Empty = default branch tip."
         required: false
-        default: ''
+        default: ""
         type: string
 
 permissions: {}
@@ -55,12 +55,14 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.licenses=Apache-2.0 OR MIT
           tags: |
             # --- Tag push path (extract semver from 'vacs-server-vX.Y.Z') ---
             type=semver,pattern={{version}},value=${{ github.ref_name }},match=(\d+\.\d+\.\d+),enable=${{ startsWith(github.ref, 'refs/tags/') }}
             type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }},match=(\d+\.\d+\.\d+),enable=${{ startsWith(github.ref, 'refs/tags/') }}
             type=semver,pattern={{major}},value=${{ github.ref_name }},match=(\d+\.\d+\.\d+),enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            
+
             # --- Manual dispatch path (accepts 1.2.3 / v1.2.3 / vacs-server-v1.2.3) ---
             type=semver,pattern={{version}},value=${{ inputs.version }},match=(\d+\.\d+\.\d+),enable=${{ github.event_name == 'workflow_dispatch' }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }},match=(\d+\.\d+\.\d+),enable=${{ github.event_name == 'workflow_dispatch' }}
@@ -84,16 +86,16 @@ jobs:
         uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # v0.34.1
         with:
           image-ref: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-          format: 'table'
-          exit-code: '1'
+          format: "table"
+          exit-code: "1"
           ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
         with:
-          cosign-release: 'v2.6.1'
+          cosign-release: "v2.6.1"
 
       - name: Sign images using Cosign with GitHub OIDC Token
         env:

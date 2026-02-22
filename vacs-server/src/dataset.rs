@@ -92,7 +92,7 @@ impl DatasetManager {
             .await
             .with_context(|| {
                 format!(
-                    "Failed to resolve tag '{}' — has it been created yet?",
+                    "Failed to resolve tag '{}', might be missing in repository",
                     self.deployed_tag
                 )
             })?;
@@ -242,7 +242,7 @@ impl DatasetManager {
                 tracing::warn!(
                     ?err,
                     tag = %self.deployed_tag,
-                    "Failed to resolve deployed tag — using cached dataset"
+                    "Failed to resolve deployed tag, using cached dataset"
                 );
                 return Ok(None);
             }
@@ -259,7 +259,7 @@ impl DatasetManager {
             from = ?local_sha,
             to = %deployed_sha,
             tag = %self.deployed_tag,
-            "Dataset update available — downloading"
+            "Dataset update available, downloading"
         );
 
         match self.fetch_and_install(&deployed_sha, &deployed_sha).await {
@@ -267,7 +267,7 @@ impl DatasetManager {
             Err(err) => {
                 tracing::warn!(
                     ?err,
-                    "Failed to download dataset update — using cached dataset"
+                    "Failed to download dataset update, using cached dataset"
                 );
                 Ok(None)
             }
@@ -297,7 +297,7 @@ fn atomic_replace_dir(src: &Path, dst: &Path) -> Result<()> {
 
         // Step 2: new → current
         if let Err(err) = std::fs::rename(src, dst) {
-            tracing::error!(?err, "Failed to move new dataset into place — rolling back");
+            tracing::error!(?err, "Failed to move new dataset into place, rolling back");
             std::fs::rename(&backup, dst).with_context(|| {
                 format!(
                     "CRITICAL: rollback rename {} → {} also failed",
@@ -326,7 +326,7 @@ fn atomic_replace_dir(src: &Path, dst: &Path) -> Result<()> {
         tracing::warn!(
             ?err,
             path = %backup.display(),
-            "Failed to remove backup directory — will be cleaned up on next deploy"
+            "Failed to remove backup directory, will be cleaned up on next deploy"
         );
     }
 

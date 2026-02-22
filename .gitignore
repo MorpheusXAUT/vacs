@@ -147,3 +147,4 @@ target/
 
 # VSCode and derivate workspaces
 *.code-workspace
+.idea/copilot.data.migration.ask2agent.xml
