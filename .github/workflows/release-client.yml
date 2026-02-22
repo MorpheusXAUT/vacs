@@ -155,11 +155,11 @@ jobs:
         with:
           node-version: 'lts/*'
           cache: 'npm'
-          cache-dependency-path: |
-            vacs-client/package-lock.json
-            vacs-client/frontend/package-lock.json
+          cache-dependency-path: vacs-client/package-lock.json
 
       - name: Rust toolchain
+        # dtolnay/rust-toolchain uses branch refs as its API (e.g. @stable);
+        # SHA-pinning would break on every Rust release. Not tracked by Dependabot.
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -226,7 +226,6 @@ jobs:
             target/**/release/bundle/dmg/*.dmg.sig
 
       - name: Attest build provenance
-        if: ${{ !github.event.repository.private || github.event.repository.owner.type == 'Organization' }}
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-path: |
@@ -249,7 +248,7 @@ jobs:
     needs: [prep, build]
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read # write access for the release is via the App token below
       id-token: write
 
     steps:
