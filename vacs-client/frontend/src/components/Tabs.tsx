@@ -25,7 +25,14 @@ function Tabs() {
 
     useEffect(() => {
         if (tabs === undefined) return;
-        setPage(tabs[active + offset].page);
+        const tab = tabs[active + offset];
+        if (tab !== undefined) {
+            setPage(tab.page);
+        } else {
+            setActive(0);
+            setOffset(0);
+            setPage(tabs[0].page);
+        }
     }, [active, offset, tabs, setPage]);
 
     if (tabs === undefined) return <></>;
