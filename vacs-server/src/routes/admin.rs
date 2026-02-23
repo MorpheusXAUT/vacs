@@ -179,7 +179,7 @@ mod post {
                 ))
             })?;
 
-        state.replace_network(network);
+        state.replace_network(network).await;
 
         tracing::info!(
             from = ?previous_sha,

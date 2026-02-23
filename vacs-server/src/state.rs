@@ -312,7 +312,7 @@ impl AppState {
         &self.rate_limiters
     }
 
-    pub fn replace_network(&self, network: Network) {
-        self.clients.replace_network(network);
+    pub async fn replace_network(&self, network: Network) {
+        self.clients.replace_network(network).await;
     }
 }

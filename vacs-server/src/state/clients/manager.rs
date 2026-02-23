@@ -58,12 +58,6 @@ impl ClientManager {
         position_id.and_then(|position_id| self.network.read().get_position(position_id).cloned())
     }
 
-    pub fn replace_network(&self, network: Network) {
-        tracing::info!(?network, "Replacing network coverage data");
-        *self.network.write() = network;
-        tracing::info!("Network coverage data replaced");
-    }
-
     pub async fn clients_for_position(&self, position_id: &PositionId) -> HashSet<ClientId> {
         self.online_positions
             .read()
@@ -78,55 +72,6 @@ impl ClientManager {
             return HashSet::new();
         };
         self.clients_for_position(&position_id).await
-    }
-
-    /// Transforms station changes to only include changes visible to vacs clients.
-    /// Stations covered solely by VATSIM-only positions are not callable, so:
-    /// - `Online` for a VATSIM-only position is dropped
-    /// - `Offline` events are always forwarded, even if the previous covering position
-    ///   was VATSIM-only. Clients handle duplicate/unknown `Offline` events gracefully.
-    /// - `Handoff` to a VATSIM-only position becomes `Offline` (station leaves vacs coverage)
-    /// - `Handoff` from a VATSIM-only position becomes `Online` (station enters vacs coverage)
-    fn client_visible_changes(
-        changes: &[StationChange],
-        online_positions: &HashMap<PositionId, HashSet<ClientId>>,
-    ) -> Vec<StationChange> {
-        changes
-            .iter()
-            .filter_map(|change| match change {
-                StationChange::Online { position_id, .. } => {
-                    if online_positions.contains_key(position_id) {
-                        Some(change.clone())
-                    } else {
-                        None
-                    }
-                }
-                StationChange::Handoff {
-                    station_id,
-                    from_position_id,
-                    to_position_id,
-                } => {
-                    let from_vacs = online_positions.contains_key(from_position_id);
-                    let to_vacs = online_positions.contains_key(to_position_id);
-                    match (from_vacs, to_vacs) {
-                        // vacs -> vacs: normal handoff
-                        (true, true) => Some(change.clone()),
-                        // vacs -> VATSIM-only: station leaves vacs coverage
-                        (true, false) => Some(StationChange::Offline {
-                            station_id: station_id.clone(),
-                        }),
-                        // VATSIM-only -> vacs: station enters vacs coverage
-                        (false, true) => Some(StationChange::Online {
-                            station_id: station_id.clone(),
-                            position_id: to_position_id.clone(),
-                        }),
-                        // VATSIM-only -> VATSIM-only: invisible to clients
-                        (false, false) => None,
-                    }
-                }
-                StationChange::Offline { .. } => Some(change.clone()),
-            })
-            .collect()
     }
 
     #[instrument(level = "debug", skip(self, client_connection_guard), err)]
@@ -225,7 +170,6 @@ impl ClientManager {
                         "Updating online stations list after position addition"
                     );
                     self.update_online_stations(&all_changes).await;
-
                     Self::client_visible_changes(&all_changes, &online_positions)
                 }
             }
@@ -285,7 +229,6 @@ impl ClientManager {
                         "Updating online stations list after position removal"
                     );
                     self.update_online_stations(&all_changes).await;
-
                     changes.extend(Self::client_visible_changes(
                         &all_changes,
                         &online_positions,
@@ -432,6 +375,148 @@ impl ClientManager {
         }
     }
 
+    pub async fn replace_network(&self, network: Network) {
+        tracing::info!(?network, "Replacing network coverage data");
+        *self.network.write() = network;
+
+        tracing::debug!("Network coverage data replaced, starting housekeeping");
+
+        let old_online_stations = self.online_stations.read().await.clone();
+
+        let mut online_positions = self.online_positions.write().await;
+        let mut clients = self.clients.write().await;
+        let mut vatsim_only = self.vatsim_only_positions.write().await;
+
+        let (session_updates, new_online_stations) = {
+            let network = self.network.read();
+            let mut session_updates: Vec<(ClientSession, server::SessionInfo)> = Vec::new();
+
+            // Remove positions that no longer exist in the new network
+            let stale_positions: Vec<PositionId> = online_positions
+                .keys()
+                .filter(|pos_id| network.get_position(pos_id).is_none())
+                .cloned()
+                .collect();
+
+            for stale_pos_id in &stale_positions {
+                tracing::debug!(
+                    ?stale_pos_id,
+                    "Position no longer exists in new network, removing"
+                );
+                if let Some(client_ids) = online_positions.remove(stale_pos_id) {
+                    for client_id in client_ids {
+                        if let Some(session) = clients.get_mut(&client_id) {
+                            tracing::debug!(
+                                ?client_id,
+                                ?stale_pos_id,
+                                "Clearing stale position from client"
+                            );
+                            session.set_position_id(None);
+                            let session_profile = session.update_active_profile(None, &network);
+                            session_updates.push((
+                                session.clone(),
+                                server::SessionInfo {
+                                    client: session.client_info().clone(),
+                                    profile: session_profile,
+                                },
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // Remove VATSIM-only positions that no longer exist in the new network
+            let stale_vatsim_only: Vec<PositionId> = vatsim_only
+                .iter()
+                .filter(|pos_id| network.get_position(pos_id).is_none())
+                .cloned()
+                .collect();
+
+            for stale_pos_id in &stale_vatsim_only {
+                tracing::debug!(
+                    ?stale_pos_id,
+                    "VATSIM-only position no longer exists in new network, removing"
+                );
+                vatsim_only.remove(stale_pos_id);
+            }
+
+            // Update profiles for clients on positions that still exist but may
+            // have changed profile assignments
+            for (pos_id, client_ids) in online_positions.iter() {
+                let new_profile_id = network
+                    .get_position(pos_id)
+                    .and_then(|p| p.profile_id.clone());
+
+                for client_id in client_ids {
+                    if let Some(session) = clients.get_mut(client_id) {
+                        let session_profile =
+                            session.update_active_profile(new_profile_id.clone(), &network);
+                        if !matches!(session_profile, server::SessionProfile::Unchanged) {
+                            tracing::debug!(
+                                ?client_id,
+                                ?pos_id,
+                                "Client profile changed after network reload"
+                            );
+                            session_updates.push((
+                                session.clone(),
+                                server::SessionInfo {
+                                    client: session.client_info().clone(),
+                                    profile: session_profile,
+                                },
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // Recalculate the full online stations map from scratch, including
+            // VATSIM-only positions for correct coverage computation
+            let all_online_pos_ids: HashSet<&PositionId> =
+                online_positions.keys().chain(vatsim_only.iter()).collect();
+
+            let mut new_online_stations: HashMap<StationId, PositionId> = HashMap::new();
+            let covered = network.covered_stations(None, &all_online_pos_ids);
+            for covered_station in covered {
+                if let Some(controlling_pos) =
+                    network.controlling_position(&covered_station.station.id, &all_online_pos_ids)
+                {
+                    new_online_stations.insert(
+                        covered_station.station.id.clone(),
+                        controlling_pos.id.clone(),
+                    );
+                }
+            }
+
+            (session_updates, new_online_stations)
+        };
+
+        // Compute station changes from the diff, apply to online stations,
+        // and filter to only client-visible changes
+        let all_changes = Self::compute_station_diff(&old_online_stations, &new_online_stations);
+        self.update_online_stations(&all_changes).await;
+        let station_changes = Self::client_visible_changes(&all_changes, &online_positions);
+
+        drop(vatsim_only);
+        drop(clients);
+        drop(online_positions);
+
+        // Send session updates to affected clients
+        for (session, session_info) in session_updates {
+            if let Err(err) = session.send_message(session_info).await {
+                tracing::warn!(
+                    ?err,
+                    client_id = ?session.id(),
+                    "Failed to send updated session info after network reload"
+                );
+            }
+        }
+
+        // Broadcast station changes to all clients
+        self.broadcast_station_changes(&station_changes).await;
+
+        tracing::info!("Network housekeeping completed");
+    }
+
     pub async fn sync_vatsim_state(
         &self,
         controllers: &HashMap<ClientId, ControllerInfo>,
@@ -549,7 +634,7 @@ impl ClientManager {
                             let new_position_id = new_position.map(|p| p.id.clone());
 
                             if old_position_id != new_position_id {
-                                tracing::info!(
+                                tracing::debug!(
                                     ?cid,
                                     ?new_position_id,
                                     ?old_position_id,
@@ -665,7 +750,6 @@ impl ClientManager {
 
                 let all_changes = self.network.read().coverage_diff(&start_all, &end_all);
                 self.update_online_stations(&all_changes).await;
-
                 coverage_changes.extend(Self::client_visible_changes(
                     &all_changes,
                     &online_positions,
@@ -684,6 +768,94 @@ impl ClientManager {
         self.broadcast_station_changes(&coverage_changes).await;
 
         disconnected_clients
+    }
+
+    fn compute_station_diff(
+        old: &HashMap<StationId, PositionId>,
+        new: &HashMap<StationId, PositionId>,
+    ) -> Vec<StationChange> {
+        let mut changes = Vec::new();
+
+        // Stations that went offline or changed controller
+        for (station_id, old_pos_id) in old {
+            match new.get(station_id) {
+                None => {
+                    changes.push(StationChange::Offline {
+                        station_id: station_id.clone(),
+                    });
+                }
+                Some(new_pos_id) if new_pos_id != old_pos_id => {
+                    changes.push(StationChange::Handoff {
+                        station_id: station_id.clone(),
+                        from_position_id: old_pos_id.clone(),
+                        to_position_id: new_pos_id.clone(),
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        // Stations that came online
+        for (station_id, new_pos_id) in new {
+            if !old.contains_key(station_id) {
+                changes.push(StationChange::Online {
+                    station_id: station_id.clone(),
+                    position_id: new_pos_id.clone(),
+                });
+            }
+        }
+
+        changes.sort();
+        changes
+    }
+
+    /// Transforms station changes to only include changes visible to vacs clients.
+    /// Stations covered solely by VATSIM-only positions are not callable, so:
+    /// - `Online` for a VATSIM-only position is dropped
+    /// - `Offline` events are always forwarded, even if the previous covering position
+    ///   was VATSIM-only. Clients handle duplicate/unknown `Offline` events gracefully.
+    /// - `Handoff` to a VATSIM-only position becomes `Offline` (station leaves vacs coverage)
+    /// - `Handoff` from a VATSIM-only position becomes `Online` (station enters vacs coverage)
+    fn client_visible_changes(
+        changes: &[StationChange],
+        online_positions: &HashMap<PositionId, HashSet<ClientId>>,
+    ) -> Vec<StationChange> {
+        changes
+            .iter()
+            .filter_map(|change| match change {
+                StationChange::Online { position_id, .. } => {
+                    if online_positions.contains_key(position_id) {
+                        Some(change.clone())
+                    } else {
+                        None
+                    }
+                }
+                StationChange::Handoff {
+                    station_id,
+                    from_position_id,
+                    to_position_id,
+                } => {
+                    let from_vacs = online_positions.contains_key(from_position_id);
+                    let to_vacs = online_positions.contains_key(to_position_id);
+                    match (from_vacs, to_vacs) {
+                        // vacs -> vacs: normal handoff
+                        (true, true) => Some(change.clone()),
+                        // vacs -> VATSIM-only: station leaves vacs coverage
+                        (true, false) => Some(StationChange::Offline {
+                            station_id: station_id.clone(),
+                        }),
+                        // VATSIM-only -> vacs: station enters vacs coverage
+                        (false, true) => Some(StationChange::Online {
+                            station_id: station_id.clone(),
+                            position_id: to_position_id.clone(),
+                        }),
+                        // VATSIM-only -> VATSIM-only: invisible to clients
+                        (false, false) => None,
+                    }
+                }
+                StationChange::Offline { .. } => Some(change.clone()),
+            })
+            .collect()
     }
 
     async fn update_online_stations(&self, changes: &[StationChange]) {
@@ -816,6 +988,15 @@ mod tests {
             position_id: Some(PositionId::from(position_id)),
             display_name: id.to_string(),
             frequency: freq.to_string(),
+        }
+    }
+
+    fn client_info_without_position(id: &str) -> ClientInfo {
+        ClientInfo {
+            id: ClientId::from(id),
+            position_id: None,
+            display_name: id.to_string(),
+            frequency: String::new(),
         }
     }
 
