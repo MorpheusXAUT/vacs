@@ -29,9 +29,9 @@ export type ClientPageSettings = {
 };
 
 export type ClientPageConfig = {
-    include: string[];
-    exclude: string[];
-    priority: string[];
+    include?: string[];
+    exclude?: string[];
+    priority?: string[];
     frequencies: FrequencyDisplayMode;
     grouping: ClientGroupMode;
 };
@@ -48,12 +48,13 @@ function globToRegex(pattern: string): RegExp {
     return new RegExp(`^${escaped}$`, "i");
 }
 
-function matchesAnyPattern(callsign: string, patterns: string[]): boolean {
-    if (patterns.length === 0) return false;
+function matchesAnyPattern(callsign: string, patterns: string[] | undefined): boolean {
+    if (patterns === undefined || patterns.length === 0) return false;
     return patterns.some(pattern => globToRegex(pattern).test(callsign));
 }
 
-function findFirstMatchIndex(callsign: string, patterns: string[]): number {
+function findFirstMatchIndex(callsign: string, patterns: string[] | undefined): number {
+    if (patterns === undefined || patterns.length === 0) return -1;
     return patterns.findIndex(pattern => globToRegex(pattern).test(callsign));
 }
 
@@ -62,7 +63,7 @@ function filterClients(clients: ClientInfo[], config: ClientPageConfig | undefin
 
     return clients.filter(client => {
         if (matchesAnyPattern(client.displayName, config.exclude)) return false;
-        if (config.include.length === 0) return true;
+        if ((config.include?.length ?? 0) === 0) return true;
         return matchesAnyPattern(client.displayName, config.include);
     });
 }
