@@ -8,7 +8,9 @@ use tracing::instrument;
 use vacs_protocol::profile::{ActiveProfile, ProfileId};
 use vacs_protocol::vatsim::{ClientId, PositionId, StationChange, StationId};
 use vacs_protocol::ws::server;
-use vacs_protocol::ws::server::{ClientInfo, DisconnectReason, ServerMessage, StationInfo};
+use vacs_protocol::ws::server::{
+    ClientInfo, DisconnectReason, ServerMessage, SessionProfile, StationInfo,
+};
 use vacs_vatsim::coverage::network::{Network, RelevantStations};
 use vacs_vatsim::coverage::position::Position;
 use vacs_vatsim::coverage::profile::Profile;
@@ -440,8 +442,10 @@ impl ClientManager {
                 vatsim_only.remove(stale_pos_id);
             }
 
-            // Update profiles for clients on positions that still exist but may
-            // have changed profile assignments
+            // Re-transmit profiles for all clients on surviving positions.
+            // Profile *content* may change during a dataset reload even when
+            // the profile ID stays the same, and we cannot cheaply detect
+            // content changes, so we always send the resolved profile.
             for (pos_id, client_ids) in online_positions.iter() {
                 let new_profile_id = network
                     .get_position(pos_id)
@@ -449,22 +453,40 @@ impl ClientManager {
 
                 for client_id in client_ids {
                     if let Some(session) = clients.get_mut(client_id) {
-                        let session_profile =
-                            session.update_active_profile(new_profile_id.clone(), &network);
-                        if !matches!(session_profile, server::SessionProfile::Unchanged) {
-                            tracing::debug!(
-                                ?client_id,
-                                ?pos_id,
-                                "Client profile changed after network reload"
-                            );
-                            session_updates.push((
-                                session.clone(),
-                                server::SessionInfo {
-                                    client: session.client_info().clone(),
-                                    profile: session_profile,
-                                },
-                            ));
-                        }
+                        // Track any profile-ID change internally
+                        let _ = session.update_active_profile(new_profile_id.clone(), &network);
+
+                        let session_profile = match session.active_profile() {
+                            ActiveProfile::Specific(profile_id) => {
+                                match network.get_profile(profile_id) {
+                                    Some(profile) => SessionProfile::Changed(
+                                        ActiveProfile::Specific(profile.into()),
+                                    ),
+                                    None => {
+                                        tracing::warn!(
+                                            ?profile_id,
+                                            "Profile not found in new network"
+                                        );
+                                        SessionProfile::Changed(ActiveProfile::None)
+                                    }
+                                }
+                            }
+                            // Custom/None profiles do not require updates as they don't carry network-derived content
+                            _ => continue,
+                        };
+
+                        tracing::debug!(
+                            ?client_id,
+                            ?pos_id,
+                            "Re-transmitting profile to client after network reload"
+                        );
+                        session_updates.push((
+                            session.clone(),
+                            server::SessionInfo {
+                                client: session.client_info().clone(),
+                                profile: session_profile,
+                            },
+                        ));
                     }
                 }
             }
@@ -490,8 +512,6 @@ impl ClientManager {
             (session_updates, new_online_stations)
         };
 
-        // Compute station changes from the diff, apply to online stations,
-        // and filter to only client-visible changes
         let all_changes = Self::compute_station_diff(&old_online_stations, &new_online_stations);
         self.update_online_stations(&all_changes).await;
         let station_changes = Self::client_visible_changes(&all_changes, &online_positions);
@@ -500,7 +520,6 @@ impl ClientManager {
         drop(clients);
         drop(online_positions);
 
-        // Send session updates to affected clients
         for (session, session_info) in session_updates {
             if let Err(err) = session.send_message(session_info).await {
                 tracing::warn!(
@@ -511,7 +530,6 @@ impl ClientManager {
             }
         }
 
-        // Broadcast station changes to all clients
         self.broadcast_station_changes(&station_changes).await;
 
         tracing::info!("Network housekeeping completed");
