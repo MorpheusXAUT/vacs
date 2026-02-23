@@ -37,10 +37,10 @@ jobs:
     continue-on-error: ${{ matrix.checks == 'advisories' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: cargo deny
-        uses: EmbarkStudios/cargo-deny-action@v2.0.15
+        uses: EmbarkStudios/cargo-deny-action@3fd3802e88374d3fe9159b834c7714ec57d6c979 # v2.0.15
         with:
           arguments: --all-features
           command: check ${{ matrix.checks }}
@@ -50,30 +50,37 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: cargo machete
-        uses: bnjbvr/cargo-machete@v0.9.1
+        uses: bnjbvr/cargo-machete@7959c845782fed02ee69303126d4a12d64f1db18 # v0.9.1
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Rust toolchain
+        # dtolnay/rust-toolchain uses branch refs as its API (e.g. @stable);
+        # SHA-pinning would break on every Rust release. Not tracked by Dependabot.
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Format
+        run: cargo fmt --all -- --check
 
   check:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install build dependencies
         run: |
-          sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc >/dev/null <<EOF
-          path-exclude /usr/share/man/*
-          path-exclude /usr/share/doc/*
-          path-exclude /usr/share/doc-base/*
-          path-exclude /usr/share/locale/*
-          path-exclude /usr/share/locale-langpack/*
-          path-exclude /usr/share/info/*
-          EOF
           sudo apt-get update
-          sudo apt-get purge -y man-db
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
             libssl-dev libasound2-dev libgtk-3-dev libopus-dev \
@@ -83,15 +90,12 @@ jobs:
         run: rm -rf /opt/hostedtoolcache
 
       - name: Rust toolchain
+        # dtolnay/rust-toolchain uses branch refs as its API (e.g. @stable);
+        # SHA-pinning would break on every Rust release. Not tracked by Dependabot.
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2.8.2
-
-      - name: Format
-        run: cargo fmt --all -- --check
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
 
       - name: Tests
         run: cargo test --workspace --all-targets --all-features
@@ -115,7 +119,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install build dependencies (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -133,13 +137,15 @@ jobs:
           brew install opus
 
       - name: Rust toolchain
+        # dtolnay/rust-toolchain uses branch refs as its API (e.g. @stable);
+        # SHA-pinning would break on every Rust release. Not tracked by Dependabot.
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
           components: clippy
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2.8.2
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
         with:
           shared-key: ${{ matrix.platform }}-${{ matrix.arch }}
 
