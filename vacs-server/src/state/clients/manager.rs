@@ -1651,4 +1651,1347 @@ facility_type = "DEL"
             "clients_for_station should return empty for VATSIM-only station"
         );
     }
+
+    fn create_lovv_network_without_del(dir: &std::path::Path) -> Network {
+        let fir_path = dir.join("LOVV");
+
+        std::fs::write(
+            fir_path.join("stations.toml"),
+            r#"
+[[stations]]
+id = "LOWW_APP"
+controlled_by = ["LOWW_APP", "LOVV_CTR"]
+
+[[stations]]
+id = "LOWW_TWR"
+parent_id = "LOWW_APP"
+controlled_by = ["LOWW_TWR"]
+
+[[stations]]
+id = "LOWW_GND"
+parent_id = "LOWW_TWR"
+controlled_by = ["LOWW_GND"]
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            fir_path.join("positions.toml"),
+            r#"
+[[positions]]
+id = "LOVV_CTR"
+prefixes = ["LOVV"]
+frequency = "132.600"
+facility_type = "CTR"
+
+[[positions]]
+id = "LOWW_APP"
+prefixes = ["LOWW"]
+frequency = "134.675"
+facility_type = "APP"
+
+[[positions]]
+id = "LOWW_TWR"
+prefixes = ["LOWW"]
+frequency = "119.400"
+facility_type = "TWR"
+
+[[positions]]
+id = "LOWW_GND"
+prefixes = ["LOWW"]
+frequency = "121.600"
+facility_type = "GND"
+"#,
+        )
+        .unwrap();
+
+        Network::load_from_dir(dir).unwrap()
+    }
+
+    fn create_lovv_network_with_profiles(dir: &std::path::Path) -> Network {
+        let fir_path = dir.join("LOVV");
+        std::fs::create_dir_all(fir_path.join("profiles")).unwrap();
+
+        std::fs::write(
+            fir_path.join("stations.toml"),
+            r#"
+[[stations]]
+id = "LOWW_APP"
+controlled_by = ["LOWW_APP", "LOVV_CTR"]
+
+[[stations]]
+id = "LOWW_TWR"
+parent_id = "LOWW_APP"
+controlled_by = ["LOWW_TWR"]
+
+[[stations]]
+id = "LOWW_GND"
+parent_id = "LOWW_TWR"
+controlled_by = ["LOWW_GND"]
+
+[[stations]]
+id = "LOWW_DEL"
+parent_id = "LOWW_GND"
+controlled_by = ["LOWW_DEL"]
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            fir_path.join("positions.toml"),
+            r#"
+[[positions]]
+id = "LOVV_CTR"
+prefixes = ["LOVV"]
+frequency = "132.600"
+facility_type = "CTR"
+profile_id = "CTR_PROFILE"
+
+[[positions]]
+id = "LOWW_APP"
+prefixes = ["LOWW"]
+frequency = "134.675"
+facility_type = "APP"
+profile_id = "APP_PROFILE"
+
+[[positions]]
+id = "LOWW_TWR"
+prefixes = ["LOWW"]
+frequency = "119.400"
+facility_type = "TWR"
+
+[[positions]]
+id = "LOWW_GND"
+prefixes = ["LOWW"]
+frequency = "121.600"
+facility_type = "GND"
+
+[[positions]]
+id = "LOWW_DEL"
+prefixes = ["LOWW"]
+frequency = "122.125"
+facility_type = "DEL"
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            fir_path.join("profiles").join("CTR_PROFILE.toml"),
+            r#"
+id = "CTR_PROFILE"
+type = "Tabbed"
+
+[[tabs]]
+label = "Main"
+
+[tabs.page]
+rows = 4
+
+[[tabs.page.keys]]
+label = "LOWW APP"
+station_id = "LOWW_APP"
+
+[[tabs.page.keys]]
+label = "LOWW TWR"
+station_id = "LOWW_TWR"
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            fir_path.join("profiles").join("APP_PROFILE.toml"),
+            r#"
+id = "APP_PROFILE"
+type = "Tabbed"
+
+[[tabs]]
+label = "Main"
+
+[tabs.page]
+rows = 4
+
+[[tabs.page.keys]]
+label = "LOWW TWR"
+station_id = "LOWW_TWR"
+
+[[tabs.page.keys]]
+label = "LOWW GND"
+station_id = "LOWW_GND"
+"#,
+        )
+        .unwrap();
+
+        Network::load_from_dir(dir).unwrap()
+    }
+
+    fn create_lovv_network_with_reassigned_profile(dir: &std::path::Path) -> Network {
+        let fir_path = dir.join("LOVV");
+
+        std::fs::write(
+            fir_path.join("positions.toml"),
+            r#"
+[[positions]]
+id = "LOVV_CTR"
+prefixes = ["LOVV"]
+frequency = "132.600"
+facility_type = "CTR"
+profile_id = "CTR_PROFILE"
+
+[[positions]]
+id = "LOWW_APP"
+prefixes = ["LOWW"]
+frequency = "134.675"
+facility_type = "APP"
+profile_id = "CTR_PROFILE"
+
+[[positions]]
+id = "LOWW_TWR"
+prefixes = ["LOWW"]
+frequency = "119.400"
+facility_type = "TWR"
+
+[[positions]]
+id = "LOWW_GND"
+prefixes = ["LOWW"]
+frequency = "121.600"
+facility_type = "GND"
+
+[[positions]]
+id = "LOWW_DEL"
+prefixes = ["LOWW"]
+frequency = "122.125"
+facility_type = "DEL"
+"#,
+        )
+        .unwrap();
+
+        Network::load_from_dir(dir).unwrap()
+    }
+
+    fn create_lovv_network_with_extra_station(dir: &std::path::Path) -> Network {
+        let fir_path = dir.join("LOVV");
+
+        std::fs::write(
+            fir_path.join("stations.toml"),
+            r#"
+[[stations]]
+id = "LOWW_APP"
+controlled_by = ["LOWW_APP", "LOVV_CTR"]
+
+[[stations]]
+id = "LOWW_TWR"
+parent_id = "LOWW_APP"
+controlled_by = ["LOWW_TWR"]
+
+[[stations]]
+id = "LOWW_GND"
+parent_id = "LOWW_TWR"
+controlled_by = ["LOWW_GND"]
+
+[[stations]]
+id = "LOWW_DEL"
+parent_id = "LOWW_GND"
+controlled_by = ["LOWW_DEL"]
+
+[[stations]]
+id = "LOVV_N1"
+controlled_by = ["LOVV_CTR"]
+"#,
+        )
+        .unwrap();
+
+        Network::load_from_dir(dir).unwrap()
+    }
+
+    #[tokio::test]
+    async fn replace_network_removes_stale_position() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // Client connects as LOWW_DEL
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_DEL", "122.125"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // Drain initial station changes from add_client
+        drain_station_changes(&mut rx);
+
+        assert!(
+            manager
+                .online_positions
+                .read()
+                .await
+                .contains_key(&pos("LOWW_DEL"))
+        );
+
+        // Replace with a network that no longer has LOWW_DEL position
+        let new_network = create_lovv_network_without_del(dir.path());
+        manager.replace_network(new_network).await;
+
+        // Position should be gone
+        assert!(
+            !manager
+                .online_positions
+                .read()
+                .await
+                .contains_key(&pos("LOWW_DEL")),
+            "LOWW_DEL position should be removed after network replace"
+        );
+
+        // Client's position_id should be cleared
+        let client = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(
+            client.position_id(),
+            None,
+            "Client's position_id should be None after their position is removed"
+        );
+
+        // Client should receive Offline for LOWW_DEL station
+        let changes = drain_station_changes(&mut rx);
+        assert_eq!(
+            changes,
+            vec![StationChange::Offline {
+                station_id: station("LOWW_DEL"),
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_removes_stale_station() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // Client connects as LOVV_CTR which covers all stations
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx);
+
+        // LOWW_DEL station should be online
+        assert!(
+            manager
+                .online_stations
+                .read()
+                .await
+                .contains_key(&station("LOWW_DEL"))
+        );
+
+        // Replace with network that has no LOWW_DEL station
+        let new_network = create_lovv_network_without_del(dir.path());
+        manager.replace_network(new_network).await;
+
+        // LOWW_DEL station should be gone
+        assert!(
+            !manager
+                .online_stations
+                .read()
+                .await
+                .contains_key(&station("LOWW_DEL")),
+            "LOWW_DEL station should be removed after network replace"
+        );
+
+        // Remaining stations (LOWW_APP, LOWW_TWR, LOWW_GND) should still be online
+        let online_stations = manager.online_stations.read().await;
+        assert!(online_stations.contains_key(&station("LOWW_APP")));
+        assert!(online_stations.contains_key(&station("LOWW_TWR")));
+        assert!(online_stations.contains_key(&station("LOWW_GND")));
+        drop(online_stations);
+
+        // Client should receive exactly Offline for LOWW_DEL
+        let changes = drain_station_changes(&mut rx);
+        assert_eq!(
+            changes,
+            vec![StationChange::Offline {
+                station_id: station("LOWW_DEL"),
+            }],
+            "Only LOWW_DEL should go offline"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_adds_new_station() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // Client connects as LOVV_CTR
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx);
+
+        // No LOVV_N1 station initially
+        assert!(
+            !manager
+                .online_stations
+                .read()
+                .await
+                .contains_key(&station("LOVV_N1"))
+        );
+
+        // Replace with network that adds LOVV_N1 station controlled by LOVV_CTR
+        let new_network = create_lovv_network_with_extra_station(dir.path());
+        manager.replace_network(new_network).await;
+
+        // LOVV_N1 should now be online, controlled by LOVV_CTR
+        let online_stations = manager.online_stations.read().await;
+        assert_eq!(
+            online_stations.get(&station("LOVV_N1")),
+            Some(&pos("LOVV_CTR")),
+            "LOVV_N1 should be online and controlled by LOVV_CTR"
+        );
+        drop(online_stations);
+
+        // Client should receive Online for LOVV_N1
+        let changes = drain_station_changes(&mut rx);
+        assert_eq!(
+            changes,
+            vec![StationChange::Online {
+                station_id: station("LOVV_N1"),
+                position_id: pos("LOVV_CTR"),
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_updates_station_controller() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // LOVV_CTR connects, covers all stations
+        let _client_ctr = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // LOWW_APP should be controlled by LOVV_CTR (only online position)
+        assert_eq!(
+            manager
+                .online_stations
+                .read()
+                .await
+                .get(&station("LOWW_APP")),
+            Some(&pos("LOVV_CTR"))
+        );
+
+        // Now LOWW_APP also connects
+        let _client_app = manager
+            .add_client(
+                client_info("client1", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // LOWW_APP station should now be controlled by LOWW_APP position
+        // (higher priority in controlled_by list)
+        assert_eq!(
+            manager
+                .online_stations
+                .read()
+                .await
+                .get(&station("LOWW_APP")),
+            Some(&pos("LOWW_APP"))
+        );
+
+        // Replace with same network structure — controllers should remain
+        let new_network = Network::load_from_dir(dir.path()).unwrap();
+        manager.replace_network(new_network).await;
+
+        // Station controller assignments should be preserved
+        let online = manager.online_stations.read().await;
+        assert_eq!(
+            online.get(&station("LOWW_APP")),
+            Some(&pos("LOWW_APP")),
+            "LOWW_APP should still be controlled by LOWW_APP position after no-op reload"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_cleans_vatsim_only_positions() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // vacs client connects as LOVV_CTR
+        let _client = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // LOWW_TWR comes online on VATSIM only
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
+            ),
+        ]);
+        manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+
+        assert!(
+            manager
+                .vatsim_only_positions
+                .read()
+                .await
+                .contains(&pos("LOWW_TWR")),
+            "LOWW_TWR should be in vatsim_only"
+        );
+
+        // Replace with network that no longer has LOWW_TWR position
+        let new_network = create_lovv_network_without_del(dir.path());
+
+        // Verify LOWW_TWR position actually doesn't exist in the new network
+        assert!(
+            new_network.get_position(&pos("LOWW_TWR")).is_some(),
+            "LOWW_TWR position should still exist in the reduced network"
+        );
+
+        manager.replace_network(new_network).await;
+
+        // LOWW_TWR position still exists (we only removed DEL), so it stays
+        // in vatsim_only
+        assert!(
+            manager
+                .vatsim_only_positions
+                .read()
+                .await
+                .contains(&pos("LOWW_TWR")),
+            "LOWW_TWR should still be in vatsim_only (position still exists)"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_removes_nonexistent_vatsim_only() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // vacs client connects as LOVV_CTR
+        let _client = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // LOWW_DEL comes online on VATSIM only
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller(
+                    "vatsim_client1",
+                    "LOWW_DEL",
+                    "122.125",
+                    FacilityType::Delivery,
+                ),
+            ),
+        ]);
+        manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+
+        assert!(
+            manager
+                .vatsim_only_positions
+                .read()
+                .await
+                .contains(&pos("LOWW_DEL"))
+        );
+
+        // Replace with network that no longer has LOWW_DEL position
+        let new_network = create_lovv_network_without_del(dir.path());
+        assert!(
+            new_network.get_position(&pos("LOWW_DEL")).is_none(),
+            "Precondition: LOWW_DEL should not exist in the new network"
+        );
+        manager.replace_network(new_network).await;
+
+        // LOWW_DEL should be cleaned from vatsim_only
+        assert!(
+            !manager
+                .vatsim_only_positions
+                .read()
+                .await
+                .contains(&pos("LOWW_DEL")),
+            "LOWW_DEL should be removed from vatsim_only after network replace"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_with_profile_reassignment() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        let network = create_lovv_network_with_profiles(dir.path());
+        let manager = client_manager(network);
+
+        // Client connects as LOWW_APP with profile APP_PROFILE
+        let _client = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Specific(ProfileId::from("APP_PROFILE")),
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // Verify initial profile
+        let client = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(
+            client.active_profile(),
+            &ActiveProfile::Specific(ProfileId::from("APP_PROFILE")),
+        );
+
+        // Replace network where LOWW_APP's profile_id changes to CTR_PROFILE
+        let new_network = create_lovv_network_with_reassigned_profile(dir.path());
+        manager.replace_network(new_network).await;
+
+        // Client's active profile should now be CTR_PROFILE
+        let client = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(
+            client.active_profile(),
+            &ActiveProfile::Specific(ProfileId::from("CTR_PROFILE")),
+            "Client's profile should be updated to CTR_PROFILE after network reload"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_custom_profile_stays_custom() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        let network = create_lovv_network_with_profiles(dir.path());
+        let manager = client_manager(network);
+
+        // Client connects with Custom profile (user's own selection)
+        let _client = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // Replace network where LOWW_APP's profile changes
+        let new_network = create_lovv_network_with_reassigned_profile(dir.path());
+        manager.replace_network(new_network).await;
+
+        // Client's profile should remain Custom
+        let client = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(
+            client.active_profile(),
+            &ActiveProfile::Custom,
+            "Client with Custom profile should remain Custom after network reload"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_no_change_is_noop() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // Client connects as LOVV_CTR
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx);
+
+        let stations_before = manager.online_stations.read().await.clone();
+        let positions_before = manager.online_positions.read().await.clone();
+
+        // Reload the exact same network
+        let same_network = Network::load_from_dir(dir.path()).unwrap();
+        manager.replace_network(same_network).await;
+
+        // Everything should be unchanged
+        assert_eq!(
+            *manager.online_stations.read().await,
+            stations_before,
+            "Online stations should be unchanged after no-op reload"
+        );
+        assert_eq!(
+            *manager.online_positions.read().await,
+            positions_before,
+            "Online positions should be unchanged after no-op reload"
+        );
+
+        // Client should still have their position
+        let client = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(client.position_id(), Some(&pos("LOVV_CTR")));
+
+        // No station changes should be sent
+        let changes = drain_station_changes(&mut rx);
+        assert_eq!(
+            changes,
+            vec![],
+            "No station changes should be sent for no-op reload"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_station_coverage_shift() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // Two clients online: LOVV_CTR and LOWW_APP
+        let (_client_ctr, mut rx_ctr) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+        let (_client_app, mut rx_app) = manager
+            .add_client(
+                client_info("client1", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx_ctr);
+        drain_station_changes(&mut rx_app);
+
+        // LOWW_APP station controlled by LOWW_APP position
+        assert_eq!(
+            manager
+                .online_stations
+                .read()
+                .await
+                .get(&station("LOWW_APP")),
+            Some(&pos("LOWW_APP"))
+        );
+
+        // Replace with network where LOWW_APP station's controlled_by only
+        // lists LOVV_CTR (removing LOWW_APP from the list)
+        let fir_path = dir.path().join("LOVV");
+        std::fs::write(
+            fir_path.join("stations.toml"),
+            r#"
+[[stations]]
+id = "LOWW_APP"
+controlled_by = ["LOVV_CTR"]
+
+[[stations]]
+id = "LOWW_TWR"
+parent_id = "LOWW_APP"
+controlled_by = ["LOWW_TWR"]
+
+[[stations]]
+id = "LOWW_GND"
+parent_id = "LOWW_TWR"
+controlled_by = ["LOWW_GND"]
+
+[[stations]]
+id = "LOWW_DEL"
+parent_id = "LOWW_GND"
+controlled_by = ["LOWW_DEL"]
+"#,
+        )
+        .unwrap();
+        let new_network = Network::load_from_dir(dir.path()).unwrap();
+        manager.replace_network(new_network).await;
+
+        // LOWW_APP station should now be controlled by LOVV_CTR
+        assert_eq!(
+            manager
+                .online_stations
+                .read()
+                .await
+                .get(&station("LOWW_APP")),
+            Some(&pos("LOVV_CTR")),
+            "LOWW_APP station should shift to LOVV_CTR after controlled_by change"
+        );
+
+        // Both clients should receive Handoffs for all stations moving from
+        // LOWW_APP to LOVV_CTR (LOWW_APP position was removed from the network)
+        let expected = vec![
+            StationChange::Handoff {
+                station_id: station("LOWW_APP"),
+                from_position_id: pos("LOWW_APP"),
+                to_position_id: pos("LOVV_CTR"),
+            },
+            StationChange::Handoff {
+                station_id: station("LOWW_DEL"),
+                from_position_id: pos("LOWW_APP"),
+                to_position_id: pos("LOVV_CTR"),
+            },
+            StationChange::Handoff {
+                station_id: station("LOWW_GND"),
+                from_position_id: pos("LOWW_APP"),
+                to_position_id: pos("LOVV_CTR"),
+            },
+            StationChange::Handoff {
+                station_id: station("LOWW_TWR"),
+                from_position_id: pos("LOWW_APP"),
+                to_position_id: pos("LOVV_CTR"),
+            },
+        ];
+        let changes_ctr = drain_station_changes(&mut rx_ctr);
+        assert_eq!(changes_ctr, expected, "LOVV_CTR client");
+        let changes_app = drain_station_changes(&mut rx_app);
+        assert_eq!(changes_app, expected, "LOWW_APP client");
+    }
+
+    /// Creates a network without the LOWW_TWR position.
+    /// LOWW_TWR *station* remains (falls back to parent LOWW_APP).
+    fn create_lovv_network_without_twr_position(dir: &std::path::Path) -> Network {
+        let fir_path = dir.join("LOVV");
+
+        // LOWW_TWR position is removed; update controlled_by references
+        // so stations fall back to LOWW_APP / LOVV_CTR instead.
+        std::fs::write(
+            fir_path.join("stations.toml"),
+            r#"
+[[stations]]
+id = "LOWW_APP"
+controlled_by = ["LOWW_APP", "LOVV_CTR"]
+
+[[stations]]
+id = "LOWW_TWR"
+parent_id = "LOWW_APP"
+controlled_by = ["LOWW_APP", "LOVV_CTR"]
+
+[[stations]]
+id = "LOWW_GND"
+parent_id = "LOWW_TWR"
+controlled_by = ["LOWW_GND"]
+
+[[stations]]
+id = "LOWW_DEL"
+parent_id = "LOWW_GND"
+controlled_by = ["LOWW_DEL"]
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            fir_path.join("positions.toml"),
+            r#"
+[[positions]]
+id = "LOVV_CTR"
+prefixes = ["LOVV"]
+frequency = "132.600"
+facility_type = "CTR"
+
+[[positions]]
+id = "LOWW_APP"
+prefixes = ["LOWW"]
+frequency = "134.675"
+facility_type = "APP"
+
+[[positions]]
+id = "LOWW_GND"
+prefixes = ["LOWW"]
+frequency = "121.600"
+facility_type = "GND"
+
+[[positions]]
+id = "LOWW_DEL"
+prefixes = ["LOWW"]
+frequency = "122.125"
+facility_type = "DEL"
+"#,
+        )
+        .unwrap();
+
+        Network::load_from_dir(dir).unwrap()
+    }
+
+    /// Creates a minimal network with only LOVV_CTR position and one station.
+    fn create_minimal_lovv_network(dir: &std::path::Path) -> Network {
+        let fir_path = dir.join("LOVV");
+
+        std::fs::write(
+            fir_path.join("stations.toml"),
+            r#"
+[[stations]]
+id = "LOWW_APP"
+controlled_by = ["LOVV_CTR"]
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            fir_path.join("positions.toml"),
+            r#"
+[[positions]]
+id = "LOVV_CTR"
+prefixes = ["LOVV"]
+frequency = "132.600"
+facility_type = "CTR"
+"#,
+        )
+        .unwrap();
+
+        Network::load_from_dir(dir).unwrap()
+    }
+
+    #[tokio::test]
+    async fn replace_network_vatsim_only_position_removed_stations_become_visible() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // vacs client connects as LOVV_CTR
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx);
+
+        // LOWW_TWR comes online as VATSIM-only
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
+            ),
+        ]);
+        manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+
+        // Client received Offline for LOWW_TWR/GND/DEL (now VATSIM-only)
+        let changes_after_sync = drain_station_changes(&mut rx);
+        assert_eq!(
+            changes_after_sync,
+            vec![
+                StationChange::Offline {
+                    station_id: station("LOWW_DEL"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_GND"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_TWR"),
+                },
+            ]
+        );
+
+        // Replace with network that removes LOWW_TWR position entirely
+        // → VATSIM-only LOWW_TWR gets cleaned, stations fall back to LOVV_CTR
+        let new_network = create_lovv_network_without_twr_position(dir.path());
+        manager.replace_network(new_network).await;
+
+        // LOWW_TWR should be removed from vatsim_only
+        assert!(
+            !manager
+                .vatsim_only_positions
+                .read()
+                .await
+                .contains(&pos("LOWW_TWR")),
+            "LOWW_TWR should be removed from vatsim_only"
+        );
+
+        // Stations should now be visible again under LOVV_CTR
+        let stations = manager
+            .list_stations(&ActiveProfile::Custom, Some(&pos("LOVV_CTR")))
+            .await;
+        let station_ids: Vec<&str> = stations.iter().map(|s| s.id.as_str()).collect();
+        assert!(station_ids.contains(&"LOWW_TWR"));
+        assert!(station_ids.contains(&"LOWW_GND"));
+        assert!(station_ids.contains(&"LOWW_DEL"));
+
+        // Client should receive Online for the stations that became visible again
+        let changes = drain_station_changes(&mut rx);
+        assert_eq!(
+            changes,
+            vec![
+                StationChange::Online {
+                    station_id: station("LOWW_DEL"),
+                    position_id: pos("LOVV_CTR"),
+                },
+                StationChange::Online {
+                    station_id: station("LOWW_GND"),
+                    position_id: pos("LOVV_CTR"),
+                },
+                StationChange::Online {
+                    station_id: station("LOWW_TWR"),
+                    position_id: pos("LOVV_CTR"),
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_multiple_clients_on_stale_position() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // Two clients connect on the same position LOWW_DEL
+        let (_client0, mut rx0) = manager
+            .add_client(
+                client_info("client0", "LOWW_DEL", "122.125"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+        let (_client1, mut rx1) = manager
+            .add_client(
+                client_info("client1", "LOWW_DEL", "122.125"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx0);
+        drain_station_changes(&mut rx1);
+
+        // Verify both are on the position
+        let pos_clients = manager
+            .online_positions
+            .read()
+            .await
+            .get(&pos("LOWW_DEL"))
+            .cloned()
+            .unwrap_or_default();
+        assert_eq!(pos_clients.len(), 2);
+
+        // Replace with network that removes LOWW_DEL position
+        let new_network = create_lovv_network_without_del(dir.path());
+        manager.replace_network(new_network).await;
+
+        // Position should be gone
+        assert!(
+            !manager
+                .online_positions
+                .read()
+                .await
+                .contains_key(&pos("LOWW_DEL")),
+        );
+
+        // Both clients should have their position_id cleared
+        let c0 = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(c0.position_id(), None, "client0 position should be cleared");
+        let c1 = manager.get_client(&cid("client1")).await.unwrap();
+        assert_eq!(c1.position_id(), None, "client1 position should be cleared");
+
+        // Both should receive Offline for LOWW_DEL
+        let changes0 = drain_station_changes(&mut rx0);
+        assert_eq!(
+            changes0,
+            vec![StationChange::Offline {
+                station_id: station("LOWW_DEL"),
+            }],
+            "client0"
+        );
+        let changes1 = drain_station_changes(&mut rx1);
+        assert_eq!(
+            changes1,
+            vec![StationChange::Offline {
+                station_id: station("LOWW_DEL"),
+            }],
+            "client1"
+        );
+    }
+
+    #[tokio::test]
+    async fn add_client_vatsim_only_position_not_controlling_any_station() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // vacs client connects as LOWW_APP (covers LOWW_APP, LOWW_TWR, LOWW_GND, LOWW_DEL)
+        let (_client_app, mut rx_app) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx_app);
+
+        // LOVV_CTR comes online as VATSIM-only. It would cover LOWW_APP station
+        // via controlled_by, but LOWW_APP position has higher priority, so
+        // LOVV_CTR controls no stations.
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOWW_APP", "134.675", FacilityType::Approach),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller(
+                    "vatsim_client1",
+                    "LOVV_CTR",
+                    "132.600",
+                    FacilityType::Enroute,
+                ),
+            ),
+        ]);
+        manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+
+        // No station changes — LOVV_CTR is VATSIM-only but controls nothing
+        // (all stations already covered by higher-priority LOWW_APP)
+        let changes_after_sync = drain_station_changes(&mut rx_app);
+        assert_eq!(changes_after_sync, vec![], "No station changes expected");
+
+        // Now a vacs client connects as LOVV_CTR (was VATSIM-only)
+        let (_client_ctr, _rx_ctr) = manager
+            .add_client(
+                client_info("client1", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // LOVV_CTR was vatsim-only but controlled no stations, so the
+        // transition shouldn't produce any Online events for the APP client
+        let changes_after_connect = drain_station_changes(&mut rx_app);
+        assert_eq!(
+            changes_after_connect,
+            vec![],
+            "No Online events expected — LOVV_CTR controls no stations while LOWW_APP is online"
+        );
+
+        // LOVV_CTR should no longer be in vatsim_only
+        assert!(
+            !manager
+                .vatsim_only_positions
+                .read()
+                .await
+                .contains(&pos("LOVV_CTR")),
+            "LOVV_CTR should be removed from vatsim_only"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_reduces_to_minimal() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // Two clients on different positions
+        let (_client_ctr, mut rx_ctr) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+        let (_client_app, mut rx_app) = manager
+            .add_client(
+                client_info("client1", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx_ctr);
+        drain_station_changes(&mut rx_app);
+
+        // Verify we have stations and positions
+        assert!(!manager.online_stations.read().await.is_empty());
+        assert!(!manager.online_positions.read().await.is_empty());
+
+        // Replace with minimal network: only LOVV_CTR position + LOWW_APP station
+        let new_network = create_minimal_lovv_network(dir.path());
+        manager.replace_network(new_network).await;
+
+        // LOWW_APP position should be gone (doesn't exist in new network)
+        assert!(
+            !manager
+                .online_positions
+                .read()
+                .await
+                .contains_key(&pos("LOWW_APP")),
+        );
+
+        // LOVV_CTR position should still exist (it's in the new network)
+        assert!(
+            manager
+                .online_positions
+                .read()
+                .await
+                .contains_key(&pos("LOVV_CTR")),
+        );
+
+        // Only LOWW_APP station should remain
+        let stations = manager.online_stations.read().await;
+        assert_eq!(stations.len(), 1, "Only LOWW_APP station should remain");
+        assert!(stations.contains_key(&station("LOWW_APP")));
+        drop(stations);
+
+        // LOWW_APP client's position should be cleared (position doesn't exist)
+        let c0 = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(
+            c0.position_id(),
+            Some(&pos("LOVV_CTR")),
+            "LOVV_CTR still exists in new network"
+        );
+        let c1 = manager.get_client(&cid("client1")).await.unwrap();
+        assert_eq!(
+            c1.position_id(),
+            None,
+            "LOWW_APP position doesn't exist in new network"
+        );
+
+        // CTR client: LOWW_TWR/GND/DEL go Offline (removed stations),
+        // LOWW_APP transitions LOWW_APP→LOVV_CTR but since LOWW_APP position
+        // is gone (removed as stale), client_visible_changes sees it as Online.
+        let changes_ctr = drain_station_changes(&mut rx_ctr);
+        assert_eq!(
+            changes_ctr,
+            vec![
+                StationChange::Online {
+                    station_id: station("LOWW_APP"),
+                    position_id: pos("LOVV_CTR"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_DEL"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_GND"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_TWR"),
+                },
+            ],
+            "CTR client"
+        );
+
+        // APP client: same changes
+        let changes_app = drain_station_changes(&mut rx_app);
+        assert_eq!(
+            changes_app,
+            vec![
+                StationChange::Online {
+                    station_id: station("LOWW_APP"),
+                    position_id: pos("LOVV_CTR"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_DEL"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_GND"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_TWR"),
+                },
+            ],
+            "APP client"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_client_without_position_unaffected() {
+        let (dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // Position-holding client
+        let (_client_ctr, mut rx_ctr) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // Client without a position (e.g. position lookup yielded no match)
+        let (_client_nopos, mut rx_nopos) = manager
+            .add_client(
+                client_info_without_position("nopos0"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx_ctr);
+        drain_station_changes(&mut rx_nopos);
+
+        // Verify client has no position
+        let nopos = manager.get_client(&cid("nopos0")).await.unwrap();
+        assert_eq!(nopos.position_id(), None);
+
+        // Replace with network that removes LOWW_DEL
+        let new_network = create_lovv_network_without_del(dir.path());
+        manager.replace_network(new_network).await;
+
+        // No-position client should still be connected with no position
+        let nopos = manager.get_client(&cid("nopos0")).await.unwrap();
+        assert_eq!(nopos.position_id(), None, "Position should remain None");
+
+        // CTR client should receive Offline for LOWW_DEL
+        let changes_ctr = drain_station_changes(&mut rx_ctr);
+        assert_eq!(
+            changes_ctr,
+            vec![StationChange::Offline {
+                station_id: station("LOWW_DEL"),
+            }]
+        );
+
+        // No-position client should also receive Offline for LOWW_DEL
+        // (they see all stations via Custom profile)
+        let changes_nopos = drain_station_changes(&mut rx_nopos);
+        assert_eq!(
+            changes_nopos,
+            vec![StationChange::Offline {
+                station_id: station("LOWW_DEL"),
+            }],
+            "No-position client should receive station changes too"
+        );
+    }
 }
