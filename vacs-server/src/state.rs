@@ -87,6 +87,16 @@ impl AppState {
     ) -> anyhow::Result<(ClientSession, mpsc::Receiver<ServerMessage>)> {
         tracing::trace!("Registering client");
 
+        if self.clients.is_empty().await {
+            tracing::debug!("First client connected, triggering initial VATSIM controller sync");
+            if let Err(err) = self
+                .update_vatsim_controllers(&mut HashSet::new(), false)
+                .await
+            {
+                tracing::warn!(?err, "Initial VATSIM controller sync failed");
+            }
+        }
+
         let (client, rx) = self
             .clients
             .add_client(client_info, active_profile, client_connection_guard)
@@ -236,8 +246,7 @@ impl AppState {
                                 continue;
                             }
 
-                            tracing::debug!("Updating controller info");
-                            if let Err(err) = Self::update_vatsim_controllers(&state, &mut pending_disconnect).await {
+                            if let Err(err) = state.update_vatsim_controllers(&mut pending_disconnect, state.config.vatsim.require_active_connection).await {
                                 tracing::warn!(?err, "Failed to update controller info");
                             }
                         }
@@ -248,31 +257,46 @@ impl AppState {
         )
     }
 
-    pub async fn force_update_controllers(state: &Arc<AppState>) -> anyhow::Result<()> {
-        let mut pending_disconnect = HashSet::new();
-        Self::update_vatsim_controllers(state, &mut pending_disconnect).await
+    pub async fn force_update_controllers(&self) -> anyhow::Result<()> {
+        self.update_vatsim_controllers(
+            &mut HashSet::new(),
+            self.config.vatsim.require_active_connection,
+        )
+        .await
     }
 
+    #[tracing::instrument(level = "debug", skip(self, pending_disconnect), fields(pending_disconnect = pending_disconnect.len()), err)]
     async fn update_vatsim_controllers(
-        state: &Arc<AppState>,
+        &self,
         pending_disconnect: &mut HashSet<ClientId>,
+        require_active_connection: bool,
     ) -> anyhow::Result<()> {
-        let controllers = state.get_vatsim_controllers().await?;
+        tracing::debug!("Updating VATSIM controllers");
+
+        let start = std::time::Instant::now();
+        let controllers = self.get_vatsim_controllers().await?;
+        tracing::trace!(elapsed = ?start.elapsed(), "Finished retrieving VATSIM controllers");
+
+        let start_sync = std::time::Instant::now();
         let current: HashMap<ClientId, ControllerInfo> = controllers
             .into_iter()
             .filter(|c| !c.callsign.ends_with("_SUP"))
             .map(|c| (c.cid.clone(), c))
             .collect();
 
-        let disconnected_clients = state
+        let disconnected_clients = self
             .clients
-            .sync_vatsim_state(&current, pending_disconnect)
+            .sync_vatsim_state(&current, pending_disconnect, require_active_connection)
             .await;
+        tracing::trace!(elapsed = ?start_sync.elapsed(), "Finished syncing VATSIM state");
 
+        let start_unregister = std::time::Instant::now();
         for (cid, disconnect_reason) in disconnected_clients {
-            state.unregister_client(&cid, Some(disconnect_reason)).await;
+            self.unregister_client(&cid, Some(disconnect_reason)).await;
         }
+        tracing::trace!(elapsed = ?start_unregister.elapsed(), "Finished unregistering clients");
 
+        tracing::debug!(elapsed = ?start.elapsed(), "Finished updating VATSIM controllers");
         Ok(())
     }
 

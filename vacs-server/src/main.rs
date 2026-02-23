@@ -56,7 +56,10 @@ async fn main() -> anyhow::Result<()> {
     let redis_pool = redis_store.get_pool().clone();
 
     let slurper = SlurperClient::new(config.vatsim.slurper_base_url.as_str())?;
-    let data_feed = Arc::new(VatsimDataFeed::new(config.vatsim.data_feed_url.as_str())?);
+    let data_feed = Arc::new(VatsimDataFeed::new(
+        config.vatsim.data_feed_url.as_str(),
+        config.vatsim.data_feed_timeout,
+    )?);
 
     let rate_limiters = RateLimiters::from(config.rate_limiters);
 
@@ -96,14 +99,10 @@ async fn main() -> anyhow::Result<()> {
     let metrics_listener = tokio::net::TcpListener::bind(config.server.metrics_bind_addr).await?;
     tracing::info!(bind_addr = ?metrics_listener.local_addr(), "Started metrics listener");
 
-    let controller_update_task = if config.vatsim.require_active_connection {
-        Some(AppState::start_controller_update_task(
-            app_state.clone(),
-            config.vatsim.controller_update_interval,
-        ))
-    } else {
-        None
-    };
+    let controller_update_task = AppState::start_controller_update_task(
+        app_state.clone(),
+        config.vatsim.controller_update_interval,
+    );
 
     let metrics_server = axum::serve(metrics_listener, metrics_app.into_make_service())
         .with_graceful_shutdown(shutdown_signal(shutdown_tx.clone()));
@@ -117,9 +116,7 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::try_join!(metrics_server, server)?;
 
-    if let Some(controller_update_task) = controller_update_task
-        && let Err(err) = controller_update_task.await
-    {
+    if let Err(err) = controller_update_task.await {
         tracing::warn!(?err, "Controller update task finished with error");
     }
 

@@ -41,7 +41,7 @@ pub async fn get_update(app: &AppHandle) -> Result<Option<Update>, Error> {
     let updater_url = state
         .config
         .backend
-        .endpoint_url(BackendEndpoint::VersionUpdateCheck)
+        .endpoint_url(&BackendEndpoint::VersionUpdateCheck)
         .replace("{{channel}}", channel.as_str());
 
     log::info!("Checking for update at {updater_url}...");

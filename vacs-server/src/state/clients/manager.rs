@@ -21,6 +21,7 @@ pub struct ClientManager {
     clients: RwLock<HashMap<ClientId, ClientSession>>,
     online_positions: RwLock<HashMap<PositionId, HashSet<ClientId>>>,
     online_stations: RwLock<HashMap<StationId, PositionId>>,
+    vatsim_only_positions: RwLock<HashSet<PositionId>>,
 }
 
 impl ClientManager {
@@ -31,6 +32,7 @@ impl ClientManager {
             clients: RwLock::new(HashMap::new()),
             online_positions: RwLock::new(HashMap::new()),
             online_stations: RwLock::new(HashMap::new()),
+            vatsim_only_positions: RwLock::new(HashSet::new()),
         }
     }
 
@@ -69,6 +71,55 @@ impl ClientManager {
 
     pub fn network(&self) -> &Network {
         &self.network
+    }
+
+    /// Transforms station changes to only include changes visible to vacs clients.
+    /// Stations covered solely by VATSIM-only positions are not callable, so:
+    /// - `Online` for a VATSIM-only position is dropped
+    /// - `Offline` events are always forwarded, even if the previous covering position
+    ///   was VATSIM-only. Clients handle duplicate/unknown `Offline` events gracefully.
+    /// - `Handoff` to a VATSIM-only position becomes `Offline` (station leaves vacs coverage)
+    /// - `Handoff` from a VATSIM-only position becomes `Online` (station enters vacs coverage)
+    fn client_visible_changes(
+        changes: &[StationChange],
+        online_positions: &HashMap<PositionId, HashSet<ClientId>>,
+    ) -> Vec<StationChange> {
+        changes
+            .iter()
+            .filter_map(|change| match change {
+                StationChange::Online { position_id, .. } => {
+                    if online_positions.contains_key(position_id) {
+                        Some(change.clone())
+                    } else {
+                        None
+                    }
+                }
+                StationChange::Handoff {
+                    station_id,
+                    from_position_id,
+                    to_position_id,
+                } => {
+                    let from_vacs = online_positions.contains_key(from_position_id);
+                    let to_vacs = online_positions.contains_key(to_position_id);
+                    match (from_vacs, to_vacs) {
+                        // vacs -> vacs: normal handoff
+                        (true, true) => Some(change.clone()),
+                        // vacs -> VATSIM-only: station leaves vacs coverage
+                        (true, false) => Some(StationChange::Offline {
+                            station_id: station_id.clone(),
+                        }),
+                        // VATSIM-only -> vacs: station enters vacs coverage
+                        (false, true) => Some(StationChange::Online {
+                            station_id: station_id.clone(),
+                            position_id: to_position_id.clone(),
+                        }),
+                        // VATSIM-only -> VATSIM-only: invisible to clients
+                        (false, false) => None,
+                    }
+                }
+                StationChange::Offline { .. } => Some(change.clone()),
+            })
+            .collect()
     }
 
     #[instrument(level = "debug", skip(self, client_connection_guard), err)]
@@ -120,20 +171,54 @@ impl ClientManager {
                 Vec::new()
             } else {
                 tracing::trace!(?position_id, "Adding position to online positions list");
-                let current_positions = online_positions.keys().collect::<HashSet<_>>();
-                let changes =
-                    self.network
-                        .coverage_changes(None, Some(position_id), &current_positions);
-                online_positions
-                    .insert(position_id.clone(), HashSet::from([client_info.id.clone()]));
+                let mut vatsim_only = self.vatsim_only_positions.write().await;
+                let was_vatsim_only = vatsim_only.remove(position_id);
 
-                tracing::trace!(
-                    ?position_id,
-                    "Updating online stations list after position addition"
-                );
-                self.update_online_stations(&changes).await;
+                if was_vatsim_only {
+                    drop(vatsim_only);
 
-                changes
+                    tracing::debug!(
+                        ?position_id,
+                        "Position was VATSIM-only, transitioning to vacs"
+                    );
+
+                    online_positions
+                        .insert(position_id.clone(), HashSet::from([client_info.id.clone()]));
+
+                    // The total set of online positions hasn't changed (the
+                    // position was already counted via vatsim_only), so there
+                    // are no actual coverage changes. However, stations
+                    // controlled by this position were invisible to vacs clients
+                    // (they received Offline when the position became
+                    // VATSIM-only) and now need Online events.
+                    let online_stations = self.online_stations.read().await;
+                    online_stations
+                        .iter()
+                        .filter(|(_, controlling_pos)| *controlling_pos == position_id)
+                        .map(|(station_id, _)| StationChange::Online {
+                            station_id: station_id.clone(),
+                            position_id: position_id.clone(),
+                        })
+                        .collect()
+                } else {
+                    let all_positions: HashSet<&PositionId> =
+                        online_positions.keys().chain(vatsim_only.iter()).collect();
+                    let all_changes =
+                        self.network
+                            .coverage_changes(None, Some(position_id), &all_positions);
+                    drop(vatsim_only);
+
+                    online_positions
+                        .insert(position_id.clone(), HashSet::from([client_info.id.clone()]));
+
+                    tracing::trace!(
+                        ?position_id,
+                        "Updating online stations list after position addition"
+                    );
+                    self.update_online_stations(&all_changes).await;
+
+                    Self::client_visible_changes(&all_changes, &online_positions)
+                }
             }
         } else {
             tracing::trace!(
@@ -176,10 +261,13 @@ impl ClientManager {
                 if online_positions.get(position_id).unwrap().len() == 1 {
                     tracing::trace!(?position_id, "Removing position from online positions list");
 
-                    let current_positions = online_positions.keys().collect::<HashSet<_>>();
-                    let changes_vec =
-                        self.network
-                            .coverage_changes(Some(position_id), None, &current_positions);
+                    let vatsim_only = self.vatsim_only_positions.read().await;
+                    let before_all: HashSet<&PositionId> =
+                        online_positions.keys().chain(vatsim_only.iter()).collect();
+                    let mut after_all = before_all.clone();
+                    after_all.remove(position_id);
+                    let all_changes = self.network.coverage_diff(&before_all, &after_all);
+                    drop(vatsim_only);
 
                     online_positions.remove(position_id);
 
@@ -187,9 +275,12 @@ impl ClientManager {
                         ?position_id,
                         "Updating online stations list after position removal"
                     );
-                    self.update_online_stations(&changes_vec).await;
+                    self.update_online_stations(&all_changes).await;
 
-                    changes.extend(changes_vec);
+                    changes.extend(Self::client_visible_changes(
+                        &all_changes,
+                        &online_positions,
+                    ));
                 } else {
                     tracing::trace!(
                         ?position_id,
@@ -221,6 +312,14 @@ impl ClientManager {
             tracing::warn!(?err, "Failed to broadcast client disconnected message");
         }
 
+        if self.clients.read().await.is_empty() {
+            tracing::debug!(
+                "Last client disconnected, clearing VATSIM-only positions and online stations"
+            );
+            self.vatsim_only_positions.write().await.clear();
+            self.online_stations.write().await.clear();
+        }
+
         self.broadcast_station_changes(&changes).await;
 
         tracing::debug!("Client removed");
@@ -247,10 +346,12 @@ impl ClientManager {
     ) -> Vec<StationInfo> {
         let relevant_stations = self.network.relevant_stations(profile);
         let online_stations = self.online_stations.read().await;
+        let online_positions = self.online_positions.read().await;
 
         let mut stations: Vec<StationInfo> = match relevant_stations {
             RelevantStations::All => online_stations
                 .iter()
+                .filter(|(_, position_id)| online_positions.contains_key(*position_id))
                 .map(|(id, controller)| {
                     let own = self_position_id
                         .map(|self_pos| controller == self_pos)
@@ -264,14 +365,16 @@ impl ClientManager {
             RelevantStations::Subset(ids) => ids
                 .iter()
                 .filter_map(|id| {
-                    online_stations.get(id).map(|controller| {
-                        let own = self_position_id
-                            .map(|self_pos| controller == self_pos)
-                            .unwrap_or(false);
-                        StationInfo {
-                            id: id.clone(),
-                            own,
-                        }
+                    online_stations.get(id).and_then(|controller| {
+                        online_positions.contains_key(controller).then(|| {
+                            let own = self_position_id
+                                .map(|self_pos| controller == self_pos)
+                                .unwrap_or(false);
+                            StationInfo {
+                                id: id.clone(),
+                                own,
+                            }
+                        })
                     })
                 })
                 .collect(),
@@ -316,6 +419,7 @@ impl ClientManager {
         &self,
         controllers: &HashMap<ClientId, ControllerInfo>,
         pending_disconnect: &mut HashSet<ClientId>,
+        require_active_connection: bool,
     ) -> Vec<(ClientId, DisconnectReason)> {
         let mut updates: Vec<ServerMessage> = Vec::new();
         let mut disconnected_clients: Vec<(ClientId, DisconnectReason)> = Vec::new();
@@ -324,7 +428,13 @@ impl ClientManager {
         {
             let mut clients = self.clients.write().await;
             let mut online_positions = self.online_positions.write().await;
-            let start_online_positions = online_positions.keys().cloned().collect::<HashSet<_>>();
+            let mut vatsim_only = self.vatsim_only_positions.write().await;
+
+            let start_all_positions: HashSet<PositionId> = online_positions
+                .keys()
+                .chain(vatsim_only.iter())
+                .cloned()
+                .collect();
             let mut positions_changed = false;
 
             fn disconnect_or_mark_pending(
@@ -353,18 +463,22 @@ impl ClientManager {
 
                 match controllers.get(cid) {
                     Some(controller) if controller.facility_type == FacilityType::Unknown => {
-                        disconnect_or_mark_pending(
-                            cid,
-                            pending_disconnect,
-                            &mut disconnected_clients,
-                        );
+                        if require_active_connection {
+                            disconnect_or_mark_pending(
+                                cid,
+                                pending_disconnect,
+                                &mut disconnected_clients,
+                            );
+                        }
                     }
                     None => {
-                        disconnect_or_mark_pending(
-                            cid,
-                            pending_disconnect,
-                            &mut disconnected_clients,
-                        );
+                        if require_active_connection {
+                            disconnect_or_mark_pending(
+                                cid,
+                                pending_disconnect,
+                                &mut disconnected_clients,
+                            );
+                        }
                     }
                     Some(controller) => {
                         if pending_disconnect.remove(cid) {
@@ -482,16 +596,48 @@ impl ClientManager {
                 }
             }
 
+            let vacs_client_ids: HashSet<&ClientId> = clients.keys().collect();
+            let mut new_vatsim_only: HashSet<PositionId> = HashSet::new();
+
+            for (cid, controller) in controllers {
+                if controller.facility_type == FacilityType::Unknown
+                    || vacs_client_ids.contains(cid)
+                {
+                    continue;
+                }
+                let positions = self.network.find_positions(
+                    &controller.callsign,
+                    &controller.frequency,
+                    controller.facility_type,
+                );
+                if positions.len() == 1 && !online_positions.contains_key(&positions[0].id) {
+                    new_vatsim_only.insert(positions[0].id.clone());
+                }
+            }
+
+            if *vatsim_only != new_vatsim_only {
+                tracing::debug!(
+                    before = vatsim_only.len(),
+                    after = new_vatsim_only.len(),
+                    "VATSIM-only positions changed"
+                );
+                *vatsim_only = new_vatsim_only;
+                positions_changed = true;
+            }
+
             if positions_changed {
                 tracing::debug!("Online positions changed, calculating coverage changes");
-                let start_online_positions = start_online_positions.iter().collect::<HashSet<_>>();
-                let end_online_positions = online_positions.keys().collect::<HashSet<_>>();
+                let start_all = start_all_positions.iter().collect::<HashSet<_>>();
+                let end_all: HashSet<&PositionId> =
+                    online_positions.keys().chain(vatsim_only.iter()).collect();
 
-                let changes = self
-                    .network
-                    .coverage_diff(&start_online_positions, &end_online_positions);
-                self.update_online_stations(&changes).await;
-                coverage_changes.extend(changes);
+                let all_changes = self.network.coverage_diff(&start_all, &end_all);
+                self.update_online_stations(&all_changes).await;
+
+                coverage_changes.extend(Self::client_visible_changes(
+                    &all_changes,
+                    &online_positions,
+                ));
             }
         }
 
@@ -596,5 +742,693 @@ impl ClientManager {
                 tracing::warn!(?err, ?client, "Failed to send station changes to client");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn pos(id: &str) -> PositionId {
+        PositionId::from(id)
+    }
+
+    fn station(id: &str) -> StationId {
+        StationId::from(id)
+    }
+
+    fn cid(id: &str) -> ClientId {
+        ClientId::from(id)
+    }
+
+    fn controller(cid: &str, callsign: &str, freq: &str, ft: FacilityType) -> ControllerInfo {
+        ControllerInfo {
+            cid: ClientId::from(cid),
+            callsign: callsign.to_string(),
+            frequency: freq.to_string(),
+            facility_type: ft,
+        }
+    }
+
+    fn client_info(id: &str, position_id: &str, freq: &str) -> ClientInfo {
+        ClientInfo {
+            id: ClientId::from(id),
+            position_id: Some(PositionId::from(position_id)),
+            display_name: id.to_string(),
+            frequency: freq.to_string(),
+        }
+    }
+
+    fn online_positions(entries: &[&str]) -> HashMap<PositionId, HashSet<ClientId>> {
+        entries
+            .iter()
+            .map(|id| (pos(id), HashSet::from([cid("1000000")])))
+            .collect()
+    }
+
+    fn client_manager(network: Network) -> ClientManager {
+        let (tx, _) = broadcast::channel(64);
+        ClientManager::new(tx, network)
+    }
+
+    /// Drain all pending messages from a client receiver and return only the
+    /// station changes, sorted for deterministic comparison.
+    fn drain_station_changes(rx: &mut mpsc::Receiver<ServerMessage>) -> Vec<StationChange> {
+        let mut changes = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            if let ServerMessage::StationChanges(sc) = msg {
+                changes.extend(sc.changes);
+            }
+        }
+        changes.sort();
+        changes
+    }
+
+    fn create_lovv_network() -> (tempfile::TempDir, Network) {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        std::fs::write(
+            fir_path.join("stations.toml"),
+            r#"
+[[stations]]
+id = "LOWW_APP"
+controlled_by = ["LOWW_APP", "LOVV_CTR"]
+
+[[stations]]
+id = "LOWW_TWR"
+parent_id = "LOWW_APP"
+controlled_by = ["LOWW_TWR"]
+
+[[stations]]
+id = "LOWW_GND"
+parent_id = "LOWW_TWR"
+controlled_by = ["LOWW_GND"]
+
+[[stations]]
+id = "LOWW_DEL"
+parent_id = "LOWW_GND"
+controlled_by = ["LOWW_DEL"]
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            fir_path.join("positions.toml"),
+            r#"
+[[positions]]
+id = "LOVV_CTR"
+prefixes = ["LOVV"]
+frequency = "132.600"
+facility_type = "CTR"
+
+[[positions]]
+id = "LOWW_APP"
+prefixes = ["LOWW"]
+frequency = "134.675"
+facility_type = "APP"
+
+[[positions]]
+id = "LOWW_TWR"
+prefixes = ["LOWW"]
+frequency = "119.400"
+facility_type = "TWR"
+
+[[positions]]
+id = "LOWW_GND"
+prefixes = ["LOWW"]
+frequency = "121.600"
+facility_type = "GND"
+
+[[positions]]
+id = "LOWW_DEL"
+prefixes = ["LOWW"]
+frequency = "122.125"
+facility_type = "DEL"
+"#,
+        )
+        .unwrap();
+
+        let network = Network::load_from_dir(dir.path()).unwrap();
+        (dir, network)
+    }
+
+    #[test]
+    fn online_vacs_position_is_visible() {
+        let changes = vec![StationChange::Online {
+            station_id: station("LOWW_TWR"),
+            position_id: pos("LOWW_TWR"),
+        }];
+        let positions = online_positions(&["LOWW_TWR"]);
+
+        let result = ClientManager::client_visible_changes(&changes, &positions);
+        assert_eq!(result, changes);
+    }
+
+    #[test]
+    fn online_vatsim_only_position_is_dropped() {
+        let changes = vec![StationChange::Online {
+            station_id: station("LOWW_TWR"),
+            position_id: pos("LOWW_TWR"),
+        }];
+        let positions = online_positions(&[]);
+
+        let result = ClientManager::client_visible_changes(&changes, &positions);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn handoff_vacs_to_vacs_is_visible() {
+        let changes = vec![StationChange::Handoff {
+            station_id: station("LOWW_APP"),
+            from_position_id: pos("LOVV_CTR"),
+            to_position_id: pos("LOWW_APP"),
+        }];
+        let positions = online_positions(&["LOVV_CTR", "LOWW_APP"]);
+
+        let result = ClientManager::client_visible_changes(&changes, &positions);
+        assert_eq!(result, changes);
+    }
+
+    #[test]
+    fn handoff_vacs_to_vatsim_only_becomes_offline() {
+        let changes = vec![StationChange::Handoff {
+            station_id: station("LOWW_TWR"),
+            from_position_id: pos("LOWW_APP"),
+            to_position_id: pos("LOWW_TWR"),
+        }];
+        let positions = online_positions(&["LOWW_APP"]);
+
+        let result = ClientManager::client_visible_changes(&changes, &positions);
+        assert_eq!(
+            result,
+            vec![StationChange::Offline {
+                station_id: station("LOWW_TWR"),
+            }]
+        );
+    }
+
+    #[test]
+    fn handoff_vatsim_only_to_vacs_becomes_online() {
+        let changes = vec![StationChange::Handoff {
+            station_id: station("LOWW_TWR"),
+            from_position_id: pos("LOWW_TWR"),
+            to_position_id: pos("LOWW_APP"),
+        }];
+        let positions = online_positions(&["LOWW_APP"]);
+
+        let result = ClientManager::client_visible_changes(&changes, &positions);
+        assert_eq!(
+            result,
+            vec![StationChange::Online {
+                station_id: station("LOWW_TWR"),
+                position_id: pos("LOWW_APP"),
+            }]
+        );
+    }
+
+    #[test]
+    fn handoff_vatsim_only_to_vatsim_only_is_dropped() {
+        let changes = vec![StationChange::Handoff {
+            station_id: station("LOWW_APP"),
+            from_position_id: pos("LOVV_CTR"),
+            to_position_id: pos("LOWW_APP"),
+        }];
+        let positions = online_positions(&[]);
+
+        let result = ClientManager::client_visible_changes(&changes, &positions);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn offline_is_always_visible() {
+        let changes = vec![StationChange::Offline {
+            station_id: station("LOWW_TWR"),
+        }];
+        let positions = online_positions(&[]);
+
+        let result = ClientManager::client_visible_changes(&changes, &positions);
+        assert_eq!(result, changes);
+    }
+
+    #[tokio::test]
+    async fn vatsim_only_position_removes_station_from_vacs_client() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx);
+
+        // LOWW_APP should cover LOWW_APP, LOWW_TWR, LOWW_GND, LOWW_DEL stations
+        let stations = manager
+            .list_stations(&ActiveProfile::Custom, Some(&pos("LOWW_APP")))
+            .await;
+        let station_ids: Vec<&str> = stations.iter().map(|s| s.id.as_str()).collect();
+        assert!(station_ids.contains(&"LOWW_APP"));
+        assert!(station_ids.contains(&"LOWW_TWR"));
+        assert!(station_ids.contains(&"LOWW_GND"));
+        assert!(station_ids.contains(&"LOWW_DEL"));
+
+        // Now LOWW_TWR comes online on VATSIM only (not on vacs)
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOWW_APP", "134.675", FacilityType::Approach),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
+            ),
+        ]);
+
+        let disconnected = manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+        assert!(disconnected.is_empty());
+
+        let stations = manager
+            .list_stations(&ActiveProfile::Custom, Some(&pos("LOWW_APP")))
+            .await;
+        let station_ids: Vec<&str> = stations.iter().map(|s| s.id.as_str()).collect();
+        assert!(station_ids.contains(&"LOWW_APP"));
+        assert!(
+            !station_ids.contains(&"LOWW_TWR"),
+            "LOWW_TWR should not be listed (VATSIM-only)"
+        );
+        // LOWW_GND and LOWW_DEL are children of LOWW_TWR, now covered by VATSIM-only LOWW_TWR
+        assert!(
+            !station_ids.contains(&"LOWW_GND"),
+            "LOWW_GND should not be listed (covered by VATSIM-only LOWW_TWR)"
+        );
+        assert!(
+            !station_ids.contains(&"LOWW_DEL"),
+            "LOWW_DEL should not be listed (covered by VATSIM-only LOWW_TWR)"
+        );
+
+        // But internally, LOWW_TWR station should be tracked in online_stations
+        let internal_stations = manager.online_stations.read().await;
+        assert!(internal_stations.contains_key(&station("LOWW_TWR")));
+        drop(internal_stations);
+
+        // Client should receive Offline for the stations that became vatsim-only
+        // (LOWW_APP stays online — still covered by vacs LOWW_APP position)
+        let changes = drain_station_changes(&mut rx);
+        assert_eq!(
+            changes,
+            vec![
+                StationChange::Offline {
+                    station_id: station("LOWW_DEL"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_GND"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_TWR"),
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn vatsim_only_position_becomes_vacs_when_client_connects() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // vacs client connects as LOVV_CTR (covers everything including LOWW_APP,
+        // LOWW_TWR, etc.)
+        let (_client, mut rx_ctr) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx_ctr);
+
+        // LOWW_TWR comes online on VATSIM only
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
+            ),
+        ]);
+        manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+
+        // LOWW_TWR station is NOT callable (VATSIM-only)
+        let stations = manager
+            .list_stations(&ActiveProfile::Custom, Some(&pos("LOVV_CTR")))
+            .await;
+        let station_ids: Vec<&str> = stations.iter().map(|s| s.id.as_str()).collect();
+        assert!(!station_ids.contains(&"LOWW_TWR"));
+
+        // CTR client should have received Offline for stations that became VATSIM-only
+        let changes_after_sync = drain_station_changes(&mut rx_ctr);
+        assert_eq!(
+            changes_after_sync,
+            vec![
+                StationChange::Offline {
+                    station_id: station("LOWW_DEL"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_GND"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_TWR"),
+                },
+            ]
+        );
+
+        // Now a vacs client connects as LOWW_TWR
+        let _client_twr = manager
+            .add_client(
+                client_info("client2", "LOWW_TWR", "119.400"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // LOWW_TWR should now be in the list (vacs client covers it)
+        let stations = manager
+            .list_stations(&ActiveProfile::Custom, Some(&pos("LOVV_CTR")))
+            .await;
+        let station_ids: Vec<&str> = stations.iter().map(|s| s.id.as_str()).collect();
+        assert!(
+            station_ids.contains(&"LOWW_TWR"),
+            "LOWW_TWR should be listed after vacs client connects"
+        );
+
+        // CTR client should receive Online for stations that transitioned from
+        // VATSIM-only to vacs coverage.
+        let changes_after_connect = drain_station_changes(&mut rx_ctr);
+        assert_eq!(
+            changes_after_connect,
+            vec![
+                StationChange::Online {
+                    station_id: station("LOWW_DEL"),
+                    position_id: pos("LOWW_TWR"),
+                },
+                StationChange::Online {
+                    station_id: station("LOWW_GND"),
+                    position_id: pos("LOWW_TWR"),
+                },
+                StationChange::Online {
+                    station_id: station("LOWW_TWR"),
+                    position_id: pos("LOWW_TWR"),
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn vacs_client_disconnect_with_vatsim_only_covering_same_position() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // vacs client connects as LOVV_CTR
+        let (_client_ctr, mut rx_ctr) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // vacs client connects as LOWW_TWR
+        let _client_twr = manager
+            .add_client(
+                client_info("client2", "LOWW_TWR", "119.400"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx_ctr);
+
+        // LOWW_TWR is callable
+        let stations = manager
+            .list_stations(&ActiveProfile::Custom, Some(&pos("LOVV_CTR")))
+            .await;
+        let station_ids: Vec<&str> = stations.iter().map(|s| s.id.as_str()).collect();
+        assert!(station_ids.contains(&"LOWW_TWR"));
+
+        // vacs LOWW_TWR client disconnects
+        manager
+            .remove_client(cid("client2"), Some(DisconnectReason::Terminated))
+            .await;
+
+        // CTR client should see LOWW_TWR come back under its control
+        let changes_after_disconnect = drain_station_changes(&mut rx_ctr);
+        assert_eq!(
+            changes_after_disconnect,
+            vec![
+                StationChange::Online {
+                    station_id: station("LOWW_DEL"),
+                    position_id: pos("LOVV_CTR"),
+                },
+                StationChange::Online {
+                    station_id: station("LOWW_GND"),
+                    position_id: pos("LOVV_CTR"),
+                },
+                StationChange::Online {
+                    station_id: station("LOWW_TWR"),
+                    position_id: pos("LOVV_CTR"),
+                },
+            ]
+        );
+
+        // But VATSIM-only LOWW_TWR is still online
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
+            ),
+        ]);
+        manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+
+        // After sync, LOWW_TWR becomes VATSIM-only → CTR client sees it go Offline
+        let changes_after_sync = drain_station_changes(&mut rx_ctr);
+        assert_eq!(
+            changes_after_sync,
+            vec![
+                StationChange::Offline {
+                    station_id: station("LOWW_DEL"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_GND"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_TWR"),
+                },
+            ]
+        );
+
+        // LOWW_TWR should NOT be callable (VATSIM-only now)
+        let stations = manager
+            .list_stations(&ActiveProfile::Custom, Some(&pos("LOVV_CTR")))
+            .await;
+        let station_ids: Vec<&str> = stations.iter().map(|s| s.id.as_str()).collect();
+        assert!(
+            !station_ids.contains(&"LOWW_TWR"),
+            "LOWW_TWR should not be listed (VATSIM-only after vacs client disconnect)"
+        );
+
+        // But LOWW_TWR should still be in internal tracking
+        let internal_stations = manager.online_stations.read().await;
+        assert!(internal_stations.contains_key(&station("LOWW_TWR")));
+    }
+
+    #[tokio::test]
+    async fn multiple_vatsim_only_positions_not_callable() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // vacs client connects as LOVV_CTR
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_station_changes(&mut rx);
+
+        // Both LOWW_TWR and LOWW_GND online on VATSIM only
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
+            ),
+            (
+                cid("vatsim_client2"),
+                controller(
+                    "vatsim_client2",
+                    "LOWW_GND",
+                    "121.600",
+                    FacilityType::Ground,
+                ),
+            ),
+        ]);
+        manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+
+        let stations = manager
+            .list_stations(&ActiveProfile::Custom, Some(&pos("LOVV_CTR")))
+            .await;
+        let station_ids: Vec<&str> = stations.iter().map(|s| s.id.as_str()).collect();
+
+        assert!(
+            !station_ids.contains(&"LOWW_TWR"),
+            "LOWW_TWR should not be callable (vatsim-only)"
+        );
+        assert!(
+            !station_ids.contains(&"LOWW_GND"),
+            "LOWW_GND should not be callable (vatsim-only)"
+        );
+        assert!(
+            !station_ids.contains(&"LOWW_DEL"),
+            "LOWW_DEL should not be callable (covered by vatsim-only LOWW_GND)"
+        );
+        // LOWW_APP should still be covered by LOVV_CTR
+        assert!(
+            station_ids.contains(&"LOWW_APP"),
+            "LOWW_APP should still be callable (covered by VACS LOVV_CTR)"
+        );
+
+        // Client should receive Offline for all three stations that became VATSIM-only
+        let changes = drain_station_changes(&mut rx);
+        assert_eq!(
+            changes,
+            vec![
+                StationChange::Offline {
+                    station_id: station("LOWW_DEL"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_GND"),
+                },
+                StationChange::Offline {
+                    station_id: station("LOWW_TWR"),
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn last_client_disconnect_clears_vatsim_only_state() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // vacs client connects
+        let _client = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // Sync with VATSIM-only TWR
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOWW_APP", "134.675", FacilityType::Approach),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
+            ),
+        ]);
+        manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+
+        assert!(!manager.vatsim_only_positions.read().await.is_empty());
+        assert!(!manager.online_stations.read().await.is_empty());
+
+        // Last vacs client disconnects
+        manager
+            .remove_client(cid("client0"), Some(DisconnectReason::Terminated))
+            .await;
+
+        assert!(
+            manager.vatsim_only_positions.read().await.is_empty(),
+            "VATSIM-only positions should be cleared after last client disconnects"
+        );
+        assert!(
+            manager.online_stations.read().await.is_empty(),
+            "online stations should be cleared after last client disconnects"
+        );
+    }
+
+    #[tokio::test]
+    async fn clients_for_station_returns_empty_for_vatsim_only() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        // vacs client connects as LOVV_CTR
+        let _client = manager
+            .add_client(
+                client_info("client0", "LOVV_CTR", "132.600"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // LOWW_TWR online VATSIM-only
+        let vatsim_controllers = HashMap::from([
+            (
+                cid("client0"),
+                controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
+            ),
+            (
+                cid("vatsim_client1"),
+                controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
+            ),
+        ]);
+        manager
+            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
+            .await;
+
+        // LOWW_TWR station exists internally but has no callable clients
+        let clients = manager.clients_for_station(&station("LOWW_TWR")).await;
+        assert!(
+            clients.is_empty(),
+            "clients_for_station should return empty for VATSIM-only station"
+        );
     }
 }

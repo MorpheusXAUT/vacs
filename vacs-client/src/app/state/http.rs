@@ -69,12 +69,16 @@ impl HttpState {
     where
         R: DeserializeOwned + Default,
     {
-        let request_url = self.parse_http_request_url(endpoint, query)?;
+        let request_url = self.parse_http_request_url(&endpoint, query)?;
 
         log::trace!("Performing HTTP GET request: {}", request_url.as_str());
-        let response = self
-            .http_client
-            .get(request_url.clone())
+        let mut request = self.http_client.get(request_url.clone());
+        if let Some(timeout) = endpoint.timeout()
+            && timeout.as_millis() > self.config.backend.timeout_ms.into()
+        {
+            request = request.timeout(timeout);
+        }
+        let response = request
             .send()
             .await
             .map_err(map_reqwest_error)?
@@ -104,15 +108,18 @@ impl HttpState {
         R: DeserializeOwned + Default,
         P: Serialize,
     {
-        let request_url = self.parse_http_request_url(endpoint, query)?;
+        let request_url = self.parse_http_request_url(&endpoint, query)?;
 
         log::trace!("Performing HTTP POST request: {}", request_url.as_str());
-        let request = self.http_client.post(request_url.clone());
-        let request = if let Some(payload) = payload {
-            request.json(&payload)
-        } else {
-            request
+        let mut request = self.http_client.post(request_url.clone());
+        if let Some(payload) = payload {
+            request = request.json(&payload)
         };
+        if let Some(timeout) = endpoint.timeout()
+            && timeout.as_millis() > self.config.backend.timeout_ms.into()
+        {
+            request = request.timeout(timeout);
+        }
         let response = request
             .send()
             .await
@@ -141,12 +148,16 @@ impl HttpState {
     where
         R: DeserializeOwned + Default,
     {
-        let request_url = self.parse_http_request_url(endpoint, query)?;
+        let request_url = self.parse_http_request_url(&endpoint, query)?;
 
         log::trace!("Performing HTTP DELETE request: {}", request_url.as_str());
-        let response = self
-            .http_client
-            .delete(request_url.clone())
+        let mut request = self.http_client.delete(request_url.clone());
+        if let Some(timeout) = endpoint.timeout()
+            && timeout.as_millis() > self.config.backend.timeout_ms.into()
+        {
+            request = request.timeout(timeout);
+        }
+        let response = request
             .send()
             .await
             .map_err(map_reqwest_error)?
@@ -168,7 +179,7 @@ impl HttpState {
 
     fn parse_http_request_url(
         &self,
-        endpoint: BackendEndpoint,
+        endpoint: &BackendEndpoint,
         query: Option<&[(&str, &str)]>,
     ) -> anyhow::Result<Url> {
         if let Some(query) = query {
