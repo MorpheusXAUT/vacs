@@ -960,6 +960,7 @@ impl ClientManager {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use vacs_vatsim::coverage::test_support::TestFirBuilder;
 
     fn pos(id: &str) -> PositionId {
         PositionId::from(id)
@@ -1023,76 +1024,6 @@ mod tests {
         }
         changes.sort();
         changes
-    }
-
-    fn create_lovv_network() -> (tempfile::TempDir, Network) {
-        let dir = tempfile::tempdir().unwrap();
-        let fir_path = dir.path().join("LOVV");
-        std::fs::create_dir(&fir_path).unwrap();
-
-        std::fs::write(
-            fir_path.join("stations.toml"),
-            r#"
-[[stations]]
-id = "LOWW_APP"
-controlled_by = ["LOWW_APP", "LOVV_CTR"]
-
-[[stations]]
-id = "LOWW_TWR"
-parent_id = "LOWW_APP"
-controlled_by = ["LOWW_TWR"]
-
-[[stations]]
-id = "LOWW_GND"
-parent_id = "LOWW_TWR"
-controlled_by = ["LOWW_GND"]
-
-[[stations]]
-id = "LOWW_DEL"
-parent_id = "LOWW_GND"
-controlled_by = ["LOWW_DEL"]
-"#,
-        )
-        .unwrap();
-
-        std::fs::write(
-            fir_path.join("positions.toml"),
-            r#"
-[[positions]]
-id = "LOVV_CTR"
-prefixes = ["LOVV"]
-frequency = "132.600"
-facility_type = "CTR"
-
-[[positions]]
-id = "LOWW_APP"
-prefixes = ["LOWW"]
-frequency = "134.675"
-facility_type = "APP"
-
-[[positions]]
-id = "LOWW_TWR"
-prefixes = ["LOWW"]
-frequency = "119.400"
-facility_type = "TWR"
-
-[[positions]]
-id = "LOWW_GND"
-prefixes = ["LOWW"]
-frequency = "121.600"
-facility_type = "GND"
-
-[[positions]]
-id = "LOWW_DEL"
-prefixes = ["LOWW"]
-frequency = "122.125"
-facility_type = "DEL"
-"#,
-        )
-        .unwrap();
-
-        let network = Network::load_from_dir(dir.path()).unwrap();
-        (dir, network)
     }
 
     #[test]
@@ -1650,257 +1581,6 @@ facility_type = "DEL"
             clients.is_empty(),
             "clients_for_station should return empty for VATSIM-only station"
         );
-    }
-
-    fn create_lovv_network_without_del(dir: &std::path::Path) -> Network {
-        let fir_path = dir.join("LOVV");
-
-        std::fs::write(
-            fir_path.join("stations.toml"),
-            r#"
-[[stations]]
-id = "LOWW_APP"
-controlled_by = ["LOWW_APP", "LOVV_CTR"]
-
-[[stations]]
-id = "LOWW_TWR"
-parent_id = "LOWW_APP"
-controlled_by = ["LOWW_TWR"]
-
-[[stations]]
-id = "LOWW_GND"
-parent_id = "LOWW_TWR"
-controlled_by = ["LOWW_GND"]
-"#,
-        )
-        .unwrap();
-
-        std::fs::write(
-            fir_path.join("positions.toml"),
-            r#"
-[[positions]]
-id = "LOVV_CTR"
-prefixes = ["LOVV"]
-frequency = "132.600"
-facility_type = "CTR"
-
-[[positions]]
-id = "LOWW_APP"
-prefixes = ["LOWW"]
-frequency = "134.675"
-facility_type = "APP"
-
-[[positions]]
-id = "LOWW_TWR"
-prefixes = ["LOWW"]
-frequency = "119.400"
-facility_type = "TWR"
-
-[[positions]]
-id = "LOWW_GND"
-prefixes = ["LOWW"]
-frequency = "121.600"
-facility_type = "GND"
-"#,
-        )
-        .unwrap();
-
-        Network::load_from_dir(dir).unwrap()
-    }
-
-    fn create_lovv_network_with_profiles(dir: &std::path::Path) -> Network {
-        let fir_path = dir.join("LOVV");
-        std::fs::create_dir_all(fir_path.join("profiles")).unwrap();
-
-        std::fs::write(
-            fir_path.join("stations.toml"),
-            r#"
-[[stations]]
-id = "LOWW_APP"
-controlled_by = ["LOWW_APP", "LOVV_CTR"]
-
-[[stations]]
-id = "LOWW_TWR"
-parent_id = "LOWW_APP"
-controlled_by = ["LOWW_TWR"]
-
-[[stations]]
-id = "LOWW_GND"
-parent_id = "LOWW_TWR"
-controlled_by = ["LOWW_GND"]
-
-[[stations]]
-id = "LOWW_DEL"
-parent_id = "LOWW_GND"
-controlled_by = ["LOWW_DEL"]
-"#,
-        )
-        .unwrap();
-
-        std::fs::write(
-            fir_path.join("positions.toml"),
-            r#"
-[[positions]]
-id = "LOVV_CTR"
-prefixes = ["LOVV"]
-frequency = "132.600"
-facility_type = "CTR"
-profile_id = "CTR_PROFILE"
-
-[[positions]]
-id = "LOWW_APP"
-prefixes = ["LOWW"]
-frequency = "134.675"
-facility_type = "APP"
-profile_id = "APP_PROFILE"
-
-[[positions]]
-id = "LOWW_TWR"
-prefixes = ["LOWW"]
-frequency = "119.400"
-facility_type = "TWR"
-
-[[positions]]
-id = "LOWW_GND"
-prefixes = ["LOWW"]
-frequency = "121.600"
-facility_type = "GND"
-
-[[positions]]
-id = "LOWW_DEL"
-prefixes = ["LOWW"]
-frequency = "122.125"
-facility_type = "DEL"
-"#,
-        )
-        .unwrap();
-
-        std::fs::write(
-            fir_path.join("profiles").join("CTR_PROFILE.toml"),
-            r#"
-id = "CTR_PROFILE"
-type = "Tabbed"
-
-[[tabs]]
-label = "Main"
-
-[tabs.page]
-rows = 4
-
-[[tabs.page.keys]]
-label = "LOWW APP"
-station_id = "LOWW_APP"
-
-[[tabs.page.keys]]
-label = "LOWW TWR"
-station_id = "LOWW_TWR"
-"#,
-        )
-        .unwrap();
-
-        std::fs::write(
-            fir_path.join("profiles").join("APP_PROFILE.toml"),
-            r#"
-id = "APP_PROFILE"
-type = "Tabbed"
-
-[[tabs]]
-label = "Main"
-
-[tabs.page]
-rows = 4
-
-[[tabs.page.keys]]
-label = "LOWW TWR"
-station_id = "LOWW_TWR"
-
-[[tabs.page.keys]]
-label = "LOWW GND"
-station_id = "LOWW_GND"
-"#,
-        )
-        .unwrap();
-
-        Network::load_from_dir(dir).unwrap()
-    }
-
-    fn create_lovv_network_with_reassigned_profile(dir: &std::path::Path) -> Network {
-        let fir_path = dir.join("LOVV");
-
-        std::fs::write(
-            fir_path.join("positions.toml"),
-            r#"
-[[positions]]
-id = "LOVV_CTR"
-prefixes = ["LOVV"]
-frequency = "132.600"
-facility_type = "CTR"
-profile_id = "CTR_PROFILE"
-
-[[positions]]
-id = "LOWW_APP"
-prefixes = ["LOWW"]
-frequency = "134.675"
-facility_type = "APP"
-profile_id = "CTR_PROFILE"
-
-[[positions]]
-id = "LOWW_TWR"
-prefixes = ["LOWW"]
-frequency = "119.400"
-facility_type = "TWR"
-
-[[positions]]
-id = "LOWW_GND"
-prefixes = ["LOWW"]
-frequency = "121.600"
-facility_type = "GND"
-
-[[positions]]
-id = "LOWW_DEL"
-prefixes = ["LOWW"]
-frequency = "122.125"
-facility_type = "DEL"
-"#,
-        )
-        .unwrap();
-
-        Network::load_from_dir(dir).unwrap()
-    }
-
-    fn create_lovv_network_with_extra_station(dir: &std::path::Path) -> Network {
-        let fir_path = dir.join("LOVV");
-
-        std::fs::write(
-            fir_path.join("stations.toml"),
-            r#"
-[[stations]]
-id = "LOWW_APP"
-controlled_by = ["LOWW_APP", "LOVV_CTR"]
-
-[[stations]]
-id = "LOWW_TWR"
-parent_id = "LOWW_APP"
-controlled_by = ["LOWW_TWR"]
-
-[[stations]]
-id = "LOWW_GND"
-parent_id = "LOWW_TWR"
-controlled_by = ["LOWW_GND"]
-
-[[stations]]
-id = "LOWW_DEL"
-parent_id = "LOWW_GND"
-controlled_by = ["LOWW_DEL"]
-
-[[stations]]
-id = "LOVV_N1"
-controlled_by = ["LOVV_CTR"]
-"#,
-        )
-        .unwrap();
-
-        Network::load_from_dir(dir).unwrap()
     }
 
     #[tokio::test]
@@ -2479,100 +2159,6 @@ controlled_by = ["LOWW_DEL"]
         assert_eq!(changes_app, expected, "LOWW_APP client");
     }
 
-    /// Creates a network without the LOWW_TWR position.
-    /// LOWW_TWR *station* remains (falls back to parent LOWW_APP).
-    fn create_lovv_network_without_twr_position(dir: &std::path::Path) -> Network {
-        let fir_path = dir.join("LOVV");
-
-        // LOWW_TWR position is removed; update controlled_by references
-        // so stations fall back to LOWW_APP / LOVV_CTR instead.
-        std::fs::write(
-            fir_path.join("stations.toml"),
-            r#"
-[[stations]]
-id = "LOWW_APP"
-controlled_by = ["LOWW_APP", "LOVV_CTR"]
-
-[[stations]]
-id = "LOWW_TWR"
-parent_id = "LOWW_APP"
-controlled_by = ["LOWW_APP", "LOVV_CTR"]
-
-[[stations]]
-id = "LOWW_GND"
-parent_id = "LOWW_TWR"
-controlled_by = ["LOWW_GND"]
-
-[[stations]]
-id = "LOWW_DEL"
-parent_id = "LOWW_GND"
-controlled_by = ["LOWW_DEL"]
-"#,
-        )
-        .unwrap();
-
-        std::fs::write(
-            fir_path.join("positions.toml"),
-            r#"
-[[positions]]
-id = "LOVV_CTR"
-prefixes = ["LOVV"]
-frequency = "132.600"
-facility_type = "CTR"
-
-[[positions]]
-id = "LOWW_APP"
-prefixes = ["LOWW"]
-frequency = "134.675"
-facility_type = "APP"
-
-[[positions]]
-id = "LOWW_GND"
-prefixes = ["LOWW"]
-frequency = "121.600"
-facility_type = "GND"
-
-[[positions]]
-id = "LOWW_DEL"
-prefixes = ["LOWW"]
-frequency = "122.125"
-facility_type = "DEL"
-"#,
-        )
-        .unwrap();
-
-        Network::load_from_dir(dir).unwrap()
-    }
-
-    /// Creates a minimal network with only LOVV_CTR position and one station.
-    fn create_minimal_lovv_network(dir: &std::path::Path) -> Network {
-        let fir_path = dir.join("LOVV");
-
-        std::fs::write(
-            fir_path.join("stations.toml"),
-            r#"
-[[stations]]
-id = "LOWW_APP"
-controlled_by = ["LOVV_CTR"]
-"#,
-        )
-        .unwrap();
-
-        std::fs::write(
-            fir_path.join("positions.toml"),
-            r#"
-[[positions]]
-id = "LOVV_CTR"
-prefixes = ["LOVV"]
-frequency = "132.600"
-facility_type = "CTR"
-"#,
-        )
-        .unwrap();
-
-        Network::load_from_dir(dir).unwrap()
-    }
-
     #[tokio::test]
     async fn replace_network_vatsim_only_position_removed_stations_become_visible() {
         let (dir, network) = create_lovv_network();
@@ -2993,5 +2579,104 @@ facility_type = "CTR"
             }],
             "No-position client should receive station changes too"
         );
+    }
+
+    /// Base builder for the standard LOVV FIR used by most tests.
+    fn lovv_fir() -> TestFirBuilder {
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_APP", &["LOWW_APP", "LOVV_CTR"])
+            .station_with_parent("LOWW_TWR", "LOWW_APP", &["LOWW_TWR"])
+            .station_with_parent("LOWW_GND", "LOWW_TWR", &["LOWW_GND"])
+            .station_with_parent("LOWW_DEL", "LOWW_GND", &["LOWW_DEL"])
+            .position("LOVV_CTR", &["LOVV"], "132.600", "CTR")
+            .position("LOWW_APP", &["LOWW"], "134.675", "APP")
+            .position("LOWW_TWR", &["LOWW"], "119.400", "TWR")
+            .position("LOWW_GND", &["LOWW"], "121.600", "GND")
+            .position("LOWW_DEL", &["LOWW"], "122.125", "DEL")
+    }
+
+    /// Standard LOVV network (5 positions, 5 stations). Returns the temp-dir
+    /// so the caller can pass it to variants that only rewrite positions/stations.
+    fn create_lovv_network() -> (tempfile::TempDir, Network) {
+        let dir = tempfile::tempdir().unwrap();
+        let network = lovv_fir().build(dir.path());
+        (dir, network)
+    }
+
+    /// LOVV without the LOWW_DEL position *and* station.
+    fn create_lovv_network_without_del(dir: &std::path::Path) -> Network {
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_APP", &["LOWW_APP", "LOVV_CTR"])
+            .station_with_parent("LOWW_TWR", "LOWW_APP", &["LOWW_TWR"])
+            .station_with_parent("LOWW_GND", "LOWW_TWR", &["LOWW_GND"])
+            .position("LOVV_CTR", &["LOVV"], "132.600", "CTR")
+            .position("LOWW_APP", &["LOWW"], "134.675", "APP")
+            .position("LOWW_TWR", &["LOWW"], "119.400", "TWR")
+            .position("LOWW_GND", &["LOWW"], "121.600", "GND")
+            .build(dir)
+    }
+
+    /// LOVV with profiles assigned to CTR and APP positions.
+    fn create_lovv_network_with_profiles(dir: &std::path::Path) -> Network {
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_APP", &["LOWW_APP", "LOVV_CTR"])
+            .station_with_parent("LOWW_TWR", "LOWW_APP", &["LOWW_TWR"])
+            .station_with_parent("LOWW_GND", "LOWW_TWR", &["LOWW_GND"])
+            .station_with_parent("LOWW_DEL", "LOWW_GND", &["LOWW_DEL"])
+            .position_with_profile("LOVV_CTR", &["LOVV"], "132.600", "CTR", "CTR_PROFILE")
+            .position_with_profile("LOWW_APP", &["LOWW"], "134.675", "APP", "APP_PROFILE")
+            .position("LOWW_TWR", &["LOWW"], "119.400", "TWR")
+            .position("LOWW_GND", &["LOWW"], "121.600", "GND")
+            .position("LOWW_DEL", &["LOWW"], "122.125", "DEL")
+            .tabbed_profile(
+                "CTR_PROFILE",
+                &[("LOWW APP", "LOWW_APP"), ("LOWW TWR", "LOWW_TWR")],
+            )
+            .tabbed_profile(
+                "APP_PROFILE",
+                &[("LOWW TWR", "LOWW_TWR"), ("LOWW GND", "LOWW_GND")],
+            )
+            .build(dir)
+    }
+
+    /// LOVV with LOWW_APP's profile reassigned to CTR_PROFILE.
+    /// Only rewrites positions.toml — stations and profiles remain from a
+    /// previous `create_lovv_network_with_profiles` call.
+    fn create_lovv_network_with_reassigned_profile(dir: &std::path::Path) -> Network {
+        TestFirBuilder::new("LOVV")
+            .position_with_profile("LOVV_CTR", &["LOVV"], "132.600", "CTR", "CTR_PROFILE")
+            .position_with_profile("LOWW_APP", &["LOWW"], "134.675", "APP", "CTR_PROFILE")
+            .position("LOWW_TWR", &["LOWW"], "119.400", "TWR")
+            .position("LOWW_GND", &["LOWW"], "121.600", "GND")
+            .position("LOWW_DEL", &["LOWW"], "122.125", "DEL")
+            .build(dir)
+    }
+
+    /// LOVV with an extra LOVV_N1 station controlled by LOVV_CTR.
+    fn create_lovv_network_with_extra_station(dir: &std::path::Path) -> Network {
+        lovv_fir().station("LOVV_N1", &["LOVV_CTR"]).build(dir)
+    }
+
+    /// Creates a network without the LOWW_TWR position.
+    /// LOWW_TWR *station* remains (falls back to parent LOWW_APP).
+    fn create_lovv_network_without_twr_position(dir: &std::path::Path) -> Network {
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_APP", &["LOWW_APP", "LOVV_CTR"])
+            .station_with_parent("LOWW_TWR", "LOWW_APP", &["LOWW_APP", "LOVV_CTR"])
+            .station_with_parent("LOWW_GND", "LOWW_TWR", &["LOWW_GND"])
+            .station_with_parent("LOWW_DEL", "LOWW_GND", &["LOWW_DEL"])
+            .position("LOVV_CTR", &["LOVV"], "132.600", "CTR")
+            .position("LOWW_APP", &["LOWW"], "134.675", "APP")
+            .position("LOWW_GND", &["LOWW"], "121.600", "GND")
+            .position("LOWW_DEL", &["LOWW"], "122.125", "DEL")
+            .build(dir)
+    }
+
+    /// Creates a minimal network with only LOVV_CTR position and one station.
+    fn create_minimal_lovv_network(dir: &std::path::Path) -> Network {
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_APP", &["LOVV_CTR"])
+            .position("LOVV_CTR", &["LOVV"], "132.600", "CTR")
+            .build(dir)
     }
 }

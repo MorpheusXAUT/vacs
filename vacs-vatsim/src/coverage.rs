@@ -3,6 +3,8 @@ pub mod network;
 pub mod position;
 pub mod profile;
 pub mod station;
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_support;
 
 use std::collections::HashSet;
 use thiserror::Error;

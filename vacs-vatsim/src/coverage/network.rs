@@ -524,6 +524,7 @@ pub struct CoveredStation<'a> {
 mod tests {
     use super::*;
     use crate::coverage::ValidationError;
+    use crate::coverage::test_support::TestFirBuilder;
     use pretty_assertions::{assert_eq, assert_matches};
 
     fn causes(error: &CoverageError, matcher: impl Fn(&CoverageError) -> bool) -> bool {
@@ -533,84 +534,6 @@ mod tests {
         match error {
             CoverageError::Context(ctx) => causes(&ctx.error, matcher),
             _ => false,
-        }
-    }
-
-    struct TestFirBuilder {
-        name: String,
-        stations: Vec<String>,
-        positions: Vec<String>,
-    }
-
-    impl TestFirBuilder {
-        fn new(name: &str) -> Self {
-            Self {
-                name: name.to_string(),
-                stations: Vec::new(),
-                positions: Vec::new(),
-            }
-        }
-
-        fn station(mut self, id: &str, controlled_by: &[&str]) -> Self {
-            self.stations.push(format!(
-                r#"
-                [[stations]]
-                id = "{id}"
-                controlled_by = {controlled_by:?}
-            "#
-            ));
-            self
-        }
-
-        fn station_with_parent(
-            mut self,
-            id: &str,
-            parent_id: &str,
-            controlled_by: &[&str],
-        ) -> Self {
-            self.stations.push(format!(
-                r#"
-                [[stations]]
-                id = "{id}"
-                parent_id = "{parent_id}"
-                controlled_by = {controlled_by:?}
-            "#
-            ));
-            self
-        }
-
-        fn position(
-            mut self,
-            id: &str,
-            prefixes: &[&str],
-            frequency: &str,
-            facility_type: &str,
-        ) -> Self {
-            self.positions.push(format!(
-                r#"
-                [[positions]]
-                id = "{id}"
-                prefixes = {prefixes:?}
-                frequency = "{frequency}"
-                facility_type = "{facility_type}"
-            "#
-            ));
-            self
-        }
-
-        fn create(self, dir: &std::path::Path) {
-            let fir_path = dir.join(&self.name);
-            if !fir_path.exists() {
-                std::fs::create_dir(&fir_path).unwrap();
-            }
-
-            if !self.stations.is_empty() {
-                std::fs::write(fir_path.join("stations.toml"), self.stations.join("\n")).unwrap();
-            }
-
-            if !self.positions.is_empty() {
-                std::fs::write(fir_path.join("positions.toml"), self.positions.join("\n")).unwrap();
-            }
         }
     }
 
