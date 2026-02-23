@@ -56,3 +56,19 @@ export function isError(err: unknown): err is Error {
         (maybeError.timeout_ms === undefined || typeof maybeError.timeout_ms === "number")
     );
 }
+
+export function safeSerialize(value: unknown): unknown {
+    try {
+        if (value instanceof Error) {
+            return {
+                name: value.name,
+                message: value.message,
+                stack: value.stack,
+                cause: (value as any).cause, // eslint-disable-line @typescript-eslint/no-explicit-any
+            };
+        }
+        return JSON.parse(JSON.stringify(value));
+    } catch {
+        return String(value);
+    }
+}

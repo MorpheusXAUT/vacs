@@ -87,11 +87,11 @@ function ClientPageConfig() {
                 <p className="font-semibold truncate">Selected Config - {selectedConfig.name}</p>
                 <div className="grid grid-cols-[auto_1fr] grid-rows-[auto_auto_auto_auto] gap-x-2 [&_p]:truncate">
                     <p>Include:</p>
-                    <p>[{selectedConfig.include.join(", ")}]</p>
+                    <p>[{selectedConfig.include?.join(", ")}]</p>
                     <p>Exclude:</p>
-                    <p>[{selectedConfig.exclude.join(", ")}]</p>
+                    <p>[{selectedConfig.exclude?.join(", ")}]</p>
                     <p>Priority:</p>
-                    <p>[{selectedConfig.priority.join(", ")}]</p>
+                    <p>[{selectedConfig.priority?.join(", ")}]</p>
                     <p>Frequencies:</p>
                     <p>{selectedConfig.frequencies === "HideAll" ? "Hide all" : "Show all"}</p>
                     <p>Grouping:</p>
