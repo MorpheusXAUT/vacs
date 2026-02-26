@@ -25,6 +25,8 @@ mod post {
     /// GitHub Actions OIDC JWKS endpoint.
     const GITHUB_OIDC_JWKS_URL: &str =
         "https://token.actions.githubusercontent.com/.well-known/jwks";
+    /// Expected algorithm for GitHub Actions OIDC tokens.
+    const GITHUB_OIDC_JWT_ALGORITHM: jsonwebtoken::Algorithm = jsonwebtoken::Algorithm::RS256;
     /// Timeout for fetching the JWKS from GitHub.
     const JWKS_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -118,8 +120,10 @@ mod post {
             AppError::InternalServerError(anyhow::anyhow!("Failed to construct decoding key"))
         })?;
 
-        // Validate the token
-        let mut validation = Validation::new(header.alg);
+        // Validate the token — always require RS256;
+        // never trust the algorithm from the JWT header to prevent algorithm
+        // confusion attacks (e.g. "none").
+        let mut validation = Validation::new(GITHUB_OIDC_JWT_ALGORITHM);
         validation.set_issuer(&[GITHUB_OIDC_ISSUER]);
         validation.set_audience(&[&config.oidc_audience]);
 
