@@ -91,7 +91,17 @@ profile_id = "{profile_id}"
     /// Add a tabbed profile with the given station keys.
     ///
     /// Each entry in `station_keys` is a `(label, station_id)` pair.
-    pub fn tabbed_profile(mut self, id: &str, station_keys: &[(&str, &str)]) -> Self {
+    pub fn tabbed_profile(self, id: &str, station_keys: &[(&str, &str)]) -> Self {
+        self.tabbed_profile_with_label(id, "Main", station_keys)
+    }
+
+    /// Like [`Self::tabbed_profile`] but with a custom tab label.
+    pub fn tabbed_profile_with_label(
+        mut self,
+        id: &str,
+        tab_label: &str,
+        station_keys: &[(&str, &str)],
+    ) -> Self {
         let keys: String = station_keys
             .iter()
             .map(|(label, station_id)| {
@@ -112,7 +122,7 @@ id = "{id}"
 type = "Tabbed"
 
 [[tabs]]
-label = "Main"
+label = "{tab_label}"
 
 [tabs.page]
 rows = 4

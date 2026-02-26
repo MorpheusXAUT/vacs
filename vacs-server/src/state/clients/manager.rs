@@ -453,26 +453,32 @@ impl ClientManager {
 
                 for client_id in client_ids {
                     if let Some(session) = clients.get_mut(client_id) {
-                        // Track any profile-ID change internally
-                        let _ = session.update_active_profile(new_profile_id.clone(), &network);
+                        let tracked =
+                            session.update_active_profile(new_profile_id.clone(), &network);
 
-                        let session_profile = match session.active_profile() {
-                            ActiveProfile::Specific(profile_id) => {
-                                match network.get_profile(profile_id) {
-                                    Some(profile) => SessionProfile::Changed(
-                                        ActiveProfile::Specific(profile.into()),
-                                    ),
-                                    None => {
-                                        tracing::warn!(
-                                            ?profile_id,
-                                            "Profile not found in new network"
-                                        );
-                                        SessionProfile::Changed(ActiveProfile::None)
+                        let session_profile = match tracked {
+                            // Profile ID changed or was cleared, send change.
+                            SessionProfile::Changed(_) => tracked,
+
+                            // Profile ID unchanged, but content may have changed under the same ID
+                            // during the reload. Re-resolve Specific profiles; skip Custom/None.
+                            SessionProfile::Unchanged => match session.active_profile() {
+                                ActiveProfile::Specific(profile_id) => {
+                                    match network.get_profile(profile_id) {
+                                        Some(profile) => SessionProfile::Changed(
+                                            ActiveProfile::Specific(profile.into()),
+                                        ),
+                                        None => {
+                                            tracing::warn!(
+                                                ?profile_id,
+                                                "Profile not found in new network"
+                                            );
+                                            SessionProfile::Changed(ActiveProfile::None)
+                                        }
                                     }
                                 }
-                            }
-                            // Custom/None profiles do not require updates as they don't carry network-derived content
-                            _ => continue,
+                                _ => continue,
+                            },
                         };
 
                         tracing::debug!(
@@ -1031,17 +1037,28 @@ mod tests {
         ClientManager::new(tx, network)
     }
 
-    /// Drain all pending messages from a client receiver and return only the
-    /// station changes, sorted for deterministic comparison.
-    fn drain_station_changes(rx: &mut mpsc::Receiver<ServerMessage>) -> Vec<StationChange> {
-        let mut changes = Vec::new();
+    struct DrainedMessages {
+        station_changes: Vec<StationChange>,
+        session_infos: Vec<server::SessionInfo>,
+    }
+
+    /// Drain all pending messages from a client receiver, collecting station
+    /// changes (sorted for deterministic comparison) and session info updates.
+    fn drain_messages(rx: &mut mpsc::Receiver<ServerMessage>) -> DrainedMessages {
+        let mut station_changes = Vec::new();
+        let mut session_infos = Vec::new();
         while let Ok(msg) = rx.try_recv() {
-            if let ServerMessage::StationChanges(sc) = msg {
-                changes.extend(sc.changes);
+            match msg {
+                ServerMessage::StationChanges(sc) => station_changes.extend(sc.changes),
+                ServerMessage::SessionInfo(si) => session_infos.push(si),
+                _ => {}
             }
         }
-        changes.sort();
-        changes
+        station_changes.sort();
+        DrainedMessages {
+            station_changes,
+            session_infos,
+        }
     }
 
     #[test]
@@ -1156,7 +1173,7 @@ mod tests {
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx);
+        drain_messages(&mut rx);
 
         // LOWW_APP should cover LOWW_APP, LOWW_TWR, LOWW_GND, LOWW_DEL stations
         let stations = manager
@@ -1211,7 +1228,7 @@ mod tests {
 
         // Client should receive Offline for the stations that became vatsim-only
         // (LOWW_APP stays online — still covered by vacs LOWW_APP position)
-        let changes = drain_station_changes(&mut rx);
+        let changes = drain_messages(&mut rx).station_changes;
         assert_eq!(
             changes,
             vec![
@@ -1244,7 +1261,7 @@ mod tests {
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx_ctr);
+        drain_messages(&mut rx_ctr);
 
         // LOWW_TWR comes online on VATSIM only
         let vatsim_controllers = HashMap::from([
@@ -1269,7 +1286,7 @@ mod tests {
         assert!(!station_ids.contains(&"LOWW_TWR"));
 
         // CTR client should have received Offline for stations that became VATSIM-only
-        let changes_after_sync = drain_station_changes(&mut rx_ctr);
+        let changes_after_sync = drain_messages(&mut rx_ctr).station_changes;
         assert_eq!(
             changes_after_sync,
             vec![
@@ -1307,7 +1324,7 @@ mod tests {
 
         // CTR client should receive Online for stations that transitioned from
         // VATSIM-only to vacs coverage.
-        let changes_after_connect = drain_station_changes(&mut rx_ctr);
+        let changes_after_connect = drain_messages(&mut rx_ctr).station_changes;
         assert_eq!(
             changes_after_connect,
             vec![
@@ -1352,7 +1369,7 @@ mod tests {
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx_ctr);
+        drain_messages(&mut rx_ctr);
 
         // LOWW_TWR is callable
         let stations = manager
@@ -1367,7 +1384,7 @@ mod tests {
             .await;
 
         // CTR client should see LOWW_TWR come back under its control
-        let changes_after_disconnect = drain_station_changes(&mut rx_ctr);
+        let changes_after_disconnect = drain_messages(&mut rx_ctr).station_changes;
         assert_eq!(
             changes_after_disconnect,
             vec![
@@ -1402,7 +1419,7 @@ mod tests {
             .await;
 
         // After sync, LOWW_TWR becomes VATSIM-only → CTR client sees it go Offline
-        let changes_after_sync = drain_station_changes(&mut rx_ctr);
+        let changes_after_sync = drain_messages(&mut rx_ctr).station_changes;
         assert_eq!(
             changes_after_sync,
             vec![
@@ -1448,7 +1465,7 @@ mod tests {
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx);
+        drain_messages(&mut rx);
 
         // Both LOWW_TWR and LOWW_GND online on VATSIM only
         let vatsim_controllers = HashMap::from([
@@ -1498,7 +1515,7 @@ mod tests {
         );
 
         // Client should receive Offline for all three stations that became VATSIM-only
-        let changes = drain_station_changes(&mut rx);
+        let changes = drain_messages(&mut rx).station_changes;
         assert_eq!(
             changes,
             vec![
@@ -1617,7 +1634,7 @@ mod tests {
             .unwrap();
 
         // Drain initial station changes from add_client
-        drain_station_changes(&mut rx);
+        drain_messages(&mut rx);
 
         assert!(
             manager
@@ -1650,7 +1667,7 @@ mod tests {
         );
 
         // Client should receive Offline for LOWW_DEL station
-        let changes = drain_station_changes(&mut rx);
+        let changes = drain_messages(&mut rx).station_changes;
         assert_eq!(
             changes,
             vec![StationChange::Offline {
@@ -1674,7 +1691,7 @@ mod tests {
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx);
+        drain_messages(&mut rx);
 
         // LOWW_DEL station should be online
         assert!(
@@ -1707,7 +1724,7 @@ mod tests {
         drop(online_stations);
 
         // Client should receive exactly Offline for LOWW_DEL
-        let changes = drain_station_changes(&mut rx);
+        let changes = drain_messages(&mut rx).station_changes;
         assert_eq!(
             changes,
             vec![StationChange::Offline {
@@ -1732,7 +1749,7 @@ mod tests {
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx);
+        drain_messages(&mut rx);
 
         // No LOVV_N1 station initially
         assert!(
@@ -1757,7 +1774,7 @@ mod tests {
         drop(online_stations);
 
         // Client should receive Online for LOVV_N1
-        let changes = drain_station_changes(&mut rx);
+        let changes = drain_messages(&mut rx).station_changes;
         assert_eq!(
             changes,
             vec![StationChange::Online {
@@ -2022,6 +2039,182 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn replace_network_profile_cleared_sends_session_update() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        let network = create_lovv_network_with_profiles(dir.path());
+        let manager = client_manager(network);
+
+        // Client connects as LOWW_APP with Specific(APP_PROFILE)
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Specific(ProfileId::from("APP_PROFILE")),
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        // Drain initial messages
+        drain_messages(&mut rx);
+
+        // Reload with a network where LOWW_APP no longer has a profile_id
+        let new_network = create_lovv_network_without_profiles(dir.path());
+        manager.replace_network(new_network).await;
+
+        // Client's internal state should be cleared to None
+        let client = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(
+            client.active_profile(),
+            &ActiveProfile::None,
+            "Client's profile should be cleared after position loses its profile_id"
+        );
+
+        // Client should have received a SessionInfo with Changed(None)
+        let session_infos = drain_messages(&mut rx).session_infos;
+        assert_eq!(session_infos.len(), 1, "Exactly one SessionInfo expected");
+        assert_eq!(
+            session_infos[0].profile,
+            SessionProfile::Changed(ActiveProfile::None),
+            "Client should be told profile was cleared"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_same_profile_id_content_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        let network = create_lovv_network_with_profiles(dir.path());
+        let manager = client_manager(network);
+
+        // Client connects as LOWW_APP with Specific(APP_PROFILE)
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Specific(ProfileId::from("APP_PROFILE")),
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_messages(&mut rx);
+
+        // Reload with same profile ID but different tab content
+        let new_network = create_lovv_network_with_modified_profile_content(dir.path());
+        manager.replace_network(new_network).await;
+
+        // Internal profile ID should stay the same
+        let client = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(
+            client.active_profile(),
+            &ActiveProfile::Specific(ProfileId::from("APP_PROFILE")),
+        );
+
+        // Client should receive the updated profile content
+        let session_infos = drain_messages(&mut rx).session_infos;
+        assert_eq!(session_infos.len(), 1, "Exactly one SessionInfo expected");
+        match &session_infos[0].profile {
+            SessionProfile::Changed(ActiveProfile::Specific(profile)) => {
+                assert_eq!(profile.id, ProfileId::from("APP_PROFILE"));
+                // The modified profile has a different tab label
+                match &profile.profile_type {
+                    vacs_protocol::profile::ProfileType::Tabbed(tabs) => {
+                        assert_eq!(tabs[0].label, vec!["Updated"]);
+                    }
+                    other => panic!("Expected Tabbed profile, got: {other:?}"),
+                }
+            }
+            other => panic!("Expected Changed(Specific(...)), got: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn replace_network_none_profile_not_notified() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        let network = create_lovv_network_with_profiles(dir.path());
+        let manager = client_manager(network);
+
+        // Client connects as LOWW_TWR which has no profile (ActiveProfile::None)
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_TWR", "119.400"),
+                ActiveProfile::None,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_messages(&mut rx);
+
+        // Reload with modified content (doesn't matter, LOWW_TWR has no profile)
+        let new_network = create_lovv_network_with_modified_profile_content(dir.path());
+        manager.replace_network(new_network).await;
+
+        // Client should still have None profile
+        let client = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(client.active_profile(), &ActiveProfile::None);
+
+        // No SessionInfo should have been sent
+        let session_infos = drain_messages(&mut rx).session_infos;
+        assert!(
+            session_infos.is_empty(),
+            "Client with None profile should not receive SessionInfo after reload"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_network_none_to_specific_sends_profile() {
+        let dir = tempfile::tempdir().unwrap();
+        let fir_path = dir.path().join("LOVV");
+        std::fs::create_dir(&fir_path).unwrap();
+
+        // Initial network: LOWW_APP has no profile_id
+        let network = create_lovv_network_without_profiles(dir.path());
+        let manager = client_manager(network);
+
+        // Client connects as LOWW_APP with ActiveProfile::None
+        let (_client, mut rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::None,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        drain_messages(&mut rx);
+
+        // Reload with a network where LOWW_APP now has a profile
+        let new_network = create_lovv_network_with_profiles(dir.path());
+        manager.replace_network(new_network).await;
+
+        // Client's internal state should now be Specific
+        let client = manager.get_client(&cid("client0")).await.unwrap();
+        assert_eq!(
+            client.active_profile(),
+            &ActiveProfile::Specific(ProfileId::from("APP_PROFILE")),
+            "Client's profile should transition from None to Specific after reload"
+        );
+
+        // Client should have received a SessionInfo with the new profile
+        let session_infos = drain_messages(&mut rx).session_infos;
+        assert_eq!(session_infos.len(), 1, "Exactly one SessionInfo expected");
+        match &session_infos[0].profile {
+            SessionProfile::Changed(ActiveProfile::Specific(profile)) => {
+                assert_eq!(profile.id, ProfileId::from("APP_PROFILE"));
+            }
+            other => panic!("Expected Changed(Specific(...)), got: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn replace_network_no_change_is_noop() {
         let (dir, network) = create_lovv_network();
         let manager = client_manager(network);
@@ -2036,7 +2229,7 @@ mod tests {
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx);
+        drain_messages(&mut rx);
 
         let stations_before = manager.online_stations.read().await.clone();
         let positions_before = manager.online_positions.read().await.clone();
@@ -2062,7 +2255,7 @@ mod tests {
         assert_eq!(client.position_id(), Some(&pos("LOVV_CTR")));
 
         // No station changes should be sent
-        let changes = drain_station_changes(&mut rx);
+        let changes = drain_messages(&mut rx).station_changes;
         assert_eq!(
             changes,
             vec![],
@@ -2093,8 +2286,8 @@ mod tests {
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx_ctr);
-        drain_station_changes(&mut rx_app);
+        drain_messages(&mut rx_ctr);
+        drain_messages(&mut rx_app);
 
         // LOWW_APP station controlled by LOWW_APP position
         assert_eq!(
@@ -2171,9 +2364,9 @@ controlled_by = ["LOWW_DEL"]
                 to_position_id: pos("LOVV_CTR"),
             },
         ];
-        let changes_ctr = drain_station_changes(&mut rx_ctr);
+        let changes_ctr = drain_messages(&mut rx_ctr).station_changes;
         assert_eq!(changes_ctr, expected, "LOVV_CTR client");
-        let changes_app = drain_station_changes(&mut rx_app);
+        let changes_app = drain_messages(&mut rx_app).station_changes;
         assert_eq!(changes_app, expected, "LOWW_APP client");
     }
 
@@ -2192,7 +2385,7 @@ controlled_by = ["LOWW_DEL"]
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx);
+        drain_messages(&mut rx);
 
         // LOWW_TWR comes online as VATSIM-only
         let vatsim_controllers = HashMap::from([
@@ -2210,7 +2403,7 @@ controlled_by = ["LOWW_DEL"]
             .await;
 
         // Client received Offline for LOWW_TWR/GND/DEL (now VATSIM-only)
-        let changes_after_sync = drain_station_changes(&mut rx);
+        let changes_after_sync = drain_messages(&mut rx).station_changes;
         assert_eq!(
             changes_after_sync,
             vec![
@@ -2251,7 +2444,7 @@ controlled_by = ["LOWW_DEL"]
         assert!(station_ids.contains(&"LOWW_DEL"));
 
         // Client should receive Online for the stations that became visible again
-        let changes = drain_station_changes(&mut rx);
+        let changes = drain_messages(&mut rx).station_changes;
         assert_eq!(
             changes,
             vec![
@@ -2294,8 +2487,8 @@ controlled_by = ["LOWW_DEL"]
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx0);
-        drain_station_changes(&mut rx1);
+        drain_messages(&mut rx0);
+        drain_messages(&mut rx1);
 
         // Verify both are on the position
         let pos_clients = manager
@@ -2327,7 +2520,7 @@ controlled_by = ["LOWW_DEL"]
         assert_eq!(c1.position_id(), None, "client1 position should be cleared");
 
         // Both should receive Offline for LOWW_DEL
-        let changes0 = drain_station_changes(&mut rx0);
+        let changes0 = drain_messages(&mut rx0).station_changes;
         assert_eq!(
             changes0,
             vec![StationChange::Offline {
@@ -2335,7 +2528,7 @@ controlled_by = ["LOWW_DEL"]
             }],
             "client0"
         );
-        let changes1 = drain_station_changes(&mut rx1);
+        let changes1 = drain_messages(&mut rx1).station_changes;
         assert_eq!(
             changes1,
             vec![StationChange::Offline {
@@ -2360,7 +2553,7 @@ controlled_by = ["LOWW_DEL"]
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx_app);
+        drain_messages(&mut rx_app);
 
         // LOVV_CTR comes online as VATSIM-only. It would cover LOWW_APP station
         // via controlled_by, but LOWW_APP position has higher priority, so
@@ -2386,7 +2579,7 @@ controlled_by = ["LOWW_DEL"]
 
         // No station changes — LOVV_CTR is VATSIM-only but controls nothing
         // (all stations already covered by higher-priority LOWW_APP)
-        let changes_after_sync = drain_station_changes(&mut rx_app);
+        let changes_after_sync = drain_messages(&mut rx_app).station_changes;
         assert_eq!(changes_after_sync, vec![], "No station changes expected");
 
         // Now a vacs client connects as LOVV_CTR (was VATSIM-only)
@@ -2401,7 +2594,7 @@ controlled_by = ["LOWW_DEL"]
 
         // LOVV_CTR was vatsim-only but controlled no stations, so the
         // transition shouldn't produce any Online events for the APP client
-        let changes_after_connect = drain_station_changes(&mut rx_app);
+        let changes_after_connect = drain_messages(&mut rx_app).station_changes;
         assert_eq!(
             changes_after_connect,
             vec![],
@@ -2442,8 +2635,8 @@ controlled_by = ["LOWW_DEL"]
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx_ctr);
-        drain_station_changes(&mut rx_app);
+        drain_messages(&mut rx_ctr);
+        drain_messages(&mut rx_app);
 
         // Verify we have stations and positions
         assert!(!manager.online_stations.read().await.is_empty());
@@ -2494,7 +2687,7 @@ controlled_by = ["LOWW_DEL"]
         // CTR client: LOWW_TWR/GND/DEL go Offline (removed stations),
         // LOWW_APP transitions LOWW_APP→LOVV_CTR but since LOWW_APP position
         // is gone (removed as stale), client_visible_changes sees it as Online.
-        let changes_ctr = drain_station_changes(&mut rx_ctr);
+        let changes_ctr = drain_messages(&mut rx_ctr).station_changes;
         assert_eq!(
             changes_ctr,
             vec![
@@ -2516,7 +2709,7 @@ controlled_by = ["LOWW_DEL"]
         );
 
         // APP client: same changes
-        let changes_app = drain_station_changes(&mut rx_app);
+        let changes_app = drain_messages(&mut rx_app).station_changes;
         assert_eq!(
             changes_app,
             vec![
@@ -2563,8 +2756,8 @@ controlled_by = ["LOWW_DEL"]
             .await
             .unwrap();
 
-        drain_station_changes(&mut rx_ctr);
-        drain_station_changes(&mut rx_nopos);
+        drain_messages(&mut rx_ctr);
+        drain_messages(&mut rx_nopos);
 
         // Verify client has no position
         let nopos = manager.get_client(&cid("nopos0")).await.unwrap();
@@ -2579,7 +2772,7 @@ controlled_by = ["LOWW_DEL"]
         assert_eq!(nopos.position_id(), None, "Position should remain None");
 
         // CTR client should receive Offline for LOWW_DEL
-        let changes_ctr = drain_station_changes(&mut rx_ctr);
+        let changes_ctr = drain_messages(&mut rx_ctr).station_changes;
         assert_eq!(
             changes_ctr,
             vec![StationChange::Offline {
@@ -2589,7 +2782,7 @@ controlled_by = ["LOWW_DEL"]
 
         // No-position client should also receive Offline for LOWW_DEL
         // (they see all stations via Custom profile)
-        let changes_nopos = drain_station_changes(&mut rx_nopos);
+        let changes_nopos = drain_messages(&mut rx_nopos).station_changes;
         assert_eq!(
             changes_nopos,
             vec![StationChange::Offline {
@@ -2695,6 +2888,48 @@ controlled_by = ["LOWW_DEL"]
         TestFirBuilder::new("LOVV")
             .station("LOWW_APP", &["LOVV_CTR"])
             .position("LOVV_CTR", &["LOVV"], "132.600", "CTR")
+            .build(dir)
+    }
+
+    /// LOVV with the same stations/positions as `create_lovv_network_with_profiles`
+    /// but positions no longer carry a profile_id.
+    fn create_lovv_network_without_profiles(dir: &std::path::Path) -> Network {
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_APP", &["LOWW_APP", "LOVV_CTR"])
+            .station_with_parent("LOWW_TWR", "LOWW_APP", &["LOWW_TWR"])
+            .station_with_parent("LOWW_GND", "LOWW_TWR", &["LOWW_GND"])
+            .station_with_parent("LOWW_DEL", "LOWW_GND", &["LOWW_DEL"])
+            .position("LOVV_CTR", &["LOVV"], "132.600", "CTR")
+            .position("LOWW_APP", &["LOWW"], "134.675", "APP")
+            .position("LOWW_TWR", &["LOWW"], "119.400", "TWR")
+            .position("LOWW_GND", &["LOWW"], "121.600", "GND")
+            .position("LOWW_DEL", &["LOWW"], "122.125", "DEL")
+            .build(dir)
+    }
+
+    /// LOVV with profiles, but APP_PROFILE has different tab content (label
+    /// changed from "Main" to "Updated") to simulate a profile content change
+    /// under the same ID.
+    fn create_lovv_network_with_modified_profile_content(dir: &std::path::Path) -> Network {
+        TestFirBuilder::new("LOVV")
+            .station("LOWW_APP", &["LOWW_APP", "LOVV_CTR"])
+            .station_with_parent("LOWW_TWR", "LOWW_APP", &["LOWW_TWR"])
+            .station_with_parent("LOWW_GND", "LOWW_TWR", &["LOWW_GND"])
+            .station_with_parent("LOWW_DEL", "LOWW_GND", &["LOWW_DEL"])
+            .position_with_profile("LOVV_CTR", &["LOVV"], "132.600", "CTR", "CTR_PROFILE")
+            .position_with_profile("LOWW_APP", &["LOWW"], "134.675", "APP", "APP_PROFILE")
+            .position("LOWW_TWR", &["LOWW"], "119.400", "TWR")
+            .position("LOWW_GND", &["LOWW"], "121.600", "GND")
+            .position("LOWW_DEL", &["LOWW"], "122.125", "DEL")
+            .tabbed_profile(
+                "CTR_PROFILE",
+                &[("LOWW APP", "LOWW_APP"), ("LOWW TWR", "LOWW_TWR")],
+            )
+            .tabbed_profile_with_label(
+                "APP_PROFILE",
+                "Updated",
+                &[("LOWW TWR", "LOWW_TWR"), ("LOWW GND", "LOWW_GND")],
+            )
             .build(dir)
     }
 }
