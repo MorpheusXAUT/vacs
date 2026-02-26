@@ -35,7 +35,13 @@ mod get {
         StatusCode::NOT_FOUND
     }
 
-    pub async fn version() -> ApiResult<VersionInfo> {
-        Ok(Json(VersionInfo::gather()))
+    pub async fn version(State(state): State<Arc<AppState>>) -> ApiResult<VersionInfo> {
+        let mut version_info = VersionInfo::gather();
+        version_info.dataset_git_sha = state
+            .dataset
+            .as_ref()
+            .and_then(|d| d.local_sha())
+            .unwrap_or_else(|| "unknown".to_string());
+        Ok(Json(version_info))
     }
 }

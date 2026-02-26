@@ -25,6 +25,7 @@ pub struct AppConfig {
     pub updates: UpdatesConfig,
     pub rate_limiters: RateLimitersConfig,
     pub ice: IceConfig,
+    pub admin: AdminConfig,
 }
 
 impl AppConfig {
@@ -157,6 +158,10 @@ pub struct VatsimConfig {
     pub data_feed_url: String,
     pub data_feed_timeout: Duration,
     pub controller_update_interval: Duration,
+    /// Path to the dataset coverage directory. Must be a **subdirectory** of
+    /// the volume mount — not the volume root itself — so that the dataset
+    /// manager can create temporary and backup directories as siblings on the
+    /// same filesystem for atomic renames.
     pub coverage_dir: String,
 }
 
@@ -199,6 +204,83 @@ impl Default for UpdatesConfig {
             policy_path: config_file_path("release_policy.toml")
                 .expect("Failed to build policy path"),
             catalog: CatalogConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AdminConfig {
+    /// Expected audience for GitHub OIDC tokens.
+    pub oidc_audience: String,
+    /// Allowed subject claim for GitHub OIDC tokens.
+    /// With GitHub Environments, the format is:
+    /// `repo:<owner>/<repo>:environment:<environment_name>`
+    /// e.g. `repo:MorpheusXAUT/vacs-data:environment:production`
+    pub oidc_allowed_sub: String,
+    /// Configuration for the dataset repository. If omitted, the server
+    /// will only load the dataset from the local `coverage_dir` on disk
+    /// and the admin reload endpoint will be unavailable.
+    #[serde(default)]
+    pub dataset: Option<DatasetRepoConfig>,
+}
+
+impl Default for AdminConfig {
+    fn default() -> Self {
+        Self {
+            oidc_audience: "https://vacs.network".to_string(),
+            oidc_allowed_sub: String::new(),
+            dataset: None,
+        }
+    }
+}
+
+/// Credentials for authenticating as a GitHub App.
+///
+/// Shared between the release catalog and the dataset manager.
+#[derive(Default, Clone, Serialize, Deserialize)]
+pub struct GitHubCredentials {
+    /// GitHub App ID.
+    pub app_id: u64,
+    /// GitHub App private key (PEM-encoded).
+    pub app_private_key: String,
+    /// GitHub App installation ID.
+    pub installation_id: u64,
+}
+
+impl std::fmt::Debug for GitHubCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GitHubCredentials")
+            .field("app_id", &self.app_id)
+            .field("installation_id", &self.installation_id)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DatasetRepoConfig {
+    /// GitHub repository owner (e.g. `MorpheusXAUT`).
+    pub owner: String,
+    /// GitHub repository name (e.g. `vacs-data`).
+    pub repo: String,
+    /// GitHub App credentials for authenticated API access.
+    /// If omitted, the client falls back to unauthenticated requests
+    /// (only works for public repositories).
+    #[serde(flatten)]
+    pub credentials: Option<GitHubCredentials>,
+    /// Lightweight tag that the GHA workflow force-pushes after every
+    /// successful deploy (e.g. `deployed/production`). The server resolves
+    /// this tag to a commit SHA on startup to decide whether the local
+    /// dataset is up-to-date.
+    pub deployed_tag: String,
+}
+
+impl Default for DatasetRepoConfig {
+    fn default() -> Self {
+        Self {
+            owner: "MorpheusXAUT".to_string(),
+            repo: "vacs-data".to_string(),
+            credentials: None,
+            deployed_tag: "deployed/production".to_string(),
         }
     }
 }

@@ -59,6 +59,7 @@ impl TestApp {
             RateLimiters::default(),
             shutdown_rx,
             Arc::new(StunOnlyProvider::default()),
+            None,
         ));
 
         let auth_layer = setup_mock_auth_layer(&config).await.unwrap();

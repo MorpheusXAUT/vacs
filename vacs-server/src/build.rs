@@ -54,6 +54,7 @@ impl CompilerInfo {
 pub struct VersionInfo {
     pub build: BuildInfo,
     pub version: &'static str,
+    pub dataset_git_sha: String,
 }
 
 impl VersionInfo {
@@ -61,6 +62,7 @@ impl VersionInfo {
         Self {
             build: BuildInfo::gather(),
             version: env!("CARGO_PKG_VERSION"),
+            dataset_git_sha: "unknown".to_string(),
         }
     }
 }

@@ -10,7 +10,6 @@ use parking_lot::RwLock;
 use regex::Regex;
 use reqwest::header;
 use semver::Version;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::num::NonZeroUsize;
@@ -18,27 +17,13 @@ use std::time::{Duration, Instant};
 use tracing::instrument;
 use vacs_protocol::http::version::ReleaseChannel;
 
+pub use crate::config::GitHubCredentials;
+
 const GITHUB_RELEASE_BODY_REQUIRED_UPDATE_FLAG: &str = "## Mandatory Update";
 const GITHUB_RELEASE_BODY_BREAKING_CHANGES_FLAG: &str = "### ⚠ BREAKING CHANGES";
 const MAX_PAGINATION_PAGES: usize = 10; // Max 1000 releases (100 per page)
 const SIGNATURE_CACHE_SIZE: usize = 100; // LRU cache size for signatures
 const FETCH_SIGNATURES_CONCURRENT_REQUESTS: usize = 5; // Number of asset signature downloads to fetch concurrently
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct GitHubCredentials {
-    pub app_id: u64,
-    pub app_private_key: String,
-    pub installation_id: u64,
-}
-
-impl Debug for GitHubCredentials {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GitHubCredentials")
-            .field("app_id", &self.app_id)
-            .field("installation_id", &self.installation_id)
-            .finish_non_exhaustive()
-    }
-}
 
 struct RegexPatterns {
     title: Regex,
