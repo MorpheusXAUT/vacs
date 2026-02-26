@@ -13,7 +13,7 @@ use vacs_audio::error::AudioError;
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn audio_get_hosts(app_state: State<'_, AppState>) -> Result<AudioHosts, Error> {
-    log::info!("Getting audio hosts");
+    log::debug!("Getting audio hosts");
 
     let mut selected = app_state
         .lock()
@@ -82,7 +82,7 @@ pub async fn audio_get_devices(
     audio_manager: State<'_, AudioManagerHandle>,
     device_type: DeviceType,
 ) -> Result<AudioDevices, Error> {
-    log::info!("Getting audio devices (type: {:?})", device_type);
+    log::debug!("Getting audio devices (type: {:?})", device_type);
 
     let state = app_state.lock().await;
     get_audio_devices(
@@ -173,7 +173,7 @@ pub async fn audio_set_device(
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn audio_get_volumes(app_state: State<'_, AppState>) -> Result<AudioVolumes, Error> {
-    log::info!("Getting audio volumes");
+    log::debug!("Getting audio volumes");
 
     let state = app_state.lock().await;
     let audio_config = &state.config.audio;
@@ -195,7 +195,7 @@ pub async fn audio_set_volume(
     volume_type: VolumeType,
     volume: f32,
 ) -> Result<(), Error> {
-    log::info!(
+    log::trace!(
         "Setting audio volume (type: {:?}, volume: {:?})",
         volume_type,
         volume
@@ -244,7 +244,6 @@ pub async fn audio_play_ui_click(
     audio_manager: State<'_, AudioManagerHandle>,
 ) -> Result<(), Error> {
     if let Some(audio_manager) = audio_manager.try_read_for(Duration::from_millis(500)) {
-        log::trace!("Playing UI click");
         audio_manager.start(SourceType::Click);
     } else {
         log::warn!("Play UI click state lock acquire timed out");

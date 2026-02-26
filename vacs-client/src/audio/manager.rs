@@ -298,23 +298,20 @@ impl AudioManager {
 
     pub fn detach_input_device(&mut self) {
         self.input = None;
-        log::info!("Detached input device");
+        log::debug!("Detached input device");
     }
 
     pub fn start(&self, source_type: SourceType) {
-        log::trace!("Starting audio source {source_type:?}");
         self.output
             .start_audio_source(self.source_ids[&source_type]);
     }
 
     pub fn restart(&self, source_type: SourceType) {
-        log::trace!("Restarting audio source {source_type:?}");
         self.output
             .restart_audio_source(self.source_ids[&source_type]);
     }
 
     pub fn stop(&self, source_type: SourceType) {
-        log::trace!("Stopping audio source {source_type:?}");
         self.output.stop_audio_source(self.source_ids[&source_type]);
     }
 
@@ -326,7 +323,6 @@ impl AudioManager {
             return;
         }
 
-        log::trace!("Setting output volume {volume} for audio source {source_type:?}");
         self.output
             .set_volume(self.source_ids[&source_type], volume);
 
@@ -385,7 +381,7 @@ impl AudioManager {
             self.output.remove_audio_source(source_id);
             log::info!("Detached call output");
         } else {
-            log::info!("Tried to detach call output but no call was attached");
+            log::debug!("Tried to detach call output but no call was attached");
         }
     }
 

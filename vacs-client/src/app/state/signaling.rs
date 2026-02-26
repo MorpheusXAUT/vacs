@@ -396,7 +396,7 @@ impl AppStateInner {
                 profile,
             } => {
                 log::debug!(
-                    "Successfully connected to signaling server. Display name: {}, frequency: {}, profile: {profile:?}",
+                    "Successfully connected to signaling server. Display name: {}, frequency: {}, profile: {profile}",
                     &client_info.display_name,
                     &client_info.frequency,
                 );
@@ -731,12 +731,10 @@ impl AppStateInner {
                 ref client,
                 ref profile,
             }) => {
-                log::trace!("Received session info: {client:?}");
+                log::trace!("Received session info for client {client:?}: {profile}");
 
-                if let SessionProfile::Changed(profile) = profile {
-                    log::trace!("Active profile changed: {profile:?}");
-                } else {
-                    log::trace!("Active profile unchanged");
+                if let SessionProfile::Changed(active_profile) = profile {
+                    log::debug!("Active profile changed: {active_profile}");
                 }
 
                 app.emit("signaling:connected", msg).ok();

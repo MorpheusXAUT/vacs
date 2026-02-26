@@ -34,7 +34,6 @@ impl PlaybackStream {
         device: StreamDevice,
         error_tx: mpsc::Sender<AudioError>,
     ) -> Result<Self, AudioError> {
-        tracing::debug!("Starting input capture stream");
         debug_assert!(matches!(device.device_type, DeviceType::Output));
 
         let mut mixer = Mixer::default();
@@ -62,7 +61,6 @@ impl PlaybackStream {
             },
         )?;
 
-        tracing::debug!("Starting playback on output stream");
         stream.play()?;
 
         Ok(Self {
@@ -94,7 +92,6 @@ impl PlaybackStream {
             .next_audio_source_id
             .fetch_add(1, atomic::Ordering::SeqCst);
 
-        tracing::trace!(?id, "Adding audio source to mixer");
         if self
             .mixer_ops
             .lock()
@@ -111,7 +108,6 @@ impl PlaybackStream {
 
     #[instrument(level = "trace", skip(self))]
     pub fn remove_audio_source(&self, id: AudioSourceId) {
-        tracing::trace!("Removing audio source from mixer");
         if self
             .mixer_ops
             .lock()
@@ -124,7 +120,6 @@ impl PlaybackStream {
 
     #[instrument(level = "trace", skip(self))]
     pub fn start_audio_source(&self, id: AudioSourceId) {
-        tracing::trace!("Starting audio source");
         if self
             .mixer_ops
             .lock()
@@ -139,7 +134,6 @@ impl PlaybackStream {
 
     #[instrument(level = "trace", skip(self))]
     pub fn stop_audio_source(&self, id: AudioSourceId) {
-        tracing::trace!("Stopping audio source");
         if self
             .mixer_ops
             .lock()
@@ -154,7 +148,6 @@ impl PlaybackStream {
 
     #[instrument(level = "trace", skip(self))]
     pub fn restart_audio_source(&self, id: AudioSourceId) {
-        tracing::trace!("Restarting audio source");
         if self
             .mixer_ops
             .lock()
@@ -169,7 +162,6 @@ impl PlaybackStream {
 
     #[instrument(level = "trace", skip(self))]
     pub fn set_volume(&self, id: AudioSourceId, volume: f32) {
-        tracing::trace!("Setting volume for audio source");
         if self
             .mixer_ops
             .lock()

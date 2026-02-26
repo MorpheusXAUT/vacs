@@ -50,7 +50,6 @@ impl CaptureStream {
         error_tx: mpsc::Sender<AudioError>,
         muted: bool,
     ) -> Result<Self, AudioError> {
-        tracing::debug!("Starting input capture stream");
         debug_assert!(matches!(device.device_type, DeviceType::Input));
 
         let muted = Arc::new(AtomicBool::new(muted));
@@ -246,8 +245,6 @@ impl CaptureStream {
         amp: f32,
         error_tx: mpsc::Sender<AudioError>,
     ) -> Result<Self, AudioError> {
-        tracing::debug!("Starting input capture stream level meter");
-
         let mut level_meter = InputLevelMeter::new(device.sample_rate() as f32);
 
         let (ops_prod, mut ops_cons) =
@@ -278,10 +275,9 @@ impl CaptureStream {
             },
         )?;
 
-        tracing::trace!("Starting level meter capture on input stream");
         stream.play()?;
 
-        tracing::info!("Input level meter capture stream started");
+        tracing::debug!("Input level meter capture stream started");
         Ok(Self {
             _stream: stream,
             volume_ops: Mutex::new(ops_prod),

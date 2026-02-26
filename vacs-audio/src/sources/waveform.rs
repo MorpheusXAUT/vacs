@@ -384,9 +384,8 @@ impl AudioSource for WaveformSource {
         }
     }
 
-    #[instrument(level = "trace", skip(self), fields(segments = ?self.segments))]
+    #[instrument(level = "trace", skip(self), fields(segment_count = self.segments.len()))]
     fn start(&mut self) {
-        tracing::trace!("Starting waveform source");
         self.active = true;
         self.releasing = false;
         self.restarting = false;
@@ -396,9 +395,8 @@ impl AudioSource for WaveformSource {
         self.segment_elapsed = 0;
     }
 
-    #[instrument(level = "trace", skip(self), fields(segments = ?self.segments))]
+    #[instrument(level = "trace", skip(self), fields(segment_count = self.segments.len()))]
     fn stop(&mut self) {
-        tracing::trace!("Stopping waveform source");
         // If we are currently releasing, we ignore the call to stop.
         // If not, we initiate the release. In case we are stopping while playing silence,
         // mix_into will abort early.
@@ -408,9 +406,8 @@ impl AudioSource for WaveformSource {
         }
     }
 
-    #[instrument(level = "trace", skip(self), fields(segments = ?self.segments))]
+    #[instrument(level = "trace", skip(self), fields(segment_count = self.segments.len()))]
     fn restart(&mut self) {
-        tracing::trace!("Restarting waveform source");
         if self.active {
             self.stop();
             self.restarting = true;
@@ -419,9 +416,8 @@ impl AudioSource for WaveformSource {
         }
     }
 
-    #[instrument(level = "trace", skip(self), fields(segments = ?self.segments))]
+    #[instrument(level = "trace", skip(self), fields(segment_count = self.segments.len()))]
     fn set_volume(&mut self, volume: f32) {
-        tracing::trace!("Setting volume for waveform source");
         self.volume = volume.clamp(0.0, 1.0);
     }
 }

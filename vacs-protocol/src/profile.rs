@@ -215,6 +215,36 @@ impl std::borrow::Borrow<String> for ProfileId {
     }
 }
 
+impl std::fmt::Display for Profile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Profile({}, {})", self.id, self.profile_type)
+    }
+}
+
+impl std::fmt::Display for ProfileType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProfileType::Geo(container) => {
+                write!(f, "Geo({} nodes)", container.children.len())
+            }
+            ProfileType::Tabbed(tabs) => {
+                let labels: Vec<String> = tabs.iter().map(|t| t.label.join("/")).collect();
+                write!(f, "Tabbed([{}])", labels.join(", "))
+            }
+        }
+    }
+}
+
+impl<T: ProfileReference + std::fmt::Display> std::fmt::Display for ActiveProfile<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ActiveProfile::Specific(profile) => write!(f, "Specific({profile})"),
+            ActiveProfile::Custom => write!(f, "Custom"),
+            ActiveProfile::None => write!(f, "None"),
+        }
+    }
+}
+
 impl PartialOrd for Profile {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.id.partial_cmp(&other.id)

@@ -194,7 +194,7 @@ impl TrackAudioRadio {
     ) {
         match connection_state {
             ConnectionState::Connected => {
-                log::trace!("Successfully connected to TrackAudio");
+                log::debug!("Successfully connected to TrackAudio");
                 state.set_connected(true, app); // This will emit, but we do more specific emissions after fetch
 
                 let api = client.api();
@@ -214,12 +214,10 @@ impl TrackAudioRadio {
                 state.sync_stations(station_states, app);
             }
             ConnectionState::Connecting { .. } | ConnectionState::Reconnecting { .. } => {
-                log::trace!("Connecting to TrackAudio");
                 state.clear();
                 state.emit(app);
             }
             ConnectionState::Disconnected { .. } => {
-                log::trace!("Disconnected from TrackAudio");
                 state.clear();
                 state.emit(app);
             }

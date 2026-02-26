@@ -257,7 +257,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         }
     }
 
-    #[instrument(level = "debug", skip(self), err)]
+    #[instrument(level = "debug", skip(self, msg), fields(message_type = msg.variant()), err)]
     pub async fn send(&self, msg: ClientMessage) -> Result<(), SignalingError> {
         match self.state() {
             State::Disconnected => {
@@ -282,7 +282,6 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
             })?
         };
 
-        tracing::debug!("Sending message to send channel");
         let serialized = ClientMessage::serialize(&msg).map_err(|err| {
             tracing::warn!(?err, "Failed to serialize message");
             SignalingError::Runtime(SignalingRuntimeError::SerializationError(err.to_string()))
@@ -296,13 +295,11 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
     #[instrument(level = "debug", skip(self), err)]
     async fn recv(&self) -> Result<ServerMessage, SignalingError> {
-        tracing::debug!("Waiting for message from server");
         self.recv_with_timeout(Duration::MAX).await
     }
 
     #[instrument(level = "debug", skip(self), err)]
     async fn recv_with_timeout(&self, timeout: Duration) -> Result<ServerMessage, SignalingError> {
-        tracing::debug!("Waiting for message from server with timeout");
         let mut broadcast_rx = self.subscribe();
 
         if self.state() == State::Disconnected {
@@ -368,7 +365,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
         match self.recv_with_timeout(self.login_timeout).await? {
             ServerMessage::SessionInfo(server::SessionInfo { client, profile }) => {
                 if let SessionProfile::Changed(profile) = profile {
-                    tracing::info!(?client, ?profile, "Login successful, received session info");
+                    tracing::info!(?client, %profile, "Login successful, received session info");
                     Ok((client, profile))
                 } else {
                     tracing::error!(
@@ -466,8 +463,6 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
 
     #[instrument(level = "debug", skip(self))]
     async fn cleanup(&self) {
-        tracing::debug!("Cleaning up after disconnect");
-
         let mut worker_tasks = {
             let mut worker_tasks = self.worker_tasks.lock();
             std::mem::replace(&mut *worker_tasks, JoinSet::new())
@@ -644,15 +639,14 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
                     msg = receiver.recv(&send_tx) => {
                         match msg {
                             Ok(message) => {
-                                tracing::trace!(?message, "Received message from transport, trying to match against matcher");
+                                tracing::trace!(message_type = message.variant(), "Received message from transport");
                                 matcher.try_match(&message);
                                 if broadcast_tx.receiver_count() > 0 {
-                                    tracing::trace!(?message, "Broadcasting message");
                                     if let Err(err) = broadcast_tx.send(SignalingEvent::Message(message.clone())) {
-                                        tracing::warn!(?message, ?err, "Failed to broadcast message");
+                                        tracing::warn!(message_type = message.variant(), ?err, "Failed to broadcast message");
                                     }
                                 } else {
-                                    tracing::trace!(?message, "No receivers subscribed, not broadcasting message");
+                                    tracing::trace!(message_type = message.variant(), "No receivers subscribed, not broadcasting message");
                                 }
                             }
                             Err(err) => {
@@ -697,7 +691,7 @@ impl<ST: SignalingTransport, TP: TokenProvider> SignalingClientInner<ST, TP> {
                         match msg {
                             Some(msg) => {
                                 if !matches!(msg, tungstenite::Message::Ping(_) | tungstenite::Message::Pong(_)) {
-                                    tracing::debug!(?msg, "Sending message to transport");
+                                    tracing::trace!("Sending message to transport");
                                 }
 
                                 if let Err(err) = sender.send(msg).await {
