@@ -45,6 +45,17 @@ pub enum StationChange {
     },
 }
 
+impl StationChange {
+    /// Returns the station ID affected by this change.
+    pub fn station_id(&self) -> &StationId {
+        match self {
+            Self::Online { station_id, .. }
+            | Self::Handoff { station_id, .. }
+            | Self::Offline { station_id } => station_id,
+        }
+    }
+}
+
 impl ClientId {
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
