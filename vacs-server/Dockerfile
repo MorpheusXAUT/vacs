@@ -39,8 +39,9 @@ RUN apt-get update && \
       curl && \
     rm -rf /var/lib/apt/lists/*
 
-VOLUME ["/etc/vacs-server"]
-RUN mkdir -p /etc/vacs-server/data/coverage && chown -R vacs:vacs /etc/vacs-server
+VOLUME ["/etc/vacs-server", "/var/lib/vacs-server/data"]
+RUN mkdir -p /etc/vacs-server /var/lib/vacs-server/data/coverage && \
+    chown -R vacs:vacs /etc/vacs-server /var/lib/vacs-server/data
 
 COPY --from=builder /usr/src/vacs/target/release/vacs-server /usr/local/bin/vacs-server
 
