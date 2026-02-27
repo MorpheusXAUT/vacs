@@ -37,7 +37,7 @@ mod get {
 
     pub async fn version(State(state): State<Arc<AppState>>) -> ApiResult<VersionInfo> {
         let mut version_info = VersionInfo::gather();
-        version_info.dataset_git_sha = state
+        version_info.dataset.git_commit_sha = state
             .dataset
             .as_ref()
             .and_then(|d| d.local_sha())

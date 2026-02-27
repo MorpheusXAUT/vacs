@@ -5,12 +5,28 @@ use bytes::Bytes;
 use http_body_util::BodyExt;
 use octocrab::Octocrab;
 use octocrab::params::repos::Reference;
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use tracing::instrument;
 use vacs_vatsim::coverage::network::Network;
 
 /// File name used to track the currently deployed commit SHA.
 const VERSION_FILE: &str = ".dataset-sha";
+
+/// Subset of the GitHub Git Tags API response that includes the target object.
+///
+/// The upstream `octocrab::models::repos::GitTag` omits the `object` field required
+/// to resolve an annotated tag to its commit SHA.
+#[derive(Debug, Deserialize)]
+struct GitTagWithObject {
+    object: GitTagTarget,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitTagTarget {
+    sha: String,
+    r#type: String,
+}
 
 /// Manages downloading, validating, and installing dataset updates from GitHub.
 pub struct DatasetManager {
@@ -100,14 +116,8 @@ impl DatasetManager {
         let sha = match git_ref.object {
             octocrab::models::repos::Object::Commit { sha, .. } => sha,
             octocrab::models::repos::Object::Tag { sha, .. } => {
-                // Annotated tag — resolve the underlying commit.
-                let tag = self
-                    .octocrab
-                    .repos(&self.owner, &self.repo)
-                    .get_tag(&sha)
-                    .await
-                    .context("Failed to resolve annotated tag to commit")?;
-                tag.sha
+                // Annotated tag - the SHA here is the tag object, not the actual commit
+                self.resolve_tag_to_commit_sha(&sha).await?
             }
             other => {
                 anyhow::bail!(
@@ -119,6 +129,31 @@ impl DatasetManager {
 
         tracing::info!(%sha, tag = %self.deployed_tag, "Resolved deployed tag to commit SHA");
         Ok(sha)
+    }
+
+    /// Dereference an annotated tag object to the underlying commit SHA.
+    async fn resolve_tag_to_commit_sha(&self, tag_object_sha: &str) -> Result<String> {
+        let route = format!(
+            "/repos/{owner}/{repo}/git/tags/{sha}",
+            owner = self.owner,
+            repo = self.repo,
+            sha = tag_object_sha,
+        );
+
+        let tag: GitTagWithObject = self
+            .octocrab
+            .get(route, None::<&()>)
+            .await
+            .context("Failed to fetch annotated tag object from GitHub")?;
+
+        anyhow::ensure!(
+            tag.object.r#type == "commit",
+            "Annotated tag points to a '{}', not a commit (SHA {})",
+            tag.object.r#type,
+            tag.object.sha,
+        );
+
+        Ok(tag.object.sha)
     }
 
     /// Download the dataset tarball for a given ref and extract to a temp
