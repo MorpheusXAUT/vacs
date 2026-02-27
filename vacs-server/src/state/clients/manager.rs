@@ -37,6 +37,8 @@ struct ClientPositionSync {
     client_info_updates: Vec<ServerMessage>,
     /// Clients that joined an already-online position and need self-handoff events.
     self_handoff_clients: Vec<(ClientSession, PositionId)>,
+    /// Clients that left a still-online position and need departure handoff events.
+    departure_handoff_clients: Vec<(ClientSession, PositionId)>,
     /// Whether any position was added or removed from the online set.
     positions_changed: bool,
 }
@@ -690,8 +692,11 @@ impl ClientManager {
                 ));
             }
 
+            let mut all_handoff_clients = std::mem::take(&mut sync.self_handoff_clients);
+            all_handoff_clients.append(&mut sync.departure_handoff_clients);
+
             let per_client_changes = self.compute_self_handoffs(
-                std::mem::take(&mut sync.self_handoff_clients),
+                all_handoff_clients,
                 &coverage_changes,
                 &online_positions,
                 &vatsim_only,
@@ -754,6 +759,7 @@ impl ClientManager {
             session_info_updates: Vec::new(),
             client_info_updates: Vec::new(),
             self_handoff_clients: Vec::new(),
+            departure_handoff_clients: Vec::new(),
             positions_changed: false,
         };
 
@@ -876,9 +882,15 @@ impl ClientManager {
                                     tracing::trace!(
                                         ?cid,
                                         ?old_position_id,
-                                        "Removing client from position in online positions list"
+                                        "Removing client from shared position in online positions list"
                                     );
                                     clients.remove(cid);
+                                    // The position stays online with remaining clients.
+                                    // This client needs departure events for stations
+                                    // that won't appear in the global coverage_diff.
+                                    result
+                                        .departure_handoff_clients
+                                        .push((session.clone(), old_position_id.clone()));
                                 }
                             }
 
