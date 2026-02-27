@@ -51,10 +51,23 @@ impl CompilerInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct DatasetInfo {
+    pub git_commit_sha: String,
+}
+
+impl DatasetInfo {
+    pub fn gather() -> Self {
+        Self {
+            git_commit_sha: "unknown".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct VersionInfo {
     pub build: BuildInfo,
     pub version: &'static str,
-    pub dataset_git_sha: String,
+    pub dataset: DatasetInfo,
 }
 
 impl VersionInfo {
@@ -62,7 +75,7 @@ impl VersionInfo {
         Self {
             build: BuildInfo::gather(),
             version: env!("CARGO_PKG_VERSION"),
-            dataset_git_sha: "unknown".to_string(),
+            dataset: DatasetInfo::gather(),
         }
     }
 }

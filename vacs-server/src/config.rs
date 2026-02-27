@@ -162,6 +162,9 @@ pub struct VatsimConfig {
     /// the volume mount — not the volume root itself — so that the dataset
     /// manager can create temporary and backup directories as siblings on the
     /// same filesystem for atomic renames.
+    ///
+    /// In production this should live on a named Docker volume
+    /// (`/var/lib/vacs-server/data`), separate from the config bind mount.
     pub coverage_dir: String,
 }
 
@@ -174,7 +177,7 @@ impl Default for VatsimConfig {
             data_feed_url: "https://data.vatsim.net/v3/vatsim-data.json".to_string(),
             data_feed_timeout: Duration::from_secs(2),
             controller_update_interval: Duration::from_secs(30),
-            coverage_dir: "/etc/vacs-server/data/coverage".to_string(),
+            coverage_dir: "/var/lib/vacs-server/data/coverage".to_string(),
         }
     }
 }
