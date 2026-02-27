@@ -1,5 +1,6 @@
 mod admin;
 mod auth;
+mod debug;
 mod root;
 mod version;
 mod webrtc;
@@ -34,6 +35,7 @@ where
     let app = Router::new()
         .nest("/admin", admin::routes())
         .nest("/auth", auth::routes())
+        .nest("/debug", debug::routes())
         .nest("/ws", ws::routes().merge(crate::ws::routes()))
         .nest("/version", version::routes())
         .nest("/webrtc", webrtc::routes())
