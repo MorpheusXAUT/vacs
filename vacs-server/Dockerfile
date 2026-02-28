@@ -24,8 +24,8 @@ FROM debian:13.3-slim AS runtime
 LABEL org.opencontainers.image.title="vacs-server" \
       org.opencontainers.image.description="VATSIM ATC Comm System - Signaling Server" \
       org.opencontainers.image.url="https://vacs.network" \
-      org.opencontainers.image.documentation="https://github.com/MorpheusXAUT/vacs#readme" \
-      org.opencontainers.image.source="https://github.com/MorpheusXAUT/vacs" \
+      org.opencontainers.image.documentation="https://github.com/vacs-project/vacs#readme" \
+      org.opencontainers.image.source="https://github.com/vacs-project/vacs" \
       org.opencontainers.image.vendor="vacs" \
       org.opencontainers.image.licenses="Apache-2.0 OR MIT"
 
