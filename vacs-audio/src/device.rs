@@ -243,13 +243,10 @@ impl DeviceSelector {
         preferred_host: Option<&str>,
         preferred_device_name: Option<&str>,
     ) -> Result<(StreamDevice, bool), AudioError> {
-        tracing::debug!("Opening device");
-
         let host = Self::select_host(preferred_host);
         let (device, stream_config, is_fallback) =
             Self::pick_device_with_stream_config(device_type, &host, preferred_device_name)?;
 
-        tracing::debug!(?stream_config, device = ?DeviceDebug(&device), ?is_fallback, "Opened device");
         Ok((
             StreamDevice {
                 device_type,
@@ -263,20 +260,14 @@ impl DeviceSelector {
 
     #[instrument(level = "debug")]
     pub fn all_host_names() -> Vec<String> {
-        tracing::debug!("Retrieving all host names");
-
-        let host_names = cpal::available_hosts()
+        cpal::available_hosts()
             .iter()
             .map(|id| id.name().to_string())
-            .collect::<Vec<_>>();
-        tracing::debug!(host_count = ?host_names.len(), "Retrieved host names");
-        host_names
+            .collect::<Vec<_>>()
     }
 
     #[instrument(level = "debug")]
     pub fn default_host_name() -> String {
-        tracing::debug!("Retrieving default host name");
-
         cpal::default_host().id().name().to_string()
     }
 
@@ -285,8 +276,6 @@ impl DeviceSelector {
         device_type: DeviceType,
         preferred_host: Option<&str>,
     ) -> Result<Vec<String>, AudioError> {
-        tracing::debug!("Retrieving all devices names with at least one stream config");
-
         let host = Self::select_host(preferred_host);
         let devices = Self::host_devices(device_type, &host)?;
 
@@ -303,7 +292,6 @@ impl DeviceSelector {
             })
             .collect::<Vec<_>>();
 
-        tracing::debug!(device_count = ?device_names.len(), "Retrieved device names");
         Ok(device_names)
     }
 
@@ -318,7 +306,6 @@ impl DeviceSelector {
         let (device, _) = Self::select_device(device_type, &host, None)?;
         Self::pick_best_stream_config(device_type, &device)?;
 
-        tracing::debug!(device = ?DeviceDebug(&device), "Retrieved device name for default device");
         Ok(device.name().unwrap_or_default())
     }
 
@@ -328,20 +315,15 @@ impl DeviceSelector {
         preferred_host: Option<&str>,
         preferred_device_name: Option<&str>,
     ) -> Result<String, AudioError> {
-        tracing::debug!("Retrieving device name for picked device");
-
         let host = Self::select_host(preferred_host);
         let (device, _) = Self::select_device(device_type, &host, preferred_device_name)?;
         Self::pick_best_stream_config(device_type, &device)?;
 
-        tracing::debug!(device = ?DeviceDebug(&device), "Retrieved device name for picked device");
         Ok(device.name().unwrap_or_default())
     }
 
     #[instrument(level = "trace")]
     fn select_host(preferred_host: Option<&str>) -> cpal::Host {
-        tracing::trace!("Selecting host");
-
         let hosts = cpal::available_hosts();
 
         if let Some(name) = preferred_host {
@@ -439,8 +421,6 @@ impl DeviceSelector {
         host: &cpal::Host,
         preferred_device_name: Option<&str>,
     ) -> Result<(cpal::Device, bool), AudioError> {
-        tracing::trace!("Selecting device");
-
         if let Some(name) = preferred_device_name {
             let devices = Self::host_devices(device_type, host)?;
 
@@ -480,8 +460,6 @@ impl DeviceSelector {
         device_type: DeviceType,
         device: &cpal::Device,
     ) -> Result<(SupportedStreamConfig, StreamConfigScore), AudioError> {
-        tracing::trace!("Picking best stream config");
-
         let (configs, preferred_channels): (Vec<SupportedStreamConfigRange>, u16) =
             match device_type {
                 DeviceType::Input => (

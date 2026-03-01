@@ -38,7 +38,6 @@ impl SignalingTransport for TokioTransport {
 
     #[tracing::instrument(level = "info", err)]
     async fn connect(&self) -> Result<(Self::Sender, Self::Receiver), SignalingError> {
-        tracing::info!("Connecting to signaling server");
         let (websocket_stream, response) = tokio_tungstenite::connect_async(&self.url)
             .await
             .map_err(|err| {
@@ -49,7 +48,6 @@ impl SignalingTransport for TokioTransport {
 
         let (websocket_tx, websocket_rx) = websocket_stream.split();
 
-        tracing::info!("Successfully established connection to signaling server");
         Ok((
             TokioSender::new(websocket_tx),
             TokioReceiver::new(websocket_rx),
@@ -127,7 +125,6 @@ impl SignalingReceiver for TokioReceiver {
                     let Some(msg) = msg else { break; };
                     match msg {
                         Ok(tungstenite::Message::Text(text)) => {
-                            tracing::debug!("Received message");
                             self.heartbeat_state.mark_rx();
                             return match ServerMessage::deserialize(&text) {
                                 Ok(ServerMessage::Disconnected(disconnected)) => {

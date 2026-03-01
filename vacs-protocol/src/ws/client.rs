@@ -41,4 +41,23 @@ impl ClientMessage {
     pub fn deserialize(s: &str) -> serde_json::Result<Self> {
         serde_json::from_str(s)
     }
+
+    pub const fn variant(&self) -> &'static str {
+        match self {
+            ClientMessage::Login(_) => "Login",
+            ClientMessage::Logout => "Logout",
+            ClientMessage::CallInvite(_) => "CallInvite",
+            ClientMessage::CallAccept(_) => "CallAccept",
+            ClientMessage::CallEnd(_) => "CallEnd",
+            ClientMessage::CallReject(_) => "CallReject",
+            ClientMessage::CallError(_) => "CallError",
+            ClientMessage::WebrtcOffer(_) => "WebrtcOffer",
+            ClientMessage::WebrtcAnswer(_) => "WebrtcAnswer",
+            ClientMessage::WebrtcIceCandidate(_) => "WebrtcIceCandidate",
+            ClientMessage::ListClients => "ListClients",
+            ClientMessage::ListStations => "ListStations",
+            ClientMessage::Disconnect => "Disconnect",
+            ClientMessage::Error(_) => "Error",
+        }
+    }
 }

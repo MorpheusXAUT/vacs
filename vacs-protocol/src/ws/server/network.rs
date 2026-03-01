@@ -64,6 +64,15 @@ pub struct StationChanges {
     pub changes: Vec<StationChange>,
 }
 
+impl std::fmt::Display for SessionProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SessionProfile::Unchanged => write!(f, "Unchanged"),
+            SessionProfile::Changed(profile) => write!(f, "Changed({profile})"),
+        }
+    }
+}
+
 impl From<ActiveProfile<Profile>> for SessionProfile {
     fn from(value: ActiveProfile<Profile>) -> Self {
         Self::Changed(value)

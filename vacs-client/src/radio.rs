@@ -90,7 +90,6 @@ pub enum RadioState {
 
 impl RadioState {
     pub fn emit(&self, app: &tauri::AppHandle) {
-        log::trace!("Emitting radio state: {self:?}");
         app.emit("radio:state", self).ok();
     }
 }
