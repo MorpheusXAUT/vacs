@@ -75,23 +75,32 @@ As we're making changes to our service, we may occasionally introduce breaking/n
 
 ## Screenshots
 
-![Main radio page displaying DA keys of stations to call](https://raw.githubusercontent.com/vacs-project/vacs/refs/heads/main/docs/screenshots/radio_page.png "radio page")
-Main radio page displaying DA keys of stations to call
+![Main phone page displaying a geo layout](docs/screenshots/geo.png "geo")
+Main phone page displaying a geo layout
 
-![Settings page for audio and radio configuration](https://raw.githubusercontent.com/vacs-project/vacs/refs/heads/main/docs/screenshots/settings.png "settings page")
+![Main phone page displaying a tabbed layout](docs/screenshots/tabbed.png "tabbed")
+Main phone page displaying a tabbed layout
+
+![Settings page for audio and radio configuration](docs/screenshots/settings.png "settings page")
 Settings page for audio and radio configuration
 
-![Mission page for stations profile selection](https://raw.githubusercontent.com/vacs-project/vacs/refs/heads/main/docs/screenshots/mission_page.png "mission page")
-Mission page for stations profile selection
+![Outgoing call initiated by user before being picked up](docs/screenshots/tabbed_outgoing_call.png "outgoing call")
+Outgoing call initiated by a user before being picked up
 
-![Outgoing call initiated by user before being picked up](https://raw.githubusercontent.com/vacs-project/vacs/refs/heads/main/docs/screenshots/outgoing_call.png "outgoing call")
-Outgoing call initiated by user before being picked up
+![Incoming call initiated by other user before being picked up](docs/screenshots/tabbed_incoming_call.gif "incoming call")
+Incoming call initiated by another user before being picked up
 
-![Incoming call initiated by other user before being picked up](https://raw.githubusercontent.com/vacs-project/vacs/refs/heads/main/docs/screenshots/incoming_call.png "incoming call")
-Incoming call initiated by other user before being picked up (DA key blinks between green and grey state)
-
-![Established call between two parties](https://raw.githubusercontent.com/vacs-project/vacs/refs/heads/main/docs/screenshots/active_call.png "active call")
+![Established call between two parties](docs/screenshots/tabbed_active_call.png "active call")
 Established call between two parties (solid green DA key)
+
+![Outgoing priority call initiated by user before being picked up](docs/screenshots/tabbed_outgoing_call_prio.gif "outgoing call")
+Outgoing priority call initiated by a user before being picked up
+
+![Incoming priority call initiated by other user before being picked up](docs/screenshots/tabbed_incoming_call_prio.gif "incoming call")
+Incoming priority call initiated by another user before being picked up
+
+![Mission page for fallback config and test profile selection](docs/screenshots/mission.png "mission page")
+Mission page for fallback config and test profile selection
 
 ## Configuration
 
