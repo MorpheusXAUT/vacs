@@ -218,7 +218,7 @@ pub struct AdminConfig {
     /// Allowed subject claim for GitHub OIDC tokens.
     /// With GitHub Environments, the format is:
     /// `repo:<owner>/<repo>:environment:<environment_name>`
-    /// e.g. `repo:MorpheusXAUT/vacs-data:environment:production`
+    /// e.g. `repo:vacs-project/vacs-data:environment:production`
     pub oidc_allowed_sub: String,
     /// Configuration for the dataset repository. If omitted, the server
     /// will only load the dataset from the local `coverage_dir` on disk
@@ -261,7 +261,7 @@ impl std::fmt::Debug for GitHubCredentials {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DatasetRepoConfig {
-    /// GitHub repository owner (e.g. `MorpheusXAUT`).
+    /// GitHub repository owner (e.g. `vacs-project`).
     pub owner: String,
     /// GitHub repository name (e.g. `vacs-data`).
     pub repo: String,
@@ -280,7 +280,7 @@ pub struct DatasetRepoConfig {
 impl Default for DatasetRepoConfig {
     fn default() -> Self {
         Self {
-            owner: "MorpheusXAUT".to_string(),
+            owner: "vacs-project".to_string(),
             repo: "vacs-data".to_string(),
             credentials: None,
             deployed_tag: "deployed/production".to_string(),

@@ -27,8 +27,8 @@ jobs:
       id-token: write
       packages: write
     env:
-      IMAGE_NAME: ghcr.io/morpheusxaut/vacs-server
-      CACHE_IMAGE_NAME: ghcr.io/morpheusxaut/vacs-server-buildcache
+      IMAGE_NAME: ghcr.io/vacs-project/vacs-server
+      CACHE_IMAGE_NAME: ghcr.io/vacs-project/vacs-server-buildcache
 
     steps:
       - name: Checkout

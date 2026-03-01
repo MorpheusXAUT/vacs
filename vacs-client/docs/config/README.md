@@ -26,7 +26,7 @@ vacs only persists a certain subset of configuration depending on the file read/
 
 All configuration files use the [TOML](https://toml.io/en/) format.  
 Various tools exist helping you create and edit TOML files, such as [Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) for [Visual Studio Code](https://code.visualstudio.com/).
-If your tool of choice supports [JSON Schema](https://json-schema.org/), you can find the schema for the `vacs` configuration in this directory ([config.schema.json](config.schema.json)) or as a [GitHub URL](https://raw.githubusercontent.com/MorpheusXAUT/vacs/refs/heads/main/vacs-client/docs/config/config.schema.json).
+If your tool of choice supports [JSON Schema](https://json-schema.org/), you can find the schema for the `vacs` configuration in this directory ([config.schema.json](config.schema.json)) or as a [GitHub URL](https://raw.githubusercontent.com/vacs-project/vacs/refs/heads/main/vacs-client/docs/config/config.schema.json).
 
 ## Top-level structure
 
