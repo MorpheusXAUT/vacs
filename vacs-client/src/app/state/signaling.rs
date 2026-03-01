@@ -749,10 +749,7 @@ impl AppStateInner {
                 app.emit("signaling:station-list", stations).ok();
             }
             ServerMessage::StationChanges(server::StationChanges { changes }) => {
-                log::trace!(
-                    "Received station changes: {} stations changed",
-                    changes.len()
-                );
+                log::trace!("Received station changes: {changes:?}");
 
                 app.emit("signaling:station-changes", changes).ok();
             }
