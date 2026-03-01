@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.0.0](https://github.com/vacs-project/vacs/compare/vacs-server-v1.1.1...vacs-server-v2.0.0) (2026-03-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* implement station coverage calculations and calling ([#452](https://github.com/vacs-project/vacs/issues/452))
+* overhaul UI with geo/tabbed layout and station-based calling ([#531](https://github.com/vacs-project/vacs/issues/531))
+
+### Features
+
+* add priority calls ([#504](https://github.com/vacs-project/vacs/issues/504)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* implement station coverage calculations and calling ([#452](https://github.com/vacs-project/vacs/issues/452)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* overhaul UI with geo/tabbed layout and station-based calling ([#531](https://github.com/vacs-project/vacs/issues/531)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** add call start and end sounds ([#505](https://github.com/vacs-project/vacs/issues/505)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** add keybind for toggling radio prio ([#500](https://github.com/vacs-project/vacs/issues/500)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** add window zoom hotkeys ([#522](https://github.com/vacs-project/vacs/issues/522)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** implement telephone directory ([#490](https://github.com/vacs-project/vacs/issues/490)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-server:** implement dataset reloading ([#555](https://github.com/vacs-project/vacs/issues/555)) ([5652687](https://github.com/vacs-project/vacs/commit/5652687fadc439188b67554b1a3d722ae320f1f8))
+
+
+### Bug Fixes
+
+* **vacs-client:** fix error while switching to exclusive audio device ([#498](https://github.com/vacs-project/vacs/issues/498)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** prevent call queue from shrinking ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-server:** fix coverage calculations for VATSIM-only positions ([#550](https://github.com/vacs-project/vacs/issues/550)) ([5276570](https://github.com/vacs-project/vacs/commit/52765707c9a82b373affc5371dda7ef4ab2f7977))
+* **vacs-server:** ignore datafeed SUP connection ([#480](https://github.com/vacs-project/vacs/issues/480)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-server:** resolve annotated dataset tag to commit SHA ([#571](https://github.com/vacs-project/vacs/issues/571)) ([109b34d](https://github.com/vacs-project/vacs/commit/109b34d203182f78b59d1a0ab306235c10949295))
+
 ## [1.1.1](https://github.com/vacs-project/vacs/compare/vacs-server-v1.1.0...vacs-server-v1.1.1) (2025-12-05)
 
 ## [1.1.0](https://github.com/vacs-project/vacs/compare/vacs-server-v1.0.0...vacs-server-v1.1.0) (2025-11-30)
