@@ -3,17 +3,17 @@ name: Release • vacs-client
 on:
   push:
     tags:
-      - 'vacs-client-v*.*.*'
+      - "vacs-client-v*.*.*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (1.2.3, v1.2.3, or vacs-client-v1.2.3)'
+        description: "Version to publish (1.2.3, v1.2.3, or vacs-client-v1.2.3)"
         required: true
         type: string
       ref:
-        description: 'Git ref to build (branch/tag/SHA). Empty = default branch tip.'
+        description: "Git ref to build (branch/tag/SHA). Empty = default branch tip."
         required: false
-        default: ''
+        default: ""
         type: string
 
 permissions: {}
@@ -21,6 +21,7 @@ permissions: {}
 jobs:
   prep:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     outputs:
@@ -36,13 +37,16 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
+          persist-credentials: false
 
       - name: Resolve version & tag
         id: vars
         shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            RAW="${{ inputs.version }}"
+            RAW="${INPUT_VERSION}"
           else
             RAW="${GITHUB_REF_NAME}"  # e.g. vacs-client-v1.2.3
           fi
@@ -84,20 +88,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'ubuntu-22.04'
-            arch: 'x86_64'
-            target: 'x86_64-unknown-linux-gnu'
-          - platform: 'windows-latest'
-            arch: 'x86_64'
-            target: 'x86_64-pc-windows-msvc'
-          - platform: 'macos-latest'
-            arch: 'aarch64'
-            target: 'aarch64-apple-darwin' # for Arm based macs (M1 and above).
-          - platform: 'macos-latest'
-            arch: 'x86_64'
-            target: 'x86_64-apple-darwin' # for Intel based macs.
+          - platform: "ubuntu-22.04"
+            arch: "x86_64"
+            target: "x86_64-unknown-linux-gnu"
+          - platform: "windows-latest"
+            arch: "x86_64"
+            target: "x86_64-pc-windows-msvc"
+          - platform: "macos-latest"
+            arch: "aarch64"
+            target: "aarch64-apple-darwin" # for Arm based macs (M1 and above).
+          - platform: "macos-latest"
+            arch: "x86_64"
+            target: "x86_64-apple-darwin" # for Intel based macs.
 
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
     permissions:
       contents: read
       attestations: write
@@ -109,18 +114,22 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
+          persist-credentials: false
 
       - name: Prepare additional version information for manual release
         if: github.event_name == 'workflow_dispatch'
         shell: bash
+        env:
+          TAG: ${{ needs.prep.outputs.tag }}
+          VERSION: ${{ needs.prep.outputs.version }}
         run: |
           # create/update a lightweight tag locally so vergen sees it
-          git tag -f "${{ needs.prep.outputs.tag }}" HEAD
+          git tag -f "$TAG" HEAD
           git describe --tags --always
           # override version info built into client
-          echo "VACS_VERSION_OVERRIDE=${{ needs.prep.outputs.version }}" >> "$GITHUB_ENV"
+          echo "VACS_VERSION_OVERRIDE=$VERSION" >> "$GITHUB_ENV"
           # build tauri user config with version info
-          echo "EXTRA_TAURI_ARGS=--config '{\"version\":\"${{ needs.prep.outputs.version }}\"}'" >> "$GITHUB_ENV"
+          echo "EXTRA_TAURI_ARGS=--config '{\"version\":\"$VERSION\"}'" >> "$GITHUB_ENV"
 
       - name: Install build dependencies (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -143,26 +152,24 @@ jobs:
           if [ ! -f /usr/local/bin/brew ]; then
             arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           fi
-          
+
           arch -x86_64 /usr/local/bin/brew update
           arch -x86_64 /usr/local/bin/brew install opus
-          
+
           echo "PKG_CONFIG_PATH=/usr/local/opt/opus/lib/pkgconfig" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
 
       - name: Setup Node (LTS)
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
+          node-version: "lts/*"
+          cache: "npm"
           cache-dependency-path: vacs-client/package-lock.json
 
       - name: Rust toolchain
-        # dtolnay/rust-toolchain uses branch refs as its API (e.g. @stable);
-        # SHA-pinning would break on every Rust release. Not tracked by Dependabot.
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup target add ${{ matrix.target }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
@@ -189,18 +196,22 @@ jobs:
       - name: Rename macOS bundles to include version & architecture
         if: matrix.platform == 'macos-latest'
         shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.prep.outputs.version }}
+          ARCH: ${{ matrix.arch }}
         run: |
-          if [[ "${{ matrix.target }}" == "" ]]; then
+          if [[ "$TARGET" == "" ]]; then
             BUNDLE_DIR="target/release/bundle"
           else
-            BUNDLE_DIR="target/${{ matrix.target }}/release/bundle"
+            BUNDLE_DIR="target/${TARGET}/release/bundle"
           fi
-          
+
           if [[ -f "$BUNDLE_DIR/macos/vacs.app.tar.gz" ]]; then
-            mv "$BUNDLE_DIR/macos/vacs.app.tar.gz" "$BUNDLE_DIR/macos/vacs_${{ needs.prep.outputs.version }}_${{ matrix.arch }}.app.tar.gz"
+            mv "$BUNDLE_DIR/macos/vacs.app.tar.gz" "$BUNDLE_DIR/macos/vacs_${VERSION}_${ARCH}.app.tar.gz"
           fi
           if [[ -f "$BUNDLE_DIR/macos/vacs.app.tar.gz.sig" ]]; then
-            mv "$BUNDLE_DIR/macos/vacs.app.tar.gz.sig" "$BUNDLE_DIR/macos/vacs_${{ needs.prep.outputs.version }}_${{ matrix.arch }}.app.tar.gz.sig"
+            mv "$BUNDLE_DIR/macos/vacs.app.tar.gz.sig" "$BUNDLE_DIR/macos/vacs_${VERSION}_${ARCH}.app.tar.gz.sig"
           fi
 
       - name: Upload bundles as artifact
@@ -225,8 +236,14 @@ jobs:
             target/**/release/bundle/dmg/*.dmg
             target/**/release/bundle/dmg/*.dmg.sig
 
+      - name: Generate SBOM
+        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+        with:
+          format: spdx-json
+          output-file: sbom.spdx.json
+
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-path: |
             target/**/release/bundle/**/*.msi
@@ -244,11 +261,26 @@ jobs:
             target/**/release/bundle/dmg/*.dmg
             target/**/release/bundle/dmg/*.dmg.sig
 
+      - name: Attest SBOM
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: |
+            target/**/release/bundle/**/*.msi
+            target/**/release/bundle/**/*.exe
+            target/**/release/bundle/**/*.deb
+            target/**/release/bundle/**/*.rpm
+            target/**/release/bundle/**/*.AppImage
+            target/**/release/bundle/macos/vacs_*_*.app.tar.gz
+            target/**/release/bundle/dmg/*.dmg
+          sbom-path: sbom.spdx.json
+
   release:
     needs: [prep, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read # write access for the release is via the App token below
+      attestations: write
       id-token: write
 
     steps:
@@ -261,8 +293,10 @@ jobs:
 
       - name: Generate checksums
         working-directory: dist
+        env:
+          VERSION: ${{ needs.prep.outputs.version }}
         run: |
-          out="SHA256SUMS-${{ needs.prep.outputs.version }}.txt"
+          out="SHA256SUMS-${VERSION}.txt"
           : > "$out"
           while IFS= read -r -d '' f; do
             sum=$(shasum -a 256 "$f" | cut -d' ' -f1)
@@ -274,16 +308,20 @@ jobs:
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
-        with:
-          cosign-release: 'v2.6.1'
 
       - name: Sign checksums using Cosign with GitHub OIDC Token
         working-directory: dist
+        env:
+          VERSION: ${{ needs.prep.outputs.version }}
         run: |
           cosign sign-blob --yes \
-            --output-signature "SHA256SUMS-${{ needs.prep.outputs.version }}.txt.sig" \
-            --output-certificate "SHA256SUMS-${{ needs.prep.outputs.version }}.txt.pem" \
-            "SHA256SUMS-${{ needs.prep.outputs.version }}.txt"
+            --bundle "SHA256SUMS-${VERSION}.txt.bundle.json" \
+            "SHA256SUMS-${VERSION}.txt"
+
+      - name: Attest release artifacts
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-checksums: dist/SHA256SUMS-${{ needs.prep.outputs.version }}.txt
 
       - name: Generate GitHub token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1

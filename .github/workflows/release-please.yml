@@ -16,6 +16,7 @@ permissions: {}
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       prs: ${{ steps.release.outputs.prs }}
 
@@ -43,6 +44,7 @@ jobs:
       matrix:
         pr: ${{ fromJson(needs.release-please.outputs.prs) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Generate GitHub token
@@ -60,11 +62,10 @@ jobs:
           ref: ${{ matrix.pr.headBranchName }}
           fetch-depth: 0
           token: ${{ steps.generate-token.outputs.token }}
+          persist-credentials: false
 
       - name: Rust toolchain
-        # dtolnay/rust-toolchain uses branch refs as its API (e.g. @stable);
-        # SHA-pinning would break on every Rust release. Not tracked by Dependabot.
-        uses: dtolnay/rust-toolchain@stable
+        run: rustup toolchain install stable --profile minimal --no-self-update
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2

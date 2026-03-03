@@ -1,29 +1,16 @@
 name: CI • Node
 
 on:
-  pull_request:
-    branches: [ main, v2 ]
-    paths:
-      - 'vacs-client/frontend/**'
-      - '!vacs-client/frontend/icons/**'
-      - '.github/workflows/ci-node.yml'
-  push:
-    branches: [ main, v2 ]
-    paths:
-      - 'vacs-client/frontend/**'
-      - '!vacs-client/frontend/icons/**'
-      - '.github/workflows/ci-node.yml'
+  workflow_call:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: node-ci-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+permissions: {}
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: vacs-client
@@ -31,12 +18,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Setup Node (LTS)
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
+          node-version: "lts/*"
+          cache: "npm"
           cache-dependency-path: vacs-client/package-lock.json
 
       - name: Install dependencies
@@ -50,3 +39,6 @@ jobs:
 
       - name: Format
         run: npm run format:check
+
+      - name: Summary
+        run: echo "### ✅ Node CI - typecheck, lint & format passed" >> $GITHUB_STEP_SUMMARY
