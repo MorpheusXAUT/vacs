@@ -11,7 +11,7 @@ Each GitHub release for `vacs-client` includes:
 - Binary bundles/installers (`.exe`, `.deb`, `.rpm`, `.dmg`, `.app.tar.gz`)
 - Per-bundle signatures created by Tauri, used for the automatic updater (`.sig`)
 - A checksum file containing the sha256 checksums of all bundles and their signatures (`SHA256SUMS-X.Y.Z.txt`)
-- A keyless [cosign](https://github.com/sigstore/cosign) signature (using a GitHub OIDC Token) for the checksum file (`SHA256SUMS-X.Y.Z.txt.sig`, `SHA256SUMS-X.Y.Z.txt.pem`)
+- A keyless [cosign](https://github.com/sigstore/cosign) bundle (using a GitHub OIDC Token) for the checksum file (`SHA256SUMS-X.Y.Z.txt.bundle.json`)
 
 Client releases are built, signed and published by the [release-client](../.github/workflows/release-client.yml) GitHub action.
 
@@ -25,14 +25,13 @@ dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJEMTJGNjQxRDY0M0VFRjkKUldU
 
 1. Download and install [cosign](https://github.com/sigstore/cosign)
 2. Download the desired `vacs-client` release bundle
-3. Download the checksum file and its signature and place them in the same directory as the bundle
-4. Verify the checksum file signature using cosign
+3. Download the checksum file and its cosign bundle and place them in the same directory as the bundle
+4. Verify the checksum file using cosign
 
 ```bash
 # Replace X.Y.Z with the actual release version
 cosign verify-blob \
-  --certificate SHA256SUMS-X.Y.Z.txt.pem \
-  --signature SHA256SUMS-X.Y.Z.txt.sig \
+  --bundle SHA256SUMS-X.Y.Z.txt.bundle.json \
   --certificate-identity "https://github.com/vacs-project/vacs/.github/workflows/release-client.yml@refs/tags/vacs-client-vX.Y.Z" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   SHA256SUMS-X.Y.Z.txt
@@ -40,8 +39,22 @@ cosign verify-blob \
 ```
 
 > [!NOTE]  
+> **Older releases** used a different cosign signature format. If the release
+> contains `SHA256SUMS-X.Y.Z.txt.sig` and `SHA256SUMS-X.Y.Z.txt.pem` instead
+> of a `.bundle.json` file, verify with:
+>
+> ```bash
+> cosign verify-blob \
+>   --signature SHA256SUMS-X.Y.Z.txt.sig \
+>   --certificate SHA256SUMS-X.Y.Z.txt.pem \
+>   --certificate-identity "https://github.com/vacs-project/vacs/.github/workflows/release-client.yml@refs/tags/vacs-client-vX.Y.Z" \
+>   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+>   SHA256SUMS-X.Y.Z.txt
+> ```
+>
 > Releases before 2.0.0 were published under the `MorpheusXAUT/vacs` repository.
-> To verify those older releases, replace `vacs-project/vacs` with `MorpheusXAUT/vacs` in the `--certificate-identity` URL above.
+> To verify those, additionally replace `vacs-project/vacs` with `MorpheusXAUT/vacs`
+> in the `--certificate-identity` URL.
 
 5. Verify checksum of downloaded bundle
 
@@ -97,4 +110,6 @@ cosign verify \
 
 > [!NOTE]  
 > Releases before 2.0.0 were published under the `MorpheusXAUT/vacs` repository.
-> To verify those older releases, replace `vacs-project/vacs` with `MorpheusXAUT/vacs` in the `--certificate-identity` URL and use `ghcr.io/morpheusxaut/vacs-server:X.Y.Z` as the image reference.
+> To verify those older releases, replace `vacs-project/vacs` with `MorpheusXAUT/vacs`
+> in the `--certificate-identity` URL and use `ghcr.io/morpheusxaut/vacs-server:X.Y.Z`
+> as the image reference.
