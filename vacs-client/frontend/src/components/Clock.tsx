@@ -2,18 +2,16 @@ import {useEffect, useState} from "preact/hooks";
 import StatusIndicator from "./ui/StatusIndicator.tsx";
 
 type TimeState = {
-    seconds: string;
     hours: string;
     minutes: string;
-    day: string;
+    seconds: string;
 };
 
 function Clock() {
     const [time, setTime] = useState<TimeState>({
-        seconds: "99",
         hours: "99",
         minutes: "99",
-        day: "99",
+        seconds: "99",
     });
 
     useEffect(() => {
@@ -21,19 +19,13 @@ function Clock() {
             const now = new Date();
             const hours = now.getUTCHours().toString().padStart(2, "0");
             const minutes = now.getUTCMinutes().toString().padStart(2, "0");
-            const day = now.getUTCDate().toString().padStart(2, "0");
             const seconds = now.getUTCSeconds().toString().padStart(2, "0");
 
             setTime(prev => {
-                if (
-                    prev.hours === hours &&
-                    prev.minutes === minutes &&
-                    prev.day === day &&
-                    prev.seconds === seconds
-                ) {
+                if (prev.hours === hours && prev.minutes === minutes && prev.seconds === seconds) {
                     return prev;
                 }
-                return {hours, minutes, day, seconds};
+                return {hours, minutes, seconds};
             });
         };
 
