@@ -15,6 +15,7 @@ use vatsim_api::types::connect::{
 };
 
 use super::CertificateIdExt;
+use super::TestClient;
 
 use crate::auth::layer::setup_test_auth_layer;
 use crate::config::{AppConfig, AuthConfig, OAuthConfig, VatsimConfig};
@@ -29,13 +30,16 @@ use vacs_vatsim::coverage::network::Network;
 use vacs_vatsim::data_feed::VatsimDataFeed;
 use vacs_vatsim::slurper::SlurperClient;
 
+/// Base CID for default test users. User N gets CID `DEFAULT_CID_BASE + N`
+/// (i.e. 1000001, 1000002, ...).
+const DEFAULT_CID_BASE: u32 = 1_000_000;
+
 /// A self-contained test environment that spins up a mock VATSIM server and a
 /// real vacs-server instance wired together.
 ///
 /// The mock VATSIM server provides real HTTP endpoints for OAuth, datafeed,
-/// and slurper. The vacs-server uses the real `Backend` auth layer (not
-/// `MockBackend`) pointed at these URLs, with `MemoryStore` for sessions
-/// (no Redis required).
+/// and slurper. The vacs-server uses the real `Backend` auth layer pointed
+/// at these URLs, with `MemoryStore` for sessions (no Redis required).
 ///
 /// The environment owns all resources and tears them down on drop.
 pub struct TestEnv {
@@ -130,14 +134,16 @@ impl TestEnv {
     ///
     /// 1. `GET /auth/vatsim` to initiate login (stores CSRF state in session)
     /// 2. Follows the redirect to the mock VATSIM OAuth authorize endpoint
+    ///    (with `login_hint` set to the target CID)
     /// 3. `POST /auth/vatsim/callback` to exchange the code
     ///
     /// The returned client has a valid session cookie and can call any
     /// authenticated endpoint.
     pub async fn authenticated_http_client(
         &self,
-        _cid: impl Into<ClientId>,
+        cid: impl Into<ClientId>,
     ) -> anyhow::Result<reqwest::Client> {
+        let cid = cid.into();
         let jar = Arc::new(reqwest::cookie::Jar::default());
         let client = reqwest::Client::builder()
             .cookie_provider(jar)
@@ -152,13 +158,24 @@ impl TestEnv {
             .error_for_status()?
             .json()
             .await?;
-        let auth_url = body["url"]
+        let auth_url_str = body["url"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing `url` in /auth/vatsim response"))?;
 
+        // Append login_hint so the mock OAuth server authenticates as the
+        // correct user instead of always picking the first one.
+        let mut auth_url = Url::parse(auth_url_str)?;
+        auth_url
+            .query_pairs_mut()
+            .append_pair("login_hint", cid.as_str());
+
         // Step 2: Follow redirect to mock OAuth (which auto-approves and
         // redirects back with code + state)
-        let redirect_resp = client.get(auth_url).send().await?.error_for_status()?;
+        let redirect_resp = client
+            .get(auth_url.as_str())
+            .send()
+            .await?
+            .error_for_status()?;
         let redirect_location = redirect_resp
             .headers()
             .get(reqwest::header::LOCATION)
@@ -208,6 +225,48 @@ impl TestEnv {
 
         Ok(token)
     }
+
+    /// Authenticates and connects `n` users via WebSocket, returning them as
+    /// a `Vec<TestClient>`.
+    ///
+    /// The users are drawn from the seeded user list (see
+    /// [`TestEnvBuilder::default_users`]). Each client walks the full OAuth
+    /// flow to obtain a WS token and then performs a WS login.
+    ///
+    /// Client CIDs will be `"1000001"`, `"1000002"`, etc. (matching
+    /// [`default_users`]).
+    pub async fn setup_clients(&self, n: usize) -> Vec<TestClient> {
+        let mut clients = Vec::with_capacity(n);
+        for i in 1..=n {
+            let cid = format!("{}", DEFAULT_CID_BASE + i as u32);
+            let token = self
+                .ws_token_for(cid.as_str())
+                .await
+                .expect("ws_token_for failed");
+            let client = TestClient::new_with_login(
+                self.ws_url(),
+                cid.as_str(),
+                &token,
+                |_, _| Ok(()),
+                |_| Ok(()),
+                |_| Ok(()),
+            )
+            .await
+            .unwrap_or_else(|e| panic!("Failed to connect client {cid}: {e}"));
+            clients.push(client);
+        }
+        clients
+    }
+
+    /// Like [`setup_clients`](Self::setup_clients) but returns a
+    /// `HashMap<ClientId, TestClient>` for named access.
+    pub async fn setup_clients_map(&self, n: usize) -> HashMap<ClientId, TestClient> {
+        self.setup_clients(n)
+            .await
+            .into_iter()
+            .map(|c| (c.id().clone(), c))
+            .collect()
+    }
 }
 
 impl Drop for TestEnv {
@@ -222,6 +281,19 @@ impl TestEnvBuilder {
     #[must_use]
     pub fn users(mut self, users: Vec<ConnectUser>) -> Self {
         self.users = users;
+        self
+    }
+
+    /// Convenience: seeds `n` default test users with CIDs 1000001 through
+    /// 1000000+n. Use with [`TestEnv::setup_clients`] to connect them.
+    #[must_use]
+    pub fn default_users(mut self, n: usize) -> Self {
+        self.users = (1..=n)
+            .map(|i| {
+                let cid = DEFAULT_CID_BASE + i as u32;
+                test_user(cid.to_string(), &format!("User{i}"), &format!("Test{i}"))
+            })
+            .collect();
         self
     }
 
@@ -265,7 +337,7 @@ impl TestEnvBuilder {
 
         let config = AppConfig {
             auth: AuthConfig {
-                login_flow_timeout_millis: 5000,
+                login_flow_timeout_millis: 100,
                 oauth: OAuthConfig {
                     auth_url: format!("{mock_base}/oauth/authorize"),
                     token_url: format!("{mock_base}/oauth/token"),
@@ -349,6 +421,14 @@ impl TestEnvBuilder {
             handle,
         }
     }
+}
+
+/// Returns the CID string for default test user `n` (1-based).
+///
+/// E.g., `cid(1)` returns `"1000001"`, `cid(2)` returns `"1000002"`.
+#[must_use]
+pub fn cid(n: usize) -> String {
+    format!("{}", DEFAULT_CID_BASE + n as u32)
 }
 
 /// Creates a minimal [`ConnectUser`] for test seeding.
