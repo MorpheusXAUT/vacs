@@ -1,7 +1,7 @@
 import {create} from "zustand/react";
 
 type Page = "phone" | "radio";
-export type Menu = "settings" | "mission" | "telephone";
+export type Menu = "settings" | "mission" | "telephone" | "playback";
 
 type SettingsSubmenu =
     | "settings-transmit"

@@ -1,9 +1,9 @@
-import Button from "./ui/Button.tsx";
-import wrenchAndDriver from "../assets/wrench-and-driver.svg";
 import mission from "../assets/mission.svg";
+import wrenchAndDriver from "../assets/wrench-and-driver.svg";
+import { useCallStore } from "../stores/call-store.ts";
+import { useSettingsStore } from "../stores/settings-store.ts";
+import Button from "./ui/Button.tsx";
 import LinkButton from "./ui/LinkButton.tsx";
-import {useCallStore} from "../stores/call-store.ts";
-import {useSettingsStore} from "../stores/settings-store.ts";
 
 function FunctionKeys() {
     const prio = useCallStore(state => state.prio);
@@ -38,7 +38,7 @@ function FunctionKeys() {
             <Button color="cyan" className="text-slate-400" disabled={true}>
                 DIV
             </Button>
-            <LinkButton path="/replay" className="h-full">
+            <LinkButton menu="playback" className="h-full">
                 <p>
                     PLAY
                     <br />

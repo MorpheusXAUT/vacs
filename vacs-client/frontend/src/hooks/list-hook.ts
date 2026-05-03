@@ -2,13 +2,14 @@ import {useLayoutEffect, useMemo, useRef, useState} from "preact/hooks";
 import {useEventCallback} from "./event-callback-hook.ts";
 
 export const HEADER_HEIGHT_REM = 1.75;
-const CALL_ROW_HEIGHT_REM = 2.7;
+const ROW_HEIGHT_REM = 2.7;
 
 type UseListOptions = {
     itemsCount: number;
     selectedItem: number;
     setSelectedItem: (item: number) => void;
     defaultRows: number;
+    rowHeight?: number;
     enableKeyboardNavigation?: boolean;
 };
 
@@ -17,6 +18,7 @@ export function useList({
     selectedItem,
     setSelectedItem,
     defaultRows,
+    rowHeight = ROW_HEIGHT_REM,
     enableKeyboardNavigation,
 }: UseListOptions) {
     const listContainer = useRef<HTMLDivElement>(null);
@@ -32,7 +34,7 @@ export function useList({
         if (listContainer.current) {
             const fontSize = parseFloat(getComputedStyle(listContainer.current).fontSize);
             const headerHeight = HEADER_HEIGHT_REM * fontSize;
-            const itemHeight = CALL_ROW_HEIGHT_REM * fontSize;
+            const itemHeight = rowHeight * fontSize;
 
             itemCount = Math.floor((listContainerHeight - headerHeight) / itemHeight);
         } else {

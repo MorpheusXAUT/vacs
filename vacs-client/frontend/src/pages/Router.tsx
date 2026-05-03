@@ -4,6 +4,7 @@ import MissionPage from "./MissionPage.tsx";
 import TelephonePage from "./TelephonePage.tsx";
 import PhonePage from "./PhonePage.tsx";
 import RadioPage from "./RadioPage.tsx";
+import PlaybackPage from "./PlaybackPage.tsx";
 
 function Router() {
     const page = useNavigationStore(state => state.page);
@@ -19,6 +20,8 @@ function Router() {
                 <MissionPage />
             ) : menu === "telephone" ? (
                 <TelephonePage />
+            ) : menu === "playback" ? (
+                <PlaybackPage />
             ) : (
                 <></>
             )}
