@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.3](https://github.com/vacs-project/vacs/compare/vacs-server-v2.3.2...vacs-server-v2.3.3) (2026-04-30)
+
+
+### Bug Fixes
+
+* **vacs-server:** downgrade metrics to v0.24.3 to fix gauge metrics ([#833](https://github.com/vacs-project/vacs/issues/833)) ([4c58c7a](https://github.com/vacs-project/vacs/commit/c37a7b78e71565d354f0f2379ae249ab1cd2e5cd))
+
 ## [2.3.2](https://github.com/vacs-project/vacs/compare/vacs-server-v2.3.1...vacs-server-v2.3.2) (2026-04-30)
 
 
