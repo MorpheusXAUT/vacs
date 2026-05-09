@@ -1,15 +1,9 @@
 import {clsx} from "clsx";
-import List from "../components/ui/List.tsx";
-import {useState} from "preact/hooks";
 import {CloseButton} from "./SettingsPage.tsx";
 import Button from "../components/ui/Button.tsx";
-
-type PlaybackListEntry = {
-    type: "Rx" | "Tx" | "Ph";
-    idk: boolean;
-    time: string;
-    target: string;
-};
+import PlaybackControls from "../components/playback/PlaybackControls.tsx";
+import PlaybackProgress from "../components/playback/PlaybackProgress.tsx";
+import PlaybackList from "../components/playback/PlaybackList.tsx";
 
 function PlaybackPage() {
     return (
@@ -35,7 +29,7 @@ function PlaybackPage() {
                         </Button>
                     </div>
                     <div className="flex flex-col gap-3">
-                        <Button color="gray" className="h-17 uppercase">
+                        <Button color="gray" className="h-17 uppercase" disabled>
                             Export
                         </Button>
                         <Button color="gray" className="h-17 uppercase">
@@ -49,203 +43,13 @@ function PlaybackPage() {
                 <div className="h-full w-full flex flex-col p-px">
                     <PlaybackList />
                     <div className="relative w-full h-full flex flex-col items-center pr-16">
-                        <p className="py-1 font-semibold">No playback</p>
-                        <div className="shrink-0 w-full h-4 border bg-gray-300"></div>
-                        <div className="flex-1 min-h-0 w-full flex items-end justify-center">
-                            <div className="h-min w-min grid grid-flow-col grid-rows-2 gap-y-3 gap-x-2">
-                                <Button
-                                    color="gray"
-                                    className="h-17 flex items-center justify-center"
-                                >
-                                    <svg
-                                        width="32"
-                                        height="32"
-                                        viewBox="0 0 74 74"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path d="M0 37V0L74 37L0 74V37Z" fill="currentColor" />
-                                    </svg>
-                                </Button>
-                                <Button color="gray" className="h-17">
-                                    H/S
-                                </Button>
-                                <Button
-                                    color="gray"
-                                    className="h-17 flex items-center justify-center text-gray-600"
-                                    disabled={true}
-                                >
-                                    <svg
-                                        height="40"
-                                        viewBox="0 0 96 110"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path d="M0 37V0L74 37L0 74V37Z" fill="currentColor" />
-                                        <path
-                                            d="M95.8945 68.2109L99.4717 70L95.8945 71.7891L19 110.236V29.7637L95.8945 68.2109Z"
-                                            fill="currentColor"
-                                            className="stroke-gray-300"
-                                            stroke-width="4"
-                                        />
-                                    </svg>
-                                </Button>
-                                <Button
-                                    color="gray"
-                                    className="h-17 flex items-center justify-center"
-                                    disabled={true}
-                                >
-                                    <div className="h-8 aspect-square bg-gray-600"></div>
-                                </Button>
-                                <Button
-                                    color="gray"
-                                    className="h-17 flex items-center justify-center text-gray-600"
-                                    disabled={true}
-                                >
-                                    <svg
-                                        height="32"
-                                        viewBox="0 0 48 74"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M48 0V74L11 37V74H0V0H11V37L48 0Z"
-                                            fill="currentColor"
-                                        />
-                                    </svg>
-                                </Button>
-                                <Button
-                                    color="gray"
-                                    className="h-17 flex items-center justify-center text-gray-600"
-                                    disabled={true}
-                                >
-                                    <svg
-                                        width="32"
-                                        height="32"
-                                        viewBox="0 0 74 74"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M74 0V74L37 37V74L0 37L37 0V37L74 0Z"
-                                            fill="currentColor"
-                                        />
-                                    </svg>
-                                </Button>
-                                <Button
-                                    color="gray"
-                                    className="h-17 flex items-center justify-center text-gray-600"
-                                    disabled={true}
-                                >
-                                    <svg
-                                        transform="rotate(180)"
-                                        height="32"
-                                        viewBox="0 0 48 74"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M48 0V74L11 37V74H0V0H11V37L48 0Z"
-                                            fill="currentColor"
-                                        />
-                                    </svg>
-                                </Button>
-                                <Button
-                                    color="gray"
-                                    className="h-17 flex items-center justify-center text-gray-600"
-                                    disabled={true}
-                                >
-                                    <svg
-                                        transform="rotate(180)"
-                                        width="32"
-                                        height="32"
-                                        viewBox="0 0 74 74"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M74 0V74L37 37V74L0 37L37 0V37L74 0Z"
-                                            fill="currentColor"
-                                        />
-                                    </svg>
-                                </Button>
-                            </div>
-                        </div>
-                        <CloseButton className="h-18 w-20! absolute bottom-0 right-0" />
+                        <PlaybackProgress />
+                        <PlaybackControls />
+                        <CloseButton className="h-17 w-19! absolute bottom-0 right-0" />
                     </div>
                 </div>
             </div>
         </div>
-    );
-}
-
-function PlaybackList() {
-    const playbackList: PlaybackListEntry[] = [
-        {type: "Ph", idk: true, time: "12:34:56", target: "310 N1 PLC"},
-        {type: "Rx", idk: true, time: "12:34:55", target: "FIN\\134.675"},
-        {type: "Tx", idk: true, time: "12:34:54", target: "FIN\\134.675"},
-        {type: "Rx", idk: true, time: "12:34:53", target: "FIN\\134.675"},
-        {type: "Tx", idk: true, time: "12:34:52", target: "FIN\\134.675"},
-        {type: "Rx", idk: true, time: "12:34:51", target: "FIN\\134.675"},
-        {type: "Tx", idk: true, time: "12:34:50", target: "FIN\\134.675"},
-    ];
-    const [selected, setSelected] = useState<number>(0);
-
-    const playbackListEntry = (item: number, isSelected: boolean, onClick: () => void) => (
-        <PlaybackEntryRow entry={playbackList[item]} isSelected={isSelected} onClick={onClick} />
-    );
-
-    return (
-        <List
-            className="w-full h-72! shrink-0"
-            itemsCount={playbackList.length}
-            selectedItem={selected}
-            setSelectedItem={setSelected}
-            defaultRows={7}
-            row={playbackListEntry}
-            rowHeight={2.2}
-            columnWidths={["5ch", "5ch", "5.5rem", "auto"]}
-            enableKeyboardNavigation={true}
-        />
-    );
-}
-
-type PlaybackEntryRowProps = {
-    entry: PlaybackListEntry | undefined;
-    isSelected: boolean;
-    onClick: () => void;
-};
-
-function PlaybackEntryRow(props: PlaybackEntryRowProps) {
-    const color = props.isSelected ? "bg-blue-700 text-white" : "bg-yellow-50";
-
-    return (
-        <>
-            <div
-                className={clsx("px-0.5 text-center flex justify-between items-center", color)}
-                onClick={props.onClick}
-            >
-                {props.entry?.type ?? ""}
-            </div>
-            <div
-                className={clsx("px-0.5 flex items-center font-semibold", color)}
-                onClick={props.onClick}
-            >
-                {props.entry?.idk === true ? "Y" : ""}
-            </div>
-            <div
-                className={clsx("flex items-center justify-center font-semibold", color)}
-                onClick={props.onClick}
-            >
-                {props.entry?.time ?? ""}
-            </div>
-            <div
-                className={clsx("px-0.5 flex items-center font-semibold", color)}
-                onClick={props.onClick}
-            >
-                {props.entry?.target ?? ""}
-            </div>
-        </>
     );
 }
 
