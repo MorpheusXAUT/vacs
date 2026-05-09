@@ -16,7 +16,8 @@
         "height": 753,
         "visible": false,
         "backgroundColor": "#B5BBC6",
-        "browserExtensionsEnabled": false
+        "browserExtensionsEnabled": false,
+        "generalAutofillEnabled": false
       }
     ],
     "security": {
@@ -44,6 +45,8 @@
       "nsis": {
         "headerImage": "frontend/icons/installer/header.bmp",
         "installerIcon": "frontend/icons/installer/icon.ico",
+        "uninstallerHeaderImage": "frontend/icons/uninstaller/header.bmp",
+        "uninstallerIcon": "frontend/icons/uninstaller/icon.ico",
         "installMode": "both"
       }
     },
