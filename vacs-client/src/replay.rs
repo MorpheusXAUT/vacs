@@ -175,7 +175,11 @@ fn make_source(
     {
         Ok(Box::new(source::TrackAudioLoopbackSource::new(radio)))
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "windows")]
+    {
+        Ok(Box::new(source::TrackAudioLoopbackSource::new(radio)))
+    }
+    #[cfg(target_os = "macos")]
     {
         Err(ReplayError::Unsupported)
     }

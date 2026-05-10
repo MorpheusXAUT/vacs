@@ -57,3 +57,12 @@ pub use linux::AfvNativePipewireCapture;
 /// The default [`LoopbackCapture`] backend for the current platform.
 #[cfg(target_os = "linux")]
 pub type DefaultLoopbackCapture = AfvNativePipewireCapture;
+
+#[cfg(target_os = "windows")]
+pub mod windows;
+
+#[cfg(target_os = "windows")]
+pub use windows::WindowsApplicationCapture;
+
+#[cfg(target_os = "windows")]
+pub type DefaultLoopbackCapture = WindowsApplicationCapture;

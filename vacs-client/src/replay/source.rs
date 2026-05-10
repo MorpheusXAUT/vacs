@@ -52,8 +52,6 @@ pub trait ReplaySource: Send {
 
 pub mod capture;
 
-#[cfg(target_os = "linux")]
 pub mod track_audio;
 
-#[cfg(target_os = "linux")]
 pub use track_audio::TrackAudioLoopbackSource;

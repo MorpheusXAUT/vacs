@@ -64,6 +64,8 @@ vacs-vatsim = { workspace = true, features = ["coverage"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { workspace = true }
 tauri-plugin-prevent-default = { workspace = true, features = ["platform-windows"] }
+sysinfo = "0.36.0"
+wasapi = "0.23.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-graphics = { workspace = true }
