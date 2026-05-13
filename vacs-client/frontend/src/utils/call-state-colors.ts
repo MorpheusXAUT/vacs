@@ -33,7 +33,7 @@ export function getCallStateColors({
     blink,
     temporarySource = false,
     defaultSource = false,
-    defaultColor = undefined,
+    defaultColor,
 }: CallStateColorParams): CallStateColors {
     const backgroundColor: ButtonHighlightColor = defaultColor ?? "gray";
 

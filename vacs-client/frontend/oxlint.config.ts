@@ -26,6 +26,7 @@ export default defineConfig({
         "no-lonely-if": "error",
         "no-var": "warn",
         "prefer-template": "warn",
+        "no-underscore-dangle": ["warn", {allow: ["__TAURI_INTERNALS__"]}],
 
         "no-unsafe-type-assertion": "off",
         "no-unnecessary-type-arguments": "off",

@@ -93,7 +93,7 @@ impl Default for ReplayConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            max_clips: 25,
+            max_clips: 5,
             hangover_ms: 500,
             max_clip_duration_s: 90,
             recording_mode: RecordingMode::PerTap,

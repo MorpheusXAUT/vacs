@@ -1,10 +1,25 @@
 import Button from "../ui/Button.tsx";
+import {ClipMeta} from "../../types/replay.ts";
+import {ComponentChildren} from "preact";
+import {clsx} from "clsx";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {invokeSafe} from "../../error.ts";
 
-function PlaybackControls() {
+type PlaybackControlsProps = {
+    clip: ClipMeta | undefined;
+};
+
+function PlaybackControls(props: PlaybackControlsProps) {
+    const disabled = props.clip === undefined;
+
+    const handlePlay = useAsyncDebounce(async () => {
+        void invokeSafe("replay_play", {id: props.clip?.id});
+    });
+
     return (
         <div className="flex-1 min-h-0 w-full flex items-end justify-center">
             <div className="h-min w-min grid grid-flow-col grid-rows-2 gap-y-3 gap-x-2">
-                <Button color="gray" className="h-17 flex items-center justify-center">
+                <PlaybackControlButton disabled={disabled} onClick={handlePlay}>
                     <svg
                         width="32"
                         height="32"
@@ -14,15 +29,9 @@ function PlaybackControls() {
                     >
                         <path d="M0 37V0L74 37L0 74V37Z" fill="currentColor" />
                     </svg>
-                </Button>
-                <Button color="gray" className="h-17">
-                    H/S
-                </Button>
-                <Button
-                    color="gray"
-                    className="h-17 flex items-center justify-center text-gray-600"
-                    disabled={true}
-                >
+                </PlaybackControlButton>
+                <PlaybackControlButton>H/S</PlaybackControlButton>
+                <PlaybackControlButton disabled={true}>
                     <svg
                         height="40"
                         viewBox="0 0 96 110"
@@ -37,19 +46,11 @@ function PlaybackControls() {
                             stroke-width="4"
                         />
                     </svg>
-                </Button>
-                <Button
-                    color="gray"
-                    className="h-17 flex items-center justify-center"
-                    disabled={true}
-                >
+                </PlaybackControlButton>
+                <PlaybackControlButton disabled={true}>
                     <div className="h-8 aspect-square bg-gray-600"></div>
-                </Button>
-                <Button
-                    color="gray"
-                    className="h-17 flex items-center justify-center text-gray-600"
-                    disabled={true}
-                >
+                </PlaybackControlButton>
+                <PlaybackControlButton disabled={true}>
                     <svg
                         height="32"
                         viewBox="0 0 48 74"
@@ -58,12 +59,8 @@ function PlaybackControls() {
                     >
                         <path d="M48 0V74L11 37V74H0V0H11V37L48 0Z" fill="currentColor" />
                     </svg>
-                </Button>
-                <Button
-                    color="gray"
-                    className="h-17 flex items-center justify-center text-gray-600"
-                    disabled={true}
-                >
+                </PlaybackControlButton>
+                <PlaybackControlButton disabled={true}>
                     <svg
                         width="32"
                         height="32"
@@ -73,12 +70,8 @@ function PlaybackControls() {
                     >
                         <path d="M74 0V74L37 37V74L0 37L37 0V37L74 0Z" fill="currentColor" />
                     </svg>
-                </Button>
-                <Button
-                    color="gray"
-                    className="h-17 flex items-center justify-center text-gray-600"
-                    disabled={true}
-                >
+                </PlaybackControlButton>
+                <PlaybackControlButton disabled={true}>
                     <svg
                         transform="rotate(180)"
                         height="32"
@@ -88,12 +81,8 @@ function PlaybackControls() {
                     >
                         <path d="M48 0V74L11 37V74H0V0H11V37L48 0Z" fill="currentColor" />
                     </svg>
-                </Button>
-                <Button
-                    color="gray"
-                    className="h-17 flex items-center justify-center text-gray-600"
-                    disabled={true}
-                >
+                </PlaybackControlButton>
+                <PlaybackControlButton disabled={true}>
                     <svg
                         transform="rotate(180)"
                         width="32"
@@ -104,9 +93,33 @@ function PlaybackControls() {
                     >
                         <path d="M74 0V74L37 37V74L0 37L37 0V37L74 0Z" fill="currentColor" />
                     </svg>
-                </Button>
+                </PlaybackControlButton>
             </div>
         </div>
+    );
+}
+
+type PlaybackControlButtonProps = {
+    className?: string;
+    disabled?: boolean;
+    onClick?: () => void;
+    children?: ComponentChildren;
+};
+
+function PlaybackControlButton(props: PlaybackControlButtonProps) {
+    return (
+        <Button
+            color="gray"
+            className={clsx(
+                "h-17 flex items-center justify-center",
+                props.disabled && "text-gray-600",
+                props.className,
+            )}
+            disabled={props.disabled}
+            onClick={props.onClick}
+        >
+            {props.children}
+        </Button>
     );
 }
 

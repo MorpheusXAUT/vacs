@@ -45,7 +45,7 @@ export function useList({
             visibleItemIndices: Array.from({length: itemCount}, (_, i) => scrollOffset + i),
             maxScrollOffset: itemsCount - itemCount,
         };
-    }, [listContainerHeight, itemsCount, scrollOffset, defaultRows]);
+    }, [listContainerHeight, itemsCount, scrollOffset, defaultRows, rowHeight]);
 
     const onKeyDown = useEventCallback((event: KeyboardEvent) => {
         if (itemsCount === 0) return;

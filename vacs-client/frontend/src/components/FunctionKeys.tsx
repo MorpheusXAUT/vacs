@@ -1,7 +1,7 @@
 import mission from "../assets/mission.svg";
 import wrenchAndDriver from "../assets/wrench-and-driver.svg";
-import { useCallStore } from "../stores/call-store.ts";
-import { useSettingsStore } from "../stores/settings-store.ts";
+import {useCallStore} from "../stores/call-store.ts";
+import {useSettingsStore} from "../stores/settings-store.ts";
 import Button from "./ui/Button.tsx";
 import LinkButton from "./ui/LinkButton.tsx";
 
