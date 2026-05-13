@@ -181,6 +181,10 @@ impl PlaybackStream {
         self.device.channels()
     }
 
+    pub fn sample_rate(&self) -> u32 {
+        self.device.sample_rate()
+    }
+
     pub fn device_name(&self) -> String {
         self.device.name()
     }

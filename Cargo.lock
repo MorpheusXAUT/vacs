@@ -8834,6 +8834,7 @@ dependencies = [
  "biquad",
  "bytes",
  "cpal",
+ "hound",
  "opus",
  "parking_lot",
  "ringbuf",
