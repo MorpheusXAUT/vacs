@@ -4,9 +4,9 @@ use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfi
 use crate::error::Error;
 use crate::radio::track_audio::TrackAudioRadioHandle;
 use crate::replay::ClipMeta;
-use crate::replay::recorder::ReplayRecorderHandle;
+use crate::replay::recorder::{CLIP_PROGRESS_EVENT, ReplayRecorderHandle};
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use vacs_audio::sources::wav::WavSource;
 
 #[tauri::command]
@@ -102,6 +102,7 @@ pub async fn replay_clear(recorder: State<'_, ReplayRecorderHandle>) -> Result<(
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn replay_play(
+    app: AppHandle,
     recorder: State<'_, ReplayRecorderHandle>,
     app_state: State<'_, AppState>,
     audio_manager: State<'_, AudioManagerHandle>,
@@ -134,7 +135,19 @@ pub async fn replay_play(
 
     let source_id = audio_manager.add_audio_source(
         move |sample_rate, channels| {
-            Box::new(WavSource::from_file(path, sample_rate, channels as usize, volume).unwrap())
+            Box::new(
+                WavSource::from_file(
+                    path,
+                    sample_rate,
+                    channels as usize,
+                    volume,
+                    None,
+                    Some(Box::new(move |progress| {
+                        app.emit(CLIP_PROGRESS_EVENT, progress).ok();
+                    })),
+                )
+                .unwrap(),
+            )
         },
         false,
     );
@@ -143,6 +156,28 @@ pub async fn replay_play(
     if let Some(r) = recorder.write().as_mut() {
         r.set_playing_source_id(Some(source_id))
     }
+
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn replay_stop(
+    app: AppHandle,
+    recorder: State<'_, ReplayRecorderHandle>,
+    audio_manager: State<'_, AudioManagerHandle>,
+) -> Result<(), Error> {
+    if let Some(source_id) = recorder
+        .read()
+        .as_ref()
+        .and_then(|r| r.get_playing_source_id())
+    {
+        audio_manager.read().remove_audio_source(source_id, false);
+    } else {
+        log::warn!("replay stop called but no clip is playing");
+    }
+
+    app.emit(CLIP_PROGRESS_EVENT, 0.0).ok();
 
     Ok(())
 }

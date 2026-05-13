@@ -2,7 +2,6 @@ import {clsx} from "clsx";
 import {CloseButton} from "./SettingsPage.tsx";
 import Button from "../components/ui/Button.tsx";
 import PlaybackControls from "../components/playback/PlaybackControls.tsx";
-import PlaybackProgress from "../components/playback/PlaybackProgress.tsx";
 import PlaybackList from "../components/playback/PlaybackList.tsx";
 import {useEffect, useState} from "preact/hooks";
 import {ClipMeta, clipUnixMs} from "../types/replay.ts";
@@ -108,7 +107,6 @@ function PlaybackPage() {
                 <div className="h-full w-full flex flex-col p-px">
                     <PlaybackList clips={clips} selected={selected} setSelected={setSelected} />
                     <div className="relative w-full h-full flex flex-col items-center pr-16">
-                        <PlaybackProgress />
                         <PlaybackControls clip={clips[selected]} />
                         <CloseButton className="h-17 w-19! absolute bottom-0 right-0" />
                     </div>

@@ -205,6 +205,7 @@ pub fn run() {
             replay::commands::replay_get_enabled,
             replay::commands::replay_list,
             replay::commands::replay_set_enabled,
+            replay::commands::replay_stop
         ])
         .build(tauri::generate_context!())
         .expect("Failed to build tauri application")

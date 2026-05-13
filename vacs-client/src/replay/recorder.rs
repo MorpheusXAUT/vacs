@@ -25,6 +25,8 @@ const TICK_INTERVAL_MS: u64 = 100;
 const CLIP_RECORDED_EVENT: &str = "replay:clip-recorded";
 const CLIP_EVICTED_EVENT: &str = "replay:clip-evicted";
 
+pub const CLIP_PROGRESS_EVENT: &str = "replay:progress";
+
 /// Snapshot of an in-flight clip the recorder is currently writing.
 struct OpenClip {
     writer: ClipWriter,

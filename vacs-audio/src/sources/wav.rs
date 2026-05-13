@@ -11,6 +11,9 @@ pub struct WavSource {
 
     active: bool,
     pos: usize,
+
+    update_interval: usize,                     // in ms, defaults to 100ms
+    on_update: Option<Box<dyn Fn(f32) + Send>>, // progress from 0.0 to 1.0
 }
 
 impl WavSource {
@@ -19,6 +22,8 @@ impl WavSource {
         sample_rate: u32,
         output_channels: usize,
         volume: f32,
+        update_interval: Option<usize>,
+        on_update: Option<Box<dyn Fn(f32) + Send>>,
     ) -> Result<Self, hound::Error> {
         let mut reader = hound::WavReader::open(path)?;
         let spec = reader.spec();
@@ -47,6 +52,8 @@ impl WavSource {
             output_channels: output_channels.max(1),
             volume: volume.clamp(0.0, 1.0),
             active: false,
+            update_interval: update_interval.unwrap_or(100),
+            on_update,
         })
     }
 }
@@ -59,6 +66,9 @@ impl AudioSource for WavSource {
 
         for frame in output.chunks_mut(self.output_channels) {
             if self.pos >= self.samples.len() {
+                if let Some(on_update) = &self.on_update {
+                    on_update(1.0);
+                }
                 self.active = false;
                 break;
             }
@@ -67,6 +77,13 @@ impl AudioSource for WavSource {
             for s in frame.iter_mut() {
                 *s += sample;
             }
+        }
+
+        if let Some(on_update) = &self.on_update
+            && self.pos.is_multiple_of(self.update_interval)
+        {
+            let elapsed = self.pos as f32 / self.samples.len() as f32;
+            on_update(elapsed);
         }
     }
 

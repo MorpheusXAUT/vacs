@@ -58,6 +58,7 @@ export type RemoteCommand =
     | "replay_delete"
     | "replay_export"
     | "replay_play"
+    | "replay_stop"
     | "replay_get_enabled"
     | "replay_list"
     | "replay_set_enabled"
@@ -112,7 +113,8 @@ export type RemoteEvent =
     | "update:progress"
     | "remote:status"
     | "replay:clip-recorded"
-    | "replay:clip-evicted";
+    | "replay:clip-evicted"
+    | "replay:progress";
 
 export type InvokeArgs = Record<string, unknown>;
 
