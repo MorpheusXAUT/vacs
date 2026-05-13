@@ -1,5 +1,5 @@
-import {useEffect, useRef, useState} from "preact/hooks";
-import {invokeSafe, invokeStrict} from "../error.ts";
+import {useEffect, useState} from "preact/hooks";
+import {invokeSafe} from "../error.ts";
 import {listen, UnlistenFn} from "../transport";
 import Button from "../components/ui/Button.tsx";
 import {ClipMeta, clipUnixMs, tapLabel} from "../types/replay.ts";
@@ -7,8 +7,6 @@ import {ClipMeta, clipUnixMs, tapLabel} from "../types/replay.ts";
 function ReplayPage() {
     const [clips, setClips] = useState<ClipMeta[]>([]);
     const [activeId, setActiveId] = useState<number | null>(null);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const objectUrlRef = useRef<string | null>(null);
 
     useEffect(() => {
         const fetch = async () => {
@@ -30,29 +28,11 @@ function ReplayPage() {
 
         return () => {
             unlistenFns.forEach(fn => fn.then(f => f()));
-            if (objectUrlRef.current !== null) {
-                URL.revokeObjectURL(objectUrlRef.current);
-                objectUrlRef.current = null;
-            }
         };
     }, []);
 
     const handlePlay = async (clip: ClipMeta) => {
-        try {
-            const bytes = await invokeStrict<number[]>("replay_get_clip_bytes", {id: clip.id});
-            const blob = new Blob([new Uint8Array(bytes)], {type: "audio/wav"});
-            if (objectUrlRef.current !== null) {
-                URL.revokeObjectURL(objectUrlRef.current);
-            }
-            objectUrlRef.current = URL.createObjectURL(blob);
-            setActiveId(clip.id);
-            if (audioRef.current !== null) {
-                audioRef.current.src = objectUrlRef.current;
-                void audioRef.current.play();
-            }
-        } catch {
-            // Error overlay surfaces from invokeStrict; nothing to do here.
-        }
+        void invokeSafe("replay_play", {id: clip.id});
     };
 
     const handleDelete = async (clip: ClipMeta) => {
@@ -95,7 +75,6 @@ function ReplayPage() {
                     ))
                 )}
             </div>
-            <audio ref={audioRef} controls className="w-full" />
         </div>
     );
 }

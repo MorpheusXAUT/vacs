@@ -13,9 +13,9 @@ use tokio::sync::mpsc;
 use vacs_audio::EncodedAudioFrame;
 use vacs_audio::device::{DeviceSelector, DeviceType, StreamDevice};
 use vacs_audio::error::AudioError;
-use vacs_audio::sources::AudioSourceId;
 use vacs_audio::sources::opus::OpusSource;
 use vacs_audio::sources::waveform::{Waveform, WaveformSource, WaveformTone};
+use vacs_audio::sources::{AudioSource, AudioSourceId};
 use vacs_audio::stream::capture::{CaptureStream, InputLevel};
 use vacs_audio::stream::playback::PlaybackStream;
 use vacs_signaling::protocol::ws::shared;
@@ -672,5 +672,34 @@ impl AudioManager {
         }
 
         Ok((output, source_ids))
+    }
+
+    pub fn add_audio_source(
+        &self,
+        source_fn: impl FnOnce(u32, u16) -> Box<dyn AudioSource>,
+        speaker: bool,
+    ) -> AudioSourceId {
+        if speaker && let Some(speaker) = &self.speaker {
+            speaker.add_audio_source(source_fn(speaker.sample_rate(), speaker.channels()))
+        } else {
+            self.output
+                .add_audio_source(source_fn(self.output.sample_rate(), self.output.channels()))
+        }
+    }
+
+    pub fn start_audio_source(&self, source_id: AudioSourceId, speaker: bool) {
+        if speaker && let Some(speaker) = &self.speaker {
+            speaker.start_audio_source(source_id)
+        } else {
+            self.output.start_audio_source(source_id)
+        }
+    }
+
+    pub fn remove_audio_source(&self, source_id: AudioSourceId, speaker: bool) {
+        if speaker && let Some(speaker) = &self.speaker {
+            speaker.remove_audio_source(source_id)
+        } else {
+            self.output.remove_audio_source(source_id)
+        }
     }
 }

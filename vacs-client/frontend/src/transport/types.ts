@@ -57,7 +57,7 @@ export type RemoteCommand =
     | "replay_clear"
     | "replay_delete"
     | "replay_export"
-    | "replay_get_clip_bytes"
+    | "replay_play"
     | "replay_get_enabled"
     | "replay_list"
     | "replay_set_enabled"

@@ -1,4 +1,5 @@
 use crate::app::state::AppState;
+use crate::audio::manager::AudioManagerHandle;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
 use crate::error::Error;
 use crate::radio::track_audio::TrackAudioRadioHandle;
@@ -6,6 +7,7 @@ use crate::replay::ClipMeta;
 use crate::replay::recorder::ReplayRecorderHandle;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
+use vacs_audio::sources::wav::WavSource;
 
 #[tauri::command]
 #[vacs_macros::log_err]
@@ -99,10 +101,20 @@ pub async fn replay_clear(recorder: State<'_, ReplayRecorderHandle>) -> Result<(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_get_clip_bytes(
+pub async fn replay_play(
     recorder: State<'_, ReplayRecorderHandle>,
+    app_state: State<'_, AppState>,
+    audio_manager: State<'_, AudioManagerHandle>,
     id: u64,
-) -> Result<Vec<u8>, Error> {
+) -> Result<(), Error> {
+    if let Some(source_id) = recorder
+        .read()
+        .as_ref()
+        .and_then(|r| r.get_playing_source_id())
+    {
+        audio_manager.read().remove_audio_source(source_id, false);
+    }
+
     let path: Option<PathBuf> = recorder
         .read()
         .as_ref()
@@ -112,13 +124,27 @@ pub async fn replay_get_clip_bytes(
             "clip {id} not found"
         ))));
     };
-    let bytes = std::fs::read(&path).map_err(|e| {
-        Error::Other(Box::new(anyhow::anyhow!(
-            "failed to read clip {id} at {}: {e}",
-            path.display()
-        )))
-    })?;
-    Ok(bytes)
+
+    let volume = {
+        let state = app_state.lock().await;
+        state.config.audio.output_device_volume
+    };
+
+    let audio_manager = audio_manager.read();
+
+    let source_id = audio_manager.add_audio_source(
+        move |sample_rate, channels| {
+            Box::new(WavSource::from_file(path, sample_rate, channels as usize, volume).unwrap())
+        },
+        false,
+    );
+    audio_manager.start_audio_source(source_id, false);
+
+    if let Some(r) = recorder.write().as_mut() {
+        r.set_playing_source_id(Some(source_id))
+    }
+
+    Ok(())
 }
 
 /// Copy a clip to the saved directory within the app data dir. Saved clips are exempt

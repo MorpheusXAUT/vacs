@@ -19,6 +19,7 @@ use std::time::{Duration, Instant, SystemTime};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use vacs_audio::sources::AudioSourceId;
 
 const TICK_INTERVAL_MS: u64 = 100;
 const CLIP_RECORDED_EVENT: &str = "replay:clip-recorded";
@@ -84,6 +85,7 @@ impl OpenClip {
 /// Public handle to a running recorder.
 pub struct ReplayRecorder {
     store: Arc<Mutex<ClipStore>>,
+    playing_source_id: Option<AudioSourceId>,
     cancel: CancellationToken,
 }
 
@@ -117,7 +119,11 @@ impl ReplayRecorder {
             tokio::spawn(run(app, config, store, source, rx, cancel));
         }
 
-        Ok(Self { store, cancel })
+        Ok(Self {
+            store,
+            playing_source_id: None,
+            cancel,
+        })
     }
 
     pub fn list(&self) -> Vec<ClipMeta> {
@@ -142,6 +148,14 @@ impl ReplayRecorder {
 
     pub fn get(&self, id: u64) -> Option<ClipMeta> {
         self.store.lock().get(id)
+    }
+
+    pub fn set_playing_source_id(&mut self, id: Option<AudioSourceId>) {
+        self.playing_source_id = id;
+    }
+
+    pub fn get_playing_source_id(&self) -> Option<AudioSourceId> {
+        self.playing_source_id
     }
 
     pub fn shutdown(&self) {

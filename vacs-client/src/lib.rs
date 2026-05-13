@@ -201,7 +201,7 @@ pub fn run() {
             replay::commands::replay_clear,
             replay::commands::replay_delete,
             replay::commands::replay_export,
-            replay::commands::replay_get_clip_bytes,
+            replay::commands::replay_play,
             replay::commands::replay_get_enabled,
             replay::commands::replay_list,
             replay::commands::replay_set_enabled,
