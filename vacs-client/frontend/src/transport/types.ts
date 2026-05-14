@@ -62,6 +62,8 @@ export type RemoteCommand =
     | "replay_get_enabled"
     | "replay_list"
     | "replay_set_enabled"
+    | "replay_skip"
+    | "replay_rewind"
     | "signaling_accept_call"
     | "signaling_add_ignored_client"
     | "signaling_connect"

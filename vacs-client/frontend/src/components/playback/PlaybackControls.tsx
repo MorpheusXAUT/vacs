@@ -5,7 +5,7 @@ import {clsx} from "clsx";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import PlaybackProgress from "./PlaybackProgress.tsx";
 import {useCallback, useEffect, useRef, useState} from "preact/hooks";
-import {invokeStrict} from "../../error.ts";
+import {invokeSafe, invokeStrict} from "../../error.ts";
 import speaker from "../../assets/speaker.svg";
 import {StateSetter} from "../../types/generic.ts";
 
@@ -142,7 +142,12 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             <path d="M48 0V74L11 37V74H0V0H11V37L48 0Z" fill="currentColor" />
                         </svg>
                     </PlaybackControlButton>
-                    <PlaybackControlButton disabled={!playing}>
+                    <PlaybackControlButton
+                        disabled={!playing}
+                        onClick={() => {
+                            void invokeSafe("replay_rewind", {millis: 500});
+                        }}
+                    >
                         <svg
                             width="32"
                             height="32"
@@ -172,7 +177,12 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             <path d="M48 0V74L11 37V74H0V0H11V37L48 0Z" fill="currentColor" />
                         </svg>
                     </PlaybackControlButton>
-                    <PlaybackControlButton disabled={!playing}>
+                    <PlaybackControlButton
+                        disabled={!playing}
+                        onClick={() => {
+                            void invokeSafe("replay_skip", {millis: 500});
+                        }}
+                    >
                         <svg
                             transform="rotate(180)"
                             width="32"

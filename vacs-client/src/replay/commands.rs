@@ -7,6 +7,7 @@ use crate::replay::ClipMeta;
 use crate::replay::recorder::{CLIP_PROGRESS_EVENT, ReplayRecorderHandle};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use vacs_audio::sources::wav::WavSource;
 
@@ -200,6 +201,54 @@ fn take_and_stop_playing_source(
         return true;
     }
     false
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn replay_skip(
+    recorder: State<'_, ReplayRecorderHandle>,
+    audio_manager: State<'_, AudioManagerHandle>,
+    millis: u64,
+) -> Result<(), Error> {
+    if let Some((source_id, is_speaker)) = recorder
+        .write()
+        .as_mut()
+        .and_then(|r| r.get_playing_source_id())
+    {
+        audio_manager.read().skip_in_audio_source(
+            source_id,
+            Duration::from_millis(millis),
+            is_speaker,
+        );
+    } else {
+        log::warn!("replay skip called but no clip is playing");
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn replay_rewind(
+    recorder: State<'_, ReplayRecorderHandle>,
+    audio_manager: State<'_, AudioManagerHandle>,
+    millis: u64,
+) -> Result<(), Error> {
+    if let Some((source_id, is_speaker)) = recorder
+        .write()
+        .as_mut()
+        .and_then(|r| r.get_playing_source_id())
+    {
+        audio_manager.read().rewind_in_audio_source(
+            source_id,
+            Duration::from_millis(millis),
+            is_speaker,
+        );
+    } else {
+        log::warn!("replay skip called but no clip is playing");
+    }
+
+    Ok(())
 }
 
 /// Copy a clip to the saved directory within the app data dir. Saved clips are exempt

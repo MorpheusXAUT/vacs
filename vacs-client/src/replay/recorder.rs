@@ -160,6 +160,10 @@ impl ReplayRecorder {
         self.playing_source_id.take()
     }
 
+    pub fn get_playing_source_id(&self) -> Option<(AudioSourceId, bool)> {
+        self.playing_source_id
+    }
+
     pub fn shutdown(&self) {
         self.cancel.cancel();
     }

@@ -695,6 +695,32 @@ impl AudioManager {
         }
     }
 
+    pub fn skip_in_audio_source(
+        &self,
+        source_id: AudioSourceId,
+        duration: Duration,
+        speaker: bool,
+    ) {
+        if speaker && let Some(speaker) = &self.speaker {
+            speaker.skip_in_audio_source(source_id, duration)
+        } else {
+            self.output.skip_in_audio_source(source_id, duration)
+        }
+    }
+
+    pub fn rewind_in_audio_source(
+        &self,
+        source_id: AudioSourceId,
+        duration: Duration,
+        speaker: bool,
+    ) {
+        if speaker && let Some(speaker) = &self.speaker {
+            speaker.rewind_in_audio_source(source_id, duration)
+        } else {
+            self.output.rewind_in_audio_source(source_id, duration)
+        }
+    }
+
     pub fn remove_audio_source(&self, source_id: AudioSourceId, speaker: bool) {
         if speaker && let Some(speaker) = &self.speaker {
             speaker.remove_audio_source(source_id)

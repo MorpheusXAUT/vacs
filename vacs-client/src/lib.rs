@@ -204,7 +204,9 @@ pub fn run() {
             replay::commands::replay_play,
             replay::commands::replay_get_enabled,
             replay::commands::replay_list,
+            replay::commands::replay_rewind,
             replay::commands::replay_set_enabled,
+            replay::commands::replay_skip,
             replay::commands::replay_stop
         ])
         .build(tauri::generate_context!())
