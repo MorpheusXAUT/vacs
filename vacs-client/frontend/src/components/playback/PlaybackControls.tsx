@@ -4,31 +4,46 @@ import {ComponentChildren} from "preact";
 import {clsx} from "clsx";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import PlaybackProgress from "./PlaybackProgress.tsx";
-import {useCallback, useEffect, useState} from "preact/hooks";
+import {useCallback, useEffect, useRef, useState} from "preact/hooks";
 import {invokeStrict} from "../../error.ts";
+import speaker from "../../assets/speaker.svg";
+import {StateSetter} from "../../types/generic.ts";
 
 type PlaybackControlsProps = {
     clip: ClipMeta | undefined;
+    prevClip: ClipMeta | undefined;
+    nextClip: ClipMeta | undefined;
+    setSelectedClip: StateSetter<number>;
 };
 
 function PlaybackControls(props: PlaybackControlsProps) {
     const disabled = props.clip === undefined;
     const [playing, setPlaying] = useState(false);
+    const [playbackDevice, setPlaybackDevice] = useState<"Headset" | "Speaker">("Headset");
 
-    const handlePlay = useAsyncDebounce(async () => {
-        try {
-            void invokeStrict("replay_play", {id: props.clip?.id});
-            setPlaying(true);
-        } catch {}
-    });
+    const clipIdRef = useRef(props.clip?.id);
+    clipIdRef.current = props.clip?.id;
+    const playingDeviceRef = useRef<"Headset" | "Speaker">(playbackDevice);
+
+    const handlePlay = useAsyncDebounce(
+        useCallback(async () => {
+            try {
+                void invokeStrict("replay_play", {
+                    id: clipIdRef.current,
+                    device: playingDeviceRef.current,
+                });
+                setPlaying(true);
+            } catch {}
+        }, []),
+    );
 
     const handleStop = useAsyncDebounce(
         useCallback(async () => {
             try {
-                void invokeStrict("replay_stop");
+                void invokeStrict("replay_stop", {device: playingDeviceRef.current});
                 setPlaying(false);
             } catch {}
-        }, [setPlaying]),
+        }, []),
     );
 
     // TODO: Check with RL behaviour. Does playback stop when selected clip changes?
@@ -38,6 +53,22 @@ function PlaybackControls(props: PlaybackControlsProps) {
             void handleStop();
         }
     }, [props.clip, handleStop]);
+
+    useEffect(() => {
+        const replayOnNewDevice = async () => {
+            await handleStop();
+            playingDeviceRef.current = playbackDevice;
+            void handlePlay();
+        };
+
+        if (playbackDevice !== playingDeviceRef.current) {
+            if (playing) {
+                void replayOnNewDevice();
+            } else {
+                playingDeviceRef.current = playbackDevice;
+            }
+        }
+    }, [playbackDevice, playing, handlePlay, handleStop]);
 
     return (
         <>
@@ -60,8 +91,18 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             <path d="M0 37V0L74 37L0 74V37Z" fill="currentColor" />
                         </svg>
                     </PlaybackControlButton>
-                    <PlaybackControlButton>H/S</PlaybackControlButton>
-                    <PlaybackControlButton disabled={true}>
+                    <PlaybackControlButton
+                        onClick={() =>
+                            setPlaybackDevice(prev => (prev === "Headset" ? "Speaker" : "Headset"))
+                        }
+                    >
+                        {playbackDevice === "Headset" ? (
+                            "H"
+                        ) : (
+                            <img src={speaker} alt="S" className="h-7" />
+                        )}
+                    </PlaybackControlButton>
+                    <PlaybackControlButton disabled={playing || props.nextClip === undefined}>
                         <svg
                             height="40"
                             viewBox="0 0 96 110"
@@ -85,7 +126,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             )}
                         ></div>
                     </PlaybackControlButton>
-                    <PlaybackControlButton disabled={true}>
+                    <PlaybackControlButton disabled={!playing || props.prevClip === undefined}>
                         <svg
                             height="32"
                             viewBox="0 0 48 74"
@@ -95,7 +136,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             <path d="M48 0V74L11 37V74H0V0H11V37L48 0Z" fill="currentColor" />
                         </svg>
                     </PlaybackControlButton>
-                    <PlaybackControlButton disabled={true}>
+                    <PlaybackControlButton disabled={!playing}>
                         <svg
                             width="32"
                             height="32"
@@ -106,7 +147,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             <path d="M74 0V74L37 37V74L0 37L37 0V37L74 0Z" fill="currentColor" />
                         </svg>
                     </PlaybackControlButton>
-                    <PlaybackControlButton disabled={true}>
+                    <PlaybackControlButton disabled={!playing || props.nextClip === undefined}>
                         <svg
                             transform="rotate(180)"
                             height="32"
@@ -117,7 +158,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             <path d="M48 0V74L11 37V74H0V0H11V37L48 0Z" fill="currentColor" />
                         </svg>
                     </PlaybackControlButton>
-                    <PlaybackControlButton disabled={true}>
+                    <PlaybackControlButton disabled={!playing}>
                         <svg
                             transform="rotate(180)"
                             width="32"

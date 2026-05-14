@@ -5,6 +5,7 @@ use crate::error::Error;
 use crate::radio::track_audio::TrackAudioRadioHandle;
 use crate::replay::ClipMeta;
 use crate::replay::recorder::{CLIP_PROGRESS_EVENT, ReplayRecorderHandle};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, State};
 use vacs_audio::sources::wav::WavSource;
@@ -99,6 +100,12 @@ pub async fn replay_clear(recorder: State<'_, ReplayRecorderHandle>) -> Result<(
     Ok(())
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReplayDevice {
+    Headset,
+    Speaker,
+}
+
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn replay_play(
@@ -107,13 +114,16 @@ pub async fn replay_play(
     app_state: State<'_, AppState>,
     audio_manager: State<'_, AudioManagerHandle>,
     id: u64,
+    device: ReplayDevice,
 ) -> Result<(), Error> {
     if let Some(source_id) = recorder
         .read()
         .as_ref()
         .and_then(|r| r.get_playing_source_id())
     {
-        audio_manager.read().remove_audio_source(source_id, false);
+        audio_manager
+            .read()
+            .remove_audio_source(source_id, device == ReplayDevice::Speaker);
     }
 
     let path: Option<PathBuf> = recorder
@@ -149,9 +159,9 @@ pub async fn replay_play(
                 .unwrap(),
             )
         },
-        false,
+        device == ReplayDevice::Speaker,
     );
-    audio_manager.start_audio_source(source_id, false);
+    audio_manager.start_audio_source(source_id, device == ReplayDevice::Speaker);
 
     if let Some(r) = recorder.write().as_mut() {
         r.set_playing_source_id(Some(source_id))
@@ -166,13 +176,16 @@ pub async fn replay_stop(
     app: AppHandle,
     recorder: State<'_, ReplayRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
+    device: ReplayDevice,
 ) -> Result<(), Error> {
     if let Some(source_id) = recorder
         .read()
         .as_ref()
         .and_then(|r| r.get_playing_source_id())
     {
-        audio_manager.read().remove_audio_source(source_id, false);
+        audio_manager
+            .read()
+            .remove_audio_source(source_id, device == ReplayDevice::Speaker);
     } else {
         log::warn!("replay stop called but no clip is playing");
     }

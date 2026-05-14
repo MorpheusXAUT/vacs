@@ -109,7 +109,12 @@ function PlaybackPageInner() {
             <div className="h-full w-full flex flex-col p-px">
                 <PlaybackList clips={clips} selected={selected} setSelected={setSelected} />
                 <div className="relative w-full h-full flex flex-col items-center pr-16">
-                    <PlaybackControls clip={clips[selected]} />
+                    <PlaybackControls
+                        clip={clips[selected]}
+                        prevClip={clips[selected + 1]}
+                        nextClip={clips[selected - 1]}
+                        setSelectedClip={setSelected}
+                    />
                     <CloseButton className="h-17 w-19! absolute bottom-0 right-0" />
                 </div>
             </div>
