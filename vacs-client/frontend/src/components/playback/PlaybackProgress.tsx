@@ -1,40 +1,39 @@
 import {useEffect, useMemo, useState} from "preact/hooks";
 import {listen} from "../../transport";
 import {ClipMeta, clipUnixMs} from "../../types/replay.ts";
+import {toUTCTimeString} from "../../utils/date.ts";
 
 type PlaybackProgressProps = {
     clip: ClipMeta | undefined;
     setPlaying: (playing: boolean) => void;
 };
 
-function PlaybackProgress(props: PlaybackProgressProps) {
+function PlaybackProgress({clip, setPlaying}: PlaybackProgressProps) {
     const [progress, setProgress] = useState(0);
 
     useEffect(() => {
         const unlisten = listen<number>("replay:progress", event => {
             setProgress(event.payload * 100);
             if (event.payload === 1) {
-                props.setPlaying(false);
+                setPlaying(false);
                 setProgress(0);
             }
         });
 
-        return () => {
-            unlisten.then(fn => fn());
-        };
-    }, []);
+        return () => unlisten.then(fn => fn());
+    }, [setPlaying]);
 
     const time = useMemo(() => {
-        if (!props.clip) return "No playback";
-        const start = clipUnixMs(props.clip.started_at);
-        const end = clipUnixMs(props.clip.ended_at);
+        if (!clip) return "No playback";
+
+        const start = clipUnixMs(clip.started_at);
+        const end = clipUnixMs(clip.ended_at);
 
         const step = (end - start) / 100;
-
         const now = start + progress * step;
 
-        return new Date(now).toLocaleTimeString();
-    }, [progress, props.clip]);
+        return toUTCTimeString(new Date(now));
+    }, [progress, clip]);
 
     return (
         <>

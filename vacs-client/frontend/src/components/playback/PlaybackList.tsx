@@ -1,6 +1,7 @@
 import List from "../ui/List.tsx";
 import {clsx} from "clsx";
 import {ClipMeta, clipUnixMs} from "../../types/replay.ts";
+import {toUTCTimeString} from "../../utils/date.ts";
 
 type PlaybackListProps = {
     clips: ClipMeta[];
@@ -55,7 +56,7 @@ function PlaybackEntryRow(props: PlaybackEntryRowProps) {
                 className={clsx("flex items-center justify-center font-semibold", color)}
                 onClick={props.onClick}
             >
-                {props.clip && new Date(clipUnixMs(props.clip.started_at)).toLocaleTimeString()}
+                {props.clip && toUTCTimeString(new Date(clipUnixMs(props.clip.started_at)))}
             </div>
             <div
                 className={clsx("px-0.5 flex items-center font-semibold", color)}
