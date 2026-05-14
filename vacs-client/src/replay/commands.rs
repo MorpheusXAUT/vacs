@@ -116,15 +116,7 @@ pub async fn replay_play(
     id: u64,
     device: ReplayDevice,
 ) -> Result<(), Error> {
-    if let Some((source_id, is_speaker)) = recorder
-        .write()
-        .as_mut()
-        .and_then(|r| r.take_playing_source_id())
-    {
-        audio_manager
-            .read()
-            .remove_audio_source(source_id, is_speaker);
-    }
+    take_and_stop_playing_source(&recorder, &audio_manager);
 
     let path: Option<PathBuf> = recorder
         .read()
@@ -142,6 +134,7 @@ pub async fn replay_play(
     };
 
     let audio_manager = audio_manager.read();
+    let is_speaker = device == ReplayDevice::Speaker;
 
     let source_id = audio_manager.add_audio_source(
         move |sample_rate, channels| {
@@ -165,12 +158,12 @@ pub async fn replay_play(
                 .unwrap(),
             )
         },
-        device == ReplayDevice::Speaker,
+        is_speaker,
     );
-    audio_manager.start_audio_source(source_id, device == ReplayDevice::Speaker);
+    audio_manager.start_audio_source(source_id, is_speaker);
 
     if let Some(r) = recorder.write().as_mut() {
-        r.set_playing_source_id(Some((source_id, device == ReplayDevice::Speaker)))
+        r.set_playing_source_id(Some((source_id, is_speaker)))
     }
 
     Ok(())
@@ -183,6 +176,19 @@ pub async fn replay_stop(
     recorder: State<'_, ReplayRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
 ) -> Result<(), Error> {
+    if !take_and_stop_playing_source(&recorder, &audio_manager) {
+        log::warn!("replay stop called but no clip is playing");
+    }
+
+    app.emit(CLIP_PROGRESS_EVENT, 0.0).ok();
+
+    Ok(())
+}
+
+fn take_and_stop_playing_source(
+    recorder: &State<ReplayRecorderHandle>,
+    audio_manager: &State<AudioManagerHandle>,
+) -> bool {
     if let Some((source_id, is_speaker)) = recorder
         .write()
         .as_mut()
@@ -191,13 +197,9 @@ pub async fn replay_stop(
         audio_manager
             .read()
             .remove_audio_source(source_id, is_speaker);
-    } else {
-        log::warn!("replay stop called but no clip is playing");
+        return true;
     }
-
-    app.emit(CLIP_PROGRESS_EVENT, 0.0).ok();
-
-    Ok(())
+    false
 }
 
 /// Copy a clip to the saved directory within the app data dir. Saved clips are exempt
