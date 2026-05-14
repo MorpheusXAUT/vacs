@@ -156,8 +156,8 @@ impl ReplayRecorder {
         self.playing_source_id = id;
     }
 
-    pub fn get_playing_source_id(&self) -> Option<AudioSourceId> {
-        self.playing_source_id
+    pub fn take_playing_source_id(&mut self) -> Option<AudioSourceId> {
+        self.playing_source_id.take()
     }
 
     pub fn shutdown(&self) {

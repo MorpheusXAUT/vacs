@@ -4,6 +4,8 @@ import {invokeSafe} from "../../error.ts";
 import Button from "../ui/Button.tsx";
 import {StateSetter} from "../../types/generic.ts";
 
+// TODO: Disable delete/delete all while playing
+
 type PlaybackActionsProps = {
     clips: ClipMeta[];
     selected: number;

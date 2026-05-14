@@ -52,7 +52,7 @@ impl WavSource {
             output_channels: output_channels.max(1),
             volume: volume.clamp(0.0, 1.0),
             active: false,
-            update_interval: update_interval.unwrap_or(100),
+            update_interval: update_interval.unwrap_or(500),
             on_update,
         })
     }
@@ -77,13 +77,13 @@ impl AudioSource for WavSource {
             for s in frame.iter_mut() {
                 *s += sample;
             }
-        }
 
-        if let Some(on_update) = &self.on_update
-            && self.pos.is_multiple_of(self.update_interval)
-        {
-            let elapsed = self.pos as f32 / self.samples.len() as f32;
-            on_update(elapsed);
+            if let Some(on_update) = &self.on_update
+                && self.pos.is_multiple_of(self.update_interval)
+            {
+                let elapsed = self.pos as f32 / self.samples.len() as f32;
+                on_update(elapsed);
+            }
         }
     }
 

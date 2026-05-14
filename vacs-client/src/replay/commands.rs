@@ -117,9 +117,9 @@ pub async fn replay_play(
     device: ReplayDevice,
 ) -> Result<(), Error> {
     if let Some(source_id) = recorder
-        .read()
-        .as_ref()
-        .and_then(|r| r.get_playing_source_id())
+        .write()
+        .as_mut()
+        .and_then(|r| r.take_playing_source_id())
     {
         audio_manager
             .read()
@@ -154,6 +154,12 @@ pub async fn replay_play(
                     None,
                     Some(Box::new(move |progress| {
                         app.emit(CLIP_PROGRESS_EVENT, progress).ok();
+                        if progress == 1.0 {
+                            let recorder = app.state::<ReplayRecorderHandle>();
+                            if let Some(r) = recorder.write().as_mut() {
+                                r.set_playing_source_id(None)
+                            }
+                        }
                     })),
                 )
                 .unwrap(),
@@ -179,9 +185,9 @@ pub async fn replay_stop(
     device: ReplayDevice,
 ) -> Result<(), Error> {
     if let Some(source_id) = recorder
-        .read()
-        .as_ref()
-        .and_then(|r| r.get_playing_source_id())
+        .write()
+        .as_mut()
+        .and_then(|r| r.take_playing_source_id())
     {
         audio_manager
             .read()
