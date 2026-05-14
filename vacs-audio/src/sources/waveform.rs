@@ -420,4 +420,18 @@ impl AudioSource for WaveformSource {
     fn set_volume(&mut self, volume: f32) {
         self.volume = volume.clamp(0.0, 1.0);
     }
+
+    fn skip(&mut self, duration: Duration) {
+        tracing::warn!(
+            "Tried to skip {:?}s in Opus source, which is not implemented",
+            duration.as_secs()
+        );
+    }
+
+    fn rewind(&mut self, duration: Duration) {
+        tracing::warn!(
+            "Tried to rewind {:?}s in Opus source, which is not implemented",
+            duration.as_secs()
+        );
+    }
 }

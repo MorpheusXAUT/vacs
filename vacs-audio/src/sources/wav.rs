@@ -2,10 +2,12 @@ use crate::sources::AudioSource;
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 use std::path::Path;
+use std::time::Duration;
 
 pub struct WavSource {
     samples: Vec<f32>, // mono f32, resampled to output sample_rate
 
+    sample_rate: u32,
     output_channels: usize,
     volume: f32,
 
@@ -49,6 +51,7 @@ impl WavSource {
         Ok(Self {
             samples: mono,
             pos: 0,
+            sample_rate,
             output_channels: output_channels.max(1),
             volume: volume.clamp(0.0, 1.0),
             active: false,
@@ -102,6 +105,16 @@ impl AudioSource for WavSource {
 
     fn set_volume(&mut self, volume: f32) {
         self.volume = volume.clamp(0.0, 1.0);
+    }
+
+    fn skip(&mut self, duration: Duration) {
+        let frames = (duration.as_secs_f32() * self.sample_rate as f32) as usize;
+        self.pos = (self.pos + frames).min(self.samples.len() - 1); // "- 1" to allow mix_into to finish
+    }
+
+    fn rewind(&mut self, duration: Duration) {
+        let frames = (duration.as_secs_f32() * self.sample_rate as f32) as usize;
+        self.pos = self.pos - frames.min(self.pos);
     }
 }
 

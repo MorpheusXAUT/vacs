@@ -11,6 +11,7 @@ use ringbuf::traits::Split;
 use rubato::Async;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, atomic};
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::instrument;
 
@@ -170,6 +171,34 @@ impl PlaybackStream {
             .is_err()
         {
             tracing::warn!("Failed to set volume for audio source");
+        }
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn skip_in_audio_source(&self, id: AudioSourceId, duration: Duration) {
+        if self
+            .mixer_ops
+            .lock()
+            .try_push(Box::new(move |mixer: &mut Mixer| {
+                mixer.skip_in_source(id, duration);
+            }))
+            .is_err()
+        {
+            tracing::warn!("Failed to skip duration for audio source");
+        }
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn rewind_in_audio_source(&self, id: AudioSourceId, duration: Duration) {
+        if self
+            .mixer_ops
+            .lock()
+            .try_push(Box::new(move |mixer: &mut Mixer| {
+                mixer.rewind_in_source(id, duration);
+            }))
+            .is_err()
+        {
+            tracing::warn!("Failed to rewind duration for audio source");
         }
     }
 

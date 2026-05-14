@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 pub mod opus;
 pub mod wav;
 pub mod waveform;
@@ -50,4 +52,8 @@ pub trait AudioSource: Send {
     /// not destructively to their sample data. The volume should not be applied to the rest of the
     /// data already present in the output buffer.
     fn set_volume(&mut self, volume: f32);
+
+    fn skip(&mut self, duration: Duration);
+
+    fn rewind(&mut self, duration: Duration);
 }

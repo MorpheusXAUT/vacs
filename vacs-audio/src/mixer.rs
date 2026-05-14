@@ -1,5 +1,6 @@
 use crate::sources::{AudioSource, AudioSourceId};
 use std::collections::HashMap;
+use std::time::Duration;
 
 #[derive(Default)]
 pub struct Mixer {
@@ -52,6 +53,18 @@ impl Mixer {
     pub fn set_source_volume(&mut self, source_id: AudioSourceId, volume: f32) {
         if let Some(source) = self.sources.get_mut(&source_id) {
             source.set_volume(volume);
+        }
+    }
+
+    pub fn skip_in_source(&mut self, source_id: AudioSourceId, duration: Duration) {
+        if let Some(source) = self.sources.get_mut(&source_id) {
+            source.skip(duration);
+        }
+    }
+
+    pub fn rewind_in_source(&mut self, source_id: AudioSourceId, duration: Duration) {
+        if let Some(source) = self.sources.get_mut(&source_id) {
+            source.rewind(duration);
         }
     }
 }
