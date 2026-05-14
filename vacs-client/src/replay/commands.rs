@@ -116,14 +116,14 @@ pub async fn replay_play(
     id: u64,
     device: ReplayDevice,
 ) -> Result<(), Error> {
-    if let Some(source_id) = recorder
+    if let Some((source_id, is_speaker)) = recorder
         .write()
         .as_mut()
         .and_then(|r| r.take_playing_source_id())
     {
         audio_manager
             .read()
-            .remove_audio_source(source_id, device == ReplayDevice::Speaker);
+            .remove_audio_source(source_id, is_speaker);
     }
 
     let path: Option<PathBuf> = recorder
@@ -170,7 +170,7 @@ pub async fn replay_play(
     audio_manager.start_audio_source(source_id, device == ReplayDevice::Speaker);
 
     if let Some(r) = recorder.write().as_mut() {
-        r.set_playing_source_id(Some(source_id))
+        r.set_playing_source_id(Some((source_id, device == ReplayDevice::Speaker)))
     }
 
     Ok(())
@@ -182,16 +182,15 @@ pub async fn replay_stop(
     app: AppHandle,
     recorder: State<'_, ReplayRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
-    device: ReplayDevice,
 ) -> Result<(), Error> {
-    if let Some(source_id) = recorder
+    if let Some((source_id, is_speaker)) = recorder
         .write()
         .as_mut()
         .and_then(|r| r.take_playing_source_id())
     {
         audio_manager
             .read()
-            .remove_audio_source(source_id, device == ReplayDevice::Speaker);
+            .remove_audio_source(source_id, is_speaker);
     } else {
         log::warn!("replay stop called but no clip is playing");
     }

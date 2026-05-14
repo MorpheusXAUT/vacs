@@ -24,26 +24,28 @@ function PlaybackControls(props: PlaybackControlsProps) {
 
     const clipIdRef = useRef(props.clip?.id);
     clipIdRef.current = props.clip?.id;
-    const playingDeviceRef = useRef<"Headset" | "Speaker">(playbackDevice);
 
     const intendedClipChangeRef = useRef(false);
 
     const handlePlay = useAsyncDebounce(
-        useCallback(async (id: number | undefined) => {
-            try {
-                await invokeStrict("replay_play", {
-                    id,
-                    device: playingDeviceRef.current,
-                });
-                setPlaying(true);
-            } catch {}
-        }, []),
+        useCallback(
+            async (id: number | undefined, device: "Headset" | "Speaker") => {
+                try {
+                    await invokeStrict("replay_play", {
+                        id,
+                        device,
+                    });
+                    setPlaying(true);
+                } catch {}
+            },
+            [playbackDevice],
+        ),
     );
 
     const handleStop = useAsyncDebounce(
         useCallback(async (setState = true) => {
             try {
-                await invokeStrict("replay_stop", {device: playingDeviceRef.current});
+                await invokeStrict("replay_stop");
                 if (setState) setPlaying(false);
             } catch {}
         }, []),
@@ -59,22 +61,6 @@ function PlaybackControls(props: PlaybackControlsProps) {
     }, [props.clip, handleStop]);
 
     useEffect(() => {
-        const replayOnNewDevice = async () => {
-            await handleStop(false);
-            playingDeviceRef.current = playbackDevice;
-            void handlePlay(clipIdRef.current);
-        };
-
-        if (playbackDevice !== playingDeviceRef.current) {
-            if (playing) {
-                void replayOnNewDevice();
-            } else {
-                playingDeviceRef.current = playbackDevice;
-            }
-        }
-    }, [playbackDevice, playing, handlePlay, handleStop]);
-
-    useEffect(() => {
         playingRef.current = playing;
     }, [playing]);
 
@@ -86,7 +72,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <PlaybackControlButton
                         color={playing ? "blue" : "gray"}
                         disabled={disabled}
-                        onClick={() => handlePlay(clipIdRef.current)}
+                        onClick={() => handlePlay(clipIdRef.current, playbackDevice)}
                         className={clsx(playing && "text-white")}
                     >
                         <svg
@@ -100,9 +86,13 @@ function PlaybackControls(props: PlaybackControlsProps) {
                         </svg>
                     </PlaybackControlButton>
                     <PlaybackControlButton
-                        onClick={() =>
-                            setPlaybackDevice(prev => (prev === "Headset" ? "Speaker" : "Headset"))
-                        }
+                        onClick={() => {
+                            setPlaybackDevice(prev => {
+                                const next = prev === "Headset" ? "Speaker" : "Headset";
+                                if (playing) void handlePlay(clipIdRef.current, next);
+                                return next;
+                            });
+                        }}
                     >
                         {playbackDevice === "Headset" ? (
                             "H"
@@ -140,7 +130,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             await handleStop(false);
                             intendedClipChangeRef.current = true;
                             props.setSelectedClip(prev => prev + 1);
-                            void handlePlay(props.prevClip?.id);
+                            void handlePlay(props.prevClip?.id, playbackDevice);
                         }}
                     >
                         <svg
@@ -169,7 +159,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             await handleStop(false);
                             intendedClipChangeRef.current = true;
                             props.setSelectedClip(prev => prev - 1);
-                            void handlePlay(props.nextClip?.id);
+                            void handlePlay(props.nextClip?.id, playbackDevice);
                         }}
                     >
                         <svg

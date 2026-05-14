@@ -87,7 +87,7 @@ impl OpenClip {
 /// Public handle to a running recorder.
 pub struct ReplayRecorder {
     store: Arc<Mutex<ClipStore>>,
-    playing_source_id: Option<AudioSourceId>,
+    playing_source_id: Option<(AudioSourceId, bool)>, // (source_id, is_speaker)
     cancel: CancellationToken,
 }
 
@@ -152,11 +152,11 @@ impl ReplayRecorder {
         self.store.lock().get(id)
     }
 
-    pub fn set_playing_source_id(&mut self, id: Option<AudioSourceId>) {
+    pub fn set_playing_source_id(&mut self, id: Option<(AudioSourceId, bool)>) {
         self.playing_source_id = id;
     }
 
-    pub fn take_playing_source_id(&mut self) -> Option<AudioSourceId> {
+    pub fn take_playing_source_id(&mut self) -> Option<(AudioSourceId, bool)> {
         self.playing_source_id.take()
     }
 
