@@ -16,6 +16,7 @@ pub struct Capabilities {
     pub always_on_top: bool,
     pub keybind_listener: bool,
     pub keybind_emitter: bool,
+    pub replay: bool,
 
     pub platform: Platform,
 }
@@ -50,6 +51,7 @@ impl Capabilities {
             always_on_top: !matches!(platform, Platform::LinuxWayland),
             keybind_listener,
             keybind_emitter: matches!(platform, Platform::Windows | Platform::MacOs),
+            replay: !matches!(platform, Platform::MacOs),
             platform,
         }
     }

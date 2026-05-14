@@ -30,3 +30,7 @@ export function tapLabel(tap: TapId): string {
     if (tap === "speaker") return "Speaker";
     return "Mixed";
 }
+
+export function sortClips(list: ClipMeta[]): ClipMeta[] {
+    return [...list].sort((a, b) => clipUnixMs(b.started_at) - clipUnixMs(a.started_at));
+}

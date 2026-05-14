@@ -4,7 +4,7 @@ import {ComponentChildren} from "preact";
 import {clsx} from "clsx";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import PlaybackProgress from "./PlaybackProgress.tsx";
-import {useState} from "preact/hooks";
+import {useEffect, useState} from "preact/hooks";
 import {invokeStrict} from "../../error.ts";
 
 type PlaybackControlsProps = {
@@ -28,6 +28,14 @@ function PlaybackControls(props: PlaybackControlsProps) {
             setPlaying(false);
         } catch {}
     });
+
+    // TODO: Check with RL behaviour. Does playback stop when selected clip changes?
+    // TODO: Stop when playback overlay is closed?
+    useEffect(() => {
+        if (props.clip !== undefined) {
+            void handleStop();
+        }
+    }, [props.clip]);
 
     return (
         <>

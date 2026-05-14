@@ -9,15 +9,15 @@ use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 use tokio::sync::mpsc;
 use wasapi::{AudioClient, Direction, SampleType, StreamMode, WaveFormat};
 
+// TODO: Tap Id should always merged, maybe not if we can get both streams separate
+// TODO: We should handle errors, right?
+
 /// Channel capacity for the capture-thread → async forwarder mpsc.
 const CHANNEL_CAPACITY: usize = 1024;
 const CHUNKSIZE: usize = 1024;
 
-/// Boxed FnOnce used to ask the PipeWire main loop to quit.
-type ShutdownFn = Box<dyn FnOnce() + Send>;
-
 pub struct WindowsApplicationCapture {
-    shutdown: Option<ShutdownFn>,
+    shutdown: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -27,7 +27,7 @@ impl WindowsApplicationCapture {
         let (shutdown, thread) = spawn_wasapi_thread(tx)?;
         Ok((
             Self {
-                shutdown: Some(shutdown),
+                shutdown,
                 thread: Some(thread),
             },
             rx,
@@ -35,9 +35,7 @@ impl WindowsApplicationCapture {
     }
 
     fn stop_inner(&mut self) {
-        if let Some(shutdown) = self.shutdown.take() {
-            shutdown();
-        }
+        self.shutdown.store(true, Ordering::Relaxed);
         if let Some(thread) = self.thread.take()
             && let Err(err) = thread.join()
         {
@@ -64,7 +62,7 @@ impl Drop for WindowsApplicationCapture {
 
 fn spawn_wasapi_thread(
     tx: mpsc::Sender<LoopbackEvent>,
-) -> Result<(ShutdownFn, JoinHandle<()>), ReplayError> {
+) -> Result<(Arc<AtomicBool>, JoinHandle<()>), ReplayError> {
     let refreshes = RefreshKind::nothing().with_processes(ProcessRefreshKind::everything());
     let system = System::new_with_specifics(refreshes);
     let process_ids = system.processes_by_name(OsStr::new("trackaudio.exe"));
@@ -83,9 +81,7 @@ fn spawn_wasapi_thread(
         .spawn(move || run_main_loop(tx, process_id, capture_stop_requested))
         .map_err(ReplayError::Io)?;
 
-    let shutdown = Box::new(move || stop_requested.store(true, Ordering::Relaxed));
-
-    Ok((shutdown, thread))
+    Ok((stop_requested, thread))
 }
 
 fn run_main_loop(
@@ -95,17 +91,17 @@ fn run_main_loop(
 ) {
     let desired_format = WaveFormat::new(32, 32, &SampleType::Float, 48000, 2, None);
     let blockalign = desired_format.get_blockalign();
-    let autoconvert = true;
-    let include_tree = true;
 
-    let mut audio_client =
-        AudioClient::new_application_loopback_client(process_id, include_tree).unwrap();
-    let mode = StreamMode::EventsShared {
-        autoconvert,
-        buffer_duration_hns: 0,
-    };
+    let mut audio_client = AudioClient::new_application_loopback_client(process_id, true).unwrap();
     audio_client
-        .initialize_client(&desired_format, &Direction::Capture, &mode)
+        .initialize_client(
+            &desired_format,
+            &Direction::Capture,
+            &StreamMode::EventsShared {
+                autoconvert: true,
+                buffer_duration_hns: 0,
+            },
+        )
         .unwrap();
 
     let h_event = audio_client.set_get_eventhandle().unwrap();
@@ -164,6 +160,8 @@ fn run_main_loop(
     }
 
     audio_client.stop_stream().unwrap();
+
+    log::info!("Windows loopback audio capture thread exiting");
 }
 
 fn bytes_to_f32(samples: &[u8]) -> Vec<f32> {

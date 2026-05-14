@@ -19,7 +19,7 @@ function AdvancedPage() {
                 <AudioHostSelector />
             </div>
             <p className="w-full text-center border-t-2 pt-1 border-zinc-200 uppercase font-semibold">
-                Replay
+                Playback
             </p>
             <div className="w-full py-3 px-4 flex flex-col gap-3">
                 <ReplaySettings />

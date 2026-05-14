@@ -7,3 +7,5 @@ export type PositionId = Brand<string, "PositionId">;
 export type StationId = Brand<string, "StationId">;
 export type ProfileId = Brand<string, "ProfileId">;
 export type CallId = Brand<string, "CallId">;
+
+export type StateSetter<T> = (value: T | ((prevState: T) => T)) => void;

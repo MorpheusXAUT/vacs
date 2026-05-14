@@ -1,12 +1,8 @@
 import {create} from "zustand/react";
-import {Capabilities, Platform} from "../types/capabilities.ts";
+import {Capabilities} from "../types/capabilities.ts";
 import {invokeStrict} from "../error.ts";
 
-type CapabilitiesState = {
-    alwaysOnTop: boolean;
-    keybindListener: boolean;
-    keybindEmitter: boolean;
-    platform: Platform;
+type CapabilitiesState = Capabilities & {
     setCapabilities: (capabilities: Capabilities) => void;
 };
 
@@ -14,6 +10,7 @@ export const useCapabilitiesStore = create<CapabilitiesState>()(set => ({
     alwaysOnTop: false,
     keybindListener: false,
     keybindEmitter: false,
+    replay: false,
     platform: "Unknown",
     setCapabilities: capabilities => {
         set({...capabilities});

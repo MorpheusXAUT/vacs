@@ -8,8 +8,8 @@ export type Platform =
 
 export type Capabilities = {
     alwaysOnTop: boolean;
-    windowState: boolean;
     keybindListener: boolean;
     keybindEmitter: boolean;
+    replay: boolean;
     platform: Platform;
 };

@@ -4,12 +4,57 @@ import Button from "../components/ui/Button.tsx";
 import PlaybackControls from "../components/playback/PlaybackControls.tsx";
 import PlaybackList from "../components/playback/PlaybackList.tsx";
 import {useEffect, useState} from "preact/hooks";
-import {ClipMeta, clipUnixMs} from "../types/replay.ts";
+import {ClipMeta, sortClips} from "../types/replay.ts";
 import {invokeSafe} from "../error.ts";
 import {listen, UnlistenFn} from "../transport";
-import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
+import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
+import {useSettingsStore} from "../stores/settings-store.ts";
+import PlaybackActions from "../components/playback/PlaybackActions.tsx";
+import {openSettingsSubmenu} from "../stores/navigation-store.ts";
 
 function PlaybackPage() {
+    const capReplay = useCapabilitiesStore(state => state.replay);
+    const capPlatform = useCapabilitiesStore(state => state.platform);
+
+    const replayEnabled = useSettingsStore(state => state.replayEnabled);
+
+    return (
+        <div
+            className={clsx(
+                "z-10 absolute h-[calc(100%+3px)] w-[44rem] -top-px right-[-2px]",
+                "bg-blue-700 px-2 pb-2 flex flex-col rounded-md",
+            )}
+        >
+            <p className="w-full text-white bg-blue-700 font-semibold text-center">Playback</p>
+            {capReplay && replayEnabled ? (
+                <PlaybackPageInner />
+            ) : !replayEnabled ? (
+                <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col justify-center items-center text-slate-600">
+                    <p>Radio playback is not enabled.</p>
+                    <p>
+                        Enable it in the{" "}
+                        <span
+                            className="text-blue-700 cursor-pointer"
+                            onClick={() => {
+                                void invokeSafe("audio_play_ui_click");
+                                openSettingsSubmenu("settings-advanced");
+                            }}
+                        >
+                            advanced settings
+                        </span>
+                        .
+                    </p>
+                </div>
+            ) : (
+                <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex justify-center items-center text-slate-600">
+                    Radio playback is not yet supported on {capPlatform}.
+                </div>
+            )}
+        </div>
+    );
+}
+
+function PlaybackPageInner() {
     const [clips, setClips] = useState<ClipMeta[]>([]);
     const [selected, setSelected] = useState<number>(0);
 
@@ -39,85 +84,37 @@ function PlaybackPage() {
         };
     }, []);
 
-    const handleDelete = useAsyncDebounce(async (clip: ClipMeta) => {
-        await invokeSafe("replay_delete", {id: clip.id});
-        setClips(prev => prev.filter(c => c.id !== clip.id));
-        if (clips[selected].id === clip.id) setSelected(0);
-    });
-
-    const handleExport = useAsyncDebounce(async (clip: ClipMeta) => {
-        await invokeSafe("replay_export", {id: clip.id});
-    });
-
-    const handleClear = useAsyncDebounce(async () => {
-        await invokeSafe("replay_clear");
-        setClips([]);
-        setSelected(0);
-    });
-
     return (
-        <div
-            className={clsx(
-                "z-10 absolute h-[calc(100%+3px)] w-[44rem] -top-px right-[-2px]",
-                "bg-blue-700 px-2 pb-2 flex flex-col rounded-md",
-            )}
-        >
-            <p className="w-full text-white bg-blue-700 font-semibold text-center">Playback</p>
-            <div className="w-full grow rounded-b-sm bg-[#B5BBC6] grid grid-cols-[6.5rem_auto] p-2 gap-2 overflow-auto">
-                <div className="h-full w-full flex flex-col justify-between items-center">
-                    <div className="w-full flex flex-col items-center bg-gray-300 border rounded-md">
-                        <p className="w-full border-b text-center font-semibold">Filter</p>
-                        <Button color="gray" className="h-15 my-2 uppercase">
-                            Speech <br /> Only
-                        </Button>
-                        <Button color="blue" className="h-15 mt-2 uppercase rounded-b-none!">
-                            Radio
-                        </Button>
-                        <Button color="blue" className="h-15 mb-2 uppercase rounded-t-none!">
-                            Phone
-                        </Button>
-                    </div>
-                    <div className="flex flex-col gap-3">
-                        <Button
-                            color="gray"
-                            className="h-17 uppercase"
-                            disabled={clips[selected] === undefined}
-                            onClick={() => handleExport(clips[selected])}
-                        >
-                            Export
-                        </Button>
-                        <Button
-                            color="gray"
-                            className="h-17 uppercase"
-                            disabled={clips[selected] === undefined}
-                            onClick={() => handleDelete(clips[selected])}
-                        >
-                            Delete
-                        </Button>
-                        <Button
-                            color="gray"
-                            className="h-17 uppercase"
-                            disabled={clips.length === 0}
-                            onClick={handleClear}
-                        >
-                            Delete <br /> All
-                        </Button>
-                    </div>
+        <div className="w-full grow rounded-b-sm bg-[#B5BBC6] grid grid-cols-[6.5rem_auto] p-2 gap-2 overflow-auto">
+            <div className="h-full w-full flex flex-col justify-between items-center">
+                <div className="w-full flex flex-col items-center bg-gray-300 border rounded-md">
+                    <p className="w-full border-b text-center font-semibold">Filter</p>
+                    <Button color="gray" className="h-15 my-2 uppercase">
+                        Speech <br /> Only
+                    </Button>
+                    <Button color="blue" className="h-15 mt-2 uppercase rounded-b-none!">
+                        Radio
+                    </Button>
+                    <Button color="blue" className="h-15 mb-2 uppercase rounded-t-none!">
+                        Phone
+                    </Button>
                 </div>
-                <div className="h-full w-full flex flex-col p-px">
-                    <PlaybackList clips={clips} selected={selected} setSelected={setSelected} />
-                    <div className="relative w-full h-full flex flex-col items-center pr-16">
-                        <PlaybackControls clip={clips[selected]} />
-                        <CloseButton className="h-17 w-19! absolute bottom-0 right-0" />
-                    </div>
+                <PlaybackActions
+                    clips={clips}
+                    selected={selected}
+                    setClips={setClips}
+                    setSelected={setSelected}
+                />
+            </div>
+            <div className="h-full w-full flex flex-col p-px">
+                <PlaybackList clips={clips} selected={selected} setSelected={setSelected} />
+                <div className="relative w-full h-full flex flex-col items-center pr-16">
+                    <PlaybackControls clip={clips[selected]} />
+                    <CloseButton className="h-17 w-19! absolute bottom-0 right-0" />
                 </div>
             </div>
         </div>
     );
-}
-
-function sortClips(list: ClipMeta[]): ClipMeta[] {
-    return [...list].sort((a, b) => clipUnixMs(b.started_at) - clipUnixMs(a.started_at));
 }
 
 export default PlaybackPage;
