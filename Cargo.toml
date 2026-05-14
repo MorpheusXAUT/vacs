@@ -50,7 +50,7 @@ keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "li
 log = "0.4.29"
 lru = "0.18.0"
 # Fixed to 0.24.3 for the moment as 0.24.4/5 seem to have a bug with gauge decrements, leading to -1 connected clients.
-metrics = "=0.24.3"
+metrics = "=0.24.6"
 nonzero_ext = "0.3.0"
 notify-debouncer-full = "0.7.0"
 objc2-core-foundation = "0.3.1"
