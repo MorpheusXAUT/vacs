@@ -11,6 +11,10 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use vacs_audio::sources::wav::WavSource;
 
+// TODO: Do we need some sort of a status?
+// TODO: Fix me being unhappy with this entire file
+// TODO: Fix me being unhappy with the function names/fields introduced in c1dd121016949dbde33800c830eb177b96701bea and 873627c29897f5bf6df985044f4c297d9c933510 (add skip and rewind)
+
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn replay_get_enabled(app_state: State<'_, AppState>) -> Result<bool, Error> {

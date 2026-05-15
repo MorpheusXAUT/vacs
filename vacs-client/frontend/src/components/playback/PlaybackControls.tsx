@@ -18,8 +18,11 @@ type PlaybackControlsProps = {
 
 function PlaybackControls(props: PlaybackControlsProps) {
     const disabled = props.clip === undefined;
+
     const [playing, setPlaying] = useState(false);
     const playingRef = useRef(playing);
+    const [playContinuously, setPlayContinuously] = useState(false);
+
     const [playbackDevice, setPlaybackDevice] = useState<"Headset" | "Speaker">("Headset");
 
     const clipIdRef = useRef(props.clip?.id);
@@ -28,18 +31,15 @@ function PlaybackControls(props: PlaybackControlsProps) {
     const intendedClipChangeRef = useRef(false);
 
     const handlePlay = useAsyncDebounce(
-        useCallback(
-            async (id: number | undefined, device: "Headset" | "Speaker") => {
-                try {
-                    await invokeStrict("replay_play", {
-                        id,
-                        device,
-                    });
-                    setPlaying(true);
-                } catch {}
-            },
-            [playbackDevice],
-        ),
+        useCallback(async (id: number | undefined, device: "Headset" | "Speaker") => {
+            try {
+                await invokeStrict("replay_play", {
+                    id,
+                    device,
+                });
+                setPlaying(true);
+            } catch {}
+        }, []),
     );
 
     const handleStop = useAsyncDebounce(
@@ -47,6 +47,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
             try {
                 await invokeStrict("replay_stop");
                 if (setState) setPlaying(false);
+                setPlayContinuously(false);
             } catch {}
         }, []),
     );
@@ -66,14 +67,26 @@ function PlaybackControls(props: PlaybackControlsProps) {
 
     return (
         <>
-            <PlaybackProgress clip={playing ? props.clip : undefined} setPlaying={setPlaying} />
+            <PlaybackProgress
+                clip={playing ? props.clip : undefined}
+                stopPlaying={() => {
+                    if (playContinuously && props.nextClip !== undefined) {
+                        intendedClipChangeRef.current = true;
+                        props.setSelectedClip(prev => prev - 1);
+                        void handlePlay(props.nextClip?.id, playbackDevice);
+                    } else {
+                        setPlaying(false);
+                        setPlayContinuously(false);
+                    }
+                }}
+            />
             <div className="flex-1 min-h-0 w-full flex items-end justify-center">
                 <div className="h-min w-min grid grid-flow-col grid-rows-2 gap-y-3 gap-x-2">
                     <PlaybackControlButton
-                        color={playing ? "blue" : "gray"}
-                        disabled={disabled}
+                        color={playing && !playContinuously ? "blue" : "gray"}
+                        disabled={disabled || (playing && playContinuously)}
                         onClick={() => handlePlay(clipIdRef.current, playbackDevice)}
-                        className={clsx(playing && "text-white")}
+                        className={clsx(playing && !playContinuously && "text-white")}
                     >
                         <svg
                             width="32"
@@ -100,7 +113,17 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             <img src={speaker} alt="S" className="h-7" />
                         )}
                     </PlaybackControlButton>
-                    <PlaybackControlButton disabled={playing || props.nextClip === undefined}>
+                    <PlaybackControlButton
+                        color={playing && playContinuously ? "blue" : "gray"}
+                        disabled={
+                            (playing && !playContinuously) ||
+                            (props.nextClip === undefined && !playContinuously)
+                        }
+                        onClick={() => {
+                            setPlayContinuously(true);
+                            void handlePlay(props.clip?.id, playbackDevice);
+                        }}
+                    >
                         <svg
                             height="40"
                             viewBox="0 0 96 110"
@@ -111,7 +134,11 @@ function PlaybackControls(props: PlaybackControlsProps) {
                             <path
                                 d="M95.8945 68.2109L99.4717 70L95.8945 71.7891L19 110.236V29.7637L95.8945 68.2109Z"
                                 fill="currentColor"
-                                className="stroke-gray-300"
+                                className={
+                                    playing && playContinuously
+                                        ? "stroke-blue-700"
+                                        : "stroke-gray-300"
+                                }
                                 stroke-width="4"
                             />
                         </svg>

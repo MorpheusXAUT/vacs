@@ -5,23 +5,23 @@ import {toUTCTimeString} from "../../utils/date.ts";
 
 type PlaybackProgressProps = {
     clip: ClipMeta | undefined;
-    setPlaying: (playing: boolean) => void;
+    stopPlaying: () => void;
 };
 
-function PlaybackProgress({clip, setPlaying}: PlaybackProgressProps) {
+function PlaybackProgress({clip, stopPlaying}: PlaybackProgressProps) {
     const [progress, setProgress] = useState(0);
 
     useEffect(() => {
         const unlisten = listen<number>("replay:progress", event => {
             setProgress(event.payload * 100);
             if (event.payload === 1) {
-                setPlaying(false);
+                stopPlaying();
                 setProgress(0);
             }
         });
 
         return () => unlisten.then(fn => fn());
-    }, [setPlaying]);
+    }, [stopPlaying]);
 
     const time = useMemo(() => {
         if (!clip) return "No playback";
