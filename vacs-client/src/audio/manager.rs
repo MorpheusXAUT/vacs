@@ -423,7 +423,10 @@ impl AudioManager {
             self.output.set_volume(*source_id, volume);
 
             match source_type {
-                SourceType::Ring | SourceType::Click | SourceType::RingbackOneshot => {
+                SourceType::RingbackOneshot => {
+                    self.output.restart_audio_source(*source_id);
+                }
+                SourceType::Ring | SourceType::Click if self.speaker.is_none() => {
                     self.output.restart_audio_source(*source_id);
                 }
                 _ => {}
@@ -436,7 +439,7 @@ impl AudioManager {
             speaker.set_volume(*source_id, volume);
 
             match source_type {
-                SourceType::Ring | SourceType::Click | SourceType::RingbackOneshot => {
+                SourceType::Ring | SourceType::Click => {
                     speaker.restart_audio_source(*source_id);
                 }
                 _ => {}
