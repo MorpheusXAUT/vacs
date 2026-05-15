@@ -66,10 +66,7 @@ function CallQueue() {
     });
 
     return (
-        <div
-            className="flex flex-col-reverse gap-2.5 pt-3 pr-px overflow-y-auto [&>button]:shrink-0"
-            style={{scrollbarWidth: "none"}}
-        >
+        <div className="flex flex-col-reverse gap-2.5 pt-3 pr-px overflow-y-auto [&>button]:shrink-0 scrollbar-none">
             {/*Call Display*/}
             {callDisplay !== undefined ? (
                 <div className="relative">

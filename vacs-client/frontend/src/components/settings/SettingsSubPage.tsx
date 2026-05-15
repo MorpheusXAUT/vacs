@@ -22,7 +22,7 @@ function SettingsSubPage(props: SettingsSubPageProps) {
                 <div className={clsx("w-full grow border-b-2 border-zinc-200", props.className)}>
                     {props.children}
                 </div>
-                <div className="h-20 w-full shrink-0 flex flex-row gap-2 justify-end p-2 [&>button]:px-1 [&>button]:shrink-0 overflow-x-auto scrollbar-hide">
+                <div className="h-20 w-full shrink-0 flex flex-row gap-2 justify-end p-2 [&>button]:px-1 [&>button]:shrink-0 overflow-x-auto scrollbar-none">
                     <CloseButton target="/settings" />
                 </div>
             </div>

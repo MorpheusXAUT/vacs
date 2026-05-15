@@ -35,10 +35,6 @@ body {
     color: initial;
 }
 
-.scrollbar-hide {
-    @apply [scrollbar-width:none] [&::-webkit-scrollbar]:hidden;
-}
-
 .active-tab::after {
     content: "";
     position: absolute;
