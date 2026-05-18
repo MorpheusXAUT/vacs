@@ -5,8 +5,11 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: daily
-      time: "05:30" # UTC
+      interval: weekly
+      day: monday
+      time: "06:00" # UTC
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 20
     rebase-strategy: auto
     versioning-strategy: auto
@@ -15,8 +18,11 @@ updates:
   - package-ecosystem: "npm"
     directory: "/vacs-client"
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
       time: "06:00" # UTC
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 20
     rebase-strategy: auto
     versioning-strategy: increase
@@ -26,8 +32,10 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-      day: friday
-      time: "06:30" # UTC
+      day: monday
+      time: "06:00" # UTC
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     rebase-strategy: auto
     labels: ["dependencies"]
@@ -36,8 +44,10 @@ updates:
     directory: "/vacs-server"
     schedule:
       interval: weekly
-      day: friday
-      time: "07:00" # UTC
+      day: monday
+      time: "06:00" # UTC
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     rebase-strategy: auto
     labels: ["dependencies"]
