@@ -23,7 +23,7 @@ function PlaybackList(props: PlaybackListProps) {
             defaultRows={7}
             row={playbackListEntry}
             rowHeight={2.2}
-            columnWidths={["5ch", "5ch", "5.5rem", "auto"]}
+            columnWidths={["4.5ch", "5.5rem", "6ch", "auto"]}
             enableKeyboardNavigation={true}
         />
     );
@@ -47,16 +47,16 @@ function PlaybackEntryRow(props: PlaybackEntryRowProps) {
                 {props.clip && "Rx" /* TODO */}
             </div>
             <div
-                className={clsx("px-0.5 flex items-center font-semibold", color)}
-                onClick={props.onClick}
-            >
-                {props.clip?.tap === "speaker" ? "Y" : ""}
-            </div>
-            <div
                 className={clsx("flex items-center justify-center font-semibold", color)}
                 onClick={props.onClick}
             >
                 {props.clip && toUTCTimeString(new Date(clipUnixMs(props.clip.started_at)))}
+            </div>
+            <div
+                className={clsx("px-0.5 flex items-center font-semibold", color)}
+                onClick={props.onClick}
+            >
+                {props.clip && `${(props.clip.duration_ms / 1000).toFixed(1)}s`}
             </div>
             <div
                 className={clsx("px-0.5 flex items-center font-semibold", color)}
