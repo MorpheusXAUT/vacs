@@ -5,13 +5,10 @@ import CallQueue from "./components/CallQueue.tsx";
 import {useEffect} from "preact/hooks";
 import {invoke} from "./transport";
 import {setupAuthListeners} from "./listeners/auth-listener.ts";
-import SettingsPage from "./pages/SettingsPage.tsx";
 import telephone from "./assets/telephone.svg";
 import ErrorOverlay from "./components/overlays/ErrorOverlay.tsx";
 import {invokeSafe} from "./error.ts";
 import {setupErrorListeners} from "./listeners/error-listener.ts";
-import MissionPage from "./pages/MissionPage.tsx";
-import TelephonePage from "./pages/TelephonePage.tsx";
 import LinkButton from "./components/ui/LinkButton.tsx";
 import {setupSignalingListeners} from "./listeners/signaling-listener.ts";
 import PhoneButton from "./components/ui/PhoneButton.tsx";
@@ -29,20 +26,14 @@ import Tabs from "./components/Tabs.tsx";
 import {useProfileType} from "./stores/profile-store.ts";
 import {fetchSettings} from "./stores/settings-store.ts";
 import {useZoomHotkey} from "./hooks/zoom-hotkey-hook.ts";
-import RadioPage from "./pages/RadioPage.tsx";
 import CplButton from "./components/ui/CplButton.tsx";
 import {fetchRadioState, setupRadioListener} from "./listeners/radio-listener.ts";
-import {useNavigationStore} from "./stores/navigation-store.ts";
-import PhonePage from "./pages/PhonePage.tsx";
+import Router from "./pages/Router.tsx";
 
 function App() {
     const connected = useConnectionStore(state => state.connectionState === "connected");
     const testing = useConnectionStore(state => state.connectionState === "test");
     const profileType = useProfileType();
-
-    const page = useNavigationStore(state => state.page);
-    const menu = useNavigationStore(state => state.menu);
-    const hidePage = menu === "settings" || menu === "mission";
 
     useZoomHotkey();
 
@@ -81,16 +72,7 @@ function App() {
                 <div className="flex flex-row w-full h-[calc(100%-10rem)] pl-1">
                     {/* Main Area */}
                     <div className="relative h-full w-[calc(100%-6rem)] bg-[#B5BBC6] border-l border-t border-r-2 border-b-2 border-gray-700 rounded-sm flex flex-row">
-                        {menu === "settings" ? (
-                            <SettingsPage />
-                        ) : menu === "mission" ? (
-                            <MissionPage />
-                        ) : menu === "telephone" ? (
-                            <TelephonePage />
-                        ) : (
-                            <></>
-                        )}
-                        {!hidePage && (page === "phone" ? <PhonePage /> : <RadioPage />)}
+                        <Router />
                     </div>
                     {/* Right Button Row */}
                     <div className="w-24 h-full px-2 pb-6 flex flex-col justify-between">
