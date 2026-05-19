@@ -55,6 +55,7 @@ function PlaybackPage() {
 }
 
 function PlaybackPageInner() {
+    const [playing, setPlaying] = useState(false);
     const [clips, setClips] = useState<ClipMeta[]>([]);
     const [selected, setSelected] = useState<number>(0);
 
@@ -104,12 +105,15 @@ function PlaybackPageInner() {
                     selected={selected}
                     setClips={setClips}
                     setSelected={setSelected}
+                    playing={playing}
                 />
             </div>
             <div className="h-full w-full flex flex-col p-px">
                 <PlaybackList clips={clips} selected={selected} setSelected={setSelected} />
                 <div className="relative w-full h-full flex flex-col items-center pr-16">
                     <PlaybackControls
+                        playing={playing}
+                        setPlaying={setPlaying}
                         clip={clips[selected]}
                         prevClip={clips[selected + 1]}
                         nextClip={clips[selected - 1]}

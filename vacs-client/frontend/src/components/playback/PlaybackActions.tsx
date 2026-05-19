@@ -4,16 +4,15 @@ import {invokeSafe} from "../../error.ts";
 import Button from "../ui/Button.tsx";
 import {StateSetter} from "../../types/generic.ts";
 
-// TODO: Disable delete/delete all while playing
-
 type PlaybackActionsProps = {
     clips: ClipMeta[];
     selected: number;
     setClips: StateSetter<ClipMeta[]>;
     setSelected: (selected: number) => void;
+    playing: boolean;
 };
 
-function PlaybackActions({clips, selected, setClips, setSelected}: PlaybackActionsProps) {
+function PlaybackActions({clips, selected, setClips, setSelected, playing}: PlaybackActionsProps) {
     const handleDelete = useAsyncDebounce(async (clip: ClipMeta) => {
         await invokeSafe("replay_delete", {id: clip.id});
         setClips(prev => prev.filter(c => c.id !== clip.id));
@@ -43,7 +42,7 @@ function PlaybackActions({clips, selected, setClips, setSelected}: PlaybackActio
             <Button
                 color="gray"
                 className="h-17 uppercase"
-                disabled={clips[selected] === undefined}
+                disabled={clips[selected] === undefined || playing}
                 onClick={() => handleDelete(clips[selected])}
             >
                 Delete
@@ -51,7 +50,7 @@ function PlaybackActions({clips, selected, setClips, setSelected}: PlaybackActio
             <Button
                 color="gray"
                 className="h-17 uppercase"
-                disabled={clips.length === 0}
+                disabled={clips.length === 0 || playing}
                 onClick={handleClear}
             >
                 Delete <br /> All

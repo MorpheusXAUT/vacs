@@ -14,10 +14,12 @@ type PlaybackControlsProps = {
     prevClip: ClipMeta | undefined;
     nextClip: ClipMeta | undefined;
     setSelectedClip: StateSetter<number>;
+    playing: boolean;
+    setPlaying: StateSetter<boolean>;
 };
 
 function PlaybackControls(props: PlaybackControlsProps) {
-    const [playing, setPlaying] = useState(false);
+    const {playing, setPlaying} = props;
     const playingRef = useRef(playing);
     const [playContinuously, setPlayContinuously] = useState(false);
 
