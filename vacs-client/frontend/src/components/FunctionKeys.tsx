@@ -57,10 +57,10 @@ function FunctionKeys() {
             <Button color="cyan" className="text-slate-400" disabled={true}>
                 SPLIT
             </Button>
-            <LinkButton path="/settings" className="h-full">
+            <LinkButton menu="settings" className="h-full">
                 <img src={wrenchAndDriver} alt="Settings" className="h-12 w-12" draggable={false} />
             </LinkButton>
-            <LinkButton path="/mission" className="h-full">
+            <LinkButton menu="mission" className="h-full">
                 <img src={mission} alt="Mission" className="h-14 w-14" draggable={false} />
             </LinkButton>
         </div>

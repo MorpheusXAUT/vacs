@@ -1,25 +1,22 @@
-import {ComponentChildren} from "preact";
-import Button from "./Button.tsx";
-import {useLocation} from "wouter";
 import {clsx} from "clsx";
-import {navigate} from "wouter/use-browser-location";
+import {ComponentChildren} from "preact";
+import {closeMenu, Menu, openMenu, useNavigationStore} from "../../stores/navigation-store.ts";
+import Button from "./Button.tsx";
 
 type LinkButtonProps = {
-    path: string;
+    menu: Menu;
     children: ComponentChildren;
     className?: string;
 };
 
 function LinkButton(props: LinkButtonProps) {
-    const [location] = useLocation();
-
-    const isActive = location.startsWith(props.path);
+    const isActive = useNavigationStore(state => state.menu === props.menu);
 
     return (
         <Button
             color={isActive ? "blue" : "cyan"}
             className={clsx("flex justify-center items-center", props.className)}
-            onClick={() => navigate(isActive ? "/" : props.path)}
+            onClick={() => (isActive ? closeMenu() : openMenu(props.menu))}
         >
             {props.children}
         </Button>

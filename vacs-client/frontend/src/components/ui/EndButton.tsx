@@ -1,11 +1,11 @@
-import Button from "./Button.tsx";
-import {navigate} from "wouter/use-browser-location";
-import {invokeStrict} from "../../error.ts";
-import {useCallStore} from "../../stores/call-store.ts";
-import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
-import {useFilterStore} from "../../stores/filter-store.ts";
-import {useProfileStore, useProfileType} from "../../stores/profile-store.ts";
 import {clsx} from "clsx";
+import {invokeStrict} from "../../error.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
+import {useCallStore} from "../../stores/call-store.ts";
+import {useFilterStore} from "../../stores/filter-store.ts";
+import {goToPage} from "../../stores/navigation-store.ts";
+import {useProfileStore, useProfileType} from "../../stores/profile-store.ts";
+import Button from "./Button.tsx";
 
 function EndButton() {
     const callDisplay = useCallStore(state => state.callDisplay);
@@ -36,7 +36,8 @@ function EndButton() {
         } else {
             setSelectedPage(undefined);
         }
-        navigate("/");
+        // TODO: Does a click on END while being on the radio page move you to the phone page?
+        goToPage("phone");
 
         void endAnyCall();
     };

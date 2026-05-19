@@ -1,23 +1,31 @@
+import {clsx} from "clsx";
+import {useEffect, useState} from "preact/hooks";
+import AdvancedPage from "../components/settings/AdvancedPage.tsx";
+import CallConfigPage from "../components/settings/CallConfigPage.tsx";
+import DeviceSelector from "../components/settings/DeviceSelector.tsx";
+import HotkeysConfigPage from "../components/settings/HotkeysConfigPage.tsx";
+import TransmitModePage from "../components/settings/TransmitModePage.tsx";
+import VolumeSettings from "../components/settings/VolumeSettings.tsx";
 import Button from "../components/ui/Button.tsx";
-import {navigate} from "wouter/use-browser-location";
-import {useAuthStore} from "../stores/auth-store.ts";
 import {invokeSafe, invokeStrict} from "../error.ts";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
-import DeviceSelector from "../components/settings/DeviceSelector.tsx";
-import VolumeSettings from "../components/settings/VolumeSettings.tsx";
-import {useEffect, useState} from "preact/hooks";
-import {useUpdateStore} from "../stores/update-store.ts";
+import {useAuthStore} from "../stores/auth-store.ts";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
-import {isTauri} from "../transport";
-import {Route, Switch} from "wouter";
-import TransmitModePage from "../components/settings/TransmitModePage.tsx";
-import HotkeysConfigPage from "../components/settings/HotkeysConfigPage.tsx";
 import {useConnectionStore} from "../stores/connection-store.ts";
-import CallConfigPage from "../components/settings/CallConfigPage.tsx";
-import AdvancedPage from "../components/settings/AdvancedPage.tsx";
-import {clsx} from "clsx";
+import {
+    closeMenu,
+    goToPage,
+    Menu,
+    openMenu,
+    openSettingsSubmenu,
+    useNavigationStore,
+} from "../stores/navigation-store.ts";
+import {useUpdateStore} from "../stores/update-store.ts";
+import {isTauri} from "../transport";
 
 function SettingsPage() {
+    const submenu = useNavigationStore(state => state.submenu);
+
     return (
         <>
             <div className="h-full w-full bg-blue-700 border-t-0 px-2 pb-2 flex flex-col">
@@ -73,28 +81,28 @@ function SettingsPage() {
                             <Button
                                 color="gray"
                                 className="w-22 h-full text-sm"
-                                onClick={() => navigate("/settings/transmit")}
+                                onClick={() => openSettingsSubmenu("settings-transmit")}
                             >
                                 Transmit
                             </Button>
                             <Button
                                 color="gray"
                                 className="w-20 h-full text-sm"
-                                onClick={() => navigate("/settings/hotkeys")}
+                                onClick={() => openSettingsSubmenu("settings-hotkeys")}
                             >
                                 Hotkeys
                             </Button>
                             <Button
                                 color="gray"
                                 className="w-20 h-full text-sm"
-                                onClick={() => navigate("/settings/call")}
+                                onClick={() => openSettingsSubmenu("settings-call")}
                             >
                                 Call
                             </Button>
                             <Button
                                 color="gray"
                                 className="w-22 h-full text-sm"
-                                onClick={() => navigate("/settings/advanced")}
+                                onClick={() => openSettingsSubmenu("settings-advanced")}
                             >
                                 Advanced
                             </Button>
@@ -103,12 +111,17 @@ function SettingsPage() {
                     </div>
                 </div>
             </div>
-            <Switch>
-                <Route path="/transmit" component={TransmitModePage} />
-                <Route path="/hotkeys" component={HotkeysConfigPage} />
-                <Route path="/call" component={CallConfigPage} />
-                <Route path="/advanced" component={AdvancedPage} />
-            </Switch>
+            {submenu === "settings-transmit" ? (
+                <TransmitModePage />
+            ) : submenu === "settings-hotkeys" ? (
+                <HotkeysConfigPage />
+            ) : submenu === "settings-call" ? (
+                <CallConfigPage />
+            ) : submenu === "settings-advanced" ? (
+                <AdvancedPage />
+            ) : (
+                <></>
+            )}
         </>
     );
 }
@@ -120,14 +133,14 @@ function AppControlButtons() {
     const handleLogoutClick = useAsyncDebounce(async () => {
         try {
             await invokeStrict("auth_logout");
-            navigate("/");
+            goToPage("phone");
         } catch {}
     });
 
     const handleDisconnectClick = useAsyncDebounce(async () => {
         try {
             await invokeStrict("signaling_disconnect");
-            navigate("/");
+            goToPage("phone");
         } catch {}
     });
 
@@ -313,12 +326,12 @@ function WindowStateButtons() {
     );
 }
 
-export function CloseButton({target, className}: {target?: string; className?: string}) {
+export function CloseButton({targetMenu, className}: {targetMenu?: Menu; className?: string}) {
     return (
         <Button
             color="gray"
             className={clsx(className, "w-18!")}
-            onClick={() => navigate(target ?? "/")}
+            onClick={() => (targetMenu !== undefined ? openMenu(targetMenu) : closeMenu())}
         >
             <svg
                 width="26"

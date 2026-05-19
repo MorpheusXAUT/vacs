@@ -1,19 +1,19 @@
-import {listen, UnlistenFn} from "../transport";
-import {useClientsStore} from "../stores/clients-store.ts";
-import {ClientInfo, ClientPageSettings, SessionInfo} from "../types/client.ts";
-import {useCallStore} from "../stores/call-store.ts";
 import {IncomingCallListEntry, useCallListStore} from "../stores/call-list-store.ts";
+import {useCallStore} from "../stores/call-store.ts";
+import {useClientsStore} from "../stores/clients-store.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
-import {CallId, ClientId, PositionId} from "../types/generic.ts";
-import {useProfileStore} from "../stores/profile-store.ts";
-import {StationChange, StationInfo} from "../types/station.ts";
-import {useStationsStore} from "../stores/stations-store.ts";
-import {Call} from "../types/call.ts";
 import {useErrorOverlayStore} from "../stores/error-overlay-store.ts";
-import {Profile} from "../types/profile.ts";
-import {navigate} from "wouter/use-browser-location";
-import {useSettingsStore} from "../stores/settings-store.ts";
 import {useFilterStore} from "../stores/filter-store.ts";
+import {goToPage} from "../stores/navigation-store.ts";
+import {useProfileStore} from "../stores/profile-store.ts";
+import {useSettingsStore} from "../stores/settings-store.ts";
+import {useStationsStore} from "../stores/stations-store.ts";
+import {listen, UnlistenFn} from "../transport";
+import {Call} from "../types/call.ts";
+import {ClientInfo, ClientPageSettings, SessionInfo} from "../types/client.ts";
+import {CallId, ClientId, PositionId} from "../types/generic.ts";
+import {Profile} from "../types/profile.ts";
+import {StationChange, StationInfo} from "../types/station.ts";
 
 export function setupSignalingListeners() {
     const {setClients, addClient, removeClient} = useClientsStore.getState();
@@ -127,7 +127,7 @@ export function setupSignalingListeners() {
                 setConnectionState("test");
                 resetProfileStore(false);
                 setProfile(event.payload);
-                navigate("/");
+                goToPage("phone");
             }),
             listen<ClientPageSettings>("signaling:client-page-config", event => {
                 setClientPageSettings(event.payload);

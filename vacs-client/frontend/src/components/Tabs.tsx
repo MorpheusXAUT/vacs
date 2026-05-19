@@ -1,12 +1,11 @@
 import {clsx} from "clsx";
-import Button from "./ui/Button.tsx";
 import {useEffect, useState} from "preact/hooks";
-import {invokeSafe} from "../error.ts";
-import {useProfileStore} from "../stores/profile-store.ts";
-import {useRoute} from "wouter";
-import {navigate} from "wouter/use-browser-location";
-import {Tab} from "../types/profile.ts";
 import cycle from "../assets/cycle.svg";
+import {invokeSafe} from "../error.ts";
+import {goToPage, useNavigationStore} from "../stores/navigation-store.ts";
+import {useProfileStore} from "../stores/profile-store.ts";
+import {Tab} from "../types/profile.ts";
+import Button from "./ui/Button.tsx";
 import ButtonLabel from "./ui/ButtonLabel.tsx";
 
 function Tabs() {
@@ -99,7 +98,7 @@ type TabButtonProps = {
 };
 
 function TabButton(props: TabButtonProps) {
-    const [settingsOpen] = useRoute("/settings/*?");
+    const settingsOpen = useNavigationStore(state => state.menu === "settings");
     const disabled = props.label === undefined;
 
     return (
@@ -120,7 +119,7 @@ function TabButton(props: TabButtonProps) {
                 onClick={() => {
                     void invokeSafe("audio_play_ui_click");
                     props.onClick?.();
-                    if (settingsOpen) navigate("/");
+                    if (settingsOpen) goToPage("phone");
                 }}
             >
                 {props.label && <ButtonLabel label={props.label} />}

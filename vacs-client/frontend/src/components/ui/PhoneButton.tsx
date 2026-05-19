@@ -1,12 +1,12 @@
-import Button from "./Button.tsx";
-import {useCallStore} from "../../stores/call-store.ts";
-import {navigate} from "wouter/use-browser-location";
-import {useFilterStore} from "../../stores/filter-store.ts";
-import {useProfileStore, useProfileType} from "../../stores/profile-store.ts";
 import {clsx} from "clsx";
+import {useBlinkStore} from "../../stores/blink-store.ts";
+import {useCallStore} from "../../stores/call-store.ts";
+import {useFilterStore} from "../../stores/filter-store.ts";
+import {goToPage} from "../../stores/navigation-store.ts";
+import {useProfileStore, useProfileType} from "../../stores/profile-store.ts";
 import {useSettingsStore} from "../../stores/settings-store.ts";
 import {getCallStateColors} from "../../utils/call-state-colors.ts";
-import {useBlinkStore} from "../../stores/blink-store.ts";
+import Button from "./Button.tsx";
 
 function PhoneButton() {
     const blink = useBlinkStore(state => state.blink);
@@ -48,7 +48,7 @@ function PhoneButton() {
                 } else {
                     setSelectedPage(undefined);
                 }
-                navigate("/");
+                goToPage("phone");
             }}
         >
             Phone

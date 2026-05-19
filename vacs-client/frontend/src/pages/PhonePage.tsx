@@ -1,8 +1,28 @@
+import LoginPage from "./LoginPage.tsx";
+import ConnectPage from "./ConnectPage.tsx";
+import {useConnectionStore} from "../stores/connection-store.ts";
+import {useAuthStore} from "../stores/auth-store.ts";
 import {useProfileStore} from "../stores/profile-store.ts";
 import DirectAccessPage from "../components/DirectAccessPage.tsx";
 import GeoPage from "./GeoPage.tsx";
-import ClientPage from "../components/ClientPage.tsx";
 import {useSettingsStore} from "../stores/settings-store.ts";
+import ClientPage from "../components/ClientPage.tsx";
+
+function PhonePage() {
+    const connected = useConnectionStore(state => state.connectionState === "connected");
+    const testing = useConnectionStore(state => state.connectionState === "test");
+    const authStatus = useAuthStore(state => state.status);
+
+    return authStatus === "loading" ? (
+        <></>
+    ) : authStatus === "unauthenticated" && !testing ? (
+        <LoginPage />
+    ) : connected || testing ? (
+        <MainPage />
+    ) : (
+        <ConnectPage />
+    );
+}
 
 function MainPage() {
     const profile = useProfileStore(state => state.profile);
@@ -33,4 +53,4 @@ function FallbackProfile() {
     );
 }
 
-export default MainPage;
+export default PhonePage;

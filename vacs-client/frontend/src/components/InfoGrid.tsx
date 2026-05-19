@@ -1,12 +1,12 @@
-import {useAuthStore} from "../stores/auth-store.ts";
-import "../styles/info-grid.css";
-import {useCallStore} from "../stores/call-store.ts";
-import {useUpdateStore} from "../stores/update-store.ts";
-import {navigate} from "wouter/use-browser-location";
-import {invokeSafe} from "../error.ts";
 import {clsx} from "clsx";
-import {isTauri} from "../transport";
+import {invokeSafe} from "../error.ts";
+import {useAuthStore} from "../stores/auth-store.ts";
+import {useCallStore} from "../stores/call-store.ts";
 import {useConnectionStore} from "../stores/connection-store.ts";
+import {openMenu} from "../stores/navigation-store.ts";
+import {useUpdateStore} from "../stores/update-store.ts";
+import "../styles/info-grid.css";
+import {isTauri} from "../transport";
 
 async function openUrl(url: string): Promise<void> {
     if (isTauri) {
@@ -34,7 +34,7 @@ function InfoGrid() {
     const handleVersionClick = async (version: string) => {
         await openUrl(`https://github.com/vacs-project/vacs/releases/tag/vacs-client-v${version}`);
         void invokeSafe("audio_play_ui_click");
-        navigate("/settings");
+        openMenu("settings");
     };
 
     return (
