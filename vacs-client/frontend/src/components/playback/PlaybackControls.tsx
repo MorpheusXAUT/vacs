@@ -17,8 +17,6 @@ type PlaybackControlsProps = {
 };
 
 function PlaybackControls(props: PlaybackControlsProps) {
-    const disabled = props.clip === undefined;
-
     const [playing, setPlaying] = useState(false);
     const playingRef = useRef(playing);
     const [playContinuously, setPlayContinuously] = useState(false);
@@ -53,7 +51,6 @@ function PlaybackControls(props: PlaybackControlsProps) {
     );
 
     // TODO: Check with RL behaviour. Does playback stop when selected clip changes?
-    // TODO: Stop when playback overlay is closed?
     useEffect(() => {
         if (props.clip !== undefined && playingRef.current && !intendedClipChangeRef.current) {
             void handleStop();
@@ -84,11 +81,11 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     }
                 }}
             />
-            <div className="flex-1 min-h-0 w-full flex items-end justify-center">
+            <div className="flex-1 min-h-0 w-full flex items-end justify-center mt-[0.625rem]">
                 <div className="h-min w-min grid grid-flow-col grid-rows-2 gap-y-3 gap-x-2">
                     <PlaybackControlButton
                         color={playing && !playContinuously ? "blue" : "gray"}
-                        disabled={disabled || (playing && playContinuously)}
+                        disabled={props.clip === undefined || (playing && playContinuously)}
                         onClick={() => handlePlay(clipIdRef.current, playbackDevice)}
                         className={clsx(playing && !playContinuously && "text-white")}
                     >
@@ -120,6 +117,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <PlaybackControlButton
                         color={playing && playContinuously ? "blue" : "gray"}
                         disabled={
+                            props.clip === undefined ||
                             (playing && !playContinuously) ||
                             (props.nextClip === undefined && !playContinuously)
                         }
