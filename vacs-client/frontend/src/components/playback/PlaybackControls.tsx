@@ -65,6 +65,10 @@ function PlaybackControls(props: PlaybackControlsProps) {
         playingRef.current = playing;
     }, [playing]);
 
+    useEffect(() => {
+        return () => handleStop();
+    }, [handleStop]);
+
     return (
         <>
             <PlaybackProgress
@@ -172,7 +176,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <PlaybackControlButton
                         disabled={!playing}
                         onClick={() => {
-                            void invokeSafe("replay_rewind", {millis: 500});
+                            void invokeSafe("replay_rewind", {millis: 1000});
                         }}
                     >
                         <svg
@@ -207,7 +211,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <PlaybackControlButton
                         disabled={!playing}
                         onClick={() => {
-                            void invokeSafe("replay_skip", {millis: 500});
+                            void invokeSafe("replay_skip", {millis: 1000});
                         }}
                     >
                         <svg
