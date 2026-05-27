@@ -63,22 +63,31 @@ impl WavSource {
 
 impl AudioSource for WavSource {
     fn mix_into(&mut self, output: &mut [f32]) {
-        if !self.active || self.volume == 0.0 || self.pos >= self.samples.len() {
+        if !self.active || self.volume == 0.0 {
+            return;
+        }
+
+        if self.samples.is_empty() {
+            if let Some(on_update) = &self.on_update {
+                on_update(1.0);
+            }
+            self.active = false;
             return;
         }
 
         for frame in output.chunks_mut(self.output_channels) {
+            let sample = self.samples[self.pos] * self.volume;
+            self.pos += 1;
+            for s in frame.iter_mut() {
+                *s += sample;
+            }
+
             if self.pos >= self.samples.len() {
                 if let Some(on_update) = &self.on_update {
                     on_update(1.0);
                 }
                 self.active = false;
                 break;
-            }
-            let sample = self.samples[self.pos] * self.volume;
-            self.pos += 1;
-            for s in frame.iter_mut() {
-                *s += sample;
             }
 
             if let Some(on_update) = &self.on_update
@@ -109,7 +118,7 @@ impl AudioSource for WavSource {
 
     fn skip(&mut self, duration: Duration) {
         let frames = (duration.as_secs_f32() * self.sample_rate as f32) as usize;
-        self.pos = (self.pos + frames).min(self.samples.len() - 1); // "- 1" to allow mix_into to finish
+        self.pos = (self.pos + frames).min(self.samples.len().saturating_sub(1)); // "- 1" to allow mix_into to finish
     }
 
     fn rewind(&mut self, duration: Duration) {
