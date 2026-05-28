@@ -164,6 +164,8 @@ pub enum ReplayError {
         allow(dead_code, reason = "constructed by make_source on non-Linux targets")
     )]
     Unsupported,
+    #[error(transparent)]
+    Other(#[from] Box<anyhow::Error>),
 }
 
 /// Build the platform-specific replay source. Returns [`ReplayError::Unsupported`]

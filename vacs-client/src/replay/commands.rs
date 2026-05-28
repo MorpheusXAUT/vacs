@@ -120,9 +120,7 @@ pub async fn replay_play(
         .as_ref()
         .and_then(|r| r.get(id).map(|m| m.path));
     let Some(path) = path else {
-        return Err(Error::Other(Box::new(anyhow::anyhow!(
-            "clip {id} not found"
-        ))));
+        return Err(ReplayError::Other(Box::new(anyhow::anyhow!("clip {id} not found"))).into());
     };
 
     let audio_manager = audio_manager.read();
@@ -262,10 +260,10 @@ pub async fn replay_export(
     };
 
     if let Err(err) = app.opener().open_path(path.to_string_lossy(), None::<&str>) {
-        return Err(Error::Other(Box::new(anyhow::anyhow!(
-            "cannot open file: {}",
-            err
-        ))));
+        return Err(ReplayError::Other(Box::new(anyhow::anyhow!(
+            "Cannot open export directory: {err}"
+        )))
+        .into());
     }
 
     Ok(path)
