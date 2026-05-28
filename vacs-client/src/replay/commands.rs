@@ -193,45 +193,33 @@ fn stop_playing_source(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_skip(
+pub async fn replay_seek(
     recorder: State<'_, ReplayRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
-    millis: u64,
+    millis: i64,
 ) -> Result<(), Error> {
-    if let Some((source_id, is_speaker)) = recorder
-        .write()
-        .as_mut()
-        .and_then(|r| r.get_playing_source_id())
-    {
-        audio_manager.read().skip_in_audio_source(
-            source_id,
-            Duration::from_millis(millis),
-            is_speaker,
-        );
-    } else {
-        log::warn!("replay skip called but no clip is playing");
+    if millis == 0 {
+        return Ok(());
     }
 
-    Ok(())
-}
-
-#[tauri::command]
-#[vacs_macros::log_err]
-pub async fn replay_rewind(
-    recorder: State<'_, ReplayRecorderHandle>,
-    audio_manager: State<'_, AudioManagerHandle>,
-    millis: u64,
-) -> Result<(), Error> {
     if let Some((source_id, is_speaker)) = recorder
         .write()
         .as_mut()
         .and_then(|r| r.get_playing_source_id())
     {
-        audio_manager.read().rewind_in_audio_source(
-            source_id,
-            Duration::from_millis(millis),
-            is_speaker,
-        );
+        if millis < 0 {
+            audio_manager.read().rewind_in_audio_source(
+                source_id,
+                Duration::from_millis(millis.unsigned_abs()),
+                is_speaker,
+            );
+        } else {
+            audio_manager.read().skip_in_audio_source(
+                source_id,
+                Duration::from_millis(millis.unsigned_abs()),
+                is_speaker,
+            );
+        }
     } else {
         log::warn!("replay skip called but no clip is playing");
     }

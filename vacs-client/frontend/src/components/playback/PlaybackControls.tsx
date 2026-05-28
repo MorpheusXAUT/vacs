@@ -52,7 +52,6 @@ function PlaybackControls(props: PlaybackControlsProps) {
         }, []),
     );
 
-    // TODO: Check with RL behaviour. Does playback stop when selected clip changes?
     useEffect(() => {
         if (props.clip !== undefined && playingRef.current && !intendedClipChangeRef.current) {
             void handleStop();
@@ -176,7 +175,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <PlaybackControlButton
                         disabled={!playing}
                         onClick={() => {
-                            void invokeSafe("replay_rewind", {millis: 1000});
+                            void invokeSafe("replay_seek", {millis: -1000});
                         }}
                     >
                         <svg
@@ -211,7 +210,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <PlaybackControlButton
                         disabled={!playing}
                         onClick={() => {
-                            void invokeSafe("replay_skip", {millis: 1000});
+                            void invokeSafe("replay_seek", {millis: 1000});
                         }}
                     >
                         <svg

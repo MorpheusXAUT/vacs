@@ -44,7 +44,7 @@ function PlaybackEntryRow(props: PlaybackEntryRowProps) {
                 className={clsx("px-0.5 text-center flex justify-between items-center", color)}
                 onClick={props.onClick}
             >
-                {props.clip && "Rx" /* TODO */}
+                {props.clip && "Rx"}
             </div>
             <div
                 className={clsx("flex items-center justify-center font-semibold", color)}
