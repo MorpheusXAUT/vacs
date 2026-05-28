@@ -71,12 +71,13 @@ function PlaybackPageInner() {
         unlistenFns.push(
             listen<ClipMeta>("replay:clip-recorded", event => {
                 setClips(prev => {
-                    if (prev.length > 0) setSelected(prev => prev + 1);
+                    if (prev.length > 0) setSelected(prev => prev + 1); // TODO: Only move while playing
                     return sortClips([...prev, event.payload]);
                 });
             }),
             listen<ClipMeta>("replay:clip-evicted", event => {
-                setClips(prev => prev.filter(c => c.id !== event.payload.id)); // TODO: move selected
+                setClips(prev => prev.filter(c => c.id !== event.payload.id));
+                // TODO: stop playback if playing and this clip is selected
             }),
         );
 
@@ -91,12 +92,14 @@ function PlaybackPageInner() {
                 <div className="w-full flex flex-col items-center bg-gray-300 border rounded-md">
                     <p className="w-full border-b text-center font-semibold">Filter</p>
                     <Button color="gray" className="h-15 my-2 uppercase">
-                        Speech <br /> Only
+                        <p>
+                            Speech <br /> Only
+                        </p>
                     </Button>
                     <Button color="blue" className="h-15 mt-2 uppercase rounded-b-none!">
                         Radio
                     </Button>
-                    <Button color="blue" className="h-15 mb-2 uppercase rounded-t-none!">
+                    <Button color="gray" className="h-15 mb-2 uppercase rounded-t-none!">
                         Phone
                     </Button>
                 </div>
@@ -104,7 +107,6 @@ function PlaybackPageInner() {
                     clips={clips}
                     selected={selected}
                     setClips={setClips}
-                    setSelected={setSelected}
                     playing={playing}
                 />
             </div>

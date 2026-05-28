@@ -8,15 +8,13 @@ type PlaybackActionsProps = {
     clips: ClipMeta[];
     selected: number;
     setClips: StateSetter<ClipMeta[]>;
-    setSelected: (selected: number) => void;
     playing: boolean;
 };
 
-function PlaybackActions({clips, selected, setClips, setSelected, playing}: PlaybackActionsProps) {
+function PlaybackActions({clips, selected, setClips, playing}: PlaybackActionsProps) {
     const handleDelete = useAsyncDebounce(async (clip: ClipMeta) => {
         await invokeSafe("replay_delete", {id: clip.id});
         setClips(prev => prev.filter(c => c.id !== clip.id));
-        if (clips[selected].id === clip.id) setSelected(0);
     });
 
     const handleExport = useAsyncDebounce(async (clip: ClipMeta) => {
@@ -26,7 +24,6 @@ function PlaybackActions({clips, selected, setClips, setSelected, playing}: Play
     const handleClear = useAsyncDebounce(async () => {
         await invokeSafe("replay_clear");
         setClips([]);
-        setSelected(0);
     });
 
     return (
