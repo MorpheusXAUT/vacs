@@ -1,10 +1,10 @@
-//! WAV writer for replay clip files.
+//! WAV writer for playback clip files.
 //!
 //! Writes 16-bit PCM mono using [`hound`], downmixing interleaved input to mono and
 //! converting f32 samples to i16 with clipping. Sample rate is taken from the source
 //! (no resampling); inputs that are not already 48 kHz are written at their native rate.
 
-use crate::replay::ReplayError;
+use crate::playback::PlaybackError;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use std::fs::File;
 use std::io::BufWriter;
@@ -26,14 +26,14 @@ pub struct ClipWriter {
 impl ClipWriter {
     /// Open a new WAV file at `path`. The file is created (or truncated) and the WAV
     /// header is reserved for finalization.
-    pub fn create(path: &Path, sample_rate: u32, channels: u16) -> Result<Self, ReplayError> {
+    pub fn create(path: &Path, sample_rate: u32, channels: u16) -> Result<Self, PlaybackError> {
         if channels == 0 {
-            return Err(ReplayError::Wav(
+            return Err(PlaybackError::Wav(
                 "channels must be greater than zero".to_owned(),
             ));
         }
         if sample_rate == 0 {
-            return Err(ReplayError::Wav(
+            return Err(PlaybackError::Wav(
                 "sample_rate must be greater than zero".to_owned(),
             ));
         }
@@ -58,7 +58,7 @@ impl ClipWriter {
     /// Append interleaved f32 samples. The buffer length must be a multiple of the
     /// configured input channel count; trailing samples that do not form a full frame
     /// are dropped.
-    pub fn write_frame(&mut self, samples: &[f32]) -> Result<(), ReplayError> {
+    pub fn write_frame(&mut self, samples: &[f32]) -> Result<(), PlaybackError> {
         let channels = usize::from(self.input_channels);
         let usable = samples.len() - (samples.len() % channels);
         if usable == 0 {
@@ -77,7 +77,7 @@ impl ClipWriter {
     }
 
     /// Finalize the WAV header and return the clip duration in milliseconds.
-    pub fn finalize(self) -> Result<u64, ReplayError> {
+    pub fn finalize(self) -> Result<u64, PlaybackError> {
         let sample_count = self.sample_count;
         let sample_rate = u64::from(self.sample_rate);
 
@@ -96,10 +96,10 @@ fn f32_to_i16(sample: f32) -> i16 {
     (clamped * f32::from(i16::MAX)) as i16
 }
 
-fn map_hound(err: hound::Error) -> ReplayError {
+fn map_hound(err: hound::Error) -> PlaybackError {
     match err {
-        hound::Error::IoError(io) => ReplayError::Io(io),
-        other => ReplayError::Wav(other.to_string()),
+        hound::Error::IoError(io) => PlaybackError::Io(io),
+        other => PlaybackError::Wav(other.to_string()),
     }
 }
 

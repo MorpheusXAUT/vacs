@@ -1,6 +1,6 @@
 import List from "../ui/List.tsx";
 import {clsx} from "clsx";
-import {ClipMeta, clipUnixMs} from "../../types/replay.ts";
+import {ClipMeta, clipUnixMs} from "../../types/playback.ts";
 import {toUTCTimeString} from "../../utils/date.ts";
 
 type PlaybackListProps = {

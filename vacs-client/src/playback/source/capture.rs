@@ -1,5 +1,5 @@
 //! Loopback capture: tap the audio output of an external application (TrackAudio /
-//! afv-native) and forward raw frames into the replay pipeline.
+//! afv-native) and forward raw frames into the playback pipeline.
 //!
 //! This is OS-specific and intentionally does not go through any virtual sink:
 //! - **Linux**: PipeWire link-factory wires afv-native's output streams directly into
@@ -8,9 +8,9 @@
 //! - **macOS**: ScreenCaptureKit-Audio (planned, [`macos`] submodule).
 //!
 //! Per-platform implementations all funnel into the platform-agnostic [`LoopbackEvent`]
-//! type so the rest of the replay pipeline stays portable.
+//! type so the rest of the playback pipeline stays portable.
 
-use crate::replay::{ReplayError, TapId};
+use crate::playback::{PlaybackError, TapId};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
@@ -40,7 +40,7 @@ pub enum LoopbackEvent {
 /// returned channel until [`LoopbackCapture::stop`] is called or the handle is dropped.
 pub trait LoopbackCapture: Send + 'static {
     /// Start capturing. Returns the handle and the event receiver.
-    fn start() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), ReplayError>
+    fn start() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError>
     where
         Self: Sized;
 

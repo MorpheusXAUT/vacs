@@ -1,6 +1,6 @@
-//! Audio source abstraction for the replay recorder.
+//! Audio source abstraction for the playback recorder.
 //!
-//! Implementations produce a stream of [`ReplaySourceEvent`] values containing both PCM
+//! Implementations produce a stream of [`PlaybackSourceEvent`] values containing both PCM
 //! frames and gating signals. The recorder is backend-agnostic and consumes whatever
 //! `TapId` variants the source emits.
 //!
@@ -9,15 +9,15 @@
 //! (PipeWire on Linux, WASAPI loopback on Windows, ScreenCaptureKit-Audio on macOS),
 //! and there is no meaningful overlap to share.
 
-use crate::replay::{ReplayError, TapId};
+use crate::playback::{PlaybackError, TapId};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use trackaudio::Frequency;
 
-/// One unit of work emitted by an [`ReplaySource`].
+/// One unit of work emitted by an [`PlaybackSource`].
 #[derive(Debug, Clone)]
-pub enum ReplaySourceEvent {
+pub enum PlaybackSourceEvent {
     TapOpened {
         tap: TapId,
         sample_rate: u32,
@@ -43,10 +43,10 @@ pub enum ReplaySourceEvent {
     },
 }
 
-/// A source of replay audio + gating events.
+/// A source of playback audio + gating events.
 #[async_trait::async_trait]
-pub trait ReplaySource: Send {
-    async fn start(&mut self) -> Result<mpsc::Receiver<ReplaySourceEvent>, ReplayError>;
+pub trait PlaybackSource: Send {
+    async fn start(&mut self) -> Result<mpsc::Receiver<PlaybackSourceEvent>, PlaybackError>;
     async fn stop(&mut self);
 }
 

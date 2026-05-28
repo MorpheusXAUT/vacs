@@ -11,13 +11,13 @@ type SettingsState = {
     clientPageConfigs: Record<string, ClientPageConfig>;
     radioConfig: RadioConfigWithLabels | undefined;
     clockMode: ClockMode;
-    replayEnabled: boolean;
+    playbackEnabled: boolean;
     setCallConfig: (config: CallConfig) => void;
     setClientPageConfig: (config: ClientPageConfig & {name: string}) => void;
     setClientPageSettings: (settings: ClientPageSettings) => void;
     setRadioConfig: (config: RadioConfigWithLabels) => void;
     setClockMode: (mode: ClockMode) => void;
-    setReplayEnabled: (enabled: boolean) => void;
+    setPlaybackEnabled: (enabled: boolean) => void;
 };
 
 const emptyClientPageConfig: ClientPageConfig = {
@@ -40,7 +40,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     clientPageConfigs: {},
     radioConfig: undefined,
     clockMode: "Realtime",
-    replayEnabled: false,
+    playbackEnabled: false,
     setCallConfig: config => {
         const defaultCallSourcesChanged =
             config.useDefaultCallSources !== get().callConfig.useDefaultCallSources;
@@ -71,7 +71,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     },
     setRadioConfig: config => set({radioConfig: config}),
     setClockMode: mode => set({clockMode: mode}),
-    setReplayEnabled: enabled => set({replayEnabled: enabled}),
+    setPlaybackEnabled: enabled => set({playbackEnabled: enabled}),
 }));
 
 async function fetchCallConfig() {
@@ -104,10 +104,10 @@ async function fetchClockMode() {
     } catch {}
 }
 
-async function fetchReplayEnabled() {
+async function fetchPlaybackEnabled() {
     try {
-        const enabled = await invokeStrict<boolean>("replay_get_enabled");
-        useSettingsStore.getState().setReplayEnabled(enabled);
+        const enabled = await invokeStrict<boolean>("playback_get_enabled");
+        useSettingsStore.getState().setPlaybackEnabled(enabled);
     } catch {}
 }
 
@@ -116,5 +116,5 @@ export async function fetchSettings() {
     void fetchClientPageSettings();
     void fetchClockMode();
     void fetchRadioConfig();
-    void fetchReplayEnabled();
+    void fetchPlaybackEnabled();
 }

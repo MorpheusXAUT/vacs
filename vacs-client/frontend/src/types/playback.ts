@@ -1,7 +1,7 @@
-// Mirrors `crate::replay::TapId` (snake_case serde rename).
+// Mirrors `crate::playback::TapId` (snake_case serde rename).
 export type TapId = {frequency: number} | "headset" | "speaker" | "merged";
 
-// Mirrors `crate::replay::ClipMeta`. Field names use Rust's default snake_case;
+// Mirrors `crate::playback::ClipMeta`. Field names use Rust's default snake_case;
 // SystemTime serializes as `{ secs_since_epoch, nanos_since_epoch }`.
 export type ClipMeta = {
     id: number;

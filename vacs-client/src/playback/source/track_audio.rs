@@ -1,6 +1,6 @@
-//! TrackAudio replay source: combines a [`LoopbackCapture`] backend (PCM frames from
+//! TrackAudio playback source: combines a [`LoopbackCapture`] backend (PCM frames from
 //! afv-native's output streams) with TrackAudio's WebSocket events (RX gating and
-//! per-frequency speaker/headset routing) into a single [`ReplaySource`].
+//! per-frequency speaker/headset routing) into a single [`PlaybackSource`].
 //!
 //! The TrackAudio gating logic (callsign/frequency tracking, mid-RX tap migration
 //! when the user toggles speaker/headset) is platform-agnostic. Only the underlying
@@ -8,9 +8,9 @@
 //! [`super::capture::DefaultLoopbackCapture`].
 
 use super::capture::{DefaultLoopbackCapture, LoopbackCapture, LoopbackEvent};
-use super::{ReplaySource, ReplaySourceEvent};
+use super::{PlaybackSource, PlaybackSourceEvent};
+use crate::playback::{PlaybackError, TapId, Transmitter};
 use crate::radio::track_audio::TrackAudioRadio;
-use crate::replay::{ReplayError, TapId, Transmitter};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 
 const EVENT_CHANNEL_CAPACITY: usize = 1024;
 
-/// ReplaySource backed by:
+/// PlaybackSource backed by:
 /// - A platform [`LoopbackCapture`] for PCM frames from afv-native's output streams.
 /// - `TrackAudioRadio` event broadcast for `RxBegin`/`RxEnd` gating, with the
 ///   tap's `headset` flag mapping each event to either [`TapId::Headset`]
@@ -40,9 +40,9 @@ impl TrackAudioLoopbackSource {
 }
 
 #[async_trait::async_trait]
-impl ReplaySource for TrackAudioLoopbackSource {
-    async fn start(&mut self) -> Result<mpsc::Receiver<ReplaySourceEvent>, ReplayError> {
-        let (tx, rx) = mpsc::channel::<ReplaySourceEvent>(EVENT_CHANNEL_CAPACITY);
+impl PlaybackSource for TrackAudioLoopbackSource {
+    async fn start(&mut self) -> Result<mpsc::Receiver<PlaybackSourceEvent>, PlaybackError> {
+        let (tx, rx) = mpsc::channel::<PlaybackSourceEvent>(EVENT_CHANNEL_CAPACITY);
 
         let (capture, mut capture_rx) = DefaultLoopbackCapture::start()?;
 
@@ -73,13 +73,13 @@ impl ReplaySource for TrackAudioLoopbackSource {
                         };
                         let mapped = match evt {
                             LoopbackEvent::Opened { tap, sample_rate, channels } => {
-                                ReplaySourceEvent::TapOpened { tap, sample_rate, channels }
+                                PlaybackSourceEvent::TapOpened { tap, sample_rate, channels }
                             }
                             LoopbackEvent::Closed { tap } => {
-                                ReplaySourceEvent::TapClosed { tap }
+                                PlaybackSourceEvent::TapClosed { tap }
                             }
                             LoopbackEvent::Frame { tap, samples, captured_at } => {
-                                ReplaySourceEvent::Frame { tap, samples, captured_at }
+                                PlaybackSourceEvent::Frame { tap, samples, captured_at }
                             }
                         };
                         if tx.send(mapped).await.is_err() {
@@ -103,7 +103,7 @@ impl ReplaySource for TrackAudioLoopbackSource {
                                     },
                                     tap,
                                 );
-                                let _ = tx.send(ReplaySourceEvent::RxBegin {
+                                let _ = tx.send(PlaybackSourceEvent::RxBegin {
                                     tap,
                                     callsign: rx.callsign,
                                     frequency: rx.frequency,
@@ -124,7 +124,7 @@ impl ReplaySource for TrackAudioLoopbackSource {
                                     rx.frequency,
                                     rx.active_transmitters
                                 );
-                                let _ = tx.send(ReplaySourceEvent::RxEnd {
+                                let _ = tx.send(PlaybackSourceEvent::RxEnd {
                                     callsign: rx.callsign,
                                     frequency: rx.frequency,
                                     active_transmitters: rx.active_transmitters,
@@ -152,12 +152,12 @@ impl ReplaySource for TrackAudioLoopbackSource {
                                         "routing changed mid-RX: {callsign} on {:?} {old_tap:?} -> {new_tap:?}",
                                         frequency,
                                     );
-                                    let _ = tx.send(ReplaySourceEvent::RxEnd {
+                                    let _ = tx.send(PlaybackSourceEvent::RxEnd {
                                         callsign: callsign.clone(),
                                         frequency,
                                         active_transmitters: None,
                                     }).await;
-                                    let _ = tx.send(ReplaySourceEvent::RxBegin {
+                                    let _ = tx.send(PlaybackSourceEvent::RxBegin {
                                         tap: new_tap,
                                         callsign: callsign.clone(),
                                         frequency,

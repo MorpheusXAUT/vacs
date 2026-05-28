@@ -12,7 +12,7 @@
 //! under `root/` is deleted, since callsign/frequency metadata is held only in memory
 //! and would be lost across restarts. Files in `saved/` are left alone.
 
-use crate::replay::{ClipMeta, ReplayError, TapId};
+use crate::playback::{ClipMeta, PlaybackError, TapId};
 use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -20,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use trackaudio::Frequency;
 
 const CLIP_FILENAME_PREFIX: &str = "clip-";
-const EXPORT_FILENAME_PREFIX: &str = "replay-";
+const EXPORT_FILENAME_PREFIX: &str = "playback-";
 const SAVED_DIR: &str = "saved";
 
 /// Manages the on-disk clip store and the in-memory rolling deque.
@@ -40,7 +40,7 @@ impl ClipStore {
     /// Open (or create) a store at `root`. Any pre-existing `clip-*.wav` files in the
     /// root directory are deleted, since their in-memory metadata is gone. Files under
     /// `saved/` and any unrelated files in `root/` are left untouched.
-    pub fn open(root: PathBuf, max_clips: usize) -> Result<Self, ReplayError> {
+    pub fn open(root: PathBuf, max_clips: usize) -> Result<Self, PlaybackError> {
         fs::create_dir_all(&root)?;
         let saved_dir = root.join(SAVED_DIR);
         fs::create_dir_all(&saved_dir)?;
@@ -100,7 +100,7 @@ impl ClipStore {
     }
 
     /// Delete a clip from the deque and its file. Returns whether the clip existed.
-    pub fn delete(&mut self, id: u64) -> Result<bool, ReplayError> {
+    pub fn delete(&mut self, id: u64) -> Result<bool, PlaybackError> {
         let Some(pos) = self.clips.iter().position(|c| c.id == id) else {
             return Ok(false);
         };
@@ -112,7 +112,7 @@ impl ClipStore {
     }
 
     /// Delete all rolling-deque clips. Files in `saved/` are left untouched.
-    pub fn clear(&mut self) -> Result<(), ReplayError> {
+    pub fn clear(&mut self) -> Result<(), PlaybackError> {
         for meta in self.clips.drain(..) {
             if meta.path.exists() {
                 let _ = fs::remove_file(&meta.path);
@@ -127,10 +127,10 @@ impl ClipStore {
     /// Saved filenames are self-describing: `clip-{unix_ms}-{tap}-{freq?}-{callsign}.wav`,
     /// e.g. `clip-1745789012345-headset-121.500-DLH4AB.wav`. Frequency is omitted if the
     /// clip has no recorded frequency.
-    pub fn export(&self, id: u64, target_dir: Option<&Path>) -> Result<PathBuf, ReplayError> {
+    pub fn export(&self, id: u64, target_dir: Option<&Path>) -> Result<PathBuf, PlaybackError> {
         let meta = self
             .get(id)
-            .ok_or_else(|| ReplayError::Wav(format!("clip {id} not found")))?;
+            .ok_or_else(|| PlaybackError::Wav(format!("clip {id} not found")))?;
 
         let dir = target_dir.unwrap_or(&self.saved_dir);
         fs::create_dir_all(dir)?;
@@ -228,7 +228,7 @@ fn unique_path(dir: &Path, base: &str, ext: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::replay::writer::ClipWriter;
+    use crate::playback::writer::ClipWriter;
     use std::time::Duration;
     use tempfile::tempdir;
 
@@ -254,7 +254,7 @@ mod tests {
     #[test]
     fn open_creates_root_and_saved_dirs() {
         let dir = tempdir().unwrap();
-        let root = dir.path().join("replay");
+        let root = dir.path().join("playback");
         let store = ClipStore::open(root.clone(), 10).unwrap();
         assert!(root.is_dir());
         assert!(root.join("saved").is_dir());

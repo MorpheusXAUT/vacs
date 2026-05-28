@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useState} from "preact/hooks";
 import {listen} from "../../transport";
-import {ClipMeta, clipUnixMs} from "../../types/replay.ts";
+import {ClipMeta, clipUnixMs} from "../../types/playback.ts";
 import {toUTCTimeString} from "../../utils/date.ts";
 
 type PlaybackProgressProps = {
@@ -12,7 +12,7 @@ function PlaybackProgress({clip, stopPlaying}: PlaybackProgressProps) {
     const [progress, setProgress] = useState(0);
 
     useEffect(() => {
-        const unlisten = listen<number>("replay:progress", event => {
+        const unlisten = listen<number>("playback:progress", event => {
             setProgress(event.payload * 100);
             if (event.payload === 1) {
                 stopPlaying();

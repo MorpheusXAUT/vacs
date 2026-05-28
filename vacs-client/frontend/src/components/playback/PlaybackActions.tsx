@@ -1,5 +1,5 @@
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
-import {ClipMeta} from "../../types/replay.ts";
+import {ClipMeta} from "../../types/playback.ts";
 import {invokeSafe} from "../../error.ts";
 import Button from "../ui/Button.tsx";
 import {StateSetter} from "../../types/generic.ts";
@@ -13,16 +13,16 @@ type PlaybackActionsProps = {
 
 function PlaybackActions({clips, selected, setClips, playing}: PlaybackActionsProps) {
     const handleDelete = useAsyncDebounce(async (clip: ClipMeta) => {
-        await invokeSafe("replay_delete", {id: clip.id});
+        await invokeSafe("playback_delete", {id: clip.id});
         setClips(prev => prev.filter(c => c.id !== clip.id));
     });
 
     const handleExport = useAsyncDebounce(async (clip: ClipMeta) => {
-        await invokeSafe("replay_export", {id: clip.id});
+        await invokeSafe("playback_export", {id: clip.id});
     });
 
     const handleClear = useAsyncDebounce(async () => {
-        await invokeSafe("replay_clear");
+        await invokeSafe("playback_clear");
         setClips([]);
     });
 

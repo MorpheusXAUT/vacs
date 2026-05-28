@@ -10,6 +10,6 @@ export type Capabilities = {
     alwaysOnTop: boolean;
     keybindListener: boolean;
     keybindEmitter: boolean;
-    replay: boolean;
+    playback: boolean;
     platform: Platform;
 };

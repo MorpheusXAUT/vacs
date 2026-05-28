@@ -4,14 +4,14 @@ import {isTauri} from "../../transport";
 import {TargetedEvent} from "preact";
 import {useSettingsStore} from "../../stores/settings-store.ts";
 
-function ReplaySettings() {
-    const enabled = useSettingsStore(state => state.replayEnabled);
-    const setEnabled = useSettingsStore(state => state.setReplayEnabled);
+function PlaybackSettings() {
+    const enabled = useSettingsStore(state => state.playbackEnabled);
+    const setEnabled = useSettingsStore(state => state.setPlaybackEnabled);
 
     const handleToggle = async (e: TargetedEvent<HTMLInputElement>) => {
         const next = e.currentTarget.checked;
         try {
-            await invokeStrict("replay_set_enabled", {enabled: next});
+            await invokeStrict("playback_set_enabled", {enabled: next});
             setEnabled(next);
         } catch {
             setEnabled(!next);
@@ -20,9 +20,9 @@ function ReplaySettings() {
 
     return (
         <div className="w-full flex justify-between items-center">
-            <label htmlFor="replay-enabled">Enable radio playback</label>
+            <label htmlFor="playback-enabled">Enable radio playback</label>
             <Checkbox
-                name="replay-enabled"
+                name="playback-enabled"
                 checked={enabled}
                 onChange={handleToggle}
                 disabled={!isTauri}
@@ -31,4 +31,4 @@ function ReplaySettings() {
     );
 }
 
-export default ReplaySettings;
+export default PlaybackSettings;

@@ -98,16 +98,16 @@ impl KeybindEngine {
         *self.listener.write() = Some(Arc::new(listener));
 
         if self.mode == TransmitMode::RadioIntegration {
-            let replay = self
+            let playback = self
                 .app
                 .state::<AppState>()
                 .lock()
                 .await
                 .config
                 .client
-                .replay
+                .playback
                 .clone();
-            let radio = self.radio_config.radio(self.app.clone(), &replay).await?;
+            let radio = self.radio_config.radio(self.app.clone(), &playback).await?;
             *self.radio.write() = radio;
         } else {
             self.app.emit("radio:integration-available", false).ok();

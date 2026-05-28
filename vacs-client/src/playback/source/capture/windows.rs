@@ -1,5 +1,5 @@
-use crate::replay::source::capture::{LoopbackCapture, LoopbackEvent};
-use crate::replay::{ReplayError, TapId};
+use crate::playback::source::capture::{LoopbackCapture, LoopbackEvent};
+use crate::playback::{PlaybackError, TapId};
 use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::sync::Arc;
@@ -21,7 +21,7 @@ pub struct WindowsApplicationCapture {
 }
 
 impl WindowsApplicationCapture {
-    fn start_inner() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), ReplayError> {
+    fn start_inner() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
         let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
         let (shutdown, thread) = spawn_wasapi_thread(tx)?;
         Ok((
@@ -44,7 +44,7 @@ impl WindowsApplicationCapture {
 }
 
 impl LoopbackCapture for WindowsApplicationCapture {
-    fn start() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), ReplayError> {
+    fn start() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
         Self::start_inner()
     }
 
@@ -61,7 +61,7 @@ impl Drop for WindowsApplicationCapture {
 
 fn spawn_wasapi_thread(
     tx: mpsc::Sender<LoopbackEvent>,
-) -> Result<(Arc<AtomicBool>, JoinHandle<()>), ReplayError> {
+) -> Result<(Arc<AtomicBool>, JoinHandle<()>), PlaybackError> {
     let refreshes = RefreshKind::nothing().with_processes(ProcessRefreshKind::everything());
     let system = System::new_with_specifics(refreshes);
     let process_ids = system.processes_by_name(OsStr::new(TRACKAUDIO_APP_NAME));
@@ -73,7 +73,7 @@ fn spawn_wasapi_thread(
     }
 
     if process_id == 0 {
-        return Err(ReplayError::Source(format!(
+        return Err(PlaybackError::Source(format!(
             "Can not find {TRACKAUDIO_APP_NAME} process"
         )));
     }
@@ -81,15 +81,15 @@ fn spawn_wasapi_thread(
     let (init_tx, init_rx) = std::sync::mpsc::sync_channel::<Result<Arc<AtomicBool>, String>>(1);
 
     let thread = std::thread::Builder::new()
-        .name("vacs-replay-wasapi".to_owned())
+        .name("vacs-playback-wasapi".to_owned())
         .spawn(move || run_main_loop(tx, process_id, init_tx))
-        .map_err(ReplayError::Io)?;
+        .map_err(PlaybackError::Io)?;
 
     let stop_requested = match init_rx.recv() {
         Ok(Ok(stop_requested)) => stop_requested,
-        Ok(Err(err)) => return Err(ReplayError::Source(err)),
+        Ok(Err(err)) => return Err(PlaybackError::Source(err)),
         Err(_) => {
-            return Err(ReplayError::Source(
+            return Err(PlaybackError::Source(
                 "WASAPI loopback audio capture thread exited before init".to_owned(),
             ));
         }

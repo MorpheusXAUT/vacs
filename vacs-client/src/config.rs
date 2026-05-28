@@ -1,11 +1,11 @@
 use crate::app::window::WindowProvider;
 use crate::error::Error;
+use crate::playback::PlaybackConfig;
 use crate::radio::push_to_talk::PushToTalkRadio;
 use crate::radio::track_audio::TrackAudioRadio;
 use crate::radio::track_audio::TrackAudioRadioHandle;
 use crate::radio::{DynRadio, RadioIntegration};
 use crate::remote::RemoteConfig;
-use crate::replay::ReplayConfig;
 use anyhow::Context;
 use config::{Config, Environment, File};
 use keyboard_types::Code;
@@ -293,7 +293,7 @@ pub struct ClientConfig {
     #[serde(default)]
     pub remote: RemoteConfig,
     #[serde(default)]
-    pub replay: ReplayConfig,
+    pub playback: PlaybackConfig,
     #[serde(default = "default_zoom_level")]
     pub zoom_level: f64,
     #[serde(default)]
@@ -323,7 +323,7 @@ impl Default for ClientConfig {
             extra_client_page_config: None,
             test_profile_watcher_delay_ms: 500,
             remote: RemoteConfig::default(),
-            replay: crate::replay::ReplayConfig::default(),
+            playback: crate::playback::PlaybackConfig::default(),
             zoom_level: 1.0f64,
             clock_mode: ClockMode::default(),
         }
@@ -615,7 +615,7 @@ impl RadioConfig {
     pub async fn radio(
         &self,
         app: AppHandle,
-        replay: &ReplayConfig,
+        playback: &PlaybackConfig,
     ) -> Result<Option<DynRadio>, Error> {
         match self.integration {
             RadioIntegration::AudioForVatsim => {
@@ -640,7 +640,7 @@ impl RadioConfig {
 
                 *app.state::<TrackAudioRadioHandle>().write() = Some(radio.clone());
 
-                replay.start(&app, radio.clone()).await;
+                playback.start(&app, radio.clone()).await;
 
                 Ok(Some(radio))
             }

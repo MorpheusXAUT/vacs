@@ -1,8 +1,8 @@
 use crate::app::state::AppState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::keybinds::KeybindsError;
+use crate::playback::PlaybackError;
 use crate::radio::RadioError;
-use crate::replay::ReplayError;
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt::{Debug, Display, Formatter};
@@ -30,8 +30,8 @@ pub enum Error {
     Keybinds(#[from] Box<KeybindsError>),
     #[error("Radio error: {0}")]
     Radio(#[from] Box<RadioError>),
-    #[error("Replay error: {0}")]
-    Replay(#[from] Box<ReplayError>),
+    #[error("Playback error: {0}")]
+    Playback(#[from] Box<PlaybackError>),
     #[error("Capability {0} not available on your platform")]
     CapabilityNotAvailable(String),
     #[error(transparent)]
@@ -68,9 +68,9 @@ impl From<RadioError> for Error {
     }
 }
 
-impl From<ReplayError> for Error {
-    fn from(err: ReplayError) -> Self {
-        Error::Replay(Box::new(err))
+impl From<PlaybackError> for Error {
+    fn from(err: PlaybackError) -> Self {
+        Error::Playback(Box::new(err))
     }
 }
 
@@ -207,7 +207,7 @@ impl From<&Error> for FrontendError {
             Error::Webrtc(err) => FrontendError::new("WebRTC error", err.to_string()),
             Error::Keybinds(err) => FrontendError::new("Keybinds error", err.to_string()),
             Error::Radio(err) => FrontendError::new("Radio error", err.to_string()),
-            Error::Replay(err) => FrontendError::new("Replay error", err.to_string()),
+            Error::Playback(err) => FrontendError::new("Playback error", err.to_string()),
             Error::CapabilityNotAvailable(capability) => FrontendError::new(
                 "Not implemented",
                 format!("{capability} functionality is not available on your platform"),

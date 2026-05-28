@@ -9,14 +9,14 @@ import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 import {openSettingsSubmenu} from "../stores/navigation-store.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
 import {listen, UnlistenFn} from "../transport";
-import {ClipMeta, sortClips} from "../types/replay.ts";
+import {ClipMeta, sortClips} from "../types/playback.ts";
 import {CloseButton} from "./SettingsPage.tsx";
 
 function PlaybackPage() {
-    const capReplay = useCapabilitiesStore(state => state.replay);
+    const capPlayback = useCapabilitiesStore(state => state.playback);
     const capPlatform = useCapabilitiesStore(state => state.platform);
 
-    const replayEnabled = useSettingsStore(state => state.replayEnabled);
+    const playbackEnabled = useSettingsStore(state => state.playbackEnabled);
 
     return (
         <div
@@ -26,9 +26,9 @@ function PlaybackPage() {
             )}
         >
             <p className="w-full text-white bg-blue-700 font-semibold text-center">Playback</p>
-            {capReplay && replayEnabled ? (
+            {capPlayback && playbackEnabled ? (
                 <PlaybackPageInner />
-            ) : !replayEnabled ? (
+            ) : !playbackEnabled ? (
                 <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col justify-center items-center text-slate-600">
                     <p>Radio playback is not enabled.</p>
                     <p>
@@ -67,7 +67,7 @@ function PlaybackPageInner() {
 
     useEffect(() => {
         const fetch = async () => {
-            const list = await invokeSafe<ClipMeta[]>("replay_list");
+            const list = await invokeSafe<ClipMeta[]>("playback_list");
             if (list === undefined) return;
             setClips(sortClips(list));
         };
@@ -75,13 +75,13 @@ function PlaybackPageInner() {
 
         const unlistenFns: Promise<UnlistenFn>[] = [];
         unlistenFns.push(
-            listen<ClipMeta>("replay:clip-recorded", event => {
+            listen<ClipMeta>("playback:clip-recorded", event => {
                 setClips(prev => {
                     if (prev.length > 0 && playingRef.current) setSelected(prev => prev + 1);
                     return sortClips([...prev, event.payload]);
                 });
             }),
-            listen<ClipMeta>("replay:clip-evicted", event => {
+            listen<ClipMeta>("playback:clip-evicted", event => {
                 setClips(prev => prev.filter(c => c.id !== event.payload.id));
                 // TODO: stop playback if playing and this clip is selected
             }),

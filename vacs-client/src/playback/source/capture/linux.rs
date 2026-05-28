@@ -1,4 +1,4 @@
-//! Linux PipeWire loopback capture for the replay recorder.
+//! Linux PipeWire loopback capture for the playback recorder.
 //!
 //! Connects to the user PipeWire socket, walks the registry for nodes matching
 //! `application.name == "afv::speaker" | "afv::headset"` AND
@@ -10,7 +10,7 @@
 //! consumers is non-blocking from the PipeWire side.
 
 use super::{LoopbackCapture, LoopbackEvent};
-use crate::replay::{ReplayError, TapId};
+use crate::playback::{PlaybackError, TapId};
 use pipewire::context::Context;
 use pipewire::keys;
 use pipewire::link::Link;
@@ -40,7 +40,7 @@ const AFV_APP_SPEAKER: &str = "afv::speaker";
 const STREAM_OUTPUT_CLASS: &str = "Stream/Output/Audio";
 /// Per-stream NODE_NAME prefix; the suffix is the afv target node id so we can
 /// match our stream's own node global back to the corresponding [`Capture`].
-const NODE_NAME_PREFIX: &str = "vacs-replay-tap-";
+const NODE_NAME_PREFIX: &str = "vacs-playback-tap-";
 
 /// Boxed FnOnce used to ask the PipeWire main loop to quit.
 type ShutdownFn = Box<dyn FnOnce() + Send>;
@@ -54,7 +54,7 @@ pub struct AfvNativePipewireCapture {
 impl AfvNativePipewireCapture {
     /// Spawn the PipeWire main loop thread and start scanning for afv output streams.
     /// Returns the capture handle and the receiver for [`LoopbackEvent`]s.
-    fn start_inner() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), ReplayError> {
+    fn start_inner() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
         let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
         let (shutdown, thread) = spawn_pipewire_thread(tx)?;
         Ok((
@@ -79,7 +79,7 @@ impl AfvNativePipewireCapture {
 }
 
 impl LoopbackCapture for AfvNativePipewireCapture {
-    fn start() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), ReplayError> {
+    fn start() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
         Self::start_inner()
     }
 
@@ -123,22 +123,22 @@ struct Capture {
 
 fn spawn_pipewire_thread(
     tx: mpsc::Sender<LoopbackEvent>,
-) -> Result<(ShutdownFn, JoinHandle<()>), ReplayError> {
+) -> Result<(ShutdownFn, JoinHandle<()>), PlaybackError> {
     // We use a oneshot to surface init failures from the thread back to the caller
     // synchronously, so `AfvNativePipewireCapture::start` returns a meaningful error.
     let (init_tx, init_rx) = std::sync::mpsc::sync_channel::<Result<MainLoopHandle, String>>(1);
     let tx_thread = tx.clone();
 
     let thread = std::thread::Builder::new()
-        .name("vacs-replay-pipewire".to_owned())
+        .name("vacs-playback-pipewire".to_owned())
         .spawn(move || run_main_loop(tx_thread, init_tx))
-        .map_err(ReplayError::Io)?;
+        .map_err(PlaybackError::Io)?;
 
     let handle = match init_rx.recv() {
         Ok(Ok(h)) => h,
-        Ok(Err(err)) => return Err(ReplayError::Source(err)),
+        Ok(Err(err)) => return Err(PlaybackError::Source(err)),
         Err(_) => {
-            return Err(ReplayError::Source(
+            return Err(PlaybackError::Source(
                 "PipeWire capture thread exited before init".to_owned(),
             ));
         }
@@ -348,12 +348,12 @@ fn build_capture(
         *keys::MEDIA_TYPE => "Audio",
         *keys::MEDIA_CATEGORY => "Capture",
         *keys::MEDIA_ROLE => "Music",
-        *keys::APP_NAME => "vacs-replay",
+        *keys::APP_NAME => "vacs-playback",
         *keys::NODE_NAME => stream_node_name.as_str(),
         "node.autoconnect" => "false",
     };
 
-    let stream = Stream::new(core, "vacs-replay-tap", props)
+    let stream = Stream::new(core, "vacs-playback-tap", props)
         .map_err(|e| format!("Stream::new failed: {e}"))?;
 
     let user_data = CaptureUserData {

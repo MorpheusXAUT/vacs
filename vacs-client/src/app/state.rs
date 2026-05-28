@@ -1,7 +1,7 @@
 pub(crate) mod audio;
 pub(crate) mod http;
 pub(crate) mod keybinds;
-pub(crate) mod replay;
+pub(crate) mod playback;
 mod sealed;
 pub(crate) mod signaling;
 pub(crate) mod track_audio_radio;
@@ -13,8 +13,8 @@ use crate::audio::manager::{AudioManager, AudioManagerHandle};
 use crate::config::AppConfig;
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::{KeybindEngine, KeybindEngineHandle};
+use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::track_audio::TrackAudioRadioHandle;
-use crate::replay::recorder::ReplayRecorderHandle;
 use crate::signaling::auth::TauriTokenProvider;
 use notify_debouncer_full::notify::RecommendedWatcher;
 use notify_debouncer_full::{Debouncer, RecommendedCache};
@@ -36,7 +36,7 @@ pub struct AppStateInner {
     signaling_client: SignalingClient<TokioTransport, TauriTokenProvider>,
     audio_manager: AudioManagerHandle,
     keybind_engine: KeybindEngineHandle,
-    replay_recorder: ReplayRecorderHandle,
+    playback_recorder: PlaybackRecorderHandle,
     track_audio_radio: TrackAudioRadioHandle,
     active_call: Option<Call>,
     unanswered_call_guard: Option<UnansweredCallGuard>,
@@ -83,7 +83,7 @@ impl AppStateInner {
                 &config.client.radio,
                 shutdown_token.child_token(),
             ))),
-            replay_recorder: Arc::new(RwLock::new(None)),
+            playback_recorder: Arc::new(RwLock::new(None)),
             track_audio_radio: Arc::new(RwLock::new(None)),
             shutdown_token,
             active_call: None,
@@ -103,7 +103,7 @@ impl AppStateInner {
 
     pub fn shutdown(&self) {
         self.shutdown_token.cancel();
-        if let Some(recorder) = self.replay_recorder.read().as_ref() {
+        if let Some(recorder) = self.playback_recorder.read().as_ref() {
             recorder.shutdown();
         }
     }

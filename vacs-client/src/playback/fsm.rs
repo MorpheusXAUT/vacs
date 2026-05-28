@@ -1,6 +1,6 @@
 //! Per-tap segmentation finite state machine.
 //!
-//! Pure logic; no I/O. Consumes [`ReplaySourceEvent`]s plus periodic [`Fsm::tick`] calls and
+//! Pure logic; no I/O. Consumes [`PlaybackSourceEvent`]s plus periodic [`Fsm::tick`] calls and
 //! emits [`FsmAction`]s the recorder turns into file operations.
 //!
 //! # Behavior
@@ -18,8 +18,8 @@
 //! When [`RecordingMode::Mixed`] is set, every tap id is collapsed to
 //! [`TapId::Merged`] so all activity feeds a single clip stream.
 
-use crate::replay::source::ReplaySourceEvent;
-use crate::replay::{RecordingMode, ReplayConfig, TapId, Transmitter};
+use crate::playback::source::PlaybackSourceEvent;
+use crate::playback::{PlaybackConfig, RecordingMode, TapId, Transmitter};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -66,7 +66,7 @@ struct TapState {
     open: Option<OpenClip>,
 }
 
-/// Replay segmentation FSM.
+/// Playback segmentation FSM.
 #[derive(Debug)]
 pub struct Fsm {
     mode: RecordingMode,
@@ -77,7 +77,7 @@ pub struct Fsm {
 }
 
 impl Fsm {
-    pub fn new(config: &ReplayConfig) -> Self {
+    pub fn new(config: &PlaybackConfig) -> Self {
         Self {
             mode: config.recording_mode,
             hangover: Duration::from_millis(config.hangover_ms),
@@ -90,12 +90,12 @@ impl Fsm {
     /// Drive the FSM with one source event.
     pub fn on_event(
         &mut self,
-        event: ReplaySourceEvent,
+        event: PlaybackSourceEvent,
         now: Instant,
         now_wall: SystemTime,
     ) -> Vec<FsmAction> {
         match event {
-            ReplaySourceEvent::TapOpened {
+            PlaybackSourceEvent::TapOpened {
                 tap,
                 sample_rate,
                 channels,
@@ -118,7 +118,7 @@ impl Fsm {
 
                 actions
             }
-            ReplaySourceEvent::TapClosed { tap } => {
+            PlaybackSourceEvent::TapClosed { tap } => {
                 let key = self.map_tap(tap);
 
                 let mut actions = Vec::new();
@@ -132,7 +132,7 @@ impl Fsm {
 
                 actions
             }
-            ReplaySourceEvent::Frame {
+            PlaybackSourceEvent::Frame {
                 tap,
                 samples,
                 captured_at,
@@ -194,7 +194,7 @@ impl Fsm {
 
                 actions
             }
-            ReplaySourceEvent::RxBegin {
+            PlaybackSourceEvent::RxBegin {
                 tap,
                 callsign,
                 frequency,
@@ -241,7 +241,7 @@ impl Fsm {
                     started_at: now_wall,
                 }]
             }
-            ReplaySourceEvent::RxEnd {
+            PlaybackSourceEvent::RxEnd {
                 callsign,
                 frequency,
                 active_transmitters,
@@ -313,8 +313,8 @@ fn close_open_clip(entry: &mut TapState, now: Instant, now_wall: SystemTime) -> 
 mod tests {
     use super::*;
 
-    fn cfg(mode: RecordingMode) -> ReplayConfig {
-        ReplayConfig {
+    fn cfg(mode: RecordingMode) -> PlaybackConfig {
+        PlaybackConfig {
             enabled: true,
             max_clips: 10,
             hangover_ms: 500,
@@ -325,7 +325,7 @@ mod tests {
 
     fn open_tap(fsm: &mut Fsm, tap: TapId, now: Instant, wall: SystemTime) {
         let actions = fsm.on_event(
-            ReplaySourceEvent::TapOpened {
+            PlaybackSourceEvent::TapOpened {
                 tap,
                 sample_rate: 48_000,
                 channels: 1,
@@ -336,24 +336,24 @@ mod tests {
         assert!(actions.is_empty());
     }
 
-    fn rx_begin(callsign: &str, freq: u64) -> ReplaySourceEvent {
-        ReplaySourceEvent::RxBegin {
+    fn rx_begin(callsign: &str, freq: u64) -> PlaybackSourceEvent {
+        PlaybackSourceEvent::RxBegin {
             tap: TapId::Headset,
             callsign: callsign.to_owned(),
             frequency: Frequency::from(freq),
         }
     }
 
-    fn rx_end(callsign: &str, freq: u64, active: Option<Vec<String>>) -> ReplaySourceEvent {
-        ReplaySourceEvent::RxEnd {
+    fn rx_end(callsign: &str, freq: u64, active: Option<Vec<String>>) -> PlaybackSourceEvent {
+        PlaybackSourceEvent::RxEnd {
             callsign: callsign.to_owned(),
             frequency: Frequency::from(freq),
             active_transmitters: active,
         }
     }
 
-    fn frame(tap: TapId, captured_at: Instant) -> ReplaySourceEvent {
-        ReplaySourceEvent::Frame {
+    fn frame(tap: TapId, captured_at: Instant) -> PlaybackSourceEvent {
+        PlaybackSourceEvent::Frame {
             tap,
             samples: Arc::from(vec![0.0_f32; 480]),
             captured_at,
@@ -510,7 +510,7 @@ mod tests {
         let _ = fsm.on_event(rx_begin("DLH1", 121_500_000), t0, w0);
 
         let closed = fsm.on_event(
-            ReplaySourceEvent::TapClosed {
+            PlaybackSourceEvent::TapClosed {
                 tap: TapId::Headset,
             },
             t0 + Duration::from_millis(50),
@@ -603,7 +603,7 @@ mod tests {
 
         // RxEnd routes to Speaker after the user toggled routing mid-transmission.
         let _ = fsm.on_event(
-            ReplaySourceEvent::RxEnd {
+            PlaybackSourceEvent::RxEnd {
                 callsign: "DLH123".into(),
                 frequency: Frequency::from(121_500_000_u64),
                 active_transmitters: None,

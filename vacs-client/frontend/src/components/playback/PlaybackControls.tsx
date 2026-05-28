@@ -1,5 +1,5 @@
 import Button, {ButtonColor} from "../ui/Button.tsx";
-import {ClipMeta} from "../../types/replay.ts";
+import {ClipMeta} from "../../types/playback.ts";
 import {ComponentChildren} from "preact";
 import {clsx} from "clsx";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
@@ -33,7 +33,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
     const handlePlay = useAsyncDebounce(
         useCallback(async (id: number | undefined, deviceType: "Output" | "Speaker") => {
             try {
-                await invokeStrict("replay_play", {
+                await invokeStrict("playback_play", {
                     id,
                     deviceType,
                 });
@@ -45,7 +45,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
     const handleStop = useAsyncDebounce(
         useCallback(async (setState = true) => {
             try {
-                await invokeStrict("replay_stop");
+                await invokeStrict("playback_stop");
                 if (setState) setPlaying(false);
                 setPlayContinuously(false);
             } catch {}
@@ -171,7 +171,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <PlaybackControlButton
                         disabled={!playing}
                         onClick={() => {
-                            void invokeSafe("replay_seek", {millis: -1000});
+                            void invokeSafe("playback_seek", {millis: -1000});
                         }}
                     >
                         <svg
@@ -206,7 +206,7 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <PlaybackControlButton
                         disabled={!playing}
                         onClick={() => {
-                            void invokeSafe("replay_seek", {millis: 1000});
+                            void invokeSafe("playback_seek", {millis: 1000});
                         }}
                     >
                         <svg

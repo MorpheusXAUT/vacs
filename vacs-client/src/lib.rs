@@ -6,9 +6,9 @@ mod config;
 mod error;
 mod keybinds;
 mod platform;
+mod playback;
 mod radio;
 mod remote;
-mod replay;
 mod secrets;
 mod signaling;
 
@@ -16,7 +16,7 @@ use crate::app::open_fatal_error_dialog;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::http::HttpState;
 use crate::app::state::keybinds::AppStateKeybindsExt;
-use crate::app::state::replay::AppStateReplayExt;
+use crate::app::state::playback::AppStatePlaybackExt;
 use crate::app::state::track_audio_radio::AppStateTrackAudioRadioExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::AudioManagerHandle;
@@ -25,9 +25,9 @@ use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfi
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
+use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::track_audio::TrackAudioRadioHandle;
 use crate::remote::{RemoteServer, RemoteServerHandle};
-use crate::replay::recorder::ReplayRecorderHandle;
 use tauri::{App, Manager, RunEvent, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tokio::sync::Mutex as TokioMutex;
@@ -98,8 +98,8 @@ pub fn run() {
 
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
                 app.manage::<AudioManagerHandle>(state.audio_manager_handle());
-                app.manage::<ReplayRecorderHandle>(
-                    state.replay_recorder_handle(),
+                app.manage::<PlaybackRecorderHandle>(
+                    state.playback_recorder_handle(),
                 );
                 app.manage::<TrackAudioRadioHandle>(state.track_audio_radio_handle());
                 app.manage::<AppState>(TokioMutex::new(state));
@@ -182,6 +182,15 @@ pub fn run() {
             keybinds::commands::keybinds_set_binding,
             keybinds::commands::keybinds_set_radio_config,
             keybinds::commands::keybinds_set_transmit_config,
+            playback::commands::playback_clear,
+            playback::commands::playback_delete,
+            playback::commands::playback_export,
+            playback::commands::playback_play,
+            playback::commands::playback_get_enabled,
+            playback::commands::playback_list,
+            playback::commands::playback_seek,
+            playback::commands::playback_set_enabled,
+            playback::commands::playback_stop,
             radio::commands::radio_add_station,
             radio::commands::radio_set_station_state,
             radio::commands::radio_get_stations,
@@ -198,15 +207,6 @@ pub fn run() {
             remote::commands::remote_get_config,
             remote::commands::remote_is_enabled,
             remote::commands::remote_set_config,
-            replay::commands::replay_clear,
-            replay::commands::replay_delete,
-            replay::commands::replay_export,
-            replay::commands::replay_play,
-            replay::commands::replay_get_enabled,
-            replay::commands::replay_list,
-            replay::commands::replay_seek,
-            replay::commands::replay_set_enabled,
-            replay::commands::replay_stop
         ])
         .build(tauri::generate_context!())
         .expect("Failed to build tauri application")

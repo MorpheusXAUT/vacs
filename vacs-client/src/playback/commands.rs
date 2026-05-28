@@ -3,9 +3,9 @@ use crate::audio::PlaybackDeviceType;
 use crate::audio::manager::AudioManagerHandle;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
 use crate::error::Error;
+use crate::playback::recorder::{CLIP_PROGRESS_EVENT, PlaybackRecorderHandle};
+use crate::playback::{ClipMeta, PlaybackError};
 use crate::radio::track_audio::TrackAudioRadioHandle;
-use crate::replay::recorder::{CLIP_PROGRESS_EVENT, ReplayRecorderHandle};
-use crate::replay::{ClipMeta, ReplayError};
 use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -16,29 +16,29 @@ use vacs_audio::sources::wav::WavSource;
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_get_enabled(app_state: State<'_, AppState>) -> Result<bool, Error> {
-    Ok(app_state.lock().await.config.client.replay.enabled)
+pub async fn playback_get_enabled(app_state: State<'_, AppState>) -> Result<bool, Error> {
+    Ok(app_state.lock().await.config.client.playback.enabled)
 }
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_set_enabled(
+pub async fn playback_set_enabled(
     app: AppHandle,
     app_state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<(), Error> {
-    let (persisted_client_config, replay_config) = {
+    let (persisted_client_config, playback_config) = {
         let mut state = app_state.lock().await;
 
-        if state.config.client.replay.enabled == enabled {
+        if state.config.client.playback.enabled == enabled {
             return Ok(());
         }
 
-        state.config.client.replay.enabled = enabled;
-        let replay_config = state.config.client.replay.clone();
+        state.config.client.playback.enabled = enabled;
+        let playback_config = state.config.client.playback.clone();
         (
             PersistedClientConfig::from(state.config.client.clone()),
-            replay_config,
+            playback_config,
         )
     };
 
@@ -53,18 +53,18 @@ pub async fn replay_set_enabled(
         // recorder will be started the next time the radio integration comes up.
         let radio = app.state::<TrackAudioRadioHandle>().read().clone();
         if let Some(radio) = radio {
-            replay_config.start(&app, radio).await;
+            playback_config.start(&app, radio).await;
         } else {
-            log::info!("replay enabled in config but no TrackAudio radio is active");
+            log::info!("playback enabled in config but no TrackAudio radio is active");
         }
     } else {
         // Stop any currently running recorder. The slot stays in place; future
-        // ReplayConfig::start calls will be no-ops while replay is disabled.
-        let handle = app.state::<ReplayRecorderHandle>();
+        // PlaybackConfig::start calls will be no-ops while playback is disabled.
+        let handle = app.state::<PlaybackRecorderHandle>();
         let existing = handle.write().take();
         if let Some(recorder) = existing {
             recorder.shutdown();
-            log::info!("replay disabled; stopped active recorder");
+            log::info!("playback disabled; stopped active recorder");
         }
     }
 
@@ -73,8 +73,8 @@ pub async fn replay_set_enabled(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_list(
-    recorder: State<'_, ReplayRecorderHandle>,
+pub async fn playback_list(
+    recorder: State<'_, PlaybackRecorderHandle>,
 ) -> Result<Vec<ClipMeta>, Error> {
     Ok(recorder
         .read()
@@ -85,8 +85,8 @@ pub async fn replay_list(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_delete(
-    recorder: State<'_, ReplayRecorderHandle>,
+pub async fn playback_delete(
+    recorder: State<'_, PlaybackRecorderHandle>,
     id: u64,
 ) -> Result<bool, Error> {
     let Some(deleted) = recorder.read().as_ref().map(|r| r.delete(id)).transpose()? else {
@@ -97,7 +97,7 @@ pub async fn replay_delete(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_clear(recorder: State<'_, ReplayRecorderHandle>) -> Result<(), Error> {
+pub async fn playback_clear(recorder: State<'_, PlaybackRecorderHandle>) -> Result<(), Error> {
     if let Some(r) = recorder.read().as_ref() {
         r.clear()?;
     }
@@ -106,9 +106,9 @@ pub async fn replay_clear(recorder: State<'_, ReplayRecorderHandle>) -> Result<(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_play(
+pub async fn playback_play(
     app: AppHandle,
-    recorder: State<'_, ReplayRecorderHandle>,
+    recorder: State<'_, PlaybackRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
     id: u64,
     device_type: PlaybackDeviceType,
@@ -120,7 +120,7 @@ pub async fn replay_play(
         .as_ref()
         .and_then(|r| r.get(id).map(|m| m.path));
     let Some(path) = path else {
-        return Err(ReplayError::Other(Box::new(anyhow::anyhow!("clip {id} not found"))).into());
+        return Err(PlaybackError::Other(Box::new(anyhow::anyhow!("clip {id} not found"))).into());
     };
 
     let audio_manager = audio_manager.read();
@@ -137,7 +137,7 @@ pub async fn replay_play(
                     Some(Box::new(move |progress| {
                         app.emit(CLIP_PROGRESS_EVENT, progress).ok();
                         if progress == 1.0 {
-                            let recorder = app.state::<ReplayRecorderHandle>();
+                            let recorder = app.state::<PlaybackRecorderHandle>();
                             if let Some(r) = recorder.write().as_mut() {
                                 r.set_playing_source_id(None)
                             }
@@ -160,13 +160,13 @@ pub async fn replay_play(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_stop(
+pub async fn playback_stop(
     app: AppHandle,
-    recorder: State<'_, ReplayRecorderHandle>,
+    recorder: State<'_, PlaybackRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
 ) -> Result<(), Error> {
     if !stop_playing_source(&recorder, &audio_manager) {
-        log::warn!("replay stop called but no clip is playing");
+        log::warn!("playback stop called but no clip is playing");
     }
 
     app.emit(CLIP_PROGRESS_EVENT, 0.0).ok();
@@ -175,7 +175,7 @@ pub async fn replay_stop(
 }
 
 fn stop_playing_source(
-    recorder: &State<ReplayRecorderHandle>,
+    recorder: &State<PlaybackRecorderHandle>,
     audio_manager: &State<AudioManagerHandle>,
 ) -> bool {
     if let Some((source_id, is_speaker)) = recorder
@@ -193,8 +193,8 @@ fn stop_playing_source(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_seek(
-    recorder: State<'_, ReplayRecorderHandle>,
+pub async fn playback_seek(
+    recorder: State<'_, PlaybackRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
     millis: i64,
 ) -> Result<(), Error> {
@@ -221,7 +221,7 @@ pub async fn replay_seek(
             );
         }
     } else {
-        log::warn!("replay skip called but no clip is playing");
+        log::warn!("playback skip called but no clip is playing");
     }
 
     Ok(())
@@ -231,9 +231,9 @@ pub async fn replay_seek(
 /// from rolling-deque eviction. Returns the destination path.
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn replay_export(
+pub async fn playback_export(
     app: AppHandle,
-    recorder: State<'_, ReplayRecorderHandle>,
+    recorder: State<'_, PlaybackRecorderHandle>,
     id: u64,
 ) -> Result<PathBuf, Error> {
     let Some(path) = recorder
@@ -248,7 +248,7 @@ pub async fn replay_export(
     };
 
     if let Err(err) = app.opener().open_path(path.to_string_lossy(), None::<&str>) {
-        return Err(ReplayError::Other(Box::new(anyhow::anyhow!(
+        return Err(PlaybackError::Other(Box::new(anyhow::anyhow!(
             "Cannot open export directory: {err}"
         )))
         .into());

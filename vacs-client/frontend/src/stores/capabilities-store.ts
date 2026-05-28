@@ -10,7 +10,7 @@ export const useCapabilitiesStore = create<CapabilitiesState>()(set => ({
     alwaysOnTop: false,
     keybindListener: false,
     keybindEmitter: false,
-    replay: false,
+    playback: false,
     platform: "Unknown",
     setCapabilities: capabilities => {
         set({...capabilities});

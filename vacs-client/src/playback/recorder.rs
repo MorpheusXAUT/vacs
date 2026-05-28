@@ -1,16 +1,16 @@
-//! Replay recorder: glues an [`ReplaySource`] to the [`Fsm`], a per-clip [`ClipWriter`],
+//! Playback recorder: glues an [`PlaybackSource`] to the [`Fsm`], a per-clip [`ClipWriter`],
 //! and the [`ClipStore`] rolling deque.
 //!
-//! The recorder owns one tokio task that consumes [`ReplaySourceEvent`]s, feeds them to
+//! The recorder owns one tokio task that consumes [`PlaybackSourceEvent`]s, feeds them to
 //! the FSM, and turns the resulting [`FsmAction`]s into file operations. A periodic ticker
 //! drives hangover-based clip closure.
 
 use crate::audio::PlaybackDeviceType;
-use crate::replay::fsm::{Fsm, FsmAction};
-use crate::replay::source::{ReplaySource, ReplaySourceEvent};
-use crate::replay::storage::ClipStore;
-use crate::replay::writer::ClipWriter;
-use crate::replay::{ClipMeta, ReplayConfig, ReplayError};
+use crate::playback::fsm::{Fsm, FsmAction};
+use crate::playback::source::{PlaybackSource, PlaybackSourceEvent};
+use crate::playback::storage::ClipStore;
+use crate::playback::writer::ClipWriter;
+use crate::playback::{ClipMeta, PlaybackConfig, PlaybackError};
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -23,16 +23,16 @@ use tokio_util::sync::CancellationToken;
 use vacs_audio::sources::AudioSourceId;
 
 const TICK_INTERVAL_MS: u64 = 100;
-const CLIP_RECORDED_EVENT: &str = "replay:clip-recorded";
-const CLIP_EVICTED_EVENT: &str = "replay:clip-evicted";
+const CLIP_RECORDED_EVENT: &str = "playback:clip-recorded";
+const CLIP_EVICTED_EVENT: &str = "playback:clip-evicted";
 
-pub const CLIP_PROGRESS_EVENT: &str = "replay:progress";
+pub const CLIP_PROGRESS_EVENT: &str = "playback:progress";
 
 /// Snapshot of an in-flight clip the recorder is currently writing.
 struct OpenClip {
     writer: ClipWriter,
     path: PathBuf,
-    tap: crate::replay::TapId,
+    tap: crate::playback::TapId,
     callsign: Option<String>,
     frequency: Option<trackaudio::Frequency>,
     started_at: SystemTime,
@@ -48,7 +48,7 @@ impl OpenClip {
         id: u64,
         ended_at: Option<SystemTime>,
         duration_override: Option<u64>,
-    ) -> Result<ClipMeta, (PathBuf, ReplayError)> {
+    ) -> Result<ClipMeta, (PathBuf, PlaybackError)> {
         let OpenClip {
             writer,
             path,
@@ -86,7 +86,7 @@ impl OpenClip {
 }
 
 /// Public handle to a running recorder.
-pub struct ReplayRecorder {
+pub struct PlaybackRecorder {
     store: Arc<Mutex<ClipStore>>,
     playing_source_id: Option<(AudioSourceId, PlaybackDeviceType)>,
     cancel: CancellationToken,
@@ -96,22 +96,22 @@ pub struct ReplayRecorder {
 /// [`crate::audio::manager::AudioManagerHandle`] and
 /// [`crate::keybinds::engine::KeybindEngineHandle`].
 ///
-/// The slot is created empty at startup and populated by [`crate::replay::ReplayConfig::start`]
-/// once the radio integration is up and replay is enabled in config. Replacing the slot
+/// The slot is created empty at startup and populated by [`crate::playback::PlaybackConfig::start`]
+/// once the radio integration is up and playback is enabled in config. Replacing the slot
 /// shuts down any previous recorder.
-pub type ReplayRecorderHandle = Arc<RwLock<Option<ReplayRecorder>>>;
+pub type PlaybackRecorderHandle = Arc<RwLock<Option<PlaybackRecorder>>>;
 
-impl ReplayRecorder {
+impl PlaybackRecorder {
     /// Spawn a recorder. Returns immediately; capture and writing happen on a background task.
     ///
-    /// `app` is used to emit `replay:clip-recorded` and `replay:clip-evicted` events to
+    /// `app` is used to emit `playback:clip-recorded` and `playback:clip-evicted` events to
     /// the frontend whenever the rolling deque changes.
     pub async fn spawn(
         app: AppHandle,
-        config: ReplayConfig,
+        config: PlaybackConfig,
         clip_dir: PathBuf,
-        mut source: Box<dyn ReplaySource>,
-    ) -> Result<Self, ReplayError> {
+        mut source: Box<dyn PlaybackSource>,
+    ) -> Result<Self, PlaybackError> {
         let store = Arc::new(Mutex::new(ClipStore::open(clip_dir, config.max_clips)?));
         let rx = source.start().await?;
         let cancel = CancellationToken::new();
@@ -133,11 +133,11 @@ impl ReplayRecorder {
         self.store.lock().list()
     }
 
-    pub fn delete(&self, id: u64) -> Result<bool, ReplayError> {
+    pub fn delete(&self, id: u64) -> Result<bool, PlaybackError> {
         self.store.lock().delete(id)
     }
 
-    pub fn clear(&self) -> Result<(), ReplayError> {
+    pub fn clear(&self) -> Result<(), PlaybackError> {
         self.store.lock().clear()
     }
 
@@ -145,7 +145,7 @@ impl ReplayRecorder {
         &self,
         id: u64,
         target: Option<&std::path::Path>,
-    ) -> Result<PathBuf, ReplayError> {
+    ) -> Result<PathBuf, PlaybackError> {
         self.store.lock().export(id, target)
     }
 
@@ -170,7 +170,7 @@ impl ReplayRecorder {
     }
 }
 
-impl Drop for ReplayRecorder {
+impl Drop for PlaybackRecorder {
     fn drop(&mut self) {
         self.cancel.cancel();
     }
@@ -178,10 +178,10 @@ impl Drop for ReplayRecorder {
 
 async fn run(
     app: AppHandle,
-    config: ReplayConfig,
+    config: PlaybackConfig,
     store: Arc<Mutex<ClipStore>>,
-    mut source: Box<dyn ReplaySource>,
-    mut rx: mpsc::Receiver<ReplaySourceEvent>,
+    mut source: Box<dyn PlaybackSource>,
+    mut rx: mpsc::Receiver<PlaybackSourceEvent>,
     cancel: CancellationToken,
 ) {
     let mut fsm = Fsm::new(&config);

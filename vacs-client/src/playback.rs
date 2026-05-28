@@ -5,8 +5,8 @@ pub mod source;
 pub mod storage;
 pub mod writer;
 
+use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::track_audio::TrackAudioRadio;
-use crate::replay::recorder::ReplayRecorderHandle;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -81,7 +81,7 @@ pub enum RecordingMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ReplayConfig {
+pub struct PlaybackConfig {
     pub enabled: bool,
     pub max_clips: usize,
     pub hangover_ms: u64,
@@ -89,7 +89,7 @@ pub struct ReplayConfig {
     pub recording_mode: RecordingMode,
 }
 
-impl Default for ReplayConfig {
+impl Default for PlaybackConfig {
     fn default() -> Self {
         Self {
             enabled: false,
@@ -101,23 +101,23 @@ impl Default for ReplayConfig {
     }
 }
 
-impl ReplayConfig {
+impl PlaybackConfig {
     pub async fn start(&self, app: &AppHandle, radio: Arc<TrackAudioRadio>) {
         if !self.enabled {
-            log::info!("replay disabled by config");
+            log::info!("playback disabled by config");
             return;
         }
 
         let source = match make_source(radio) {
             Ok(s) => s,
-            Err(ReplayError::Unsupported) => {
+            Err(PlaybackError::Unsupported) => {
                 log::warn!(
-                    "replay enabled in config, but capture is not supported on this platform"
+                    "playback enabled in config, but capture is not supported on this platform"
                 );
                 return;
             }
             Err(err) => {
-                log::error!("failed to build replay source: {err}");
+                log::error!("failed to build playback source: {err}");
                 return;
             }
         };
@@ -129,13 +129,13 @@ impl ReplayConfig {
                 return;
             }
         };
-        let clip_dir = app_data_dir.join("replay");
+        let clip_dir = app_data_dir.join("playback");
 
         log::info!("starting recorder, clip dir = {}", clip_dir.display());
 
-        match recorder::ReplayRecorder::spawn(app.clone(), self.clone(), clip_dir, source).await {
+        match recorder::PlaybackRecorder::spawn(app.clone(), self.clone(), clip_dir, source).await {
             Ok(recorder) => {
-                let handle = app.state::<ReplayRecorderHandle>();
+                let handle = app.state::<PlaybackRecorderHandle>();
                 let mut slot = handle.write();
                 if let Some(existing) = slot.take() {
                     existing.shutdown();
@@ -151,14 +151,14 @@ impl ReplayConfig {
 }
 
 #[derive(Debug, Error)]
-pub enum ReplayError {
-    #[error("Replay I/O error: {0}")]
+pub enum PlaybackError {
+    #[error("Playback I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("WAV writer error: {0}")]
     Wav(String),
     #[error("Audio source error: {0}")]
     Source(String),
-    #[error("Replay capture not supported on this platform")]
+    #[error("Playback capture not supported on this platform")]
     #[cfg_attr(
         target_os = "linux",
         allow(dead_code, reason = "constructed by make_source on non-Linux targets")
@@ -168,11 +168,11 @@ pub enum ReplayError {
     Other(#[from] Box<anyhow::Error>),
 }
 
-/// Build the platform-specific replay source. Returns [`ReplayError::Unsupported`]
+/// Build the platform-specific playback source. Returns [`PlaybackError::Unsupported`]
 /// on platforms where no loopback capture backend is implemented yet.
 fn make_source(
     #[cfg_attr(not(target_os = "linux"), allow(unused_variables))] radio: Arc<TrackAudioRadio>,
-) -> Result<Box<dyn source::ReplaySource>, ReplayError> {
+) -> Result<Box<dyn source::PlaybackSource>, PlaybackError> {
     #[cfg(target_os = "linux")]
     {
         Ok(Box::new(source::TrackAudioLoopbackSource::new(radio)))
@@ -183,6 +183,6 @@ fn make_source(
     }
     #[cfg(target_os = "macos")]
     {
-        Err(ReplayError::Unsupported)
+        Err(PlaybackError::Unsupported)
     }
 }
