@@ -157,7 +157,7 @@ impl ClipStore {
         let target = unique_path(dir, &base, "wav");
         fs::copy(&meta.path, &target)?;
 
-        Ok(target)
+        Ok(dir.into())
     }
 
     fn evict_overflow(&mut self) -> Vec<ClipMeta> {

@@ -53,7 +53,7 @@ pub struct ClipMeta {
     pub id: u64,
     pub path: PathBuf,
     pub tap: TapId,
-    pub callsign: Option<String>,
+    pub callsign: Option<String>, // TODO: Make this a Vec and allow multiple callsigns per clip
     pub frequency: Option<Frequency>,
     pub started_at: SystemTime,
     pub ended_at: SystemTime,
@@ -94,7 +94,7 @@ impl Default for ReplayConfig {
         Self {
             enabled: false,
             max_clips: 5,
-            hangover_ms: 500,
+            hangover_ms: 250,
             max_clip_duration_s: 90,
             recording_mode: RecordingMode::PerTap,
         }
