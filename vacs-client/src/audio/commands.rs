@@ -1,7 +1,10 @@
 use crate::app::state::AppState;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::audio::manager::{AudioManagerHandle, SourceType};
-use crate::audio::{AudioDevices, AudioHosts, AudioVolumes, ClientAudioDeviceType, VolumeType};
+use crate::audio::manager::AudioManagerHandle;
+use crate::audio::source_type::SourceType;
+use crate::audio::{
+    AudioDevices, AudioHosts, AudioVolumes, ClientAudioDeviceType, PlaybackDeviceType, VolumeType,
+};
 use crate::config::{AUDIO_SETTINGS_FILE_NAME, AudioConfig, Persistable, PersistedAudioConfig};
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
@@ -60,10 +63,20 @@ pub async fn audio_set_host(
         // Device IDs are host-scoped, so clear them when switching hosts.
         audio_config.input_device_id = None;
         audio_config.output_device_id = None;
+        audio_config.speaker_device_id = None;
 
-        audio_manager
-            .write()
-            .switch_output_device(app.clone(), &audio_config, false)?;
+        audio_manager.write().switch_playback_device(
+            app.clone(),
+            &audio_config,
+            PlaybackDeviceType::Output,
+            false,
+        )?;
+        audio_manager.write().switch_playback_device(
+            app.clone(),
+            &audio_config,
+            PlaybackDeviceType::Speaker,
+            false,
+        )?;
 
         state.config.audio = audio_config;
         state.config.audio.clone().into()
@@ -156,7 +169,12 @@ pub async fn audio_set_device(
                 audio_config.output_device_name = device_name;
                 audio_config.output_device_id = device_id;
 
-                audio_manager.switch_output_device(app.clone(), &audio_config, false)?;
+                audio_manager.switch_playback_device(
+                    app.clone(),
+                    &audio_config,
+                    PlaybackDeviceType::Output,
+                    false,
+                )?;
 
                 state.config.audio = audio_config;
             }
@@ -166,7 +184,12 @@ pub async fn audio_set_device(
                 audio_config.speaker_device_name = device_name;
                 audio_config.speaker_device_id = device_id;
 
-                audio_manager.switch_speaker_device(app.clone(), &audio_config, false)?;
+                audio_manager.switch_playback_device(
+                    app.clone(),
+                    &audio_config,
+                    PlaybackDeviceType::Speaker,
+                    false,
+                )?;
 
                 state.config.audio = audio_config;
             }

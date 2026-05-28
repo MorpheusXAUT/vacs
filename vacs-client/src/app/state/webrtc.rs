@@ -1,6 +1,6 @@
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::{AppState, AppStateInner, sealed};
-use crate::audio::manager::SourceType;
+use crate::audio::source_type::SourceType;
 use crate::config::{ENCODED_AUDIO_FRAME_BUFFER_SIZE, ICE_CONFIG_EXPIRY_LEEWAY};
 use crate::error::{CallError, Error};
 use anyhow::Context;

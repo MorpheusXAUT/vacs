@@ -1,6 +1,8 @@
 use crate::app::state::AppState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
+use crate::audio::PlaybackDeviceType;
+use crate::audio::source_type::SourceType;
 use crate::config::AudioConfig;
 use crate::error::{Error, FrontendError};
 use parking_lot::RwLock;
@@ -14,7 +16,6 @@ use vacs_audio::EncodedAudioFrame;
 use vacs_audio::device::{DeviceSelector, DeviceType, StreamDevice};
 use vacs_audio::error::AudioError;
 use vacs_audio::sources::opus::OpusSource;
-use vacs_audio::sources::waveform::{Waveform, WaveformSource, WaveformTone};
 use vacs_audio::sources::{AudioSource, AudioSourceId};
 use vacs_audio::stream::capture::{CaptureStream, InputLevel};
 use vacs_audio::stream::playback::PlaybackStream;
@@ -23,131 +24,14 @@ use vacs_signaling::protocol::ws::shared::CallErrorReason;
 
 const AUDIO_STREAM_ERROR_CHANNEL_SIZE: usize = 32;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub enum SourceType {
-    Opus,
-    Ring,
-    PriorityRing,
-    Ringback,
-    RingbackOneshot,
-    Click,
-    CallStart,
-    CallEnd,
-}
-
-impl SourceType {
-    fn into_waveform_source(
-        self,
-        sample_rate: f32,
-        output_channels: usize,
-        volume: f32,
-    ) -> WaveformSource {
-        match self {
-            SourceType::Opus => {
-                unimplemented!("Cannot create waveform source for Opus SourceType")
-            }
-            SourceType::Ring => WaveformSource::single(
-                WaveformTone::new(497.0, Waveform::Triangle, 0.2),
-                Duration::from_secs_f32(1.69),
-                None,
-                Duration::from_millis(10),
-                sample_rate,
-                output_channels,
-                volume,
-            ),
-            SourceType::PriorityRing => WaveformSource::new(
-                [
-                    (
-                        WaveformTone::new(769.0, Waveform::Sine, 0.2),
-                        Duration::from_millis(120),
-                    ),
-                    (
-                        WaveformTone::new(628.0, Waveform::Triangle, 0.13),
-                        Duration::from_millis(80),
-                    ),
-                    (
-                        WaveformTone::new(492.0, Waveform::Triangle, 0.08),
-                        Duration::from_millis(90),
-                    ),
-                ]
-                .repeat(4),
-                None,
-                Duration::from_millis(10),
-                sample_rate,
-                output_channels,
-                volume,
-            ),
-            SourceType::Ringback => WaveformSource::single(
-                WaveformTone::new(425.0, Waveform::Sine, 0.2),
-                Duration::from_secs(1),
-                Some(Duration::from_secs(4)),
-                Duration::from_millis(10),
-                sample_rate,
-                output_channels,
-                volume,
-            ),
-            SourceType::RingbackOneshot => WaveformSource::single(
-                WaveformTone::new(425.0, Waveform::Sine, 0.2),
-                Duration::from_secs(1),
-                None,
-                Duration::from_millis(10),
-                sample_rate,
-                2,
-                volume,
-            ),
-            SourceType::Click => WaveformSource::single(
-                WaveformTone::new(4000.0, Waveform::Sine, 0.2),
-                Duration::from_millis(20),
-                None,
-                Duration::from_millis(1),
-                sample_rate,
-                output_channels,
-                volume,
-            ),
-            SourceType::CallStart => WaveformSource::new(
-                vec![
-                    (
-                        WaveformTone::new(600.0, Waveform::Sine, 0.2),
-                        Duration::from_millis(100),
-                    ),
-                    (
-                        WaveformTone::new(900.0, Waveform::Sine, 0.15),
-                        Duration::from_millis(100),
-                    ),
-                ],
-                None,
-                Duration::from_millis(10),
-                sample_rate,
-                output_channels,
-                volume,
-            ),
-            SourceType::CallEnd => WaveformSource::new(
-                vec![
-                    (
-                        WaveformTone::new(650.0, Waveform::Sine, 0.2),
-                        Duration::from_millis(100),
-                    ),
-                    (
-                        WaveformTone::new(450.0, Waveform::Sine, 0.15),
-                        Duration::from_millis(100),
-                    ),
-                ],
-                None,
-                Duration::from_millis(10),
-                sample_rate,
-                output_channels,
-                volume,
-            ),
-        }
-    }
-}
+type SourceMap = HashMap<SourceType, AudioSourceId>;
 
 pub struct AudioManager {
     output: PlaybackStream,
     speaker: Option<PlaybackStream>,
     input: Option<CaptureStream>,
-    output_source_ids: HashMap<SourceType, AudioSourceId>,
-    speaker_source_ids: HashMap<SourceType, AudioSourceId>,
+    output_source_ids: SourceMap,
+    speaker_source_ids: SourceMap,
 }
 
 pub type AudioManagerHandle = Arc<RwLock<AudioManager>>;
@@ -166,7 +50,7 @@ impl AudioManager {
             is_fallback,
             audio_config,
             false,
-            false,
+            PlaybackDeviceType::Output,
         )?;
 
         let (speaker, speaker_source_ids) = if audio_config.speaker_enabled {
@@ -182,7 +66,7 @@ impl AudioManager {
                 is_fallback,
                 audio_config,
                 false,
-                true,
+                PlaybackDeviceType::Speaker,
             )?;
             (Some(speaker), speaker_source_ids)
         } else {
@@ -206,57 +90,54 @@ impl AudioManager {
         self.speaker.as_ref().map(|s| s.device_name().clone())
     }
 
-    pub fn switch_output_device(
+    pub fn switch_playback_device(
         &mut self,
         app: AppHandle,
         audio_config: &AudioConfig,
+        device_type: PlaybackDeviceType,
         restarting: bool,
     ) -> Result<(), Error> {
+        if device_type == PlaybackDeviceType::Speaker && !audio_config.speaker_enabled {
+            self.speaker = None;
+            self.speaker_source_ids = HashMap::new();
+            return Ok(());
+        }
+
+        let (device_id, device_name) = match device_type {
+            PlaybackDeviceType::Output => (
+                audio_config.output_device_id.as_deref(),
+                audio_config.output_device_name.as_deref(),
+            ),
+            PlaybackDeviceType::Speaker => (
+                audio_config.speaker_device_id.as_deref(),
+                audio_config.speaker_device_name.as_deref(),
+            ),
+        };
+
         let (output_device, is_fallback) = DeviceSelector::open(
             DeviceType::Output,
             audio_config.host_name.as_deref(),
-            audio_config.output_device_id.as_deref(),
-            audio_config.output_device_name.as_deref(),
+            device_id,
+            device_name,
         )?;
-        let (output, source_ids) = Self::create_playback_stream(
+        let (stream, source_ids) = Self::create_playback_stream(
             app,
             output_device,
             is_fallback,
             audio_config,
             restarting,
-            false,
+            device_type,
         )?;
-        self.output = output;
-        self.output_source_ids = source_ids;
-        Ok(())
-    }
 
-    pub fn switch_speaker_device(
-        &mut self,
-        app: AppHandle,
-        audio_config: &AudioConfig,
-        restarting: bool,
-    ) -> Result<(), Error> {
-        if audio_config.speaker_enabled {
-            let (speaker_device, is_fallback) = DeviceSelector::open(
-                DeviceType::Output,
-                audio_config.host_name.as_deref(),
-                audio_config.speaker_device_id.as_deref(),
-                audio_config.speaker_device_name.as_deref(),
-            )?;
-            let (speaker, source_ids) = Self::create_playback_stream(
-                app,
-                speaker_device,
-                is_fallback,
-                audio_config,
-                restarting,
-                true,
-            )?;
-            self.speaker = Some(speaker);
-            self.speaker_source_ids = source_ids;
-        } else {
-            self.speaker = None;
-            self.speaker_source_ids = HashMap::new();
+        match device_type {
+            PlaybackDeviceType::Output => {
+                self.output = stream;
+                self.output_source_ids = source_ids;
+            }
+            PlaybackDeviceType::Speaker => {
+                self.speaker = Some(stream);
+                self.speaker_source_ids = source_ids;
+            }
         }
 
         Ok(())
@@ -507,8 +388,8 @@ impl AudioManager {
         is_fallback: bool,
         audio_config: &AudioConfig,
         restarting: bool,
-        speaker: bool,
-    ) -> Result<(PlaybackStream, HashMap<SourceType, AudioSourceId>), Error> {
+        device_type: PlaybackDeviceType,
+    ) -> Result<(PlaybackStream, SourceMap), Error> {
         if is_fallback {
             app.emit::<FrontendError>("error", FrontendError::from(Error::AudioDevice(Box::from(AudioError::Other(
                 anyhow::anyhow!("Selected audio output device is not available, falling back to next best option. Check your audio settings.")
@@ -524,150 +405,65 @@ impl AudioManager {
         let audio_config_clone = audio_config.clone();
         tauri::async_runtime::spawn(async move {
             while let Some(err) = error_rx.recv().await {
-                let state = app.state::<AppState>();
-                let mut state = state.lock().await;
-
-                if restarting {
-                    log::error!(
-                        "Restarting output device after failure errored, cannot recover: {:?}",
-                        err
-                    );
-                    app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
-                        anyhow::anyhow!("Audio output device failed to start irrecoverably, check your audio settings and restart the application.")
-                    ))).into()).ok();
-                } else {
-                    if let Some(call_id) = state.active_call_id().cloned() {
-                        log::debug!("Ending active call {call_id} due to playback stream error");
-
-                        state.cleanup_call(&call_id).await;
-                        if let Err(err) = state
-                            .send_signaling_message(shared::CallError {
-                                call_id,
-                                reason: CallErrorReason::AudioFailure,
-                                message: None,
-                            })
-                            .await
-                        {
-                            log::warn!("Failed to send call end signaling message: {:?}", err);
-                        };
-                        state.set_outgoing_call(None);
-                        app.state::<AudioManagerHandle>()
-                            .read()
-                            .stop(SourceType::Ringback);
-
-                        app.emit("signaling:call-end", &call_id).ok();
-                    }
-
-                    let res = {
-                        let audio_manager = app.state::<AudioManagerHandle>();
-                        let mut audio_manager = audio_manager.write();
-
-                        if speaker {
-                            audio_manager.switch_speaker_device(
-                                app.clone(),
-                                &audio_config_clone,
-                                true,
-                            )
-                        } else {
-                            audio_manager.switch_output_device(
-                                app.clone(),
-                                &audio_config_clone,
-                                true,
-                            )
-                        }
-                    };
-
-                    let device = if speaker { "speaker" } else { "output" };
-                    if let Err(err) = res {
-                        log::error!("Failed to switch {device} device after failure: {:?}", err);
-
-                        app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
-                            anyhow::anyhow!("Audio {device} device failed to start irrecoverably, check your audio settings and restart the application.")
-                        ))).into()).ok();
-
-                        return;
-                    } else {
-                        log::info!(
-                            "Successfully restarted {device} device after failure, continuing playback"
-                        );
-                    }
-
-                    app.emit::<FrontendError>(
-                        "error",
-                        FrontendError::from(Error::from(err)).non_critical(),
-                    )
-                    .ok();
-                }
+                handle_playback_stream_error(
+                    err,
+                    restarting,
+                    &audio_config_clone,
+                    device_type,
+                    app.clone(),
+                )
+                .await;
             }
             log::debug!("Playback stream error receiver closed");
         });
 
         let mut source_ids = HashMap::new();
 
-        source_ids.insert(
-            SourceType::Ring,
-            output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                SourceType::Ring,
-                sample_rate,
-                channels,
-                audio_config.chime_volume,
-            ))),
-        );
-        source_ids.insert(
+        let insert_waveform_source =
+            |source_ids: &mut SourceMap, source_type: SourceType, volume: f32| {
+                source_ids.insert(
+                    source_type,
+                    output.add_audio_source(Box::new(SourceType::into_waveform_source(
+                        source_type,
+                        sample_rate,
+                        channels,
+                        volume,
+                    ))),
+                );
+            };
+
+        insert_waveform_source(&mut source_ids, SourceType::Ring, audio_config.chime_volume);
+        insert_waveform_source(
+            &mut source_ids,
             SourceType::PriorityRing,
-            output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                SourceType::PriorityRing,
-                sample_rate,
-                channels,
-                audio_config.chime_volume,
-            ))),
+            audio_config.chime_volume,
         );
-        source_ids.insert(
+        insert_waveform_source(
+            &mut source_ids,
             SourceType::Click,
-            output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                SourceType::Click,
-                sample_rate,
-                channels,
-                audio_config.click_volume,
-            ))),
+            audio_config.click_volume,
         );
 
-        if !speaker {
-            source_ids.insert(
+        if device_type == PlaybackDeviceType::Output {
+            insert_waveform_source(
+                &mut source_ids,
                 SourceType::Ringback,
-                output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                    SourceType::Ringback,
-                    sample_rate,
-                    channels,
-                    audio_config.output_device_volume,
-                ))),
+                audio_config.output_device_volume,
             );
-            source_ids.insert(
+            insert_waveform_source(
+                &mut source_ids,
                 SourceType::RingbackOneshot,
-                output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                    SourceType::RingbackOneshot,
-                    sample_rate,
-                    channels,
-                    audio_config.output_device_volume,
-                ))),
+                audio_config.output_device_volume,
             );
-            source_ids.insert(
+            insert_waveform_source(
+                &mut source_ids,
                 SourceType::CallStart,
-                output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                    SourceType::CallStart,
-                    sample_rate,
-                    channels,
-                    audio_config.output_device_volume,
-                ))),
+                audio_config.output_device_volume,
             );
-            source_ids.insert(
+            insert_waveform_source(
+                &mut source_ids,
                 SourceType::CallEnd,
-                output.add_audio_source(Box::new(SourceType::into_waveform_source(
-                    SourceType::CallEnd,
-                    sample_rate,
-                    channels,
-                    audio_config.output_device_volume,
-                ))),
+                audio_config.output_device_volume,
             );
         }
 
@@ -677,55 +473,127 @@ impl AudioManager {
     pub fn add_audio_source(
         &self,
         source_fn: impl FnOnce(u32, u16) -> Box<dyn AudioSource>,
-        speaker: bool,
+        device_type: PlaybackDeviceType,
     ) -> AudioSourceId {
-        if speaker && let Some(speaker) = &self.speaker {
-            speaker.add_audio_source(source_fn(speaker.sample_rate(), speaker.channels()))
-        } else {
-            self.output
-                .add_audio_source(source_fn(self.output.sample_rate(), self.output.channels()))
-        }
+        let (sample_rate, channels) = match (device_type, self.speaker.as_ref()) {
+            (PlaybackDeviceType::Output, _) | (PlaybackDeviceType::Speaker, None) => {
+                (self.output.sample_rate(), self.output.channels())
+            }
+            (PlaybackDeviceType::Speaker, Some(speaker)) => {
+                (speaker.sample_rate(), speaker.channels())
+            }
+        };
+        self.get_stream_for_playback(device_type)
+            .add_audio_source(source_fn(sample_rate, channels))
     }
 
-    pub fn start_audio_source(&self, source_id: AudioSourceId, speaker: bool) {
-        if speaker && let Some(speaker) = &self.speaker {
-            speaker.start_audio_source(source_id)
-        } else {
-            self.output.start_audio_source(source_id)
-        }
+    pub fn start_audio_source(&self, source_id: AudioSourceId, device_type: PlaybackDeviceType) {
+        self.get_stream_for_playback(device_type)
+            .start_audio_source(source_id);
+    }
+
+    pub fn remove_audio_source(&self, source_id: AudioSourceId, device_type: PlaybackDeviceType) {
+        self.get_stream_for_playback(device_type)
+            .remove_audio_source(source_id);
     }
 
     pub fn skip_in_audio_source(
         &self,
         source_id: AudioSourceId,
         duration: Duration,
-        speaker: bool,
+        device_type: PlaybackDeviceType,
     ) {
-        if speaker && let Some(speaker) = &self.speaker {
-            speaker.skip_in_audio_source(source_id, duration)
-        } else {
-            self.output.skip_in_audio_source(source_id, duration)
-        }
+        self.get_stream_for_playback(device_type)
+            .skip_in_audio_source(source_id, duration);
     }
 
     pub fn rewind_in_audio_source(
         &self,
         source_id: AudioSourceId,
         duration: Duration,
-        speaker: bool,
+        device_type: PlaybackDeviceType,
     ) {
-        if speaker && let Some(speaker) = &self.speaker {
-            speaker.rewind_in_audio_source(source_id, duration)
-        } else {
-            self.output.rewind_in_audio_source(source_id, duration)
-        }
+        self.get_stream_for_playback(device_type)
+            .rewind_in_audio_source(source_id, duration);
     }
 
-    pub fn remove_audio_source(&self, source_id: AudioSourceId, speaker: bool) {
-        if speaker && let Some(speaker) = &self.speaker {
-            speaker.remove_audio_source(source_id)
-        } else {
-            self.output.remove_audio_source(source_id)
+    fn get_stream_for_playback(&self, device_type: PlaybackDeviceType) -> &PlaybackStream {
+        match (device_type, self.speaker.as_ref()) {
+            (PlaybackDeviceType::Output, _) | (PlaybackDeviceType::Speaker, None) => &self.output,
+            (PlaybackDeviceType::Speaker, Some(speaker)) => speaker,
         }
+    }
+}
+
+async fn handle_playback_stream_error(
+    err: AudioError,
+    restarting: bool,
+    audio_config: &AudioConfig,
+    device_type: PlaybackDeviceType,
+    app: AppHandle,
+) {
+    if restarting {
+        log::error!(
+            "Restarting output device after failure errored, cannot recover: {:?}",
+            err
+        );
+        app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
+            anyhow::anyhow!("Audio output device failed to start irrecoverably, check your audio settings and restart the application.")
+        ))).into()).ok();
+    } else {
+        let state = app.state::<AppState>();
+        let mut state = state.lock().await;
+
+        if let Some(call_id) = state.active_call_id().cloned() {
+            log::debug!("Ending active call {call_id} due to playback stream error");
+
+            state.cleanup_call(&call_id).await;
+            if let Err(err) = state
+                .send_signaling_message(shared::CallError {
+                    call_id,
+                    reason: CallErrorReason::AudioFailure,
+                    message: None,
+                })
+                .await
+            {
+                log::warn!("Failed to send call end signaling message: {:?}", err);
+            };
+            state.set_outgoing_call(None);
+            app.state::<AudioManagerHandle>()
+                .read()
+                .stop(SourceType::Ringback);
+
+            app.emit("signaling:call-end", &call_id).ok();
+        }
+
+        let res = {
+            let audio_manager = app.state::<AudioManagerHandle>();
+            let mut audio_manager = audio_manager.write();
+
+            audio_manager.switch_playback_device(app.clone(), audio_config, device_type, true)
+        };
+
+        if let Err(err) = res {
+            log::error!(
+                "Failed to switch {device_type:#?} device after failure: {:?}",
+                err
+            );
+
+            app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
+                anyhow::anyhow!("Audio {device_type:#?} device failed to start irrecoverably, check your audio settings and restart the application.")
+            ))).into()).ok();
+
+            return;
+        } else {
+            log::info!(
+                "Successfully restarted {device_type:#?} device after failure, continuing playback"
+            );
+        }
+
+        app.emit::<FrontendError>(
+            "error",
+            FrontendError::from(Error::from(err)).non_critical(),
+        )
+        .ok();
     }
 }

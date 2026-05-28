@@ -2,7 +2,8 @@ use crate::app::state::http::HttpState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::app::state::{AppState, AppStateInner};
-use crate::audio::manager::{AudioManagerHandle, SourceType};
+use crate::audio::manager::AudioManagerHandle;
+use crate::audio::source_type::SourceType;
 use crate::config::{
     BackendEndpoint, CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig,
 };

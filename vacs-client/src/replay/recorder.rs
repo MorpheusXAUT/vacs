@@ -5,6 +5,7 @@
 //! the FSM, and turns the resulting [`FsmAction`]s into file operations. A periodic ticker
 //! drives hangover-based clip closure.
 
+use crate::audio::PlaybackDeviceType;
 use crate::replay::fsm::{Fsm, FsmAction};
 use crate::replay::source::{ReplaySource, ReplaySourceEvent};
 use crate::replay::storage::ClipStore;
@@ -87,7 +88,7 @@ impl OpenClip {
 /// Public handle to a running recorder.
 pub struct ReplayRecorder {
     store: Arc<Mutex<ClipStore>>,
-    playing_source_id: Option<(AudioSourceId, bool)>, // (source_id, is_speaker)
+    playing_source_id: Option<(AudioSourceId, PlaybackDeviceType)>,
     cancel: CancellationToken,
 }
 
@@ -152,15 +153,15 @@ impl ReplayRecorder {
         self.store.lock().get(id)
     }
 
-    pub fn set_playing_source_id(&mut self, id: Option<(AudioSourceId, bool)>) {
+    pub fn set_playing_source_id(&mut self, id: Option<(AudioSourceId, PlaybackDeviceType)>) {
         self.playing_source_id = id;
     }
 
-    pub fn take_playing_source_id(&mut self) -> Option<(AudioSourceId, bool)> {
+    pub fn take_playing_source_id(&mut self) -> Option<(AudioSourceId, PlaybackDeviceType)> {
         self.playing_source_id.take()
     }
 
-    pub fn get_playing_source_id(&self) -> Option<(AudioSourceId, bool)> {
+    pub fn get_playing_source_id(&self) -> Option<(AudioSourceId, PlaybackDeviceType)> {
         self.playing_source_id
     }
 

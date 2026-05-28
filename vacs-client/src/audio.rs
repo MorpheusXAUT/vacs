@@ -3,6 +3,7 @@ use vacs_audio::device::DeviceType;
 
 pub(crate) mod commands;
 pub(crate) mod manager;
+pub(crate) mod source_type;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,4 +54,10 @@ impl From<ClientAudioDeviceType> for DeviceType {
             ClientAudioDeviceType::Speaker => DeviceType::Output,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlaybackDeviceType {
+    Output,
+    Speaker,
 }

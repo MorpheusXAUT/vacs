@@ -1,7 +1,8 @@
 use crate::app::state::http::HttpState;
 use crate::app::state::webrtc::{AppStateWebrtcExt, UnansweredCallGuard};
 use crate::app::state::{AppState, AppStateInner, sealed};
-use crate::audio::manager::{AudioManagerHandle, SourceType};
+use crate::audio::manager::AudioManagerHandle;
+use crate::audio::source_type::SourceType;
 use crate::config::{BackendEndpoint, WS_LOGIN_TIMEOUT};
 use crate::error::{Error, FrontendError};
 use crate::signaling::auth::TauriTokenProvider;

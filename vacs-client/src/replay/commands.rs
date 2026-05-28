@@ -1,11 +1,11 @@
 use crate::app::state::AppState;
+use crate::audio::PlaybackDeviceType;
 use crate::audio::manager::AudioManagerHandle;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
 use crate::error::Error;
 use crate::radio::track_audio::TrackAudioRadioHandle;
-use crate::replay::ClipMeta;
 use crate::replay::recorder::{CLIP_PROGRESS_EVENT, ReplayRecorderHandle};
-use serde::{Deserialize, Serialize};
+use crate::replay::{ClipMeta, ReplayError};
 use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -13,8 +13,6 @@ use tauri_plugin_opener::OpenerExt;
 use vacs_audio::sources::wav::WavSource;
 
 // TODO: Do we need some sort of a status?
-// TODO: Fix me being unhappy with this entire file
-// TODO: Fix me being unhappy with the function names/fields introduced in c1dd121016949dbde33800c830eb177b96701bea and 873627c29897f5bf6df985044f4c297d9c933510 (add skip and rewind)
 
 #[tauri::command]
 #[vacs_macros::log_err]
@@ -106,23 +104,16 @@ pub async fn replay_clear(recorder: State<'_, ReplayRecorderHandle>) -> Result<(
     Ok(())
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ReplayDevice {
-    Headset,
-    Speaker,
-}
-
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn replay_play(
     app: AppHandle,
     recorder: State<'_, ReplayRecorderHandle>,
-    app_state: State<'_, AppState>,
     audio_manager: State<'_, AudioManagerHandle>,
     id: u64,
-    device: ReplayDevice,
+    device_type: PlaybackDeviceType,
 ) -> Result<(), Error> {
-    take_and_stop_playing_source(&recorder, &audio_manager);
+    stop_playing_source(&recorder, &audio_manager);
 
     let path: Option<PathBuf> = recorder
         .read()
@@ -134,13 +125,7 @@ pub async fn replay_play(
         ))));
     };
 
-    let volume = {
-        let state = app_state.lock().await;
-        state.config.audio.output_device_volume
-    };
-
     let audio_manager = audio_manager.read();
-    let is_speaker = device == ReplayDevice::Speaker;
 
     let source_id = audio_manager.add_audio_source(
         move |sample_rate, channels| {
@@ -149,7 +134,7 @@ pub async fn replay_play(
                     path,
                     sample_rate,
                     channels as usize,
-                    volume,
+                    1.0,
                     None,
                     Some(Box::new(move |progress| {
                         app.emit(CLIP_PROGRESS_EVENT, progress).ok();
@@ -164,12 +149,12 @@ pub async fn replay_play(
                 .unwrap(),
             )
         },
-        is_speaker,
+        device_type,
     );
-    audio_manager.start_audio_source(source_id, is_speaker);
+    audio_manager.start_audio_source(source_id, device_type);
 
     if let Some(r) = recorder.write().as_mut() {
-        r.set_playing_source_id(Some((source_id, is_speaker)))
+        r.set_playing_source_id(Some((source_id, device_type)))
     }
 
     Ok(())
@@ -182,7 +167,7 @@ pub async fn replay_stop(
     recorder: State<'_, ReplayRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
 ) -> Result<(), Error> {
-    if !take_and_stop_playing_source(&recorder, &audio_manager) {
+    if !stop_playing_source(&recorder, &audio_manager) {
         log::warn!("replay stop called but no clip is playing");
     }
 
@@ -191,7 +176,7 @@ pub async fn replay_stop(
     Ok(())
 }
 
-fn take_and_stop_playing_source(
+fn stop_playing_source(
     recorder: &State<ReplayRecorderHandle>,
     audio_manager: &State<AudioManagerHandle>,
 ) -> bool {

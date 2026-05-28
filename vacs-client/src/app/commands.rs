@@ -1,6 +1,7 @@
 use crate::app::state::AppState;
 use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog};
-use crate::audio::manager::{AudioManagerHandle, SourceType};
+use crate::audio::manager::AudioManagerHandle;
+use crate::audio::source_type::SourceType;
 use crate::build::VersionInfo;
 use crate::config::{
     AppConfig, CLIENT_SETTINGS_FILE_NAME, ClientConfig, ClockMode, FrontendCallConfig,
