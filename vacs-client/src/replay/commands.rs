@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 use vacs_audio::sources::wav::WavSource;
 
 // TODO: Do we need some sort of a status?
@@ -260,6 +261,7 @@ pub async fn replay_rewind(
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn replay_export(
+    app: AppHandle,
     recorder: State<'_, ReplayRecorderHandle>,
     id: u64,
 ) -> Result<PathBuf, Error> {
@@ -273,5 +275,13 @@ pub async fn replay_export(
             "recorder not running"
         ))));
     };
+
+    if let Err(err) = app.opener().open_path(path.to_string_lossy(), None::<&str>) {
+        return Err(Error::Other(Box::new(anyhow::anyhow!(
+            "cannot open file: {}",
+            err
+        ))));
+    }
+
     Ok(path)
 }
