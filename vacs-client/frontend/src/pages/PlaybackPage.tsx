@@ -1,16 +1,16 @@
 import {clsx} from "clsx";
-import {CloseButton} from "./SettingsPage.tsx";
-import Button from "../components/ui/Button.tsx";
+import {useEffect, useRef, useState} from "preact/hooks";
+import PlaybackActions from "../components/playback/PlaybackActions.tsx";
 import PlaybackControls from "../components/playback/PlaybackControls.tsx";
 import PlaybackList from "../components/playback/PlaybackList.tsx";
-import {useEffect, useState} from "preact/hooks";
-import {ClipMeta, sortClips} from "../types/replay.ts";
+import Button from "../components/ui/Button.tsx";
 import {invokeSafe} from "../error.ts";
-import {listen, UnlistenFn} from "../transport";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
-import {useSettingsStore} from "../stores/settings-store.ts";
-import PlaybackActions from "../components/playback/PlaybackActions.tsx";
 import {openSettingsSubmenu} from "../stores/navigation-store.ts";
+import {useSettingsStore} from "../stores/settings-store.ts";
+import {listen, UnlistenFn} from "../transport";
+import {ClipMeta, sortClips} from "../types/replay.ts";
+import {CloseButton} from "./SettingsPage.tsx";
 
 function PlaybackPage() {
     const capReplay = useCapabilitiesStore(state => state.replay);
@@ -56,8 +56,14 @@ function PlaybackPage() {
 
 function PlaybackPageInner() {
     const [playing, setPlaying] = useState(false);
+    const playingRef = useRef(playing);
+
     const [clips, setClips] = useState<ClipMeta[]>([]);
     const [selected, setSelected] = useState<number>(0);
+
+    useEffect(() => {
+        playingRef.current = playing;
+    }, [playing]);
 
     useEffect(() => {
         const fetch = async () => {
@@ -71,7 +77,7 @@ function PlaybackPageInner() {
         unlistenFns.push(
             listen<ClipMeta>("replay:clip-recorded", event => {
                 setClips(prev => {
-                    if (prev.length > 0) setSelected(prev => prev + 1); // TODO: Only move while playing
+                    if (prev.length > 0 && playingRef.current) setSelected(prev => prev + 1);
                     return sortClips([...prev, event.payload]);
                 });
             }),
@@ -115,6 +121,7 @@ function PlaybackPageInner() {
                 <div className="relative w-full h-full flex flex-col items-center pr-16">
                     <PlaybackControls
                         playing={playing}
+                        playingRef={playingRef}
                         setPlaying={setPlaying}
                         clip={clips[selected]}
                         prevClip={clips[selected + 1]}

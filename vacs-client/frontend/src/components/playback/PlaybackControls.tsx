@@ -15,15 +15,15 @@ type PlaybackControlsProps = {
     nextClip: ClipMeta | undefined;
     setSelectedClip: StateSetter<number>;
     playing: boolean;
+    playingRef: {current: boolean};
     setPlaying: StateSetter<boolean>;
 };
 
 function PlaybackControls(props: PlaybackControlsProps) {
-    const {playing, setPlaying} = props;
-    const playingRef = useRef(playing);
+    const {playing, playingRef, setPlaying} = props;
     const [playContinuously, setPlayContinuously] = useState(false);
 
-    const [playbackDevice, setPlaybackDevice] = useState<"Headset" | "Speaker">("Headset");
+    const [playbackDevice, setPlaybackDevice] = useState<"Output" | "Speaker">("Output");
 
     const clipIdRef = useRef(props.clip?.id);
     clipIdRef.current = props.clip?.id;
@@ -31,11 +31,11 @@ function PlaybackControls(props: PlaybackControlsProps) {
     const intendedClipChangeRef = useRef(false);
 
     const handlePlay = useAsyncDebounce(
-        useCallback(async (id: number | undefined, device: "Headset" | "Speaker") => {
+        useCallback(async (id: number | undefined, deviceType: "Output" | "Speaker") => {
             try {
                 await invokeStrict("replay_play", {
                     id,
-                    device,
+                    deviceType,
                 });
                 setPlaying(true);
             } catch {}
@@ -58,10 +58,6 @@ function PlaybackControls(props: PlaybackControlsProps) {
         }
         intendedClipChangeRef.current = false;
     }, [props.clip, handleStop]);
-
-    useEffect(() => {
-        playingRef.current = playing;
-    }, [playing]);
 
     useEffect(() => {
         return () => handleStop();
@@ -103,13 +99,13 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <PlaybackControlButton
                         onClick={() => {
                             setPlaybackDevice(prev => {
-                                const next = prev === "Headset" ? "Speaker" : "Headset";
+                                const next = prev === "Output" ? "Speaker" : "Output";
                                 if (playing) void handlePlay(clipIdRef.current, next);
                                 return next;
                             });
                         }}
                     >
-                        {playbackDevice === "Headset" ? (
+                        {playbackDevice === "Output" ? (
                             "H"
                         ) : (
                             <img src={speaker} alt="S" className="h-7" />
