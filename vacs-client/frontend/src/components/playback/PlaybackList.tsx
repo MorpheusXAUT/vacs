@@ -1,7 +1,7 @@
-import List from "../ui/List.tsx";
 import {clsx} from "clsx";
 import {ClipMeta, clipUnixMs} from "../../types/playback.ts";
 import {toUTCTimeString} from "../../utils/date.ts";
+import List from "../ui/List.tsx";
 
 type PlaybackListProps = {
     clips: ClipMeta[];
@@ -59,10 +59,10 @@ function PlaybackEntryRow(props: PlaybackEntryRowProps) {
                 {props.clip && `${(props.clip.duration_ms / 1000).toFixed(1)}s`}
             </div>
             <div
-                className={clsx("px-0.5 flex items-center font-semibold", color)}
+                className={clsx("px-0.5 flex items-center font-semibold min-w-0", color)}
                 onClick={props.onClick}
             >
-                {props.clip && clipToTarget(props.clip)}
+                <p className="w-full truncate">{props.clip && clipToTarget(props.clip)}</p>
             </div>
         </>
     );
@@ -71,7 +71,7 @@ function PlaybackEntryRow(props: PlaybackEntryRowProps) {
 function clipToTarget(clip: ClipMeta): string {
     const freq = clip.frequency ? (clip.frequency / 1000).toString() : "";
     const freqString = `${freq.substring(0, 3)}.${freq.substring(3)}`;
-    return `${clip?.callsign ?? ""}\\${freqString}`;
+    return `${clip?.callsigns.join("|") ?? ""}\\${freqString}`;
 }
 
 export default PlaybackList;

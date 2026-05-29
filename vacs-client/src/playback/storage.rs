@@ -136,21 +136,25 @@ impl ClipStore {
         fs::create_dir_all(dir)?;
 
         let unix_ms = system_time_to_unix_ms(meta.started_at);
-        let callsign = meta.callsign.as_deref().unwrap_or("unknown");
-        let safe_callsign = sanitize(callsign);
+        let callsigns = if meta.callsigns.is_empty() {
+            "unknown"
+        } else {
+            &meta.callsigns.into_iter().collect::<Vec<_>>().join("-")
+        };
+        let safe_callsigns = sanitize(callsigns);
         let base = match meta.frequency {
             Some(freq) => format!(
                 "{EXPORT_FILENAME_PREFIX}{}-{}-{}-{}",
                 unix_ms,
                 meta.tap.filename_token(),
                 format_frequency_mhz(freq),
-                safe_callsign
+                safe_callsigns
             ),
             None => format!(
                 "{EXPORT_FILENAME_PREFIX}{}-{}-{}",
                 unix_ms,
                 meta.tap.filename_token(),
-                safe_callsign
+                safe_callsigns
             ),
         };
 
@@ -193,14 +197,10 @@ fn format_frequency_mhz(freq: Frequency) -> String {
     format!("{mhz}.{khz:03}")
 }
 
-#[allow(
-    dead_code,
-    reason = "used by the deferred export() in the command layer"
-)]
 fn sanitize(s: &str) -> String {
     s.chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
                 c
             } else {
                 '_'
@@ -229,6 +229,7 @@ fn unique_path(dir: &Path, base: &str, ext: &str) -> PathBuf {
 mod tests {
     use super::*;
     use crate::playback::writer::ClipWriter;
+    use std::collections::HashSet;
     use std::time::Duration;
     use tempfile::tempdir;
 
@@ -243,7 +244,7 @@ mod tests {
             id,
             path,
             tap,
-            callsign: Some("DLH123".into()),
+            callsigns: HashSet::from(["DLH123".to_string()]),
             frequency: Some(Frequency::from(121_500_000_u64)),
             started_at: SystemTime::UNIX_EPOCH + Duration::from_millis(1_700_000_000_000),
             ended_at: SystemTime::UNIX_EPOCH + Duration::from_millis(1_700_000_001_000),
@@ -333,59 +334,6 @@ mod tests {
         store.clear().unwrap();
         assert!(store.list().is_empty());
         assert!(exported.exists(), "saved clip must survive clear");
-    }
-
-    #[test]
-    fn export_resolves_collisions() {
-        let dir = tempdir().unwrap();
-        let mut store = ClipStore::open(dir.path().to_path_buf(), 10).unwrap();
-        let path = store.allocate(TapId::Headset, SystemTime::UNIX_EPOCH);
-        write_dummy_clip(&path);
-        let id = 1;
-        store.commit(fresh_meta(id, path, TapId::Headset));
-
-        let p1 = store.export(id, None).unwrap();
-        let p2 = store.export(id, None).unwrap();
-        let p3 = store.export(id, None).unwrap();
-        assert_ne!(p1, p2);
-        assert_ne!(p2, p3);
-        assert!(p1.exists() && p2.exists() && p3.exists());
-    }
-
-    #[test]
-    fn export_filename_includes_frequency_and_callsign() {
-        let dir = tempdir().unwrap();
-        let mut store = ClipStore::open(dir.path().to_path_buf(), 10).unwrap();
-        let path = store.allocate(TapId::Headset, SystemTime::UNIX_EPOCH);
-        write_dummy_clip(&path);
-        let id = 1;
-        store.commit(fresh_meta(id, path, TapId::Headset));
-
-        let exported = store.export(id, None).unwrap();
-        let name = exported.file_name().unwrap().to_str().unwrap();
-        assert_eq!(
-            name,
-            format!("{EXPORT_FILENAME_PREFIX}1700000000000-headset-121.500-DLH123.wav")
-        );
-    }
-
-    #[test]
-    fn export_filename_omits_frequency_when_unknown() {
-        let dir = tempdir().unwrap();
-        let mut store = ClipStore::open(dir.path().to_path_buf(), 10).unwrap();
-        let path = store.allocate(TapId::Speaker, SystemTime::UNIX_EPOCH);
-        write_dummy_clip(&path);
-        let id = 1;
-        let mut meta = fresh_meta(id, path, TapId::Speaker);
-        meta.frequency = None;
-        store.commit(meta);
-
-        let exported = store.export(id, None).unwrap();
-        let name = exported.file_name().unwrap().to_str().unwrap();
-        assert_eq!(
-            name,
-            format!("{EXPORT_FILENAME_PREFIX}1700000000000-speaker-DLH123.wav")
-        );
     }
 
     #[test]

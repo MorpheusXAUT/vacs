@@ -68,6 +68,7 @@ function PlaybackPageInner() {
     useEffect(() => {
         const fetch = async () => {
             const list = await invokeSafe<ClipMeta[]>("playback_list");
+            console.log(list);
             if (list === undefined) return;
             setClips(sortClips(list));
         };

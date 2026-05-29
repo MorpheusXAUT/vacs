@@ -13,7 +13,7 @@ use crate::playback::writer::ClipWriter;
 use crate::playback::{ClipMeta, PlaybackConfig, PlaybackError};
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -33,7 +33,7 @@ struct OpenClip {
     writer: ClipWriter,
     path: PathBuf,
     tap: crate::playback::TapId,
-    callsign: Option<String>,
+    callsigns: HashSet<String>,
     frequency: Option<trackaudio::Frequency>,
     started_at: SystemTime,
 }
@@ -53,7 +53,7 @@ impl OpenClip {
             writer,
             path,
             tap,
-            callsign,
+            callsigns,
             frequency,
             started_at,
         } = self;
@@ -76,7 +76,7 @@ impl OpenClip {
             id,
             path,
             tap,
-            callsign,
+            callsigns,
             frequency,
             started_at,
             ended_at,
@@ -244,7 +244,7 @@ fn apply_actions(
                 tap,
                 sample_rate,
                 channels,
-                callsign,
+                callsigns,
                 frequency,
                 started_at,
             } => {
@@ -258,7 +258,7 @@ fn apply_actions(
                                 writer,
                                 path,
                                 tap,
-                                callsign,
+                                callsigns,
                                 frequency,
                                 started_at,
                             },
@@ -279,12 +279,15 @@ fn apply_actions(
             }
             FsmAction::CloseClip {
                 clip_id,
+                callsigns,
                 ended_at,
                 duration_ms,
             } => {
-                let Some(clip) = open.remove(&clip_id) else {
+                let Some(mut clip) = open.remove(&clip_id) else {
                     continue;
                 };
+
+                clip.callsigns = callsigns;
 
                 match clip.finalize(clip_id, Some(ended_at), Some(duration_ms)) {
                     Ok(meta) => {

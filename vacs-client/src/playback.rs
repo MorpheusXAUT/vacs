@@ -8,6 +8,7 @@ pub mod writer;
 use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::track_audio::TrackAudioRadio;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -53,7 +54,7 @@ pub struct ClipMeta {
     pub id: u64,
     pub path: PathBuf,
     pub tap: TapId,
-    pub callsign: Option<String>, // TODO: Make this a Vec and allow multiple callsigns per clip
+    pub callsigns: HashSet<String>,
     pub frequency: Option<Frequency>,
     pub started_at: SystemTime,
     pub ended_at: SystemTime,
@@ -96,7 +97,7 @@ impl Default for PlaybackConfig {
             max_clips: 5,
             hangover_ms: 250,
             max_clip_duration_s: 90,
-            recording_mode: RecordingMode::PerTap,
+            recording_mode: RecordingMode::PerTap, // TODO: this should be os dependent
         }
     }
 }

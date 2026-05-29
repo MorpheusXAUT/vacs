@@ -7,7 +7,7 @@ export type ClipMeta = {
     id: number;
     path: string;
     tap: TapId;
-    callsign: string | null;
+    callsigns: string[];
     frequency: number | null;
     started_at: {secs_since_epoch: number; nanos_since_epoch: number};
     ended_at: {secs_since_epoch: number; nanos_since_epoch: number};

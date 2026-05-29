@@ -33,7 +33,7 @@ pub enum FsmAction {
         tap: TapId,
         sample_rate: u32,
         channels: u16,
-        callsign: Option<String>,
+        callsigns: HashSet<String>,
         frequency: Option<Frequency>,
         started_at: SystemTime,
     },
@@ -43,6 +43,7 @@ pub enum FsmAction {
     },
     CloseClip {
         clip_id: u64,
+        callsigns: HashSet<String>,
         ended_at: SystemTime,
         duration_ms: u64,
     },
@@ -55,7 +56,7 @@ struct OpenClip {
     started_at_wall: SystemTime,
     last_audio_at: Instant,
     transmitters: HashSet<Transmitter>,
-    primary_callsign: Option<String>,
+    callsigns: HashSet<String>,
     frequency: Option<Frequency>,
 }
 
@@ -160,7 +161,7 @@ impl Fsm {
                 if captured_at.duration_since(open.started_at) >= self.max_clip_duration {
                     let sample_rate = entry.sample_rate;
                     let channels = entry.channels;
-                    let prev_callsign = open.primary_callsign.clone();
+                    let prev_callsign = open.callsigns.clone();
                     let prev_frequency = open.frequency;
                     let prev_transmitters = std::mem::take(&mut open.transmitters);
 
@@ -177,7 +178,7 @@ impl Fsm {
                         started_at_wall: now_wall,
                         last_audio_at: captured_at,
                         transmitters: prev_transmitters,
-                        primary_callsign: prev_callsign.clone(),
+                        callsigns: prev_callsign.clone(),
                         frequency: prev_frequency,
                     });
 
@@ -186,7 +187,7 @@ impl Fsm {
                         tap: key,
                         sample_rate,
                         channels,
-                        callsign: prev_callsign,
+                        callsigns: prev_callsign,
                         frequency: prev_frequency,
                         started_at: now_wall,
                     });
@@ -204,6 +205,7 @@ impl Fsm {
                     return Vec::new();
                 };
                 if let Some(open) = entry.open.as_mut() {
+                    open.callsigns.insert(callsign.clone());
                     open.transmitters.insert(Transmitter {
                         callsign,
                         frequency,
@@ -227,7 +229,7 @@ impl Fsm {
                     started_at_wall: now_wall,
                     last_audio_at: now,
                     transmitters,
-                    primary_callsign: Some(callsign.clone()),
+                    callsigns: HashSet::from([callsign.clone()]),
                     frequency: Some(frequency),
                 });
 
@@ -236,7 +238,7 @@ impl Fsm {
                     tap: key,
                     sample_rate: entry.sample_rate,
                     channels: entry.channels,
-                    callsign: Some(callsign),
+                    callsigns: HashSet::from([callsign]),
                     frequency: Some(frequency),
                     started_at: now_wall,
                 }]
@@ -280,6 +282,7 @@ impl Fsm {
                 o.transmitters.is_empty() && now >= o.last_audio_at + self.hangover
             });
             if should_close && let Some(action) = close_open_clip(entry, now, now_wall) {
+                log::debug!("should_close {:?}", entry.open);
                 actions.push(action);
             }
         }
@@ -304,6 +307,7 @@ fn close_open_clip(entry: &mut TapState, now: Instant, now_wall: SystemTime) -> 
         .unwrap_or(now_wall);
     Some(FsmAction::CloseClip {
         clip_id: open.clip_id,
+        callsigns: open.callsigns,
         ended_at,
         duration_ms,
     })
