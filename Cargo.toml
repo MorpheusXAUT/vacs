@@ -56,7 +56,8 @@ objc2-core-foundation = "0.3.1"
 objc2-core-graphics = "0.3.1"
 oauth2 = { version = "5.0.0", default-features = false }
 octocrab = "0.51.0"
-opus = "0.3.1"
+# Required to fix audiopus_sys deprecation warning, until opus releases version with replaced dependency
+opus = { git = "https://github.com/SpaceManiac/opus-rs", rev = "559876660603dc8079a053e03e6438766f669e69" }
 parking_lot = "0.12.5"
 pretty_assertions = "1.4.1"
 quote = "1.0.45"
