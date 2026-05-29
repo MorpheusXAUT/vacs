@@ -87,7 +87,6 @@ pub struct PlaybackConfig {
     pub max_clips: usize,
     pub hangover_ms: u64,
     pub max_clip_duration_s: u64,
-    pub recording_mode: RecordingMode,
 }
 
 impl Default for PlaybackConfig {
@@ -97,7 +96,6 @@ impl Default for PlaybackConfig {
             max_clips: 5,
             hangover_ms: 250,
             max_clip_duration_s: 90,
-            recording_mode: RecordingMode::PerTap, // TODO: this should be os dependent
         }
     }
 }

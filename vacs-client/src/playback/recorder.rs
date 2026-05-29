@@ -10,7 +10,7 @@ use crate::playback::fsm::{Fsm, FsmAction};
 use crate::playback::source::{PlaybackSource, PlaybackSourceEvent};
 use crate::playback::storage::ClipStore;
 use crate::playback::writer::ClipWriter;
-use crate::playback::{ClipMeta, PlaybackConfig, PlaybackError};
+use crate::playback::{ClipMeta, PlaybackConfig, PlaybackError, RecordingMode};
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
@@ -184,7 +184,16 @@ async fn run(
     mut rx: mpsc::Receiver<PlaybackSourceEvent>,
     cancel: CancellationToken,
 ) {
-    let mut fsm = Fsm::new(&config);
+    let mode = cfg_select! {
+        target_os = "linux" => {
+            RecordingMode::PerTap
+        }
+        _ => {
+            RecordingMode::Mixed
+        }
+    };
+
+    let mut fsm = Fsm::new(&config, mode);
     let mut open: HashMap<u64, OpenClip> = HashMap::new();
     let mut ticker = tokio::time::interval(Duration::from_millis(TICK_INTERVAL_MS));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);

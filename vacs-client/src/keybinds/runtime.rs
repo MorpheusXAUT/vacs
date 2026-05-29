@@ -25,7 +25,7 @@
 //!
 //! ## Platform Selection
 //!
-//! Platform-specific implementations are selected at compile time using `cfg_if!`:
+//! Platform-specific implementations are selected at compile time using `cfg_select!`:
 //!
 //! - **Windows/macOS**: Direct platform implementation
 //! - **Linux**: Runtime detection (see `linux.rs`) to choose between Wayland/X11/Unknown
@@ -80,21 +80,24 @@ pub trait KeybindEmitter: Send + Sync + Debug + 'static {
 
 pub type DynKeybindEmitter = Arc<dyn KeybindEmitter>;
 
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "windows")] {
+cfg_select! {
+    target_os = "windows" => {
         mod windows;
         pub use windows::WindowsKeybindEmitter as PlatformEmitter;
         pub use windows::WindowsKeybindListener as PlatformListener;
-    } else if #[cfg(target_os = "macos")] {
+    }
+    target_os = "macos" => {
         mod macos;
         pub use macos::MacOsKeybindListener as PlatformListener;
         pub use macos::MacOsKeybindEmitter as PlatformEmitter;
-    } else if #[cfg(target_os = "linux")] {
+    }
+    target_os = "linux" => {
         mod linux;
         mod stub;
         pub use linux::LinuxKeybindEmitter as PlatformEmitter;
         pub use linux::LinuxKeybindListener as PlatformListener;
-    } else {
+    }
+    _ => {
         mod stub;
         pub use stub::NoopKeybindEmitter as PlatformEmitter;
         pub use stub::NoopKeybindListener as PlatformListener;

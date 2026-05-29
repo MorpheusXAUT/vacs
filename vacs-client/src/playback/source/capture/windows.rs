@@ -152,10 +152,9 @@ fn run_main_loop(
 
     let mut sample_queue: VecDeque<u8> = VecDeque::new();
 
-    // TODO: Tap Id should always merged
     // TODO: Check LoopbackEvents (which are send when)
     if let Err(err) = tx.try_send(LoopbackEvent::Opened {
-        tap: TapId::Headset,
+        tap: TapId::Merged,
         channels: 2,        // TODO: ?
         sample_rate: 48000, // TODO: ?
     }) {
@@ -186,7 +185,7 @@ fn run_main_loop(
                 *element = sample_queue.pop_front().unwrap_or_default();
             }
             if let Err(err) = tx.try_send(LoopbackEvent::Frame {
-                tap: TapId::Headset,
+                tap: TapId::Merged,
                 samples: bytes_to_f32(&chunk).into(),
                 captured_at: std::time::Instant::now(),
             }) {
@@ -216,9 +215,7 @@ fn run_main_loop(
         }
     }
 
-    if let Err(err) = tx.try_send(LoopbackEvent::Closed {
-        tap: TapId::Headset,
-    }) {
+    if let Err(err) = tx.try_send(LoopbackEvent::Closed { tap: TapId::Merged }) {
         log::warn!("failed to send closed event: {err}");
     }
 

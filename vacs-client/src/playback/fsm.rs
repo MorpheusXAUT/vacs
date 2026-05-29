@@ -78,9 +78,9 @@ pub struct Fsm {
 }
 
 impl Fsm {
-    pub fn new(config: &PlaybackConfig) -> Self {
+    pub fn new(config: &PlaybackConfig, mode: RecordingMode) -> Self {
         Self {
-            mode: config.recording_mode,
+            mode,
             hangover: Duration::from_millis(config.hangover_ms),
             max_clip_duration: Duration::from_secs(config.max_clip_duration_s),
             taps: HashMap::new(),
@@ -317,13 +317,12 @@ fn close_open_clip(entry: &mut TapState, now: Instant, now_wall: SystemTime) -> 
 mod tests {
     use super::*;
 
-    fn cfg(mode: RecordingMode) -> PlaybackConfig {
+    fn cfg() -> PlaybackConfig {
         PlaybackConfig {
             enabled: true,
             max_clips: 10,
             hangover_ms: 500,
             max_clip_duration_s: 5,
-            recording_mode: mode,
         }
     }
 
@@ -366,7 +365,7 @@ mod tests {
 
     #[test]
     fn rx_cycle_opens_and_closes_clip_after_hangover() {
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         let w0 = SystemTime::UNIX_EPOCH;
         open_tap(&mut fsm, TapId::Headset, t0, w0);
@@ -397,7 +396,7 @@ mod tests {
 
     #[test]
     fn frames_outside_recording_are_dropped() {
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         open_tap(&mut fsm, TapId::Headset, t0, SystemTime::UNIX_EPOCH);
 
@@ -407,7 +406,7 @@ mod tests {
 
     #[test]
     fn unknown_station_rxbegin_is_ignored() {
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         let actions = fsm.on_event(rx_begin("DLH123", 121_500_000), t0, SystemTime::UNIX_EPOCH);
         assert!(actions.is_empty());
@@ -415,7 +414,7 @@ mod tests {
 
     #[test]
     fn second_transmitter_does_not_open_new_clip() {
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         let w0 = SystemTime::UNIX_EPOCH;
         open_tap(&mut fsm, TapId::Headset, t0, w0);
@@ -431,7 +430,7 @@ mod tests {
 
     #[test]
     fn clip_stays_open_while_any_transmitter_active() {
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         let w0 = SystemTime::UNIX_EPOCH;
         open_tap(&mut fsm, TapId::Headset, t0, w0);
@@ -457,7 +456,7 @@ mod tests {
 
     #[test]
     fn active_transmitters_replaces_set() {
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         let w0 = SystemTime::UNIX_EPOCH;
         open_tap(&mut fsm, TapId::Headset, t0, w0);
@@ -474,7 +473,7 @@ mod tests {
 
     #[test]
     fn long_clip_rotates_at_max_duration() {
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         let w0 = SystemTime::UNIX_EPOCH;
         open_tap(&mut fsm, TapId::Headset, t0, w0);
@@ -492,7 +491,7 @@ mod tests {
 
     #[test]
     fn mixed_mode_collapses_to_merged() {
-        let mut fsm = Fsm::new(&cfg(RecordingMode::Mixed));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::Mixed);
         let t0 = Instant::now();
         let w0 = SystemTime::UNIX_EPOCH;
         open_tap(&mut fsm, TapId::Headset, t0, w0);
@@ -507,7 +506,7 @@ mod tests {
 
     #[test]
     fn station_closed_finalizes_open_clip() {
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         let w0 = SystemTime::UNIX_EPOCH;
         open_tap(&mut fsm, TapId::Headset, t0, w0);
@@ -535,7 +534,7 @@ mod tests {
         // Real-world: a single transmitter "stutters", emitting a quick
         // RxEnd/RxBegin pair. The gap is shorter than `hangover_ms` so the
         // FSM should reattach to the existing OpenClip rather than rotating.
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         let w0 = SystemTime::UNIX_EPOCH;
         open_tap(&mut fsm, TapId::Headset, t0, w0);
@@ -596,7 +595,7 @@ mod tests {
         // mid-transmission. RxBegin landed on Headset, but the source emits
         // RxEnd on Speaker because routing has flipped. The Headset clip must
         // still see its transmitter cleared so the hangover can fire.
-        let mut fsm = Fsm::new(&cfg(RecordingMode::PerTap));
+        let mut fsm = Fsm::new(&cfg(), RecordingMode::PerTap);
         let t0 = Instant::now();
         let w0 = SystemTime::UNIX_EPOCH;
         open_tap(&mut fsm, TapId::Headset, t0, w0);
