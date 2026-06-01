@@ -1,28 +1,13 @@
-import {useEffect, useMemo, useState} from "preact/hooks";
-import {listen} from "../../transport";
+import {useMemo} from "preact/hooks";
 import {ClipMeta, clipUnixMs} from "../../types/playback.ts";
 import {toUTCTimeString} from "../../utils/date.ts";
 
 type PlaybackProgressProps = {
     clip: ClipMeta | undefined;
-    stopPlaying: () => void;
+    progress: number;
 };
 
-function PlaybackProgress({clip, stopPlaying}: PlaybackProgressProps) {
-    const [progress, setProgress] = useState(0);
-
-    useEffect(() => {
-        const unlisten = listen<number>("playback:progress", event => {
-            setProgress(event.payload * 100);
-            if (event.payload === 1) {
-                stopPlaying();
-                setProgress(0);
-            }
-        });
-
-        return () => unlisten.then(fn => fn());
-    }, [stopPlaying]);
-
+function PlaybackProgress({clip, progress}: PlaybackProgressProps) {
     const time = useMemo(() => {
         if (!clip) return "No playback";
 

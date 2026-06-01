@@ -20,6 +20,7 @@ use tokio_util::sync::CancellationToken;
 
 #[cfg(target_os = "linux")]
 use crate::platform::Platform;
+use crate::playback::PlaybackConfig;
 
 #[derive(Debug)]
 pub struct KeybindEngine {
@@ -98,16 +99,28 @@ impl KeybindEngine {
         *self.listener.write() = Some(Arc::new(listener));
 
         if self.mode == TransmitMode::RadioIntegration {
-            let playback = self
-                .app
-                .state::<AppState>()
-                .lock()
-                .await
-                .config
-                .client
-                .playback
-                .clone();
-            let radio = self.radio_config.radio(self.app.clone(), &playback).await?;
+            // TODO: fix deadlock and only start playback if enabled? currently handled by playback.rs:L105
+            // let playback = self
+            //     .app
+            //     .state::<AppState>()
+            //     .lock()
+            //     .await
+            //     .config
+            //     .client
+            //     .playback
+            //     .clone();
+            let radio = self
+                .radio_config
+                .radio(
+                    self.app.clone(),
+                    &PlaybackConfig {
+                        enabled: true,
+                        hangover_ms: 250,
+                        max_clip_duration_s: 10,
+                        max_clips: 5,
+                    },
+                )
+                .await?;
             *self.radio.write() = radio;
         } else {
             self.app.emit("radio:integration-available", false).ok();

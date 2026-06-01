@@ -8,10 +8,10 @@ type PlaybackActionsProps = {
     clips: ClipMeta[];
     selected: number;
     setClips: StateSetter<ClipMeta[]>;
-    playing: boolean;
+    deleteDisabled: boolean;
 };
 
-function PlaybackActions({clips, selected, setClips, playing}: PlaybackActionsProps) {
+function PlaybackActions({clips, selected, setClips, deleteDisabled}: PlaybackActionsProps) {
     const handleDelete = useAsyncDebounce(async (clip: ClipMeta) => {
         await invokeSafe("playback_delete", {id: clip.id});
         setClips(prev => prev.filter(c => c.id !== clip.id));
@@ -39,7 +39,7 @@ function PlaybackActions({clips, selected, setClips, playing}: PlaybackActionsPr
             <Button
                 color="gray"
                 className="h-17 uppercase"
-                disabled={clips[selected] === undefined || playing}
+                disabled={clips[selected] === undefined || deleteDisabled}
                 onClick={() => handleDelete(clips[selected])}
             >
                 Delete
@@ -47,7 +47,7 @@ function PlaybackActions({clips, selected, setClips, playing}: PlaybackActionsPr
             <Button
                 color="gray"
                 className="h-17 uppercase"
-                disabled={clips.length === 0 || playing}
+                disabled={clips.length === 0 || deleteDisabled}
                 onClick={handleClear}
             >
                 Delete <br /> All
