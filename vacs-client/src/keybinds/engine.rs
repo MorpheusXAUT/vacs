@@ -72,7 +72,7 @@ impl KeybindEngine {
         }
     }
 
-    pub async fn start(&mut self) -> Result<(), Error> {
+    pub async fn start(&mut self, playback_config: &PlaybackConfig) -> Result<(), Error> {
         if self.rx_task.is_some() {
             return Ok(());
         }
@@ -99,27 +99,9 @@ impl KeybindEngine {
         *self.listener.write() = Some(Arc::new(listener));
 
         if self.mode == TransmitMode::RadioIntegration {
-            // TODO: fix deadlock and only start playback if enabled? currently handled by playback.rs:L105
-            // let playback = self
-            //     .app
-            //     .state::<AppState>()
-            //     .lock()
-            //     .await
-            //     .config
-            //     .client
-            //     .playback
-            //     .clone();
             let radio = self
                 .radio_config
-                .radio(
-                    self.app.clone(),
-                    &PlaybackConfig {
-                        enabled: true,
-                        hangover_ms: 250,
-                        max_clip_duration_s: 10,
-                        max_clips: 5,
-                    },
-                )
+                .radio(self.app.clone(), playback_config)
                 .await?;
             *self.radio.write() = radio;
         } else {
@@ -163,6 +145,7 @@ impl KeybindEngine {
         &mut self,
         transmit_config: &TransmitConfig,
         keybinds_config: &KeybindsConfig,
+        playback_config: &PlaybackConfig,
     ) -> Result<(), Error> {
         self.stop();
 
@@ -175,19 +158,23 @@ impl KeybindEngine {
 
         self.reset_input_state();
 
-        self.start().await?;
+        self.start(playback_config).await?;
 
         Ok(())
     }
 
-    pub async fn set_radio_config(&mut self, config: &RadioConfig) -> Result<(), Error> {
+    pub async fn set_radio_config(
+        &mut self,
+        config: &RadioConfig,
+        playback_config: &PlaybackConfig,
+    ) -> Result<(), Error> {
         self.stop();
 
         self.radio_config = config.clone();
 
         self.reset_input_state();
 
-        self.start().await?;
+        self.start(playback_config).await?;
 
         Ok(())
     }
