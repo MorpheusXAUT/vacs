@@ -94,7 +94,7 @@ impl Default for PlaybackConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            max_clips: 5,
+            max_clips: 15,
             hangover_ms: 250,
             max_clip_duration_s: 90,
         }
