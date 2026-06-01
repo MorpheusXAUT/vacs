@@ -492,6 +492,11 @@ impl AudioManager {
             .start_audio_source(source_id);
     }
 
+    pub fn stop_audio_source(&self, source_id: AudioSourceId, device_type: PlaybackDeviceType) {
+        self.get_stream_for_playback(device_type)
+            .stop_audio_source(source_id);
+    }
+
     pub fn remove_audio_source(&self, source_id: AudioSourceId, device_type: PlaybackDeviceType) {
         self.get_stream_for_playback(device_type)
             .remove_audio_source(source_id);

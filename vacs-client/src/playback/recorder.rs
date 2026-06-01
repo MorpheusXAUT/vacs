@@ -24,7 +24,7 @@ use tokio_util::sync::CancellationToken;
 use vacs_audio::sources::AudioSourceId;
 
 const TICK_INTERVAL_MS: u64 = 100;
-const CLIPS_MODIFIED_EVENT: &str = "playback:clips-modified";
+pub const CLIPS_MODIFIED_EVENT: &str = "playback:clips-modified";
 
 pub const CLIP_PROGRESS_EVENT: &str = "playback:progress";
 

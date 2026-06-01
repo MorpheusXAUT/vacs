@@ -6,6 +6,12 @@ use crate::config::{ClockMode, FrontendCallConfig, FrontendClientPageSettings};
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
+use crate::playback::commands::{
+    playback_clear, playback_continue, playback_delete, playback_export, playback_get_enabled,
+    playback_list, playback_pause, playback_play, playback_seek, playback_set_enabled,
+    playback_stop,
+};
+use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::remote::RemoteStatus;
 use crate::remote::commands::FrontendRemoteConfigWithStatus;
 use crate::remote::protocol::{
@@ -579,6 +585,65 @@ async fn dispatch_command(
         KeybindsReconnectRadio => {
             let keybind_engine = app.state::<KeybindEngineHandle>();
             dispatch(keybinds_reconnect_radio(keybind_engine).await)
+        }
+
+        PlaybackGetEnabled => {
+            let app_state = app.state::<AppState>();
+            dispatch(playback_get_enabled(app_state).await)
+        }
+        PlaybackSetEnabled => {
+            let app_state = app.state::<AppState>();
+            dispatch(playback_set_enabled(app.clone(), app_state, args!(args, "enabled")).await)
+        }
+        PlaybackList => {
+            let recorder = app.state::<PlaybackRecorderHandle>();
+            dispatch(playback_list(recorder).await)
+        }
+        PlaybackDelete => {
+            let recorder = app.state::<PlaybackRecorderHandle>();
+            dispatch(playback_delete(recorder, args!(args, "id")).await)
+        }
+        PlaybackClear => {
+            let recorder = app.state::<PlaybackRecorderHandle>();
+            dispatch(playback_clear(recorder).await)
+        }
+        PlaybackPlay => {
+            let recorder = app.state::<PlaybackRecorderHandle>();
+            let audio_manager = app.state::<AudioManagerHandle>();
+            dispatch(
+                playback_play(
+                    app.clone(),
+                    recorder,
+                    audio_manager,
+                    args!(args, "id"),
+                    args!(args, "deviceType"),
+                )
+                .await,
+            )
+        }
+        PlaybackPause => {
+            let recorder = app.state::<PlaybackRecorderHandle>();
+            let audio_manager = app.state::<AudioManagerHandle>();
+            dispatch(playback_pause(recorder, audio_manager).await)
+        }
+        PlaybackContinue => {
+            let recorder = app.state::<PlaybackRecorderHandle>();
+            let audio_manager = app.state::<AudioManagerHandle>();
+            dispatch(playback_continue(recorder, audio_manager).await)
+        }
+        PlaybackStop => {
+            let recorder = app.state::<PlaybackRecorderHandle>();
+            let audio_manager = app.state::<AudioManagerHandle>();
+            dispatch(playback_stop(app.clone(), recorder, audio_manager).await)
+        }
+        PlaybackSeek => {
+            let recorder = app.state::<PlaybackRecorderHandle>();
+            let audio_manager = app.state::<AudioManagerHandle>();
+            dispatch(playback_seek(recorder, audio_manager, args!(args, "millis")).await)
+        }
+        PlaybackExport => {
+            let recorder = app.state::<PlaybackRecorderHandle>();
+            dispatch(playback_export(app.clone(), recorder, args!(args, "id")).await)
         }
 
         RadioAddStation => {

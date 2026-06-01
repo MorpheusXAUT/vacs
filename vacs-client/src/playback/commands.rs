@@ -160,6 +160,46 @@ pub async fn playback_play(
 
 #[tauri::command]
 #[vacs_macros::log_err]
+pub async fn playback_pause(
+    recorder: State<'_, PlaybackRecorderHandle>,
+    audio_manager: State<'_, AudioManagerHandle>,
+) -> Result<(), Error> {
+    if let Some((source_id, is_speaker)) = recorder
+        .write()
+        .as_mut()
+        .and_then(|r| r.get_playing_source_id())
+    {
+        audio_manager
+            .read()
+            .stop_audio_source(source_id, is_speaker);
+    } else {
+        log::warn!("playback pause called but no clip is playing");
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn playback_continue(
+    recorder: State<'_, PlaybackRecorderHandle>,
+    audio_manager: State<'_, AudioManagerHandle>,
+) -> Result<(), Error> {
+    if let Some((source_id, is_speaker)) = recorder
+        .write()
+        .as_mut()
+        .and_then(|r| r.get_playing_source_id())
+    {
+        audio_manager
+            .read()
+            .start_audio_source(source_id, is_speaker);
+    } else {
+        log::warn!("playback continue called but no clip is paused");
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
 pub async fn playback_stop(
     app: AppHandle,
     recorder: State<'_, PlaybackRecorderHandle>,

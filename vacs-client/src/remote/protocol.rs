@@ -1,3 +1,4 @@
+use crate::playback::recorder::{CLIP_PROGRESS_EVENT, CLIPS_MODIFIED_EVENT};
 use axum::extract::ws::{self, Utf8Bytes};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -197,6 +198,18 @@ pub enum RemoteCommand {
     KeybindsOpenSystemShortcutsSettings,
     KeybindsReconnectRadio,
 
+    PlaybackGetEnabled,
+    PlaybackSetEnabled,
+    PlaybackList,
+    PlaybackDelete,
+    PlaybackClear,
+    PlaybackPlay,
+    PlaybackPause,
+    PlaybackContinue,
+    PlaybackStop,
+    PlaybackSeek,
+    PlaybackExport,
+
     RadioAddStation,
     RadioSetStationState,
     RadioGetStations,
@@ -245,6 +258,8 @@ pub enum RemoteEvent {
     AuthError,
     AuthUnauthenticated,
     Error,
+    PlaybackClipsModified,
+    PlaybackProgress,
     RadioState,
     RadioStationAdded,
     RadioStationRemoved,
@@ -287,6 +302,8 @@ impl RemoteEvent {
         Self::AuthError,
         Self::AuthUnauthenticated,
         Self::Error,
+        Self::PlaybackClipsModified,
+        Self::PlaybackProgress,
         Self::RadioState,
         Self::RadioStationAdded,
         Self::RadioStationRemoved,
@@ -329,6 +346,8 @@ impl RemoteEvent {
             Self::AuthError => "auth:error",
             Self::AuthUnauthenticated => "auth:unauthenticated",
             Self::Error => "error",
+            Self::PlaybackClipsModified => CLIPS_MODIFIED_EVENT,
+            Self::PlaybackProgress => CLIP_PROGRESS_EVENT,
             Self::RadioState => "radio:state",
             Self::RadioStationAdded => "radio:station-added",
             Self::RadioStationRemoved => "radio:station-removed",
