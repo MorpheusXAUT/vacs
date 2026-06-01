@@ -36,7 +36,6 @@ function EndButton() {
         } else {
             setSelectedPage(undefined);
         }
-        // TODO: Does a click on END while being on the radio page move you to the phone page?
         goToPage("phone");
 
         void endAnyCall();

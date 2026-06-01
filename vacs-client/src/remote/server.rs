@@ -8,7 +8,7 @@ use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
 use crate::playback::commands::{
     playback_clear, playback_continue, playback_delete, playback_export, playback_get_enabled,
-    playback_list, playback_pause, playback_play, playback_seek, playback_set_enabled,
+    playback_list, playback_pause, playback_seek, playback_set_enabled, playback_start,
     playback_stop,
 };
 use crate::playback::recorder::PlaybackRecorderHandle;
@@ -607,16 +607,18 @@ async fn dispatch_command(
             let recorder = app.state::<PlaybackRecorderHandle>();
             dispatch(playback_clear(recorder).await)
         }
-        PlaybackPlay => {
+        PlaybackStart => {
             let recorder = app.state::<PlaybackRecorderHandle>();
             let audio_manager = app.state::<AudioManagerHandle>();
             dispatch(
-                playback_play(
+                playback_start(
                     app.clone(),
                     recorder,
                     audio_manager,
                     args!(args, "id"),
                     args!(args, "deviceType"),
+                    args!(args, "initialProgress"),
+                    args!(args, "startPaused"),
                 )
                 .await,
             )

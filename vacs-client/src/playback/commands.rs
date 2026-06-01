@@ -106,20 +106,19 @@ pub async fn playback_clear(recorder: State<'_, PlaybackRecorderHandle>) -> Resu
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn playback_play(
+pub async fn playback_start(
     app: AppHandle,
     recorder: State<'_, PlaybackRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
     id: u64,
     device_type: PlaybackDeviceType,
+    initial_progress: Option<f64>, // 0.0 to 1.0
+    start_paused: Option<bool>,
 ) -> Result<(), Error> {
     stop_playing_source(&recorder, &audio_manager);
 
-    let path: Option<PathBuf> = recorder
-        .read()
-        .as_ref()
-        .and_then(|r| r.get(id).map(|m| m.path));
-    let Some(path) = path else {
+    let clip = recorder.read().as_ref().and_then(|r| r.get(id));
+    let Some(clip) = clip else {
         return Err(PlaybackError::Other(Box::new(anyhow::anyhow!("clip {id} not found"))).into());
     };
 
@@ -129,7 +128,7 @@ pub async fn playback_play(
         move |sample_rate, channels| {
             Box::new(
                 WavSource::from_file(
-                    path,
+                    clip.path,
                     sample_rate,
                     channels as usize,
                     1.0,
@@ -149,7 +148,20 @@ pub async fn playback_play(
         },
         device_type,
     );
-    audio_manager.start_audio_source(source_id, device_type);
+
+    let initial_progress = initial_progress.unwrap_or(0.0);
+    if initial_progress > 0.0 {
+        audio_manager.skip_in_audio_source(
+            source_id,
+            Duration::from_millis((clip.duration_ms as f64 * initial_progress).round() as u64),
+            device_type,
+        );
+    }
+
+    let start_paused = start_paused.unwrap_or(false);
+    if !start_paused {
+        audio_manager.start_audio_source(source_id, device_type);
+    }
 
     if let Some(r) = recorder.write().as_mut() {
         r.set_playing_source_id(Some((source_id, device_type)))

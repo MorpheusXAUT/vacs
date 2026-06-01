@@ -203,7 +203,7 @@ pub enum RemoteCommand {
     PlaybackList,
     PlaybackDelete,
     PlaybackClear,
-    PlaybackPlay,
+    PlaybackStart,
     PlaybackPause,
     PlaybackContinue,
     PlaybackStop,

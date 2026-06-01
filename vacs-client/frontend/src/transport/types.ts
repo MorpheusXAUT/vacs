@@ -59,7 +59,7 @@ export type RemoteCommand =
     | "playback_delete"
     | "playback_export"
     | "playback_pause"
-    | "playback_play"
+    | "playback_start"
     | "playback_stop"
     | "playback_get_enabled"
     | "playback_list"

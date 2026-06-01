@@ -80,61 +80,51 @@ function PlaybackPageInner() {
 
     const {blink, startBlink, stopBlink} = useBlinkStore(state => state);
 
-    const handlePlay = useAsyncDebounce(
-        useCallback(
-            async (id: number, deviceType: PlaybackDevice, continuously = false) => {
-                try {
-                    await invokeStrict("playback_play", {
-                        id,
-                        deviceType,
-                    });
-                    setStatus({id, status: "playing", continuously, progress: 0});
-                } catch {}
-            },
-            [setStatus],
-        ),
+    const handleStart = useAsyncDebounce(
+        async (id: number, deviceType: PlaybackDevice, continuously: boolean = false) => {
+            try {
+                await invokeStrict("playback_start", {id, deviceType});
+                setStatus({id, status: "playing", continuously, progress: 0});
+            } catch {}
+        },
     );
 
-    const handlePause = useAsyncDebounce(
-        useCallback(async () => {
-            try {
-                await invokeStrict("playback_pause");
-                setStatus(prev => {
-                    if (prev === undefined) return prev;
-                    return {
-                        ...prev,
-                        status: "paused",
-                    };
-                });
-                startBlink();
-            } catch {}
-        }, [setStatus, startBlink]),
-    );
+    const handlePause = useAsyncDebounce(async () => {
+        try {
+            await invokeStrict("playback_pause");
+            setStatus(prev => {
+                if (prev === undefined) return prev;
+                return {
+                    ...prev,
+                    status: "paused",
+                };
+            });
+            startBlink();
+        } catch {}
+    });
 
-    const handleContinue = useAsyncDebounce(
-        useCallback(async () => {
-            try {
-                await invokeStrict("playback_continue");
-                setStatus(prev => {
-                    if (prev === undefined) return prev;
-                    return {
-                        ...prev,
-                        status: "playing",
-                    };
-                });
-                if (
-                    shouldStopBlinking(
-                        useCallStore.getState().incomingCalls.length,
-                        useCallStore.getState().callDisplay,
-                        useRadioStore.getState().cpl,
-                        false,
-                    )
-                ) {
-                    stopBlink();
-                }
-            } catch {}
-        }, [setStatus, stopBlink]),
-    );
+    const handleContinue = useAsyncDebounce(async () => {
+        try {
+            await invokeStrict("playback_continue");
+            setStatus(prev => {
+                if (prev === undefined) return prev;
+                return {
+                    ...prev,
+                    status: "playing",
+                };
+            });
+            if (
+                shouldStopBlinking(
+                    useCallStore.getState().incomingCalls.length,
+                    useCallStore.getState().callDisplay,
+                    useRadioStore.getState().cpl,
+                    false,
+                )
+            ) {
+                stopBlink();
+            }
+        } catch {}
+    });
 
     const handleStop = useAsyncDebounce(
         useCallback(
@@ -148,25 +138,38 @@ function PlaybackPageInner() {
         ),
     );
 
-    const handleSeek = useAsyncDebounce(
-        useCallback(
-            async (durationSecs: number = 1) => {
-                const millis = 1000 * durationSecs;
-                try {
-                    await invokeStrict("playback_seek", {millis});
-                    setStatus(prev => {
-                        if (prev === undefined || prev.status === "playing") return prev;
-                        const diff = millis / selectedClip.durationMs;
-                        return {
-                            ...prev,
-                            progress: prev.progress + diff,
-                        };
-                    });
-                } catch {}
-            },
-            [setStatus],
-        ),
-    );
+    const handleSeek = useAsyncDebounce(async (durationSecs: number = 1) => {
+        const millis = 1000 * durationSecs;
+        try {
+            await invokeStrict("playback_seek", {millis});
+            setStatus(prev => {
+                if (prev === undefined || prev.status === "playing") return prev;
+                const diff = millis / selectedClip.durationMs;
+                console.log(diff);
+                return {
+                    ...prev,
+                    progress: Math.min(Math.max(prev.progress + diff, 0), 1),
+                };
+            });
+        } catch {}
+    });
+
+    const handleDeviceSwitch = useAsyncDebounce(async () => {
+        const deviceType = playbackDevice === "Output" ? "Speaker" : "Output";
+        if (status === undefined) {
+            setPlaybackDevice(deviceType);
+        } else {
+            try {
+                await invokeStrict("playback_start", {
+                    id: status.id,
+                    deviceType,
+                    initialProgress: status.progress,
+                    startPaused: status.status === "paused",
+                });
+                setPlaybackDevice(deviceType);
+            } catch {}
+        }
+    });
 
     useEffect(() => {
         if (!isPlaybackRoot()) return;
@@ -194,7 +197,7 @@ function PlaybackPageInner() {
             if (status?.continuously && nextClip !== undefined) {
                 intendedClipChangeRef.current = true;
                 setSelected(prev => prev - 1);
-                void handlePlay(nextClip?.id, playbackDevice, true);
+                void handleStart(nextClip?.id, playbackDevice, true);
             } else {
                 setStatus(undefined);
             }
@@ -294,7 +297,7 @@ function PlaybackPageInner() {
                                 disabled={selectedClip === undefined || status?.continuously}
                                 onClick={async () => {
                                     if (status === undefined) {
-                                        void handlePlay(selectedClip.id, playbackDevice);
+                                        void handleStart(selectedClip.id, playbackDevice);
                                     } else if (status.status === "playing") {
                                         await handlePause();
                                     } else {
@@ -317,15 +320,7 @@ function PlaybackPageInner() {
                                     <path d="M0 37V0L74 37L0 74V37Z" fill="currentColor" />
                                 </svg>
                             </PlaybackControlButton>
-                            <PlaybackControlButton
-                                onClick={() => {
-                                    setPlaybackDevice(prev => {
-                                        const next = prev === "Output" ? "Speaker" : "Output";
-                                        if (active) void handlePlay(selectedClip.id, next);
-                                        return next;
-                                    });
-                                }}
-                            >
+                            <PlaybackControlButton onClick={handleDeviceSwitch}>
                                 {playbackDevice === "Output" ? (
                                     "H"
                                 ) : (
@@ -340,7 +335,7 @@ function PlaybackPageInner() {
                                     (nextClip === undefined && status?.continuously)
                                 }
                                 onClick={() => {
-                                    void handlePlay(selectedClip?.id, playbackDevice, true);
+                                    void handleStart(selectedClip?.id, playbackDevice, true);
                                 }}
                             >
                                 <svg
@@ -376,7 +371,7 @@ function PlaybackPageInner() {
                                     await handleStop(false);
                                     intendedClipChangeRef.current = true;
                                     setSelected(prev => prev + 1);
-                                    void handlePlay(prevClip?.id, playbackDevice);
+                                    void handleStart(prevClip?.id, playbackDevice);
                                 }}
                             >
                                 <svg
@@ -414,7 +409,7 @@ function PlaybackPageInner() {
                                     await handleStop(false);
                                     intendedClipChangeRef.current = true;
                                     setSelected(prev => prev - 1);
-                                    void handlePlay(nextClip?.id, playbackDevice);
+                                    void handleStart(nextClip?.id, playbackDevice);
                                 }}
                             >
                                 <svg

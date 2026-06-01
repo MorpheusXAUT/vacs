@@ -117,12 +117,12 @@ impl AudioSource for WavSource {
     }
 
     fn skip(&mut self, duration: Duration) {
-        let frames = (duration.as_secs_f32() * self.sample_rate as f32) as usize;
+        let frames = (duration.as_secs_f32() * self.sample_rate as f32).round() as usize;
         self.pos = (self.pos + frames).min(self.samples.len().saturating_sub(1)); // "- 1" to allow mix_into to finish
     }
 
     fn rewind(&mut self, duration: Duration) {
-        let frames = (duration.as_secs_f32() * self.sample_rate as f32) as usize;
+        let frames = (duration.as_secs_f32() * self.sample_rate as f32).round() as usize;
         self.pos = self.pos - frames.min(self.pos);
     }
 }
