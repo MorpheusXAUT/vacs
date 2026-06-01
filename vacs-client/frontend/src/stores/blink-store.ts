@@ -35,9 +35,11 @@ export const shouldStopBlinking = (
     incomingCallsLength: number,
     callDisplay: CallDisplay | undefined,
     cpl: boolean,
+    playbackPaused: boolean,
 ) => {
     return (
         !cpl &&
+        !playbackPaused &&
         incomingCallsLength === 0 &&
         (callDisplay === undefined ||
             (callDisplay.type !== "rejected" &&

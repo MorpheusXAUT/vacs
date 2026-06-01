@@ -9,6 +9,7 @@ import {useCallListStore} from "./call-list-store.ts";
 import {useStationsStore} from "./stations-store.ts";
 import {shouldStopBlinking, startBlink, stopBlink} from "./blink-store.ts";
 import {useRadioStore} from "./radio-store.ts";
+import {isPlaybackPaused} from "./playback-store.ts";
 
 export type ConnectionState = "connecting" | "connected" | "disconnected";
 export type CallDisplayType = "outgoing" | "accepted" | "rejected" | "error";
@@ -68,6 +69,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
                     incomingCalls.length,
                     get().callDisplay,
                     useRadioStore.getState().cpl,
+                    isPlaybackPaused(),
                 )
             ) {
                 stopBlink();
@@ -101,6 +103,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
                     get().incomingCalls.length,
                     nextCallDisplay,
                     useRadioStore.getState().cpl,
+                    isPlaybackPaused(),
                 )
             ) {
                 stopBlink();
@@ -118,6 +121,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
                     get().incomingCalls.length,
                     undefined,
                     useRadioStore.getState().cpl,
+                    isPlaybackPaused(),
                 )
             ) {
                 stopBlink();
@@ -146,7 +150,12 @@ export const useCallStore = create<CallState>()((set, get) => ({
             rejectCallInCallListIfUnanswered(callId);
 
             if (
-                shouldStopBlinking(incomingCalls.length, callDisplay, useRadioStore.getState().cpl)
+                shouldStopBlinking(
+                    incomingCalls.length,
+                    callDisplay,
+                    useRadioStore.getState().cpl,
+                    isPlaybackPaused(),
+                )
             ) {
                 stopBlink();
                 set({incomingCalls: [], callDisplay});
@@ -182,6 +191,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
                     get().incomingCalls.length,
                     undefined,
                     useRadioStore.getState().cpl,
+                    isPlaybackPaused(),
                 )
             ) {
                 stopBlink();
@@ -220,6 +230,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
                     get().incomingCalls.length,
                     undefined,
                     useRadioStore.getState().cpl,
+                    isPlaybackPaused(),
                 )
             ) {
                 stopBlink();

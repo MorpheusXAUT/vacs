@@ -8,6 +8,12 @@ import type {ClientPageConfig} from "../types/client.ts";
 import type {CallConfig, ClockMode} from "../types/settings.ts";
 import {shouldStopBlinking, startBlink, stopBlink} from "../stores/blink-store.ts";
 import {useRadioStore} from "../stores/radio-store.ts";
+import {
+    isPlaybackPaused,
+    PlaybackDevice,
+    PlaybackStatus,
+    usePlaybackStore,
+} from "../stores/playback-store.ts";
 
 type StationsSync = {
     defaultSource: StationId | undefined;
@@ -33,12 +39,19 @@ type RadioSync = {
     cpl: boolean;
 };
 
+type PlaybackSync = {
+    selected: number;
+    status: Omit<PlaybackStatus, "progress"> | undefined;
+    playbackDevice: PlaybackDevice;
+};
+
 type SyncMap = {
     stations: StationsSync;
     call: CallSync;
     callList: CallListSync;
     settings: SettingsSync;
     radio: RadioSync;
+    playback: PlaybackSync;
 };
 
 type SyncStoreName = keyof SyncMap;
@@ -107,6 +120,7 @@ function applySync(payload: SyncPayload) {
                     incomingCalls.length,
                     callDisplay,
                     cpl,
+                    isPlaybackPaused(),
                 );
                 if (shouldStartBlink) {
                     startBlink();
@@ -137,12 +151,45 @@ function applySync(payload: SyncPayload) {
                 incomingCalls.length,
                 callDisplay,
                 payload.state.cpl,
+                isPlaybackPaused(),
             );
             if (shouldStartBlink) {
                 startBlink();
             } else {
                 stopBlink();
             }
+            break;
+        }
+        case "playback": {
+            console.log("applying playback sync", payload.state);
+            const {selected, status, playbackDevice} = payload.state;
+
+            usePlaybackStore.setState(prev => ({
+                selected,
+                status:
+                    status !== undefined
+                        ? {
+                              id: status.id,
+                              status: status.status,
+                              continuously: status.continuously,
+                              progress: prev.status?.progress ?? 0,
+                          }
+                        : undefined,
+                playbackDevice,
+            }));
+
+            const shouldStartBlink = !shouldStopBlinking(
+                useCallStore.getState().incomingCalls.length,
+                useCallStore.getState().callDisplay,
+                useRadioStore.getState().cpl,
+                status?.status === "paused",
+            );
+            if (shouldStartBlink) {
+                startBlink();
+            } else {
+                stopBlink();
+            }
+            break;
         }
     }
 }
@@ -207,6 +254,21 @@ function startSync(): () => void {
         })),
     );
 
+    unlistenFns.push(
+        subscribeFields(usePlaybackStore, "playback", s => ({
+            selected: s.selected,
+            status:
+                s.status !== undefined
+                    ? {
+                          id: s.status.id,
+                          status: s.status.status,
+                          continuously: s.status.continuously,
+                      }
+                    : undefined,
+            playbackDevice: s.playbackDevice,
+        })),
+    );
+
     const unlistenSync = listen<SyncPayload>("store:sync", event => {
         if (event.payload.sourceId === instanceId) return;
         applying = true;
@@ -262,5 +324,12 @@ function broadcastAllStoreState() {
     const radio = useRadioStore.getState();
     broadcast("radio", {
         cpl: radio.cpl,
+    });
+
+    const playback = usePlaybackStore.getState();
+    broadcast("playback", {
+        selected: playback.selected,
+        status: playback.status,
+        playbackDevice: playback.playbackDevice,
     });
 }

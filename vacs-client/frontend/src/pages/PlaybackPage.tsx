@@ -7,7 +7,7 @@ import {invokeSafe, invokeStrict} from "../error.ts";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 import {openSettingsSubmenu} from "../stores/navigation-store.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
-import {EventCallback, listen, UnlistenFn} from "../transport";
+import {EventCallback, isTauri, listen, UnlistenFn} from "../transport";
 import {ClipMeta, sortClips} from "../types/playback.ts";
 import {CloseButton} from "./SettingsPage.tsx";
 import PlaybackProgress from "../components/playback/PlaybackProgress.tsx";
@@ -15,6 +15,10 @@ import speaker from "../assets/speaker.svg";
 import {ComponentChildren} from "preact";
 import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
 import {useEventCallback} from "../hooks/event-callback-hook.ts";
+import {shouldStopBlinking, useBlinkStore} from "../stores/blink-store.ts";
+import {useCallStore} from "../stores/call-store.ts";
+import {useRadioStore} from "../stores/radio-store.ts";
+import {PlaybackDevice, usePlaybackStore} from "../stores/playback-store.ts";
 
 function PlaybackPage() {
     const capPlayback = useCapabilitiesStore(state => state.playback);
@@ -58,59 +62,96 @@ function PlaybackPage() {
     );
 }
 
-type PlaybackStatus = {
-    id: number;
-    status: "playing" | "paused";
-    continuously: boolean;
-    progress: number;
-};
-
 function PlaybackPageInner() {
     const [clips, setClips] = useState<ClipMeta[]>([]);
-    const [selected, setSelected] = useState<number>(0);
 
-    // TODO: implement pause
+    const selected = usePlaybackStore(state => state.selected);
+    const status = usePlaybackStore(state => state.status);
+    const playbackDevice = usePlaybackStore(state => state.playbackDevice);
+    const {setSelected, setStatus, setPlaybackDevice} = usePlaybackStore(state => state.actions);
 
-    const [status, setStatus] = useState<PlaybackStatus | undefined>(undefined);
-    const statusRef = useRef(status);
     const intendedClipChangeRef = useRef(false);
-
-    const [playbackDevice, setPlaybackDevice] = useState<"Output" | "Speaker">("Output");
 
     const active = status !== undefined;
     const selectedClip: ClipMeta | undefined = clips[selected];
     const prevClip: ClipMeta | undefined = clips[selected + 1];
     const nextClip: ClipMeta | undefined = clips[selected - 1];
 
+    const {blink, startBlink, stopBlink} = useBlinkStore(state => state);
+
     const handlePlay = useAsyncDebounce(
-        useCallback(async (id: number, deviceType: "Output" | "Speaker", continuously = false) => {
+        useCallback(
+            async (id: number, deviceType: PlaybackDevice, continuously = false) => {
+                try {
+                    await invokeStrict("playback_play", {
+                        id,
+                        deviceType,
+                    });
+                    setStatus({id, status: "playing", continuously, progress: 0});
+                } catch {}
+            },
+            [setStatus],
+        ),
+    );
+
+    const handlePause = useAsyncDebounce(
+        useCallback(async () => {
             try {
-                await invokeStrict("playback_play", {
-                    id,
-                    deviceType,
+                await invokeStrict("playback_pause");
+                setStatus(prev => {
+                    if (prev === undefined) return prev;
+                    return {
+                        ...prev,
+                        status: "paused",
+                    };
                 });
-                setStatus({id, status: "playing", continuously, progress: 0});
+                startBlink();
             } catch {}
-        }, []),
+        }, [setStatus, startBlink]),
+    );
+
+    const handleContinue = useAsyncDebounce(
+        useCallback(async () => {
+            try {
+                await invokeStrict("playback_continue");
+                setStatus(prev => {
+                    if (prev === undefined) return prev;
+                    return {
+                        ...prev,
+                        status: "playing",
+                    };
+                });
+                if (
+                    shouldStopBlinking(
+                        useCallStore.getState().incomingCalls.length,
+                        useCallStore.getState().callDisplay,
+                        useRadioStore.getState().cpl,
+                        false,
+                    )
+                ) {
+                    stopBlink();
+                }
+            } catch {}
+        }, [setStatus, stopBlink]),
     );
 
     const handleStop = useAsyncDebounce(
-        useCallback(async (setState = true) => {
-            try {
-                await invokeStrict("playback_stop");
-                if (setState) setStatus(undefined);
-            } catch {}
-        }, []),
+        useCallback(
+            async (setState = true) => {
+                try {
+                    await invokeStrict("playback_stop");
+                    if (setState) setStatus(undefined);
+                } catch {}
+            },
+            [setStatus],
+        ),
     );
 
     useEffect(() => {
-        statusRef.current = status;
-    }, [status]);
-
-    useEffect(() => {
+        if (!isTauri) return;
         if (
             selectedClip !== undefined &&
-            statusRef.current !== undefined &&
+            usePlaybackStore.getState().status !== undefined &&
             !intendedClipChangeRef.current
         ) {
             void handleStop();
@@ -129,17 +170,18 @@ function PlaybackPageInner() {
         const unlistenFns: Promise<UnlistenFn>[] = [];
         unlistenFns.push(
             listen<{recorded: ClipMeta; evicted: ClipMeta[]}>("playback:clips-modified", event => {
+                let status = usePlaybackStore.getState().status;
                 setClips(prev => {
                     let playingEvicted = false;
                     for (const evictedClip of event.payload.evicted) {
                         prev = prev.filter(clip => clip.id !== evictedClip.id);
-                        if (statusRef.current?.id === evictedClip.id) {
+                        if (status?.id === evictedClip.id) {
                             void handleStop();
                             playingEvicted = true;
                         }
                     }
 
-                    if (prev.length > 0 && statusRef.current !== undefined && !playingEvicted)
+                    if (prev.length > 0 && status !== undefined && !playingEvicted)
                         setSelected(prev => prev + 1);
                     return sortClips([...prev, event.payload.recorded]);
                 });
@@ -147,6 +189,7 @@ function PlaybackPageInner() {
         );
 
         return () => {
+            void handleStop();
             unlistenFns.forEach(fn => fn.then(f => f()));
         };
     }, [handleStop]);
@@ -159,7 +202,7 @@ function PlaybackPageInner() {
                 progress: event.payload * 100,
             };
         });
-        if (event.payload === 1) {
+        if (event.payload === 1 && isTauri) {
             if (status?.continuously && nextClip !== undefined) {
                 intendedClipChangeRef.current = true;
                 setSelected(prev => prev - 1);
@@ -210,10 +253,27 @@ function PlaybackPageInner() {
                     <div className="flex-1 min-h-0 w-full flex items-end justify-center mt-[0.625rem]">
                         <div className="h-min w-min grid grid-flow-col grid-rows-2 gap-y-3 gap-x-2">
                             <PlaybackControlButton
-                                color={status?.continuously === false ? "blue" : "gray"}
+                                color={
+                                    status?.continuously === false &&
+                                    (status?.status === "playing" || blink)
+                                        ? "blue"
+                                        : "gray"
+                                }
                                 disabled={selectedClip === undefined || status?.continuously}
-                                onClick={() => handlePlay(selectedClip.id, playbackDevice)}
-                                className={clsx(status?.continuously === false && "text-white")}
+                                onClick={async () => {
+                                    if (status === undefined) {
+                                        void handlePlay(selectedClip.id, playbackDevice);
+                                    } else if (status.status === "playing") {
+                                        await handlePause();
+                                    } else {
+                                        await handleContinue();
+                                    }
+                                }}
+                                className={clsx(
+                                    status?.continuously === false &&
+                                        (status?.status === "playing" || blink) &&
+                                        "text-white",
+                                )}
                             >
                                 <svg
                                     width="32"
