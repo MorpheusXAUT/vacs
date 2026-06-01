@@ -128,24 +128,28 @@ function PlaybackPageInner() {
 
         const unlistenFns: Promise<UnlistenFn>[] = [];
         unlistenFns.push(
-            // TODO: combine these two events
-            listen<ClipMeta>("playback:clip-recorded", event => {
+            listen<{recorded: ClipMeta; evicted: ClipMeta[]}>("playback:clips-modified", event => {
                 setClips(prev => {
-                    if (prev.length > 0 && statusRef.current !== undefined)
+                    let playingEvicted = false;
+                    for (const evictedClip of event.payload.evicted) {
+                        prev = prev.filter(clip => clip.id !== evictedClip.id);
+                        if (statusRef.current?.id === evictedClip.id) {
+                            void handleStop();
+                            playingEvicted = true;
+                        }
+                    }
+
+                    if (prev.length > 0 && statusRef.current !== undefined && !playingEvicted)
                         setSelected(prev => prev + 1);
-                    return sortClips([...prev, event.payload]);
+                    return sortClips([...prev, event.payload.recorded]);
                 });
-            }),
-            listen<ClipMeta>("playback:clip-evicted", event => {
-                setClips(prev => prev.filter(c => c.id !== event.payload.id));
-                if (statusRef.current?.id === event.payload.id) void handleStop();
             }),
         );
 
         return () => {
             unlistenFns.forEach(fn => fn.then(f => f()));
         };
-    }, []);
+    }, [handleStop]);
 
     const handleProgressUpdate: EventCallback<number> = useEventCallback(event => {
         setStatus(prev => {

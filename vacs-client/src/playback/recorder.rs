@@ -13,6 +13,7 @@ use crate::playback::writer::ClipWriter;
 use crate::playback::{ClipMeta, PlaybackConfig, PlaybackError, RecordingMode};
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,8 +24,7 @@ use tokio_util::sync::CancellationToken;
 use vacs_audio::sources::AudioSourceId;
 
 const TICK_INTERVAL_MS: u64 = 100;
-const CLIP_RECORDED_EVENT: &str = "playback:clip-recorded";
-const CLIP_EVICTED_EVENT: &str = "playback:clip-evicted";
+const CLIPS_MODIFIED_EVENT: &str = "playback:clips-modified";
 
 pub const CLIP_PROGRESS_EVENT: &str = "playback:progress";
 
@@ -224,11 +224,12 @@ async fn run(
     for (clip_id, clip) in open.drain() {
         match clip.finalize(clip_id, None, None) {
             Ok(meta) => {
-                let _ = app.emit(CLIP_RECORDED_EVENT, &meta);
+                let recorded = meta.clone();
                 let evicted = store.lock().commit(meta);
-                for ev in evicted {
-                    let _ = app.emit(CLIP_EVICTED_EVENT, &ev);
-                }
+                let _ = app.emit(
+                    CLIPS_MODIFIED_EVENT,
+                    ClipsModifiedEvent { recorded, evicted },
+                );
             }
             Err((path, err)) => {
                 log::warn!("failed to finalize clip during shutdown: {err}");
@@ -300,12 +301,12 @@ fn apply_actions(
 
                 match clip.finalize(clip_id, Some(ended_at), Some(duration_ms)) {
                     Ok(meta) => {
-                        let _ = app.emit(CLIP_RECORDED_EVENT, &meta);
+                        let recorded = meta.clone();
                         let evicted = store.lock().commit(meta);
-                        for ev in evicted {
-                            log::trace!("evicted clip {} ({})", ev.id, ev.path.display());
-                            let _ = app.emit(CLIP_EVICTED_EVENT, &ev);
-                        }
+                        let _ = app.emit(
+                            CLIPS_MODIFIED_EVENT,
+                            ClipsModifiedEvent { recorded, evicted },
+                        );
                     }
                     Err((path, err)) => {
                         log::error!("failed to finalize clip: {err}");
@@ -315,4 +316,10 @@ fn apply_actions(
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ClipsModifiedEvent {
+    recorded: ClipMeta,
+    evicted: Vec<ClipMeta>,
 }

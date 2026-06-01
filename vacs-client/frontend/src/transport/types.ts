@@ -113,8 +113,7 @@ export type RemoteEvent =
     | "webrtc:call-error"
     | "update:progress"
     | "remote:status"
-    | "playback:clip-recorded"
-    | "playback:clip-evicted"
+    | "playback:clips-modified"
     | "playback:progress";
 
 export type InvokeArgs = Record<string, unknown>;
