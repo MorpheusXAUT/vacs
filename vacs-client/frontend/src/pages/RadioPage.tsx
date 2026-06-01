@@ -6,6 +6,7 @@ import {listen, UnlistenFn} from "../transport";
 import AddRadioStation from "../components/radio/AddRadioStation.tsx";
 import {sortCallsigns} from "../types/client.ts";
 import {useRadioStore} from "../stores/radio-store.ts";
+import {setPage} from "../stores/navigation-store.ts";
 
 function RadioPage() {
     const [stations, setStations] = useState<Map<number, RadioStation>>(new Map());
@@ -16,7 +17,7 @@ function RadioPage() {
             radioState?.state !== undefined &&
             (radioState.state === "NotConfigured" || radioState.state === "Disconnected")
         ) {
-            window.history.back();
+            setPage("phone");
         }
     }, [radioState?.state]);
 

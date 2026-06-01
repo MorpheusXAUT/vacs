@@ -95,7 +95,6 @@ pub fn run() {
                 let call_control_config = state.config.client.keybinds.clone();
                 let keybind_engine = state.keybind_engine_handle();
                 let remote_config = state.config.client.remote.clone();
-                let playback_config = state.config.client.playback.clone();
 
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
                 app.manage::<AudioManagerHandle>(state.audio_manager_handle());
@@ -109,7 +108,7 @@ pub fn run() {
                     keybind_engine
                         .write()
                         .await
-                        .set_config(&transmit_config, &call_control_config, &playback_config)
+                        .set_config(&transmit_config, &call_control_config)
                         .await
                         .map_startup_err(StartupError::Keybinds)?;
                 } else {

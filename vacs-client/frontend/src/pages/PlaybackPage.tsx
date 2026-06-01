@@ -25,7 +25,19 @@ function PlaybackPage() {
     const capPlayback = useCapabilitiesStore(state => state.playback);
     const capPlatform = useCapabilitiesStore(state => state.platform);
 
+    const trackAudioRadioEnabled = useSettingsStore(
+        state =>
+            state.transmitConfig?.mode === "RadioIntegration" &&
+            state.radioConfig?.integration === "TrackAudio",
+    );
+
     const playbackEnabled = useSettingsStore(state => state.playbackEnabled);
+
+    const radioConnected = useRadioStore(
+        state =>
+            state.radioState?.state !== "NotConfigured" &&
+            state.radioState?.state !== "Disconnected",
+    );
 
     return (
         <div
@@ -35,8 +47,27 @@ function PlaybackPage() {
             )}
         >
             <p className="w-full text-white bg-blue-700 font-semibold text-center">Playback</p>
-            {capPlayback && playbackEnabled ? (
-                <PlaybackPageInner />
+            {!capPlayback ? (
+                <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex justify-center items-center text-slate-600">
+                    Radio playback is not yet supported on {capPlatform}.
+                </div>
+            ) : !trackAudioRadioEnabled ? (
+                <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col justify-center items-center text-slate-600">
+                    <p>TrackAudio radio integration is not enabled.</p>
+                    <p>
+                        Enable it in the{" "}
+                        <span
+                            className="text-blue-700 cursor-pointer"
+                            onClick={() => {
+                                void invokeSafe("audio_play_ui_click");
+                                openSettingsSubmenu("settings-transmit");
+                            }}
+                        >
+                            transmit settings
+                        </span>
+                        .
+                    </p>
+                </div>
             ) : !playbackEnabled ? (
                 <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col justify-center items-center text-slate-600">
                     <p>Radio playback is not enabled.</p>
@@ -54,10 +85,12 @@ function PlaybackPage() {
                         .
                     </p>
                 </div>
-            ) : (
-                <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex justify-center items-center text-slate-600">
-                    Radio playback is not yet supported on {capPlatform}.
+            ) : !radioConnected ? (
+                <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col justify-center items-center text-slate-600">
+                    <p>No TrackAudio connection.</p>
                 </div>
+            ) : (
+                <PlaybackPageInner />
             )}
         </div>
     );

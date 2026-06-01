@@ -13,6 +13,9 @@ use wasapi::{AudioClient, Direction, SampleType, StreamMode, WaveFormat};
 const CHANNEL_CAPACITY: usize = 1024;
 const CHUNKSIZE: usize = 1024;
 
+const SAMPLE_RATE: usize = 48000;
+const CHANNELS: usize = 2;
+
 const TRACKAUDIO_APP_NAME: &str = "trackaudio.exe";
 
 pub struct WindowsApplicationCapture {
@@ -103,8 +106,8 @@ fn run_main_loop(
     process_id: u32,
     init_tx: std::sync::mpsc::SyncSender<Result<Arc<AtomicBool>, String>>,
 ) {
-    let desired_format = WaveFormat::new(32, 32, &SampleType::Float, 48000, 2, None);
-    let blockalign = desired_format.get_blockalign();
+    let wave_format = WaveFormat::new(32, 32, &SampleType::Float, SAMPLE_RATE, CHANNELS, None);
+    let blockalign = wave_format.get_blockalign();
 
     let mut audio_client = match AudioClient::new_application_loopback_client(process_id, true) {
         Ok(a) => a,
@@ -117,7 +120,7 @@ fn run_main_loop(
     };
 
     if let Err(err) = audio_client.initialize_client(
-        &desired_format,
+        &wave_format,
         &Direction::Capture,
         &StreamMode::EventsShared {
             autoconvert: true,
@@ -155,8 +158,8 @@ fn run_main_loop(
     // TODO: Check LoopbackEvents (which are send when)
     if let Err(err) = tx.try_send(LoopbackEvent::Opened {
         tap: TapId::Merged,
-        channels: 2,        // TODO: ?
-        sample_rate: 48000, // TODO: ?
+        sample_rate: SAMPLE_RATE as u32,
+        channels: CHANNELS as u16,
     }) {
         log::warn!("failed to send opened event: {err}");
     }

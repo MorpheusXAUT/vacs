@@ -1,5 +1,5 @@
 import Select from "../ui/Select.tsx";
-import {Dispatch, StateUpdater, useEffect, useState} from "preact/hooks";
+import {useEffect, useState} from "preact/hooks";
 import {
     withTransmitLabels,
     isTransmitMode,
@@ -21,28 +21,16 @@ import {transmitModeToKeybind} from "../../types/keybinds.ts";
 import StatusIndicator, {Status} from "../ui/StatusIndicator.tsx";
 import {useRadioStore} from "../../stores/radio-store.ts";
 import {useSettingsStore} from "../../stores/settings-store.ts";
+import {setPage} from "../../stores/navigation-store.ts";
 
 function TransmitModeSettings() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
     const capPlatform = useCapabilitiesStore(state => state.platform);
-    const [transmitConfig, setTransmitConfig] = useState<TransmitConfigWithLabels | undefined>(
-        undefined,
-    );
+
+    const transmitConfig = useSettingsStore(state => state.transmitConfig);
+    const setTransmitConfig = useSettingsStore(state => state.setTransmitConfig);
     const radioConfig = useSettingsStore(state => state.radioConfig);
     const setRadioConfig = useSettingsStore(state => state.setRadioConfig);
-
-    useEffect(() => {
-        const fetchConfig = async () => {
-            const transmitConfig = await invokeSafe<TransmitConfig>("keybinds_get_transmit_config");
-            if (transmitConfig === undefined) return;
-
-            setTransmitConfig(await withTransmitLabels(transmitConfig));
-        };
-
-        if (capKeybindListener) {
-            void fetchConfig();
-        }
-    }, [capKeybindListener]);
 
     return (
         <div className="h-full flex flex-col">
@@ -167,7 +155,7 @@ function TransmitModeSettings() {
 
 type TransmitConfigSettingsProps = {
     transmitConfig: TransmitConfigWithLabels;
-    setTransmitConfig: Dispatch<StateUpdater<TransmitConfigWithLabels | undefined>>;
+    setTransmitConfig: (config: TransmitConfigWithLabels) => void;
 };
 
 function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitConfigSettingsProps) {
@@ -375,6 +363,9 @@ function RadioIntegrationSettings({
 
         try {
             await invokeStrict("keybinds_set_radio_config", {radioConfig: newRadioConfig});
+            if (value === "AudioForVatsim") {
+                setPage("phone");
+            }
         } catch {
             setRadioConfig(previousRadioConfig);
         }

@@ -1,3 +1,5 @@
+use crate::app::state::AppState;
+use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::{
     Frequency, Radio, RadioError, RadioState, RadioStation, StationStateUpdate, TransmissionState,
 };
@@ -7,7 +9,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use trackaudio::messages::commands::SetStationState;
@@ -191,6 +193,29 @@ impl TrackAudioRadio {
                 state.sync_stations(app, station_states);
             }
             Event::Client(ClientEvent::ConnectionStateChanged(connection_state)) => {
+                match connection_state {
+                    ConnectionState::Connected => {
+                        let state = app.state::<AppState>();
+                        let state = state.lock().await;
+
+                        let trackaudio_radio = app.state::<TrackAudioRadioHandle>().read().clone();
+
+                        if let Some(radio) = trackaudio_radio {
+                            log::info!("trackaudio radio state connected; starting recorder");
+                            state.config.client.playback.start(app, radio).await;
+                        }
+                    }
+                    _ => {
+                        let handle = app.state::<PlaybackRecorderHandle>();
+                        let existing = handle.write().take();
+                        if let Some(recorder) = existing {
+                            recorder.shutdown();
+                            log::info!(
+                                "trackaudio radio state changed to {connection_state:?}; stopped active recorder"
+                            );
+                        }
+                    }
+                }
                 Self::handle_connection_state(connection_state, state, app, client).await;
             }
             Event::Client(ClientEvent::CommandSendFailed { error, command }) => {

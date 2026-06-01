@@ -49,11 +49,7 @@ pub async fn keybinds_set_transmit_config(
         keybind_engine
             .write()
             .await
-            .set_config(
-                &transmit_config,
-                &state.config.client.keybinds,
-                &state.config.client.playback,
-            )
+            .set_config(&transmit_config, &state.config.client.keybinds)
             .await?;
 
         state.config.client.transmit_config = transmit_config;
@@ -112,11 +108,7 @@ pub async fn keybinds_set_binding(
         keybind_engine
             .write()
             .await
-            .set_config(
-                &state.config.client.transmit_config,
-                &keybinds_config,
-                &state.config.client.playback,
-            )
+            .set_config(&state.config.client.transmit_config, &keybinds_config)
             .await?;
 
         state.config.client.keybinds = keybinds_config;
@@ -163,7 +155,7 @@ pub async fn keybinds_set_radio_config(
         keybind_engine
             .write()
             .await
-            .set_radio_config(&radio_config, &state.config.client.playback)
+            .set_radio_config(&radio_config)
             .await?;
 
         state.config.client.radio = radio_config;

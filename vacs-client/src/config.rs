@@ -612,11 +612,7 @@ impl RadioConfig {
     ///
     /// The TrackAudio integration is not affected by this platform limitation and is thus the
     /// default radio implementation for Linux.
-    pub async fn radio(
-        &self,
-        app: AppHandle,
-        playback: &PlaybackConfig,
-    ) -> Result<Option<DynRadio>, Error> {
+    pub async fn radio(&self, app: AppHandle) -> Result<Option<DynRadio>, Error> {
         match self.integration {
             RadioIntegration::AudioForVatsim => {
                 let Some(config) = self.audio_for_vatsim.as_ref() else {
@@ -639,8 +635,6 @@ impl RadioConfig {
                 );
 
                 *app.state::<TrackAudioRadioHandle>().write() = Some(radio.clone());
-
-                playback.start(&app, radio.clone()).await;
 
                 Ok(Some(radio))
             }

@@ -6,13 +6,12 @@ use crate::error::Error;
 use crate::playback::recorder::{CLIP_PROGRESS_EVENT, PlaybackRecorderHandle};
 use crate::playback::{ClipMeta, PlaybackError};
 use crate::radio::track_audio::TrackAudioRadioHandle;
+use crate::radio::{Radio, RadioState};
 use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 use vacs_audio::sources::wav::WavSource;
-
-// TODO: Do we need some sort of a status?
 
 #[tauri::command]
 #[vacs_macros::log_err]
@@ -52,7 +51,12 @@ pub async fn playback_set_enabled(
         // Start the recorder live if a TrackAudioRadio is currently active. If not, the
         // recorder will be started the next time the radio integration comes up.
         let radio = app.state::<TrackAudioRadioHandle>().read().clone();
-        if let Some(radio) = radio {
+        if let Some(radio) = radio
+            && !matches!(
+                radio.state(),
+                RadioState::NotConfigured | RadioState::Disconnected
+            )
+        {
             playback_config.start(&app, radio).await;
         } else {
             log::info!("playback enabled in config but no TrackAudio radio is active");

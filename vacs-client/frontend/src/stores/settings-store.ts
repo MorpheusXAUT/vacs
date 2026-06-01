@@ -3,18 +3,27 @@ import {invokeStrict} from "../error.ts";
 import {CallConfig, ClockMode} from "../types/settings.ts";
 import {ClientPageConfig, ClientPageSettings} from "../types/client.ts";
 import {useStationsStore} from "./stations-store.ts";
-import {RadioConfig, RadioConfigWithLabels, withRadioLabels} from "../types/transmit.ts";
+import {
+    RadioConfig,
+    RadioConfigWithLabels,
+    TransmitConfig,
+    TransmitConfigWithLabels,
+    withRadioLabels,
+    withTransmitLabels,
+} from "../types/transmit.ts";
 
 type SettingsState = {
     callConfig: CallConfig;
     selectedClientPageConfig: ClientPageConfig & {name: string};
     clientPageConfigs: Record<string, ClientPageConfig>;
+    transmitConfig: TransmitConfigWithLabels | undefined;
     radioConfig: RadioConfigWithLabels | undefined;
     clockMode: ClockMode;
     playbackEnabled: boolean;
     setCallConfig: (config: CallConfig) => void;
     setClientPageConfig: (config: ClientPageConfig & {name: string}) => void;
     setClientPageSettings: (settings: ClientPageSettings) => void;
+    setTransmitConfig: (config: TransmitConfigWithLabels) => void;
     setRadioConfig: (config: RadioConfigWithLabels) => void;
     setClockMode: (mode: ClockMode) => void;
     setPlaybackEnabled: (enabled: boolean) => void;
@@ -38,6 +47,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     },
     selectedClientPageConfig: {...emptyClientPageConfig, name: "None"},
     clientPageConfigs: {},
+    transmitConfig: undefined,
     radioConfig: undefined,
     clockMode: "Realtime",
     playbackEnabled: false,
@@ -69,6 +79,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
             }
         }
     },
+    setTransmitConfig: config => set({transmitConfig: config}),
     setRadioConfig: config => set({radioConfig: config}),
     setClockMode: mode => set({clockMode: mode}),
     setPlaybackEnabled: enabled => set({playbackEnabled: enabled}),
@@ -90,8 +101,11 @@ async function fetchClientPageSettings() {
     } catch {}
 }
 
-async function fetchRadioConfig() {
+async function fetchTransmitSettings() {
     try {
+        const transmitConfig = await invokeStrict<TransmitConfig>("keybinds_get_transmit_config");
+        useSettingsStore.getState().setTransmitConfig(await withTransmitLabels(transmitConfig));
+
         const radioConfig = await invokeStrict<RadioConfig>("keybinds_get_radio_config");
         useSettingsStore.getState().setRadioConfig(await withRadioLabels(radioConfig));
     } catch {}
@@ -115,6 +129,6 @@ export async function fetchSettings() {
     void fetchCallConfig();
     void fetchClientPageSettings();
     void fetchClockMode();
-    void fetchRadioConfig();
+    void fetchTransmitSettings();
     void fetchPlaybackEnabled();
 }

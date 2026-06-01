@@ -14,6 +14,7 @@ type NavigationState = {
     page: Page;
     menu: Menu | undefined;
     submenu: Submenu | undefined;
+    setPage: (page: Page) => void;
     goToPage: (page: Page) => void;
     openMenu: (menu: Menu) => void;
     closeMenu: () => void;
@@ -24,6 +25,7 @@ export const useNavigationStore = create<NavigationState>()(set => ({
     page: "phone",
     menu: undefined,
     submenu: undefined,
+    setPage: page => set({page}),
     goToPage: page => {
         set({page, menu: undefined, submenu: undefined});
     },
@@ -31,6 +33,8 @@ export const useNavigationStore = create<NavigationState>()(set => ({
     closeMenu: () => set({menu: undefined, submenu: undefined}),
     openSettingsSubmenu: (submenu: SettingsSubmenu) => set({menu: "settings", submenu}),
 }));
+
+export const setPage = (page: Page) => useNavigationStore.getState().setPage(page);
 
 export const goToPage = (page: Page) => useNavigationStore.getState().goToPage(page);
 

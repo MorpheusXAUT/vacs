@@ -20,7 +20,6 @@ use tokio_util::sync::CancellationToken;
 
 #[cfg(target_os = "linux")]
 use crate::platform::Platform;
-use crate::playback::PlaybackConfig;
 
 #[derive(Debug)]
 pub struct KeybindEngine {
@@ -72,7 +71,7 @@ impl KeybindEngine {
         }
     }
 
-    pub async fn start(&mut self, playback_config: &PlaybackConfig) -> Result<(), Error> {
+    pub async fn start(&mut self) -> Result<(), Error> {
         if self.rx_task.is_some() {
             return Ok(());
         }
@@ -99,10 +98,7 @@ impl KeybindEngine {
         *self.listener.write() = Some(Arc::new(listener));
 
         if self.mode == TransmitMode::RadioIntegration {
-            let radio = self
-                .radio_config
-                .radio(self.app.clone(), playback_config)
-                .await?;
+            let radio = self.radio_config.radio(self.app.clone()).await?;
             *self.radio.write() = radio;
         } else {
             self.app.emit("radio:integration-available", false).ok();
@@ -145,7 +141,6 @@ impl KeybindEngine {
         &mut self,
         transmit_config: &TransmitConfig,
         keybinds_config: &KeybindsConfig,
-        playback_config: &PlaybackConfig,
     ) -> Result<(), Error> {
         self.stop();
 
@@ -158,23 +153,19 @@ impl KeybindEngine {
 
         self.reset_input_state();
 
-        self.start(playback_config).await?;
+        self.start().await?;
 
         Ok(())
     }
 
-    pub async fn set_radio_config(
-        &mut self,
-        config: &RadioConfig,
-        playback_config: &PlaybackConfig,
-    ) -> Result<(), Error> {
+    pub async fn set_radio_config(&mut self, config: &RadioConfig) -> Result<(), Error> {
         self.stop();
 
         self.radio_config = config.clone();
 
         self.reset_input_state();
 
-        self.start(playback_config).await?;
+        self.start().await?;
 
         Ok(())
     }
