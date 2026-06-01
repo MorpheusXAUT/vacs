@@ -41,8 +41,9 @@ type RadioSync = {
 
 type PlaybackSync = {
     selected: number;
-    status: Omit<PlaybackStatus, "progress"> | undefined;
+    status: PlaybackStatus | undefined;
     playbackDevice: PlaybackDevice;
+    openInstanceIds: string[];
 };
 
 type SyncMap = {
@@ -70,23 +71,26 @@ function createInstanceId(): string {
 }
 
 // Unique ID for this client instance so we can ignore our own broadcasts.
-const instanceId = createInstanceId();
+export const instanceId = createInstanceId();
 
 // set to `true` while applying an incoming sync to prevent re-broadcast
 let applying = false;
 
 function subscribeFields<K extends SyncStoreName, S>(
-    store: {getState: () => S; subscribe: (fn: (state: S) => void) => () => void},
+    store: {
+        getState: () => S;
+        subscribe: (listener: (state: S, prevState: S) => void) => () => void;
+    },
     name: K,
     select: (state: S) => SyncMap[K],
+    skipSync?: (next: S, prev: S) => boolean,
 ): () => void {
-    let prev = JSON.stringify(select(store.getState()));
+    return store.subscribe((nextState, prevState) => {
+        const next = JSON.stringify(select(nextState));
+        const prev = JSON.stringify(select(prevState));
 
-    return store.subscribe(state => {
-        const next = JSON.stringify(select(state));
-        if (next === prev) return;
-        prev = next;
-        if (applying) return;
+        if (next === prev || applying || skipSync?.(nextState, prevState)) return;
+
         void invoke("remote_broadcast_store_sync", {
             store: name,
             state: JSON.parse(next),
@@ -161,22 +165,14 @@ function applySync(payload: SyncPayload) {
             break;
         }
         case "playback": {
-            console.log("applying playback sync", payload.state);
-            const {selected, status, playbackDevice} = payload.state;
+            const {selected, status, playbackDevice, openInstanceIds} = payload.state;
 
-            usePlaybackStore.setState(prev => ({
+            usePlaybackStore.setState({
                 selected,
-                status:
-                    status !== undefined
-                        ? {
-                              id: status.id,
-                              status: status.status,
-                              continuously: status.continuously,
-                              progress: prev.status?.progress ?? 0,
-                          }
-                        : undefined,
+                status,
                 playbackDevice,
-            }));
+                openInstanceIds,
+            });
 
             const shouldStartBlink = !shouldStopBlinking(
                 useCallStore.getState().incomingCalls.length,
@@ -255,18 +251,27 @@ function startSync(): () => void {
     );
 
     unlistenFns.push(
-        subscribeFields(usePlaybackStore, "playback", s => ({
-            selected: s.selected,
-            status:
-                s.status !== undefined
-                    ? {
-                          id: s.status.id,
-                          status: s.status.status,
-                          continuously: s.status.continuously,
-                      }
-                    : undefined,
-            playbackDevice: s.playbackDevice,
-        })),
+        subscribeFields(
+            usePlaybackStore,
+            "playback",
+            s => ({
+                selected: s.selected,
+                status: s.status,
+                playbackDevice: s.playbackDevice,
+                openInstanceIds: s.openInstanceIds,
+            }),
+            (nextState, prevState) => {
+                if (nextState.status === undefined || prevState.status === undefined) return false;
+
+                const {progress: _nextProgress, ...nextStatusWithoutProgress} = nextState.status;
+                const {progress: _prevProgress, ...prevStatusWithoutProgress} = prevState.status;
+
+                const next = {...nextState, status: nextStatusWithoutProgress};
+                const prev = {...prevState, status: prevStatusWithoutProgress};
+
+                return JSON.stringify(next) === JSON.stringify(prev);
+            },
+        ),
     );
 
     const unlistenSync = listen<SyncPayload>("store:sync", event => {
@@ -331,5 +336,6 @@ function broadcastAllStoreState() {
         selected: playback.selected,
         status: playback.status,
         playbackDevice: playback.playbackDevice,
+        openInstanceIds: playback.openInstanceIds,
     });
 }

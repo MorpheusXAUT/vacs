@@ -7,7 +7,7 @@ import {invokeSafe, invokeStrict} from "../error.ts";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 import {openSettingsSubmenu} from "../stores/navigation-store.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
-import {EventCallback, isTauri, listen, UnlistenFn} from "../transport";
+import {EventCallback, listen, UnlistenFn} from "../transport";
 import {ClipMeta, sortClips} from "../types/playback.ts";
 import {CloseButton} from "./SettingsPage.tsx";
 import PlaybackProgress from "../components/playback/PlaybackProgress.tsx";
@@ -18,7 +18,8 @@ import {useEventCallback} from "../hooks/event-callback-hook.ts";
 import {shouldStopBlinking, useBlinkStore} from "../stores/blink-store.ts";
 import {useCallStore} from "../stores/call-store.ts";
 import {useRadioStore} from "../stores/radio-store.ts";
-import {PlaybackDevice, usePlaybackStore} from "../stores/playback-store.ts";
+import {isPlaybackRoot, PlaybackDevice, usePlaybackStore} from "../stores/playback-store.ts";
+import {instanceId} from "../transport/store-sync.ts";
 
 function PlaybackPage() {
     const capPlayback = useCapabilitiesStore(state => state.playback);
@@ -148,51 +149,18 @@ function PlaybackPageInner() {
     );
 
     useEffect(() => {
-        if (!isTauri) return;
+        if (!isPlaybackRoot()) return;
+        const status = usePlaybackStore.getState().status;
         if (
             selectedClip !== undefined &&
-            usePlaybackStore.getState().status !== undefined &&
+            status !== undefined &&
+            status.id !== selectedClip.id &&
             !intendedClipChangeRef.current
         ) {
             void handleStop();
         }
         intendedClipChangeRef.current = false;
     }, [selectedClip, handleStop]);
-
-    useEffect(() => {
-        const fetch = async () => {
-            const list = await invokeSafe<ClipMeta[]>("playback_list");
-            if (list === undefined) return;
-            setClips(sortClips(list));
-        };
-        void fetch();
-
-        const unlistenFns: Promise<UnlistenFn>[] = [];
-        unlistenFns.push(
-            listen<{recorded: ClipMeta; evicted: ClipMeta[]}>("playback:clips-modified", event => {
-                let status = usePlaybackStore.getState().status;
-                setClips(prev => {
-                    let playingEvicted = false;
-                    for (const evictedClip of event.payload.evicted) {
-                        prev = prev.filter(clip => clip.id !== evictedClip.id);
-                        if (status?.id === evictedClip.id) {
-                            void handleStop();
-                            playingEvicted = true;
-                        }
-                    }
-
-                    if (prev.length > 0 && status !== undefined && !playingEvicted)
-                        setSelected(prev => prev + 1);
-                    return sortClips([...prev, event.payload.recorded]);
-                });
-            }),
-        );
-
-        return () => {
-            void handleStop();
-            unlistenFns.forEach(fn => fn.then(f => f()));
-        };
-    }, [handleStop]);
 
     const handleProgressUpdate: EventCallback<number> = useEventCallback(event => {
         setStatus(prev => {
@@ -202,7 +170,7 @@ function PlaybackPageInner() {
                 progress: event.payload * 100,
             };
         });
-        if (event.payload === 1 && isTauri) {
+        if (event.payload === 1 && isPlaybackRoot()) {
             if (status?.continuously && nextClip !== undefined) {
                 intendedClipChangeRef.current = true;
                 setSelected(prev => prev - 1);
@@ -218,6 +186,50 @@ function PlaybackPageInner() {
 
         return () => unlisten.then(fn => fn());
     }, [handleProgressUpdate]);
+
+    useEffect(() => {
+        usePlaybackStore.getState().actions.setOpenInstanceIds(prev => [...prev, instanceId]);
+
+        const fetch = async () => {
+            const list = await invokeSafe<ClipMeta[]>("playback_list");
+            if (list === undefined) return;
+            setClips(sortClips(list));
+        };
+        void fetch();
+
+        const unlistenFns: Promise<UnlistenFn>[] = [];
+        unlistenFns.push(
+            listen<{recorded: ClipMeta; evicted: ClipMeta[]}>("playback:clips-modified", event => {
+                if (!isPlaybackRoot()) return;
+
+                let status = usePlaybackStore.getState().status;
+                setClips(prev => {
+                    let playingEvicted = false;
+                    for (const evictedClip of event.payload.evicted) {
+                        prev = prev.filter(clip => clip.id !== evictedClip.id);
+                        if (status?.id === evictedClip.id) {
+                            void handleStop();
+                            playingEvicted = true;
+                        }
+                    }
+
+                    if (prev.length > 0 && status !== undefined && !playingEvicted) {
+                        setSelected(prev => prev + 1);
+                    }
+                    return sortClips([...prev, event.payload.recorded]);
+                });
+            }),
+        );
+
+        return () => {
+            usePlaybackStore.getState().actions.setOpenInstanceIds(prev => {
+                const next = prev.filter(id => id !== instanceId);
+                if (next.length === 0) void handleStop();
+                return next;
+            });
+            unlistenFns.forEach(fn => fn.then(f => f()));
+        };
+    }, [handleStop, setSelected]);
 
     return (
         <div className="w-full grow rounded-b-sm bg-[#B5BBC6] grid grid-cols-[6.5rem_auto] p-2 gap-2 overflow-auto">
