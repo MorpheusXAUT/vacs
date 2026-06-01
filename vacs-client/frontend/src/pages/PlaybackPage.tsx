@@ -148,6 +148,26 @@ function PlaybackPageInner() {
         ),
     );
 
+    const handleSeek = useAsyncDebounce(
+        useCallback(
+            async (durationSecs: number = 1) => {
+                const millis = 1000 * durationSecs;
+                try {
+                    await invokeStrict("playback_seek", {millis});
+                    setStatus(prev => {
+                        if (prev === undefined || prev.status === "playing") return prev;
+                        const diff = millis / selectedClip.durationMs;
+                        return {
+                            ...prev,
+                            progress: prev.progress + diff,
+                        };
+                    });
+                } catch {}
+            },
+            [setStatus],
+        ),
+    );
+
     useEffect(() => {
         if (!isPlaybackRoot()) return;
         const status = usePlaybackStore.getState().status;
@@ -167,7 +187,7 @@ function PlaybackPageInner() {
             if (prev === undefined) return prev;
             return {
                 ...prev,
-                progress: event.payload * 100,
+                progress: event.payload,
             };
         });
         if (event.payload === 1 && isPlaybackRoot()) {
@@ -301,7 +321,7 @@ function PlaybackPageInner() {
                                 onClick={() => {
                                     setPlaybackDevice(prev => {
                                         const next = prev === "Output" ? "Speaker" : "Output";
-                                        if (active) void handlePlay(selectedClip.id, next); // TODO stop instead of play
+                                        if (active) void handlePlay(selectedClip.id, next);
                                         return next;
                                     });
                                 }}
@@ -373,9 +393,7 @@ function PlaybackPageInner() {
                             </PlaybackControlButton>
                             <PlaybackControlButton
                                 disabled={!active}
-                                onClick={() => {
-                                    void invokeSafe("playback_seek", {millis: -1000});
-                                }}
+                                onClick={() => void handleSeek(-1)}
                             >
                                 <svg
                                     width="32"
@@ -414,9 +432,7 @@ function PlaybackPageInner() {
                             </PlaybackControlButton>
                             <PlaybackControlButton
                                 disabled={!active}
-                                onClick={() => {
-                                    void invokeSafe("playback_seek", {millis: 1000});
-                                }}
+                                onClick={() => void handleSeek(1)}
                             >
                                 <svg
                                     transform="rotate(180)"

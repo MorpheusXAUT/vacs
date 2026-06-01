@@ -50,6 +50,7 @@ impl TapId {
 
 /// Metadata for a single recorded clip.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ClipMeta {
     pub id: u64,
     pub path: PathBuf,

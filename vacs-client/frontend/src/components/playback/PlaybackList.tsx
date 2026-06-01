@@ -50,13 +50,13 @@ function PlaybackEntryRow(props: PlaybackEntryRowProps) {
                 className={clsx("flex items-center justify-center font-semibold", color)}
                 onClick={props.onClick}
             >
-                {props.clip && toUTCTimeString(new Date(clipUnixMs(props.clip.started_at)))}
+                {props.clip && toUTCTimeString(new Date(clipUnixMs(props.clip.startedAt)))}
             </div>
             <div
                 className={clsx("px-0.5 flex items-center font-semibold", color)}
                 onClick={props.onClick}
             >
-                {props.clip && `${(props.clip.duration_ms / 1000).toFixed(1)}s`}
+                {props.clip && `${(props.clip.durationMs / 1000).toFixed(1)}s`}
             </div>
             <div
                 className={clsx("px-0.5 flex items-center font-semibold min-w-0", color)}

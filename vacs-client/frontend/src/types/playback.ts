@@ -9,12 +9,12 @@ export type ClipMeta = {
     tap: TapId;
     callsigns: string[];
     frequency: number | null;
-    started_at: {secs_since_epoch: number; nanos_since_epoch: number};
-    ended_at: {secs_since_epoch: number; nanos_since_epoch: number};
-    duration_ms: number;
+    startedAt: {secs_since_epoch: number; nanos_since_epoch: number};
+    endedAt: {secs_since_epoch: number; nanos_since_epoch: number};
+    durationMs: number;
 };
 
-export function clipUnixMs(t: ClipMeta["started_at"]): number {
+export function clipUnixMs(t: ClipMeta["startedAt"]): number {
     return t.secs_since_epoch * 1000 + Math.floor(t.nanos_since_epoch / 1_000_000);
 }
 
@@ -32,5 +32,5 @@ export function tapLabel(tap: TapId): string {
 }
 
 export function sortClips(list: ClipMeta[]): ClipMeta[] {
-    return [...list].sort((a, b) => clipUnixMs(b.started_at) - clipUnixMs(a.started_at));
+    return [...list].sort((a, b) => clipUnixMs(b.startedAt) - clipUnixMs(a.startedAt));
 }
