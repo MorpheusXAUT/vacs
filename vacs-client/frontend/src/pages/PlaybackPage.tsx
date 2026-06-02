@@ -1,25 +1,21 @@
 import {clsx} from "clsx";
-import {useCallback, useEffect, useRef, useState} from "preact/hooks";
+import {useEffect, useState} from "preact/hooks";
 import PlaybackActions from "../components/playback/PlaybackActions.tsx";
+import {PlaybackControls} from "../components/playback/PlaybackControls.tsx";
 import PlaybackList from "../components/playback/PlaybackList.tsx";
-import Button, {ButtonColor} from "../components/ui/Button.tsx";
-import {invokeSafe, invokeStrict} from "../error.ts";
+import PlaybackProgress from "../components/playback/PlaybackProgress.tsx";
+import Button from "../components/ui/Button.tsx";
+import {invokeSafe} from "../error.ts";
+import {usePlaybackControls} from "../hooks/playback-controls-hook.ts";
 import {useCapabilitiesStore} from "../stores/capabilities-store.ts";
 import {openSettingsSubmenu} from "../stores/navigation-store.ts";
+import {isPlaybackRoot, usePlaybackStore} from "../stores/playback-store.ts";
+import {useRadioStore} from "../stores/radio-store.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
-import {EventCallback, listen, UnlistenFn} from "../transport";
+import {listen, UnlistenFn} from "../transport";
+import {instanceId} from "../transport/store-sync.ts";
 import {ClipMeta, sortClips} from "../types/playback.ts";
 import {CloseButton} from "./SettingsPage.tsx";
-import PlaybackProgress from "../components/playback/PlaybackProgress.tsx";
-import speaker from "../assets/speaker.svg";
-import {ComponentChildren} from "preact";
-import {useAsyncDebounce} from "../hooks/debounce-hook.ts";
-import {useEventCallback} from "../hooks/event-callback-hook.ts";
-import {shouldStopBlinking, useBlinkStore} from "../stores/blink-store.ts";
-import {useCallStore} from "../stores/call-store.ts";
-import {useRadioStore} from "../stores/radio-store.ts";
-import {isPlaybackRoot, PlaybackDevice, usePlaybackStore} from "../stores/playback-store.ts";
-import {instanceId} from "../transport/store-sync.ts";
 
 function PlaybackPage() {
     const capPlayback = useCapabilitiesStore(state => state.playback);
@@ -98,150 +94,15 @@ function PlaybackPage() {
 
 function PlaybackPageInner() {
     const [clips, setClips] = useState<ClipMeta[]>([]);
-
     const selected = usePlaybackStore(state => state.selected);
-    const status = usePlaybackStore(state => state.status);
-    const playbackDevice = usePlaybackStore(state => state.playbackDevice);
-    const {setSelected, setStatus, setPlaybackDevice} = usePlaybackStore(state => state.actions);
+    const {setSelected} = usePlaybackStore(state => state.actions);
 
-    const intendedClipChangeRef = useRef(false);
+    const selectedClip = clips[selected];
+    const prevClip = clips[selected + 1];
+    const nextClip = clips[selected - 1];
 
-    const active = status !== undefined;
-    const selectedClip: ClipMeta | undefined = clips[selected];
-    const prevClip: ClipMeta | undefined = clips[selected + 1];
-    const nextClip: ClipMeta | undefined = clips[selected - 1];
-
-    const {blink, startBlink, stopBlink} = useBlinkStore(state => state);
-
-    const handleStart = useAsyncDebounce(
-        async (id: number, deviceType: PlaybackDevice, continuously: boolean = false) => {
-            try {
-                await invokeStrict("playback_start", {id, deviceType});
-                setStatus({id, status: "playing", continuously, progress: 0});
-            } catch {}
-        },
-    );
-
-    const handlePause = useAsyncDebounce(async () => {
-        try {
-            await invokeStrict("playback_pause");
-            setStatus(prev => {
-                if (prev === undefined) return prev;
-                return {
-                    ...prev,
-                    status: "paused",
-                };
-            });
-            startBlink();
-        } catch {}
-    });
-
-    const handleContinue = useAsyncDebounce(async () => {
-        try {
-            await invokeStrict("playback_continue");
-            setStatus(prev => {
-                if (prev === undefined) return prev;
-                return {
-                    ...prev,
-                    status: "playing",
-                };
-            });
-            if (
-                shouldStopBlinking(
-                    useCallStore.getState().incomingCalls.length,
-                    useCallStore.getState().callDisplay,
-                    useRadioStore.getState().cpl,
-                    false,
-                )
-            ) {
-                stopBlink();
-            }
-        } catch {}
-    });
-
-    const handleStop = useAsyncDebounce(
-        useCallback(
-            async (setState = true) => {
-                try {
-                    await invokeStrict("playback_stop");
-                    if (setState) setStatus(undefined);
-                } catch {}
-            },
-            [setStatus],
-        ),
-    );
-
-    const handleSeek = useAsyncDebounce(async (durationSecs: number = 1) => {
-        const millis = 1000 * durationSecs;
-        try {
-            await invokeStrict("playback_seek", {millis});
-            setStatus(prev => {
-                if (prev === undefined || prev.status === "playing") return prev;
-                const diff = millis / selectedClip.durationMs;
-                console.log(diff);
-                return {
-                    ...prev,
-                    progress: Math.min(Math.max(prev.progress + diff, 0), 1),
-                };
-            });
-        } catch {}
-    });
-
-    const handleDeviceSwitch = useAsyncDebounce(async () => {
-        const deviceType = playbackDevice === "Output" ? "Speaker" : "Output";
-        if (status === undefined) {
-            setPlaybackDevice(deviceType);
-        } else {
-            try {
-                await invokeStrict("playback_start", {
-                    id: status.id,
-                    deviceType,
-                    initialProgress: status.progress,
-                    startPaused: status.status === "paused",
-                });
-                setPlaybackDevice(deviceType);
-            } catch {}
-        }
-    });
-
-    useEffect(() => {
-        if (!isPlaybackRoot()) return;
-        const status = usePlaybackStore.getState().status;
-        if (
-            selectedClip !== undefined &&
-            status !== undefined &&
-            status.id !== selectedClip.id &&
-            !intendedClipChangeRef.current
-        ) {
-            void handleStop();
-        }
-        intendedClipChangeRef.current = false;
-    }, [selectedClip, handleStop]);
-
-    const handleProgressUpdate: EventCallback<number> = useEventCallback(event => {
-        setStatus(prev => {
-            if (prev === undefined) return prev;
-            return {
-                ...prev,
-                progress: event.payload,
-            };
-        });
-        if (event.payload === 1 && isPlaybackRoot()) {
-            if (status?.continuously && nextClip !== undefined) {
-                intendedClipChangeRef.current = true;
-                setSelected(prev => prev - 1);
-                void handleStart(nextClip?.id, playbackDevice, true);
-            } else {
-                setStatus(undefined);
-            }
-        }
-    });
-
-    useEffect(() => {
-        const unlisten = listen<number>("playback:progress", handleProgressUpdate);
-
-        return () => unlisten.then(fn => fn());
-    }, [handleProgressUpdate]);
+    const controls = usePlaybackControls({selectedClip, prevClip, nextClip});
+    const {active, status, handleStop} = controls;
 
     useEffect(() => {
         usePlaybackStore.getState().actions.setOpenInstanceIds(prev => [...prev, instanceId]);
@@ -319,194 +180,28 @@ function PlaybackPageInner() {
                         progress={status?.progress ?? 0}
                     />
                     <div className="flex-1 min-h-0 w-full flex items-end justify-center mt-[0.625rem]">
-                        <div className="h-min w-min grid grid-flow-col grid-rows-2 gap-y-3 gap-x-2">
-                            <PlaybackControlButton
-                                color={
-                                    status?.continuously === false &&
-                                    (status?.status === "playing" || blink)
-                                        ? "blue"
-                                        : "gray"
-                                }
-                                disabled={selectedClip === undefined || status?.continuously}
-                                onClick={async () => {
-                                    if (status === undefined) {
-                                        void handleStart(selectedClip.id, playbackDevice);
-                                    } else if (status.status === "playing") {
-                                        await handlePause();
-                                    } else {
-                                        await handleContinue();
-                                    }
-                                }}
-                                className={clsx(
-                                    status?.continuously === false &&
-                                        (status?.status === "playing" || blink) &&
-                                        "text-white",
-                                )}
-                            >
-                                <svg
-                                    width="32"
-                                    height="32"
-                                    viewBox="0 0 74 74"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path d="M0 37V0L74 37L0 74V37Z" fill="currentColor" />
-                                </svg>
-                            </PlaybackControlButton>
-                            <PlaybackControlButton onClick={handleDeviceSwitch}>
-                                {playbackDevice === "Output" ? (
-                                    "H"
-                                ) : (
-                                    <img src={speaker} alt="S" className="h-7" />
-                                )}
-                            </PlaybackControlButton>
-                            <PlaybackControlButton
-                                color={status?.continuously ? "blue" : "gray"}
-                                disabled={
-                                    selectedClip === undefined ||
-                                    status?.continuously === false ||
-                                    (nextClip === undefined && status?.continuously)
-                                }
-                                onClick={() => {
-                                    void handleStart(selectedClip?.id, playbackDevice, true);
-                                }}
-                            >
-                                <svg
-                                    height="40"
-                                    viewBox="0 0 96 110"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path d="M0 37V0L74 37L0 74V37Z" fill="currentColor" />
-                                    <path
-                                        d="M95.8945 68.2109L99.4717 70L95.8945 71.7891L19 110.236V29.7637L95.8945 68.2109Z"
-                                        fill="currentColor"
-                                        className={
-                                            status?.continuously
-                                                ? "stroke-blue-700"
-                                                : "stroke-gray-300"
-                                        }
-                                        stroke-width="4"
-                                    />
-                                </svg>
-                            </PlaybackControlButton>
-                            <PlaybackControlButton disabled={!active} onClick={handleStop}>
-                                <div
-                                    className={clsx(
-                                        "h-8 aspect-square",
-                                        active ? "bg-black" : "bg-gray-600",
-                                    )}
-                                ></div>
-                            </PlaybackControlButton>
-                            <PlaybackControlButton
-                                disabled={!active || prevClip === undefined}
-                                onClick={async () => {
-                                    await handleStop(false);
-                                    intendedClipChangeRef.current = true;
-                                    setSelected(prev => prev + 1);
-                                    void handleStart(prevClip?.id, playbackDevice);
-                                }}
-                            >
-                                <svg
-                                    height="32"
-                                    viewBox="0 0 48 74"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M48 0V74L11 37V74H0V0H11V37L48 0Z"
-                                        fill="currentColor"
-                                    />
-                                </svg>
-                            </PlaybackControlButton>
-                            <PlaybackControlButton
-                                disabled={!active}
-                                onClick={() => void handleSeek(-1)}
-                            >
-                                <svg
-                                    width="32"
-                                    height="32"
-                                    viewBox="0 0 74 74"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M74 0V74L37 37V74L0 37L37 0V37L74 0Z"
-                                        fill="currentColor"
-                                    />
-                                </svg>
-                            </PlaybackControlButton>
-                            <PlaybackControlButton
-                                disabled={!active || nextClip === undefined}
-                                onClick={async () => {
-                                    await handleStop(false);
-                                    intendedClipChangeRef.current = true;
-                                    setSelected(prev => prev - 1);
-                                    void handleStart(nextClip?.id, playbackDevice);
-                                }}
-                            >
-                                <svg
-                                    transform="rotate(180)"
-                                    height="32"
-                                    viewBox="0 0 48 74"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M48 0V74L11 37V74H0V0H11V37L48 0Z"
-                                        fill="currentColor"
-                                    />
-                                </svg>
-                            </PlaybackControlButton>
-                            <PlaybackControlButton
-                                disabled={!active}
-                                onClick={() => void handleSeek(1)}
-                            >
-                                <svg
-                                    transform="rotate(180)"
-                                    width="32"
-                                    height="32"
-                                    viewBox="0 0 74 74"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M74 0V74L37 37V74L0 37L37 0V37L74 0Z"
-                                        fill="currentColor"
-                                    />
-                                </svg>
-                            </PlaybackControlButton>
-                        </div>
+                        <PlaybackControls
+                            selectedClip={selectedClip}
+                            prevClip={prevClip}
+                            nextClip={nextClip}
+                            status={controls.status}
+                            blink={controls.blink}
+                            playbackDevice={controls.playbackDevice}
+                            active={active}
+                            onPlayPause={controls.handlePlayPause}
+                            onStop={controls.handleStop}
+                            onSeekBack={controls.handleSeekBack}
+                            onSeekForward={controls.handleSeekForward}
+                            onDeviceSwitch={controls.handleDeviceSwitch}
+                            onPrev={controls.handlePrev}
+                            onNext={controls.handleNext}
+                            onStartContinuously={controls.handleStartContinuously}
+                        />
                     </div>
                     <CloseButton className="h-17 w-19! absolute bottom-0 right-0" />
                 </div>
             </div>
         </div>
-    );
-}
-
-type PlaybackControlButtonProps = {
-    color?: ButtonColor;
-    className?: string;
-    disabled?: boolean;
-    onClick?: () => void;
-    children?: ComponentChildren;
-};
-
-function PlaybackControlButton(props: PlaybackControlButtonProps) {
-    return (
-        <Button
-            color={props.color ?? "gray"}
-            className={clsx(
-                "h-17 flex items-center justify-center",
-                props.disabled && "text-gray-600",
-                props.className,
-            )}
-            disabled={props.disabled}
-            onClick={props.onClick}
-        >
-            {props.children}
-        </Button>
     );
 }
 
