@@ -1,13 +1,13 @@
 import {useCallback, useEffect, useRef} from "preact/hooks";
-import {useAsyncDebounce} from "./debounce-hook.ts";
-import {useEventCallback} from "./event-callback-hook.ts";
 import {invokeStrict} from "../error.ts";
 import {shouldStopBlinking, useBlinkStore} from "../stores/blink-store.ts";
 import {useCallStore} from "../stores/call-store.ts";
-import {useRadioStore} from "../stores/radio-store.ts";
 import {isPlaybackRoot, PlaybackDevice, usePlaybackStore} from "../stores/playback-store.ts";
+import {useRadioStore} from "../stores/radio-store.ts";
 import {EventCallback, listen} from "../transport";
 import {ClipMeta} from "../types/playback.ts";
+import {useAsyncDebounce} from "./debounce-hook.ts";
+import {useEventCallback} from "./event-callback-hook.ts";
 
 type Params = {
     selectedClip: ClipMeta | undefined;
@@ -69,6 +69,7 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
                 try {
                     await invokeStrict("playback_stop");
                     if (setState) setStatus(undefined);
+                    // TODO: stop blinking; maybe move into useffect
                 } catch {}
             },
             [setStatus],
@@ -108,22 +109,24 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
         }
     });
 
-    const handlePlayPause = useCallback(async () => {
-        if (status === undefined) {
-            if (selectedClip !== undefined) void handleStart(selectedClip.id, playbackDevice);
-        } else if (status.status === "playing") {
-            await handlePause();
-        } else {
-            await handleContinue();
-        }
-    }, [status, selectedClip, handleStart, playbackDevice, handlePause, handleContinue]);
+    const handlePlayPause = useCallback(
+        async (continuously: boolean) => {
+            if (status === undefined) {
+                if (selectedClip !== undefined)
+                    void handleStart(selectedClip.id, playbackDevice, continuously);
+            } else if (status.continuously === continuously) {
+                if (status.status === "playing") {
+                    void handlePause();
+                } else {
+                    void handleContinue();
+                }
+            }
+        },
+        [status, selectedClip, handleStart, playbackDevice, handlePause, handleContinue],
+    );
 
     const handleSeekBack = useCallback(() => void handleSeek(-1), [handleSeek]);
     const handleSeekForward = useCallback(() => void handleSeek(1), [handleSeek]);
-
-    const handleStartContinuously = useCallback(() => {
-        if (selectedClip !== undefined) void handleStart(selectedClip.id, playbackDevice, true);
-    }, [selectedClip, handleStart, playbackDevice]);
 
     const handlePrev = useCallback(async () => {
         await handleStop(false);
@@ -184,7 +187,6 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
         handleSeekBack,
         handleSeekForward,
         handleDeviceSwitch,
-        handleStartContinuously,
         handlePrev,
         handleNext,
     };

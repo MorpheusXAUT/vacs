@@ -195,7 +195,6 @@ function PlaybackPageInner() {
                             onDeviceSwitch={controls.handleDeviceSwitch}
                             onPrev={controls.handlePrev}
                             onNext={controls.handleNext}
-                            onStartContinuously={controls.handleStartContinuously}
                         />
                     </div>
                     <CloseButton className="h-17 w-19! absolute bottom-0 right-0" />

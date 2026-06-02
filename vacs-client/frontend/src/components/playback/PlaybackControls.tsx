@@ -1,9 +1,9 @@
 import {clsx} from "clsx";
 import {ComponentChildren} from "preact";
 import speaker from "../../assets/speaker.svg";
-import Button, {ButtonColor} from "../ui/Button.tsx";
 import {PlaybackDevice, PlaybackStatus} from "../../stores/playback-store.ts";
 import {ClipMeta} from "../../types/playback.ts";
+import Button, {ButtonColor} from "../ui/Button.tsx";
 
 type PlaybackControlsProps = {
     selectedClip: ClipMeta | undefined;
@@ -13,14 +13,13 @@ type PlaybackControlsProps = {
     blink: boolean;
     playbackDevice: PlaybackDevice;
     active: boolean;
-    onPlayPause: () => void;
+    onPlayPause: (continuously: boolean) => void;
     onStop: () => void;
     onSeekBack: () => void;
     onSeekForward: () => void;
     onDeviceSwitch: () => void;
     onPrev: () => void;
     onNext: () => void;
-    onStartContinuously: () => void;
 };
 
 export function PlaybackControls({
@@ -38,7 +37,6 @@ export function PlaybackControls({
     onDeviceSwitch,
     onPrev,
     onNext,
-    onStartContinuously,
 }: PlaybackControlsProps) {
     const playSingle = status?.continuously === false;
     const isPlaying = status?.status === "playing";
@@ -48,7 +46,7 @@ export function PlaybackControls({
             <PlaybackControlButton
                 color={playSingle && (isPlaying || blink) ? "blue" : "gray"}
                 disabled={selectedClip === undefined || status?.continuously}
-                onClick={onPlayPause}
+                onClick={() => onPlayPause(false)}
                 className={clsx(playSingle && (isPlaying || blink) && "text-white")}
             >
                 <svg
@@ -65,13 +63,13 @@ export function PlaybackControls({
                 {playbackDevice === "Output" ? "H" : <img src={speaker} alt="S" className="h-7" />}
             </PlaybackControlButton>
             <PlaybackControlButton
-                color={status?.continuously ? "blue" : "gray"}
+                color={status?.continuously && (isPlaying || blink) ? "blue" : "gray"}
                 disabled={
                     selectedClip === undefined ||
                     (status !== undefined && !status.continuously) ||
                     (nextClip === undefined && status === undefined)
                 }
-                onClick={onStartContinuously}
+                onClick={() => onPlayPause(true)}
             >
                 <svg
                     height="40"
@@ -83,7 +81,11 @@ export function PlaybackControls({
                     <path
                         d="M95.8945 68.2109L99.4717 70L95.8945 71.7891L19 110.236V29.7637L95.8945 68.2109Z"
                         fill="currentColor"
-                        className={status?.continuously ? "stroke-blue-700" : "stroke-gray-300"}
+                        className={
+                            status?.continuously && (isPlaying || blink)
+                                ? "stroke-blue-700"
+                                : "stroke-gray-300"
+                        }
                         stroke-width="4"
                     />
                 </svg>
