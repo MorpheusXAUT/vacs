@@ -1,9 +1,6 @@
 import {useCallback, useEffect, useRef} from "preact/hooks";
 import {invokeStrict} from "../error.ts";
-import {shouldStopBlinking, useBlinkStore} from "../stores/blink-store.ts";
-import {useCallStore} from "../stores/call-store.ts";
 import {isPlaybackRoot, PlaybackDevice, usePlaybackStore} from "../stores/playback-store.ts";
-import {useRadioStore} from "../stores/radio-store.ts";
 import {EventCallback, listen} from "../transport";
 import {ClipMeta} from "../types/playback.ts";
 import {useAsyncDebounce} from "./debounce-hook.ts";
@@ -19,7 +16,6 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
     const status = usePlaybackStore(state => state.status);
     const playbackDevice = usePlaybackStore(state => state.playbackDevice);
     const {setSelected, setStatus, setPlaybackDevice} = usePlaybackStore(state => state.actions);
-    const {blink, startBlink, stopBlink} = useBlinkStore(state => state);
 
     const intendedClipChangeRef = useRef(false);
 
@@ -39,7 +35,6 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
                 if (prev === undefined) return prev;
                 return {...prev, status: "paused"};
             });
-            startBlink();
         } catch {}
     });
 
@@ -50,16 +45,6 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
                 if (prev === undefined) return prev;
                 return {...prev, status: "playing"};
             });
-            if (
-                shouldStopBlinking(
-                    useCallStore.getState().incomingCalls.length,
-                    useCallStore.getState().callDisplay,
-                    useRadioStore.getState().cpl,
-                    false,
-                )
-            ) {
-                stopBlink();
-            }
         } catch {}
     });
 
@@ -69,7 +54,6 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
                 try {
                     await invokeStrict("playback_stop");
                     if (setState) setStatus(undefined);
-                    // TODO: stop blinking; maybe move into useffect
                 } catch {}
             },
             [setStatus],
@@ -83,7 +67,6 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
             setStatus(prev => {
                 if (prev === undefined || prev.status === "playing") return prev;
                 const diff = millis / selectedClip!.durationMs;
-                console.log(diff);
                 return {
                     ...prev,
                     progress: Math.min(Math.max(prev.progress + diff, 0), 1),
@@ -179,7 +162,6 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
 
     return {
         status,
-        blink,
         playbackDevice,
         active: status !== undefined,
         handleStop,

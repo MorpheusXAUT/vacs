@@ -1,7 +1,10 @@
 import {create} from "zustand/react";
-import {StateSetter} from "../types/generic.ts";
+import {createSetter, StateSetter} from "../types/generic.ts";
 import {isTauri} from "../transport";
 import {instanceId} from "../transport/store-sync.ts";
+import {shouldStopBlinking, startBlink, stopBlink} from "./blink-store.ts";
+import {useCallStore} from "./call-store.ts";
+import {useRadioStore} from "./radio-store.ts";
 
 export type PlaybackStatus = {
     id: number;
@@ -25,38 +28,36 @@ type PlaybackState = {
     };
 };
 
-export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
-    selected: 0,
-    status: undefined,
-    playbackDevice: "Output",
-    openInstanceIds: [],
-    actions: {
-        setSelected: selected => {
-            if (typeof selected === "function") {
-                selected = selected(get().selected);
-            }
-            set({selected});
+export const usePlaybackStore = create<PlaybackState>()(set => {
+    const setter = createSetter<PlaybackState>(set);
+    return {
+        selected: 0,
+        status: undefined,
+        playbackDevice: "Output",
+        openInstanceIds: [],
+        actions: {
+            setSelected: setter("selected"),
+            setStatus: setter("status", (next, prev) => {
+                if (prev?.status !== "paused" && next?.status === "paused") {
+                    startBlink();
+                } else if (
+                    prev?.status === "paused" &&
+                    next?.status !== "paused" &&
+                    shouldStopBlinking(
+                        useCallStore.getState().incomingCalls.length,
+                        useCallStore.getState().callDisplay,
+                        useRadioStore.getState().cpl,
+                        false,
+                    )
+                ) {
+                    stopBlink();
+                }
+            }),
+            setPlaybackDevice: setter("playbackDevice"),
+            setOpenInstanceIds: setter("openInstanceIds"),
         },
-        setStatus: status => {
-            if (typeof status === "function") {
-                status = status(get().status);
-            }
-            set({status});
-        },
-        setPlaybackDevice: device => {
-            if (typeof device === "function") {
-                device = device(get().playbackDevice);
-            }
-            set({playbackDevice: device});
-        },
-        setOpenInstanceIds: openInstanceIds => {
-            if (typeof openInstanceIds === "function") {
-                openInstanceIds = openInstanceIds(get().openInstanceIds);
-            }
-            set({openInstanceIds});
-        },
-    },
-}));
+    };
+});
 
 export const isPlaybackPaused = () => usePlaybackStore.getState().status?.status === "paused";
 

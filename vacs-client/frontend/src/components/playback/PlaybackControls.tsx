@@ -4,13 +4,13 @@ import speaker from "../../assets/speaker.svg";
 import {PlaybackDevice, PlaybackStatus} from "../../stores/playback-store.ts";
 import {ClipMeta} from "../../types/playback.ts";
 import Button, {ButtonColor} from "../ui/Button.tsx";
+import {useBlinkStore} from "../../stores/blink-store.ts";
 
 type PlaybackControlsProps = {
     selectedClip: ClipMeta | undefined;
     prevClip: ClipMeta | undefined;
     nextClip: ClipMeta | undefined;
     status: PlaybackStatus | undefined;
-    blink: boolean;
     playbackDevice: PlaybackDevice;
     active: boolean;
     onPlayPause: (continuously: boolean) => void;
@@ -27,7 +27,6 @@ export function PlaybackControls({
     prevClip,
     nextClip,
     status,
-    blink,
     playbackDevice,
     active,
     onPlayPause,
@@ -40,6 +39,8 @@ export function PlaybackControls({
 }: PlaybackControlsProps) {
     const playSingle = status?.continuously === false;
     const isPlaying = status?.status === "playing";
+
+    const blink = useBlinkStore(state => state.blink);
 
     return (
         <div className="h-min w-min grid grid-flow-col grid-rows-2 gap-y-3 gap-x-2">

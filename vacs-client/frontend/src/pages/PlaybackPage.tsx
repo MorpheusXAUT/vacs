@@ -185,7 +185,6 @@ function PlaybackPageInner() {
                             prevClip={prevClip}
                             nextClip={nextClip}
                             status={controls.status}
-                            blink={controls.blink}
                             playbackDevice={controls.playbackDevice}
                             active={active}
                             onPlayPause={controls.handlePlayPause}
