@@ -64,9 +64,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
             setDefaultSource(getPositionDefaultSource(positionDefaultSources, stations));
         }
     },
-    setClientPageConfig: config => {
-        set({selectedClientPageConfig: config});
-    },
+    setClientPageConfig: config => set({selectedClientPageConfig: config}),
     setClientPageSettings: settings => {
         set({clientPageConfigs: {None: emptyClientPageConfig, ...settings.configs}});
 

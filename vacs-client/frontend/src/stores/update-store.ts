@@ -21,17 +21,12 @@ export const useUpdateStore = create<UpdateState>()(set => ({
     currentVersion: "",
     newVersion: undefined,
     actions: {
-        setVersions: (currentVersion: string, newVersion?: string) => {
-            set({currentVersion, newVersion});
-        },
-        openMandatoryDialog: () => {
-            set({overlayVisible: true, mandatoryDialogVisible: true, downloadDialogVisible: false});
-        },
-        openDownloadDialog: () => {
-            set({overlayVisible: true, downloadDialogVisible: true, mandatoryDialogVisible: false});
-        },
-        closeOverlay: () => {
-            set({overlayVisible: false, mandatoryDialogVisible: false});
-        },
+        setVersions: (currentVersion: string, newVersion?: string) =>
+            set({currentVersion, newVersion}),
+        openMandatoryDialog: () =>
+            set({overlayVisible: true, mandatoryDialogVisible: true, downloadDialogVisible: false}),
+        openDownloadDialog: () =>
+            set({overlayVisible: true, downloadDialogVisible: true, mandatoryDialogVisible: false}),
+        closeOverlay: () => set({overlayVisible: false, mandatoryDialogVisible: false}),
     },
 }));

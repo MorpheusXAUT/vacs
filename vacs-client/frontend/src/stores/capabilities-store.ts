@@ -12,9 +12,7 @@ export const useCapabilitiesStore = create<CapabilitiesState>()(set => ({
     keybindEmitter: false,
     playback: false,
     platform: "Unknown",
-    setCapabilities: capabilities => {
-        set({...capabilities});
-    },
+    setCapabilities: capabilities => set({...capabilities}),
 }));
 
 export const fetchCapabilities = async () => {
