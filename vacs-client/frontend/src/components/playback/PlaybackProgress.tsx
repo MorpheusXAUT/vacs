@@ -1,13 +1,15 @@
 import {useMemo} from "preact/hooks";
+import {usePlaybackStore} from "../../stores/playback-store.ts";
 import {ClipMeta, clipUnixMs} from "../../types/playback.ts";
 import {toUTCTimeString} from "../../utils/date.ts";
 
 type PlaybackProgressProps = {
     clip: ClipMeta | undefined;
-    progress: number;
 };
 
-function PlaybackProgress({clip, progress}: PlaybackProgressProps) {
+function PlaybackProgress({clip}: PlaybackProgressProps) {
+    const progress = usePlaybackStore(state => state.status?.progress ?? 0);
+
     const time = useMemo(() => {
         if (!clip) return "No playback";
 

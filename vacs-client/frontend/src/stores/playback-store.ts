@@ -13,6 +13,8 @@ export type PlaybackStatus = {
     progress: number;
 };
 
+export type PlaybackStatusBase = Pick<PlaybackStatus, "id" | "status" | "continuously">;
+
 export type PlaybackDevice = "Output" | "Speaker";
 
 type PlaybackState = {
@@ -62,7 +64,7 @@ export const usePlaybackStore = create<PlaybackState>()(set => {
 export const isPlaybackPaused = () => usePlaybackStore.getState().status?.status === "paused";
 
 export const isPlaybackRoot = () => {
-    const openInstanceIds = usePlaybackStore.getState().openInstanceIds.sort();
+    const openInstanceIds = [...usePlaybackStore.getState().openInstanceIds].sort();
     if (openInstanceIds.length === 0) return isTauri;
     return openInstanceIds[0] === instanceId;
 };

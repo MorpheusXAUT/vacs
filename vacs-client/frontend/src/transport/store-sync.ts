@@ -86,10 +86,12 @@ function subscribeFields<K extends SyncStoreName, S>(
     skipSync?: (next: S, prev: S) => boolean,
 ): () => void {
     return store.subscribe((nextState, prevState) => {
+        if (applying || skipSync?.(nextState, prevState)) return;
+
         const next = JSON.stringify(select(nextState));
         const prev = JSON.stringify(select(prevState));
 
-        if (next === prev || applying || skipSync?.(nextState, prevState)) return;
+        if (next === prev) return;
 
         void invoke("remote_broadcast_store_sync", {
             store: name,

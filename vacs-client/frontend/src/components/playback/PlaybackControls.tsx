@@ -1,7 +1,7 @@
 import {clsx} from "clsx";
 import {ComponentChildren} from "preact";
 import speaker from "../../assets/speaker.svg";
-import {PlaybackDevice, PlaybackStatus} from "../../stores/playback-store.ts";
+import {PlaybackDevice, PlaybackStatusBase} from "../../stores/playback-store.ts";
 import {ClipMeta} from "../../types/playback.ts";
 import Button, {ButtonColor} from "../ui/Button.tsx";
 import {useBlinkStore} from "../../stores/blink-store.ts";
@@ -10,7 +10,7 @@ type PlaybackControlsProps = {
     selectedClip: ClipMeta | undefined;
     prevClip: ClipMeta | undefined;
     nextClip: ClipMeta | undefined;
-    status: PlaybackStatus | undefined;
+    status: PlaybackStatusBase | undefined;
     playbackDevice: PlaybackDevice;
     active: boolean;
     onPlayPause: (continuously: boolean) => void;

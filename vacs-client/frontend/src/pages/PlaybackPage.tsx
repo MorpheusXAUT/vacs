@@ -1,5 +1,5 @@
 import {clsx} from "clsx";
-import {useEffect, useState} from "preact/hooks";
+import {useEffect, useRef, useState} from "preact/hooks";
 import PlaybackActions from "../components/playback/PlaybackActions.tsx";
 import {PlaybackControls} from "../components/playback/PlaybackControls.tsx";
 import PlaybackList from "../components/playback/PlaybackList.tsx";
@@ -94,6 +94,8 @@ function PlaybackPage() {
 
 function PlaybackPageInner() {
     const [clips, setClips] = useState<ClipMeta[]>([]);
+    const clipsRef = useRef<ClipMeta[]>([]);
+    clipsRef.current = clips;
     const selected = usePlaybackStore(state => state.selected);
     const {setSelected} = usePlaybackStore(state => state.actions);
 
@@ -102,7 +104,7 @@ function PlaybackPageInner() {
     const nextClip = clips[selected - 1];
 
     const controls = usePlaybackControls({selectedClip, prevClip, nextClip});
-    const {active, status, handleStop} = controls;
+    const {active, handleStop} = controls;
 
     useEffect(() => {
         usePlaybackStore.getState().actions.setOpenInstanceIds(prev => [...prev, instanceId]);
@@ -119,22 +121,16 @@ function PlaybackPageInner() {
             listen<{recorded: ClipMeta; evicted: ClipMeta[]}>("playback:clips-modified", event => {
                 if (!isPlaybackRoot()) return;
 
-                let status = usePlaybackStore.getState().status;
-                setClips(prev => {
-                    let playingEvicted = false;
-                    for (const evictedClip of event.payload.evicted) {
-                        prev = prev.filter(clip => clip.id !== evictedClip.id);
-                        if (status?.id === evictedClip.id) {
-                            void handleStop();
-                            playingEvicted = true;
-                        }
-                    }
+                const status = usePlaybackStore.getState().status;
+                const evictedIds = new Set(event.payload.evicted.map(c => c.id));
+                const filtered = clipsRef.current.filter(c => !evictedIds.has(c.id));
+                const playingEvicted = status !== undefined && evictedIds.has(status.id);
 
-                    if (prev.length > 0 && status !== undefined && !playingEvicted) {
-                        setSelected(prev => prev + 1);
-                    }
-                    return sortClips([...prev, event.payload.recorded]);
-                });
+                if (playingEvicted) void handleStop();
+                if (filtered.length > 0 && status !== undefined && !playingEvicted) {
+                    setSelected(prev => prev + 1);
+                }
+                setClips(sortClips([...filtered, event.payload.recorded]));
             }),
         );
 
@@ -169,16 +165,13 @@ function PlaybackPageInner() {
                     clips={clips}
                     selected={selected}
                     setClips={setClips}
-                    deleteDisabled={status !== undefined}
+                    deleteDisabled={active}
                 />
             </div>
             <div className="h-full w-full flex flex-col p-px">
                 <PlaybackList clips={clips} selected={selected} setSelected={setSelected} />
                 <div className="relative w-full h-full flex flex-col items-center pr-16">
-                    <PlaybackProgress
-                        clip={active ? clips[selected] : undefined}
-                        progress={status?.progress ?? 0}
-                    />
+                    <PlaybackProgress clip={active ? clips[selected] : undefined} />
                     <div className="flex-1 min-h-0 w-full flex items-end justify-center mt-[0.625rem]">
                         <PlaybackControls
                             selectedClip={selectedClip}
