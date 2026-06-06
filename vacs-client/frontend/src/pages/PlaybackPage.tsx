@@ -13,7 +13,7 @@ import {isPlaybackRoot, usePlaybackStore} from "../stores/playback-store.ts";
 import {useRadioStore} from "../stores/radio-store.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
 import {listen, UnlistenFn} from "../transport";
-import {instanceId} from "../transport/store-sync.ts";
+import {INSTANCE_ID} from "../transport/store-sync.ts";
 import {ClipMeta, sortClips} from "../types/playback.ts";
 import {CloseButton} from "./SettingsPage.tsx";
 
@@ -107,7 +107,7 @@ function PlaybackPageInner() {
     const {active, handleStop} = controls;
 
     useEffect(() => {
-        usePlaybackStore.getState().actions.setOpenInstanceIds(prev => [...prev, instanceId]);
+        usePlaybackStore.getState().actions.setOpenInstanceIds(prev => [...prev, INSTANCE_ID]);
 
         const fetch = async () => {
             const list = await invokeSafe<ClipMeta[]>("playback_list");
@@ -134,7 +134,7 @@ function PlaybackPageInner() {
 
         return () => {
             usePlaybackStore.getState().actions.setOpenInstanceIds(prev => {
-                const next = prev.filter(id => id !== instanceId);
+                const next = prev.filter(id => id !== INSTANCE_ID);
                 if (next.length === 0) void handleStop();
                 return next;
             });

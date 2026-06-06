@@ -1,17 +1,16 @@
-import {invoke, isRemote, isTauri, listen} from "./index.ts";
-import {useStationsStore} from "../stores/stations-store.ts";
-import {CallDisplay, useCallStore} from "../stores/call-store.ts";
-import {type CallListItem, useCallListStore} from "../stores/call-list-store.ts";
-import {useSettingsStore} from "../stores/settings-store.ts";
-import type {CallId, StationId} from "../types/generic.ts";
-import type {ClientPageConfig} from "../types/client.ts";
-import type {CallConfig, ClockMode} from "../types/settings.ts";
 import {syncBlink} from "../stores/blink-store.ts";
-import {useRadioStore} from "../stores/radio-store.ts";
+import {type CallListItem, useCallListStore} from "../stores/call-list-store.ts";
+import {CallDisplay, useCallStore} from "../stores/call-store.ts";
 import {PlaybackStatus, usePlaybackStore} from "../stores/playback-store.ts";
+import {useRadioStore} from "../stores/radio-store.ts";
+import {useSettingsStore} from "../stores/settings-store.ts";
+import {useStationsStore} from "../stores/stations-store.ts";
 import {PlaybackDeviceType} from "../types/audio.ts";
-
-// TODO: sync settings store
+import type {ClientPageConfig} from "../types/client.ts";
+import type {CallId, StationId} from "../types/generic.ts";
+import type {CallConfig, ClockMode} from "../types/settings.ts";
+import type {RadioConfigWithLabels, TransmitConfigWithLabels} from "../types/transmit.ts";
+import {invoke, isRemote, isTauri, listen} from "./index.ts";
 
 type StationsSync = {
     defaultSource: StationId | undefined;
@@ -31,6 +30,9 @@ type SettingsSync = {
     callConfig: CallConfig;
     selectedClientPageConfig: ClientPageConfig & {name: string};
     clockMode: ClockMode;
+    playbackEnabled: boolean;
+    transmitConfig: TransmitConfigWithLabels | undefined;
+    radioConfig: RadioConfigWithLabels | undefined;
 };
 
 type RadioSync = {
@@ -69,7 +71,7 @@ function createInstanceId(): string {
 }
 
 // Unique ID for this client instance so we can ignore our own broadcasts.
-export const instanceId = createInstanceId();
+export const INSTANCE_ID = createInstanceId();
 
 // set to `true` while applying an incoming sync to prevent re-broadcast
 let applying = false;
@@ -94,7 +96,7 @@ function subscribeFields<K extends SyncStoreName, S>(
         void invoke("remote_broadcast_store_sync", {
             store: name,
             state: JSON.parse(next),
-            sourceId: instanceId,
+            sourceId: INSTANCE_ID,
         });
     });
 }
@@ -130,6 +132,9 @@ function applySync(payload: SyncPayload) {
                 callConfig: payload.state.callConfig,
                 selectedClientPageConfig: payload.state.selectedClientPageConfig,
                 clockMode: payload.state.clockMode,
+                playbackEnabled: payload.state.playbackEnabled,
+                transmitConfig: payload.state.transmitConfig,
+                radioConfig: payload.state.radioConfig,
             });
             break;
         }
@@ -205,6 +210,9 @@ function startSync(): () => void {
             callConfig: s.callConfig,
             selectedClientPageConfig: s.selectedClientPageConfig,
             clockMode: s.clockMode,
+            playbackEnabled: s.playbackEnabled,
+            transmitConfig: s.transmitConfig,
+            radioConfig: s.radioConfig,
         })),
     );
 
@@ -239,7 +247,7 @@ function startSync(): () => void {
     );
 
     const unlistenSync = listen<SyncPayload>("store:sync", event => {
-        if (event.payload.sourceId === instanceId) return;
+        if (event.payload.sourceId === INSTANCE_ID) return;
         applying = true;
         try {
             applySync(event.payload);
@@ -263,7 +271,7 @@ function startSync(): () => void {
 
 function broadcastAllStoreState() {
     const broadcast = <K extends SyncStoreName>(name: K, state: SyncMap[K]) => {
-        void invoke("remote_broadcast_store_sync", {store: name, state, sourceId: instanceId});
+        void invoke("remote_broadcast_store_sync", {store: name, state, sourceId: INSTANCE_ID});
     };
 
     const stations = useStationsStore.getState();
@@ -288,6 +296,9 @@ function broadcastAllStoreState() {
         callConfig: settings.callConfig,
         selectedClientPageConfig: settings.selectedClientPageConfig,
         clockMode: settings.clockMode,
+        playbackEnabled: settings.playbackEnabled,
+        transmitConfig: settings.transmitConfig,
+        radioConfig: settings.radioConfig,
     });
 
     const radio = useRadioStore.getState();

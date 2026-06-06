@@ -1,7 +1,7 @@
 import {create} from "zustand/react";
 import {createSetter, StateSetter} from "../types/generic.ts";
 import {isTauri} from "../transport";
-import {instanceId} from "../transport/store-sync.ts";
+import {INSTANCE_ID} from "../transport/store-sync.ts";
 import {startBlink, tryStopBlink} from "./blink-store.ts";
 import {PlaybackDeviceType} from "../types/audio.ts";
 
@@ -54,5 +54,5 @@ export const isPlaybackPaused = () => usePlaybackStore.getState().status?.status
 export const isPlaybackRoot = () => {
     const openInstanceIds = [...usePlaybackStore.getState().openInstanceIds].sort();
     if (openInstanceIds.length === 0) return isTauri;
-    return openInstanceIds[0] === instanceId;
+    return openInstanceIds[0] === INSTANCE_ID;
 };
