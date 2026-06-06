@@ -40,7 +40,9 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
             try {
                 await invokeStrict("playback_start", {id, deviceType});
                 setStatus({id, status: "playing", continuously, progress: 0});
-            } catch {}
+            } catch {
+                setStatus(undefined);
+            }
         },
     );
 
@@ -76,13 +78,12 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
         ),
     );
 
-    const handleSeek = useAsyncDebounce(async (durationSecs: number = 1) => {
+    const handleSeek = useAsyncDebounce(async (durationSecs: number) => {
         const millis = 1000 * durationSecs;
         try {
             await invokeStrict("playback_seek", {millis});
             setStatus(prev => {
-                if (prev === undefined || prev.status === "playing") return prev;
-                if (selectedClip === undefined) return prev;
+                if (prev?.status !== "paused" || selectedClip === undefined) return prev;
                 const diff = millis / selectedClip.durationMs;
                 return {
                     ...prev,
