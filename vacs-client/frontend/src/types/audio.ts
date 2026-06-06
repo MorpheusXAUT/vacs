@@ -23,3 +23,5 @@ export type InputLevel = {
     norm: number; // 0..1, for display purposes
     clipping: boolean;
 };
+
+export type PlaybackDeviceType = "Output" | "Speaker";

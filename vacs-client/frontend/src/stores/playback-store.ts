@@ -3,6 +3,7 @@ import {createSetter, StateSetter} from "../types/generic.ts";
 import {isTauri} from "../transport";
 import {instanceId} from "../transport/store-sync.ts";
 import {startBlink, tryStopBlink} from "./blink-store.ts";
+import {PlaybackDeviceType} from "../types/audio.ts";
 
 export type PlaybackStatus = {
     id: number;
@@ -11,14 +12,12 @@ export type PlaybackStatus = {
     progress: number;
 };
 
-export type PlaybackStatusBase = Pick<PlaybackStatus, "id" | "status" | "continuously">;
-
-export type PlaybackDevice = "Output" | "Speaker";
+export type PlaybackStatusBase = Omit<PlaybackStatus, "progress">;
 
 type PlaybackState = {
     selected: number;
     status: PlaybackStatus | undefined;
-    playbackDevice: PlaybackDevice;
+    playbackDevice: PlaybackDeviceType;
     openInstanceIds: string[];
     actions: {
         setSelected: StateSetter<PlaybackState["selected"]>;

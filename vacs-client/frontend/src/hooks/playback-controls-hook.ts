@@ -1,16 +1,12 @@
 import {useCallback, useEffect, useRef} from "preact/hooks";
 import {useShallow} from "zustand/react/shallow";
 import {invokeStrict} from "../error.ts";
-import {
-    isPlaybackRoot,
-    PlaybackDevice,
-    PlaybackStatusBase,
-    usePlaybackStore,
-} from "../stores/playback-store.ts";
+import {isPlaybackRoot, PlaybackStatusBase, usePlaybackStore} from "../stores/playback-store.ts";
 import {EventCallback, listen} from "../transport";
 import {ClipMeta} from "../types/playback.ts";
 import {useAsyncDebounce} from "./debounce-hook.ts";
 import {useEventCallback} from "./event-callback-hook.ts";
+import {PlaybackDeviceType} from "../types/audio.ts";
 
 type Params = {
     selectedClip: ClipMeta | undefined;
@@ -36,7 +32,7 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
     const intendedClipChangeRef = useRef(false);
 
     const handleStart = useAsyncDebounce(
-        async (id: number, deviceType: PlaybackDevice, continuously: boolean = false) => {
+        async (id: number, deviceType: PlaybackDeviceType, continuously: boolean = false) => {
             try {
                 await invokeStrict("playback_start", {id, deviceType});
                 setStatus({id, status: "playing", continuously, progress: 0});

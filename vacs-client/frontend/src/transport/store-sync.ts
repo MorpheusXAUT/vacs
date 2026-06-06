@@ -8,7 +8,8 @@ import type {ClientPageConfig} from "../types/client.ts";
 import type {CallConfig, ClockMode} from "../types/settings.ts";
 import {syncBlink} from "../stores/blink-store.ts";
 import {useRadioStore} from "../stores/radio-store.ts";
-import {PlaybackDevice, PlaybackStatus, usePlaybackStore} from "../stores/playback-store.ts";
+import {PlaybackStatus, usePlaybackStore} from "../stores/playback-store.ts";
+import {PlaybackDeviceType} from "../types/audio.ts";
 
 // TODO: sync settings store
 
@@ -39,7 +40,7 @@ type RadioSync = {
 type PlaybackSync = {
     selected: number;
     status: PlaybackStatus | undefined;
-    playbackDevice: PlaybackDevice;
+    playbackDevice: PlaybackDeviceType;
     openInstanceIds: string[];
 };
 
