@@ -163,7 +163,7 @@ function PlaybackPageInner() {
                 </div>
                 <PlaybackActions
                     clips={clips}
-                    selected={selected}
+                    selectedClip={selectedClip}
                     setClips={setClips}
                     deleteDisabled={active}
                 />

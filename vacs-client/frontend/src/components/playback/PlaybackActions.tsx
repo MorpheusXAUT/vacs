@@ -6,19 +6,21 @@ import {StateSetter} from "../../types/generic.ts";
 
 type PlaybackActionsProps = {
     clips: ClipMeta[];
-    selected: number;
+    selectedClip: ClipMeta | undefined;
     setClips: StateSetter<ClipMeta[]>;
     deleteDisabled: boolean;
 };
 
-function PlaybackActions({clips, selected, setClips, deleteDisabled}: PlaybackActionsProps) {
-    const handleDelete = useAsyncDebounce(async (clip: ClipMeta) => {
-        await invokeSafe("playback_delete", {id: clip.id});
-        setClips(prev => prev.filter(c => c.id !== clip.id));
+function PlaybackActions({clips, selectedClip, setClips, deleteDisabled}: PlaybackActionsProps) {
+    const handleDelete = useAsyncDebounce(async () => {
+        if (selectedClip === undefined) return;
+        await invokeSafe("playback_delete", {id: selectedClip.id});
+        setClips(prev => prev.filter(c => c.id !== selectedClip.id));
     });
 
-    const handleExport = useAsyncDebounce(async (clip: ClipMeta) => {
-        await invokeSafe("playback_export", {id: clip.id});
+    const handleExport = useAsyncDebounce(async () => {
+        if (selectedClip === undefined) return;
+        await invokeSafe("playback_export", {id: selectedClip.id});
     });
 
     const handleClear = useAsyncDebounce(async () => {
@@ -31,16 +33,16 @@ function PlaybackActions({clips, selected, setClips, deleteDisabled}: PlaybackAc
             <Button
                 color="gray"
                 className="h-17 uppercase"
-                disabled={clips[selected] === undefined}
-                onClick={() => handleExport(clips[selected])}
+                disabled={selectedClip === undefined}
+                onClick={handleExport}
             >
                 Export
             </Button>
             <Button
                 color="gray"
                 className="h-17 uppercase"
-                disabled={clips[selected] === undefined || deleteDisabled}
-                onClick={() => handleDelete(clips[selected])}
+                disabled={selectedClip === undefined || deleteDisabled}
+                onClick={handleDelete}
             >
                 Delete
             </Button>
@@ -50,7 +52,9 @@ function PlaybackActions({clips, selected, setClips, deleteDisabled}: PlaybackAc
                 disabled={clips.length === 0 || deleteDisabled}
                 onClick={handleClear}
             >
-                Delete <br /> All
+                <p>
+                    Delete <br /> All
+                </p>
             </Button>
         </div>
     );
