@@ -93,10 +93,12 @@ pub async fn playback_delete(
     recorder: State<'_, PlaybackRecorderHandle>,
     id: u64,
 ) -> Result<bool, Error> {
-    let Some(deleted) = recorder.read().as_ref().map(|r| r.delete(id)).transpose()? else {
-        return Ok(false);
-    };
-    Ok(deleted)
+    Ok(recorder
+        .read()
+        .as_ref()
+        .map(|r| r.delete(id))
+        .transpose()?
+        .unwrap_or_default())
 }
 
 #[tauri::command]
@@ -180,8 +182,8 @@ pub async fn playback_pause(
     audio_manager: State<'_, AudioManagerHandle>,
 ) -> Result<(), Error> {
     if let Some((source_id, is_speaker)) = recorder
-        .write()
-        .as_mut()
+        .read()
+        .as_ref()
         .and_then(|r| r.get_playing_source_id())
     {
         audio_manager
@@ -200,8 +202,8 @@ pub async fn playback_continue(
     audio_manager: State<'_, AudioManagerHandle>,
 ) -> Result<(), Error> {
     if let Some((source_id, is_speaker)) = recorder
-        .write()
-        .as_mut()
+        .read()
+        .as_ref()
         .and_then(|r| r.get_playing_source_id())
     {
         audio_manager
@@ -258,20 +260,21 @@ pub async fn playback_seek(
     }
 
     if let Some((source_id, is_speaker)) = recorder
-        .write()
-        .as_mut()
+        .read()
+        .as_ref()
         .and_then(|r| r.get_playing_source_id())
     {
+        let millis_abs = millis.unsigned_abs();
         if millis < 0 {
             audio_manager.read().rewind_in_audio_source(
                 source_id,
-                Duration::from_millis(millis.unsigned_abs()),
+                Duration::from_millis(millis_abs),
                 is_speaker,
             );
         } else {
             audio_manager.read().skip_in_audio_source(
                 source_id,
-                Duration::from_millis(millis.unsigned_abs()),
+                Duration::from_millis(millis_abs),
                 is_speaker,
             );
         }
