@@ -130,7 +130,7 @@ pub async fn playback_start(
 
     let audio_manager = audio_manager.read();
 
-    let source_id = audio_manager.add_audio_source(
+    let (source_id, actual_device_type) = audio_manager.add_audio_source(
         move |sample_rate, channels| {
             let source = WavSource::from_file(
                 clip.path,
@@ -159,17 +159,17 @@ pub async fn playback_start(
         audio_manager.skip_in_audio_source(
             source_id,
             Duration::from_millis((clip.duration_ms as f64 * initial_progress).round() as u64),
-            device_type,
+            actual_device_type,
         );
     }
 
     let start_paused = start_paused.unwrap_or(false);
     if !start_paused {
-        audio_manager.start_audio_source(source_id, device_type);
+        audio_manager.start_audio_source(source_id, actual_device_type);
     }
 
     if let Some(r) = recorder.write().as_mut() {
-        r.set_playing_source_id(Some((source_id, device_type)))
+        r.set_playing_source_id(Some((source_id, actual_device_type)))
     }
 
     Ok(())

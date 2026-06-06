@@ -87,7 +87,7 @@ impl AudioManager {
     }
 
     pub fn speaker_device_name(&self) -> Option<String> {
-        self.speaker.as_ref().map(|s| s.device_name().clone())
+        self.speaker.as_ref().map(|s| s.device_name())
     }
 
     pub fn switch_playback_device(
@@ -474,18 +474,17 @@ impl AudioManager {
         &self,
         source_fn: impl FnOnce(u32, u16) -> Result<Box<dyn AudioSource>, Error>,
         device_type: PlaybackDeviceType,
-    ) -> Result<AudioSourceId, Error> {
-        let (sample_rate, channels) = match (device_type, self.speaker.as_ref()) {
-            (PlaybackDeviceType::Output, _) | (PlaybackDeviceType::Speaker, None) => {
-                (self.output.sample_rate(), self.output.channels())
-            }
-            (PlaybackDeviceType::Speaker, Some(speaker)) => {
-                (speaker.sample_rate(), speaker.channels())
-            }
+    ) -> Result<(AudioSourceId, PlaybackDeviceType), Error> {
+        let actual_type = if device_type == PlaybackDeviceType::Speaker && self.speaker.is_some() {
+            PlaybackDeviceType::Speaker
+        } else {
+            PlaybackDeviceType::Output
         };
-        Ok(self
-            .get_stream_for_playback(device_type)
-            .add_audio_source(source_fn(sample_rate, channels)?))
+        let stream = self.get_stream_for_playback(device_type);
+        Ok((
+            stream.add_audio_source(source_fn(stream.sample_rate(), stream.channels())?),
+            actual_type,
+        ))
     }
 
     pub fn start_audio_source(&self, source_id: AudioSourceId, device_type: PlaybackDeviceType) {
@@ -540,11 +539,11 @@ async fn handle_playback_stream_error(
 ) {
     if restarting {
         log::error!(
-            "Restarting output device after failure errored, cannot recover: {:?}",
+            "Restarting {device_type} device after failure errored, cannot recover: {:?}",
             err
         );
         app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
-            anyhow::anyhow!("Audio output device failed to start irrecoverably, check your audio settings and restart the application.")
+            anyhow::anyhow!("Audio {device_type} device failed to start irrecoverably, check your audio settings and restart the application.")
         ))).into()).ok();
     } else {
         let state = app.state::<AppState>();
@@ -581,18 +580,18 @@ async fn handle_playback_stream_error(
 
         if let Err(err) = res {
             log::error!(
-                "Failed to switch {device_type:#?} device after failure: {:?}",
+                "Failed to switch {device_type} device after failure: {:?}",
                 err
             );
 
             app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
-                anyhow::anyhow!("Audio {device_type:#?} device failed to start irrecoverably, check your audio settings and restart the application.")
+                anyhow::anyhow!("Audio {device_type} device failed to start irrecoverably, check your audio settings and restart the application.")
             ))).into()).ok();
 
             return;
         } else {
             log::info!(
-                "Successfully restarted {device_type:#?} device after failure, continuing playback"
+                "Successfully restarted {device_type} device after failure, continuing playback"
             );
         }
 

@@ -61,3 +61,12 @@ pub enum PlaybackDeviceType {
     Output,
     Speaker,
 }
+
+impl std::fmt::Display for PlaybackDeviceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlaybackDeviceType::Output => write!(f, "output"),
+            PlaybackDeviceType::Speaker => write!(f, "speaker"),
+        }
+    }
+}
