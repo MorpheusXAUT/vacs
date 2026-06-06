@@ -2,7 +2,6 @@ import {TargetedEvent} from "preact";
 import {invokeStrict} from "../../error.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {useSettingsStore} from "../../stores/settings-store.ts";
-import {isTauri} from "../../transport";
 import Checkbox from "../ui/Checkbox.tsx";
 
 function PlaybackSettings() {
@@ -22,12 +21,7 @@ function PlaybackSettings() {
     return (
         <div className="w-full flex justify-between items-center">
             <label htmlFor="playback-enabled">Enable radio playback</label>
-            <Checkbox
-                name="playback-enabled"
-                checked={enabled}
-                onChange={handleToggle}
-                disabled={!isTauri}
-            />
+            <Checkbox name="playback-enabled" checked={enabled} onChange={handleToggle} />
         </div>
     );
 }
