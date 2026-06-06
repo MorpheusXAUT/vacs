@@ -118,9 +118,7 @@ impl KeybindEngine {
         }
 
         self.radio.write().take();
-        if let Some(handle) = self.app.try_state::<TrackAudioRadioHandle>() {
-            handle.write().take();
-        }
+        self.app.state::<TrackAudioRadioHandle>().write().take();
         self.app.emit("radio:integration-available", false).ok();
 
         if let Some(stop_token) = self.stop_token.take() {

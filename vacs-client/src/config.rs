@@ -323,7 +323,7 @@ impl Default for ClientConfig {
             extra_client_page_config: None,
             test_profile_watcher_delay_ms: 500,
             remote: RemoteConfig::default(),
-            playback: crate::playback::PlaybackConfig::default(),
+            playback: PlaybackConfig::default(),
             zoom_level: 1.0f64,
             clock_mode: ClockMode::default(),
         }

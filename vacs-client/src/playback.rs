@@ -22,7 +22,7 @@ use trackaudio::Frequency;
 ///
 /// Different audio sources produce different variants:
 /// - `Frequency(_)` is reserved for a future native vacs radio stack that taps individual
-///   stations directly.
+///   radio stations directly.
 /// - `Headset` and `Speaker` correspond to the two output buses exposed by radio clients
 ///   (e.g., using afv-native) that can be captured separately.
 /// - `Merged` is produced by sources that cannot separate streams (e.g. WASAPI process
@@ -40,7 +40,7 @@ impl TapId {
     /// Token suitable for embedding in clip filenames.
     pub fn filename_token(&self) -> String {
         match self {
-            TapId::Frequency(f) => format!("freq-{}", u64::from(*f)),
+            TapId::Frequency(f) => format!("freq-{}", f.as_khz()),
             TapId::Headset => "headset".to_owned(),
             TapId::Speaker => "speaker".to_owned(),
             TapId::Merged => "merged".to_owned(),
