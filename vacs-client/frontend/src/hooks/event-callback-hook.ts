@@ -1,11 +1,11 @@
-import {useCallback, useRef, useEffect} from "preact/hooks";
+import {useCallback, useLayoutEffect, useRef} from "preact/hooks";
 
 export function useEventCallback<TArgs extends unknown[], TResult>(
     fn: (...args: TArgs) => TResult,
 ): (...args: TArgs) => TResult {
     const fnRef = useRef(fn);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         fnRef.current = fn;
     }, [fn]);
 
