@@ -1,5 +1,6 @@
 use crate::dsp::downmix_interleaved_to_mono;
 use crate::sources::AudioSource;
+use anyhow::{Context, Result};
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 use std::path::Path;
@@ -27,7 +28,7 @@ impl WavSource {
         volume: f32,
         update_interval: Option<usize>,
         on_update: Option<Box<dyn Fn(f32) + Send>>,
-    ) -> Result<Self, hound::Error> {
+    ) -> Result<Self> {
         let mut reader = hound::WavReader::open(path)?;
         let spec = reader.spec();
         let file_channels = spec.channels as usize;
@@ -52,7 +53,7 @@ impl WavSource {
         };
 
         if spec.sample_rate != sample_rate {
-            samples = resample(&samples, spec.sample_rate, sample_rate);
+            samples = resample(&samples, spec.sample_rate as usize, sample_rate as usize)?;
         }
 
         Ok(Self {
@@ -134,25 +135,22 @@ impl AudioSource for WavSource {
     }
 }
 
-fn resample(samples: &[f32], in_rate: u32, out_rate: u32) -> Vec<f32> {
-    let in_rate = in_rate as usize;
-    let out_rate = out_rate as usize;
-
+fn resample(samples: &[f32], in_rate: usize, out_rate: usize) -> anyhow::Result<Vec<f32>> {
     let mut resampler = Fft::<f32>::new(in_rate, out_rate, 1024, 2, 1, FixedSync::Input)
-        .expect("Failed to construct WAV resampler");
+        .context("Failed to construct WAV resampler")?;
 
     let input_frames = samples.len();
     let output_frames = resampler.process_all_needed_output_len(input_frames);
     let mut out = vec![0.0f32; output_frames];
 
     let input_adapter = InterleavedSlice::new(samples, 1, input_frames)
-        .expect("Failed to create resampler input adapter");
+        .context("Failed to create resampler input adapter")?;
     let mut output_adapter = InterleavedSlice::new_mut(&mut out, 1, output_frames)
-        .expect("Failed to create resampler output adapter");
+        .context("Failed to create resampler output adapter")?;
 
     resampler
         .process_all_into_buffer(&input_adapter, &mut output_adapter, input_frames, None)
-        .expect("Failed to resample WAV audio");
+        .context("Failed to resample WAV audio")?;
 
-    out
+    Ok(out)
 }
