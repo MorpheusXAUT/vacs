@@ -15,6 +15,8 @@ import {
     usePlaybackStore,
 } from "../stores/playback-store.ts";
 
+// TODO: sync settings store
+
 type StationsSync = {
     defaultSource: StationId | undefined;
     temporarySource: StationId | undefined;

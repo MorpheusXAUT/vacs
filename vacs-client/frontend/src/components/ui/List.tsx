@@ -40,22 +40,18 @@ function List(props: ListProps) {
                 gridTemplateColumns: gridCols,
             }}
         >
-            {props.header && (
-                <>
-                    {props.header.map((headerItem, idx) => (
-                        <div
-                            key={idx}
-                            className={clsx(
-                                "bg-gray-300 flex justify-center items-center font-bold",
-                                headerItem.className,
-                            )}
-                        >
-                            {headerItem.title}
-                        </div>
-                    ))}
-                    <div className="outline-0!"></div>
-                </>
-            )}
+            {props.header?.map((headerItem, idx) => (
+                <div
+                    key={idx}
+                    className={clsx(
+                        "bg-gray-300 flex justify-center items-center font-bold",
+                        headerItem.className,
+                    )}
+                >
+                    {headerItem.title}
+                </div>
+            ))}
+            {props.header && <div className="outline-0!"></div>}
 
             {visibleItemIndices.map((itemIndex, idx) => {
                 const rowSpan = visibleItemIndices.length - 2;
