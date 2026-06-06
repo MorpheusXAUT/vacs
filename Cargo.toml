@@ -78,6 +78,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.150"
 sha1 = "0.11.0"
 syn = { version = "2.0.117", features = ["full"] }
+sysinfo = "0.39.3"
 tar = "0.4.46"
 tauri = "2.11.2"
 tauri-build = "2.6.1"
@@ -111,6 +112,7 @@ vacs-signaling = { path = "vacs-signaling" }
 vacs-vatsim = { path = "vacs-vatsim", default-features = false }
 vacs-webrtc = { path = "vacs-webrtc" }
 vergen-git2 = { version = "9.1.0", features = ["build", "cargo", "rustc"] }
+wasapi = "0.23.0"
 webrtc = "0.17.1"
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
