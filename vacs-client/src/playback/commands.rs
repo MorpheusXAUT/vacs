@@ -123,35 +123,34 @@ pub async fn playback_start(
 
     let clip = recorder.read().as_ref().and_then(|r| r.get(id));
     let Some(clip) = clip else {
-        return Err(PlaybackError::Other(Box::new(anyhow::anyhow!("clip {id} not found"))).into());
+        return Err(PlaybackError::Other(anyhow::anyhow!("clip {id} not found")).into());
     };
 
     let audio_manager = audio_manager.read();
 
     let source_id = audio_manager.add_audio_source(
         move |sample_rate, channels| {
-            Box::new(
-                WavSource::from_file(
-                    clip.path,
-                    sample_rate,
-                    channels as usize,
-                    1.0,
-                    None,
-                    Some(Box::new(move |progress| {
-                        app.emit(CLIP_PROGRESS_EVENT, progress).ok();
-                        if progress == 1.0 {
-                            let recorder = app.state::<PlaybackRecorderHandle>();
-                            if let Some(r) = recorder.write().as_mut() {
-                                r.set_playing_source_id(None)
-                            }
+            let source = WavSource::from_file(
+                clip.path,
+                sample_rate,
+                channels as usize,
+                1.0,
+                None,
+                Some(Box::new(move |progress| {
+                    app.emit(CLIP_PROGRESS_EVENT, progress).ok();
+                    if progress >= 1.0 {
+                        let recorder = app.state::<PlaybackRecorderHandle>();
+                        if let Some(r) = recorder.write().as_mut() {
+                            r.set_playing_source_id(None)
                         }
-                    })),
-                )
-                .unwrap(),
+                    }
+                })),
             )
+            .map_err(PlaybackError::Other)?;
+            Ok(Box::new(source))
         },
         device_type,
-    );
+    )?;
 
     let initial_progress = initial_progress.unwrap_or(0.0);
     if initial_progress > 0.0 {
@@ -304,10 +303,9 @@ pub async fn playback_export(
     };
 
     if let Err(err) = app.opener().open_path(path.to_string_lossy(), None::<&str>) {
-        return Err(PlaybackError::Other(Box::new(anyhow::anyhow!(
-            "Cannot open export directory: {err}"
-        )))
-        .into());
+        return Err(
+            PlaybackError::Other(anyhow::anyhow!("Cannot open export directory: {err}")).into(),
+        );
     }
 
     Ok(path)

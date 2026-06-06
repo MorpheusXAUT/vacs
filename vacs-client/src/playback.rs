@@ -165,7 +165,7 @@ pub enum PlaybackError {
     )]
     Unsupported,
     #[error(transparent)]
-    Other(#[from] Box<anyhow::Error>),
+    Other(#[from] anyhow::Error),
 }
 
 /// Build the platform-specific playback source. Returns [`PlaybackError::Unsupported`]

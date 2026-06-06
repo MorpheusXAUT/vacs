@@ -472,9 +472,9 @@ impl AudioManager {
 
     pub fn add_audio_source(
         &self,
-        source_fn: impl FnOnce(u32, u16) -> Box<dyn AudioSource>,
+        source_fn: impl FnOnce(u32, u16) -> Result<Box<dyn AudioSource>, Error>,
         device_type: PlaybackDeviceType,
-    ) -> AudioSourceId {
+    ) -> Result<AudioSourceId, Error> {
         let (sample_rate, channels) = match (device_type, self.speaker.as_ref()) {
             (PlaybackDeviceType::Output, _) | (PlaybackDeviceType::Speaker, None) => {
                 (self.output.sample_rate(), self.output.channels())
@@ -483,8 +483,9 @@ impl AudioManager {
                 (speaker.sample_rate(), speaker.channels())
             }
         };
-        self.get_stream_for_playback(device_type)
-            .add_audio_source(source_fn(sample_rate, channels))
+        Ok(self
+            .get_stream_for_playback(device_type)
+            .add_audio_source(source_fn(sample_rate, channels)?))
     }
 
     pub fn start_audio_source(&self, source_id: AudioSourceId, device_type: PlaybackDeviceType) {
