@@ -1,3 +1,4 @@
+use crate::dsp::downmix_interleaved_to_mono;
 use crate::sources::AudioSource;
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
@@ -42,14 +43,20 @@ impl WavSource {
             }
         };
 
-        let mut mono = mix_to_mono(interleaved, file_channels);
+        let mut samples = if file_channels == 1 {
+            interleaved
+        } else {
+            let mut mono = Vec::new();
+            downmix_interleaved_to_mono(&interleaved, file_channels, &mut mono);
+            mono
+        };
 
         if spec.sample_rate != sample_rate {
-            mono = resample(&mono, spec.sample_rate, sample_rate);
+            samples = resample(&samples, spec.sample_rate, sample_rate);
         }
 
         Ok(Self {
-            samples: mono,
+            samples,
             pos: 0,
             sample_rate,
             output_channels: output_channels.max(1),
@@ -125,16 +132,6 @@ impl AudioSource for WavSource {
         let frames = (duration.as_secs_f32() * self.sample_rate as f32).round() as usize;
         self.pos = self.pos - frames.min(self.pos);
     }
-}
-
-fn mix_to_mono(interleaved: Vec<f32>, channels: usize) -> Vec<f32> {
-    if channels == 1 {
-        return interleaved;
-    }
-    interleaved
-        .chunks(channels)
-        .map(|frame| frame.iter().sum::<f32>() / channels as f32)
-        .collect()
 }
 
 fn resample(samples: &[f32], in_rate: u32, out_rate: u32) -> Vec<f32> {
