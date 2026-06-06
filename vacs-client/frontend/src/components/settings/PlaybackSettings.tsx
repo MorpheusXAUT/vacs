@@ -1,22 +1,23 @@
-import Checkbox from "../ui/Checkbox.tsx";
-import {invokeStrict} from "../../error.ts";
-import {isTauri} from "../../transport";
 import {TargetedEvent} from "preact";
+import {invokeStrict} from "../../error.ts";
+import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {useSettingsStore} from "../../stores/settings-store.ts";
+import {isTauri} from "../../transport";
+import Checkbox from "../ui/Checkbox.tsx";
 
 function PlaybackSettings() {
     const enabled = useSettingsStore(state => state.playbackEnabled);
     const setEnabled = useSettingsStore(state => state.setPlaybackEnabled);
 
-    const handleToggle = async (e: TargetedEvent<HTMLInputElement>) => {
+    const handleToggle = useAsyncDebounce(async (e: TargetedEvent<HTMLInputElement>) => {
         const next = e.currentTarget.checked;
+        setEnabled(next);
         try {
             await invokeStrict("playback_set_enabled", {enabled: next});
-            setEnabled(next);
         } catch {
             setEnabled(!next);
         }
-    };
+    });
 
     return (
         <div className="w-full flex justify-between items-center">
