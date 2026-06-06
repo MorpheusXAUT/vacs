@@ -218,15 +218,12 @@ pub async fn playback_continue(
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn playback_stop(
-    app: AppHandle,
     recorder: State<'_, PlaybackRecorderHandle>,
     audio_manager: State<'_, AudioManagerHandle>,
 ) -> Result<(), Error> {
     if !stop_playing_source(&recorder, &audio_manager) {
         log::warn!("playback stop called but no clip is playing");
     }
-
-    app.emit(CLIP_PROGRESS_EVENT, 0.0).ok();
 
     Ok(())
 }

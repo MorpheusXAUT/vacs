@@ -636,7 +636,7 @@ async fn dispatch_command(
         PlaybackStop => {
             let recorder = app.state::<PlaybackRecorderHandle>();
             let audio_manager = app.state::<AudioManagerHandle>();
-            dispatch(playback_stop(app.clone(), recorder, audio_manager).await)
+            dispatch(playback_stop(recorder, audio_manager).await)
         }
         PlaybackSeek => {
             let recorder = app.state::<PlaybackRecorderHandle>();
