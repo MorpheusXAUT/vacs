@@ -2,9 +2,7 @@ import {create} from "zustand/react";
 import {createSetter, StateSetter} from "../types/generic.ts";
 import {isTauri} from "../transport";
 import {instanceId} from "../transport/store-sync.ts";
-import {shouldStopBlinking, startBlink, stopBlink} from "./blink-store.ts";
-import {useCallStore} from "./call-store.ts";
-import {useRadioStore} from "./radio-store.ts";
+import {startBlink, tryStopBlink} from "./blink-store.ts";
 
 export type PlaybackStatus = {
     id: number;
@@ -42,17 +40,8 @@ export const usePlaybackStore = create<PlaybackState>()(set => {
             setStatus: setter("status", (next, prev) => {
                 if (prev?.status !== "paused" && next?.status === "paused") {
                     startBlink();
-                } else if (
-                    prev?.status === "paused" &&
-                    next?.status !== "paused" &&
-                    shouldStopBlinking(
-                        useCallStore.getState().incomingCalls.length,
-                        useCallStore.getState().callDisplay,
-                        useRadioStore.getState().cpl,
-                        false,
-                    )
-                ) {
-                    stopBlink();
+                } else if (prev?.status === "paused" && next?.status !== "paused") {
+                    tryStopBlink(null, null, null, false);
                 }
             }),
             setPlaybackDevice: setter("playbackDevice"),

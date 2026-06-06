@@ -1,10 +1,18 @@
 import {create} from "zustand/react";
-import {CallDisplay} from "./call-store.ts";
+import {CallDisplay, useCallStore} from "./call-store.ts";
+import {useRadioStore} from "./radio-store.ts";
+import {isPlaybackPaused} from "./playback-store.ts";
 
 type BlinkState = {
     blink: boolean;
     blinkTimeoutId: number | undefined;
     startBlink: () => void;
+    tryStopBlink: (
+        incomingCallsLength: number | null,
+        callDisplay: CallDisplay | undefined | null,
+        cpl: boolean | null,
+        playbackPaused: boolean | null,
+    ) => void;
     stopBlink: () => void;
 };
 
@@ -21,6 +29,30 @@ export const useBlinkStore = create<BlinkState>()((set, get) => ({
         };
         toggleBlink(true);
     },
+    tryStopBlink: (incomingCallsLength, callDisplay, cpl, playbackPaused) => {
+        if (get().blinkTimeoutId === undefined) return;
+
+        const effectiveCallsLength =
+            incomingCallsLength ?? useCallStore.getState().incomingCalls.length;
+        const effectiveCallDisplay =
+            callDisplay === null ? useCallStore.getState().callDisplay : callDisplay;
+        const effectiveCpl = cpl ?? useRadioStore.getState().cpl;
+        const effectivePlaybackPaused = playbackPaused ?? isPlaybackPaused();
+
+        if (
+            !shouldStopBlinking(
+                effectiveCallsLength,
+                effectiveCallDisplay,
+                effectiveCpl,
+                effectivePlaybackPaused,
+            )
+        ) {
+            return;
+        }
+
+        clearTimeout(get().blinkTimeoutId);
+        set({blink: false, blinkTimeoutId: undefined});
+    },
     stopBlink: () => {
         if (get().blinkTimeoutId === undefined) return;
         clearTimeout(get().blinkTimeoutId);
@@ -29,9 +61,30 @@ export const useBlinkStore = create<BlinkState>()((set, get) => ({
 }));
 
 export const startBlink = () => useBlinkStore.getState().startBlink();
+export const tryStopBlink: BlinkState["tryStopBlink"] = (
+    incomingCallsLength,
+    callDisplay,
+    cpl,
+    playbackPaused,
+) => useBlinkStore.getState().tryStopBlink(incomingCallsLength, callDisplay, cpl, playbackPaused);
 export const stopBlink = () => useBlinkStore.getState().stopBlink();
+export const syncBlink = () => {
+    const {incomingCalls, callDisplay} = useCallStore.getState();
+    if (
+        shouldStopBlinking(
+            incomingCalls.length,
+            callDisplay,
+            useRadioStore.getState().cpl,
+            isPlaybackPaused(),
+        )
+    ) {
+        useBlinkStore.getState().stopBlink();
+    } else {
+        useBlinkStore.getState().startBlink();
+    }
+};
 
-export const shouldStopBlinking = (
+const shouldStopBlinking = (
     incomingCallsLength: number,
     callDisplay: CallDisplay | undefined,
     cpl: boolean,

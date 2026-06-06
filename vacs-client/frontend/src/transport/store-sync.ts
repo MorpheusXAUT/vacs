@@ -6,14 +6,9 @@ import {useSettingsStore} from "../stores/settings-store.ts";
 import type {CallId, StationId} from "../types/generic.ts";
 import type {ClientPageConfig} from "../types/client.ts";
 import type {CallConfig, ClockMode} from "../types/settings.ts";
-import {shouldStopBlinking, startBlink, stopBlink} from "../stores/blink-store.ts";
+import {syncBlink} from "../stores/blink-store.ts";
 import {useRadioStore} from "../stores/radio-store.ts";
-import {
-    isPlaybackPaused,
-    PlaybackDevice,
-    PlaybackStatus,
-    usePlaybackStore,
-} from "../stores/playback-store.ts";
+import {PlaybackDevice, PlaybackStatus, usePlaybackStore} from "../stores/playback-store.ts";
 
 // TODO: sync settings store
 
@@ -114,27 +109,14 @@ function applySync(payload: SyncPayload) {
         }
         case "call": {
             const {
-                incomingCalls,
                 actions: {setPrio},
             } = useCallStore.getState();
-            const {cpl} = useRadioStore.getState();
             const {prio, callDisplay} = payload.state;
             setPrio(prio);
 
             if (callDisplay !== null) {
                 useCallStore.setState({callDisplay});
-
-                const shouldStartBlink = !shouldStopBlinking(
-                    incomingCalls.length,
-                    callDisplay,
-                    cpl,
-                    isPlaybackPaused(),
-                );
-                if (shouldStartBlink) {
-                    startBlink();
-                } else {
-                    stopBlink();
-                }
+                syncBlink();
             }
             break;
         }
@@ -151,21 +133,8 @@ function applySync(payload: SyncPayload) {
             break;
         }
         case "radio": {
-            const {incomingCalls, callDisplay} = useCallStore.getState();
-
             useRadioStore.setState({cpl: payload.state.cpl});
-
-            const shouldStartBlink = !shouldStopBlinking(
-                incomingCalls.length,
-                callDisplay,
-                payload.state.cpl,
-                isPlaybackPaused(),
-            );
-            if (shouldStartBlink) {
-                startBlink();
-            } else {
-                stopBlink();
-            }
+            syncBlink();
             break;
         }
         case "playback": {
@@ -178,17 +147,7 @@ function applySync(payload: SyncPayload) {
                 openInstanceIds,
             });
 
-            const shouldStartBlink = !shouldStopBlinking(
-                useCallStore.getState().incomingCalls.length,
-                useCallStore.getState().callDisplay,
-                useRadioStore.getState().cpl,
-                status?.status === "paused",
-            );
-            if (shouldStartBlink) {
-                startBlink();
-            } else {
-                stopBlink();
-            }
+            syncBlink();
             break;
         }
     }
