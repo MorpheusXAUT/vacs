@@ -16,7 +16,7 @@ use vacs_protocol::profile::{
 use vacs_protocol::vatsim::StationId;
 
 static GEO_PAGE_CONTAINER_SIZE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\d+(%|rem)$").unwrap());
+    LazyLock::new(|| Regex::new(r"^\d+(\.\d{1,5})?(%|rem)$").unwrap());
 
 #[derive(Clone)]
 pub struct Profile {
