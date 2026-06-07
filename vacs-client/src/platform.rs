@@ -47,11 +47,23 @@ impl Capabilities {
         #[cfg(not(target_os = "linux"))]
         let keybind_listener = matches!(platform, Platform::Windows | Platform::MacOs);
 
+        let playback = cfg_select! {
+            target_os = "linux" => {
+                check_pipewire()
+            }
+            target_os = "windows" => {
+                true
+            }
+            target_os = "macos" => {
+                false
+            }
+        };
+
         Self {
             always_on_top: !matches!(platform, Platform::LinuxWayland),
             keybind_listener,
             keybind_emitter: matches!(platform, Platform::Windows | Platform::MacOs),
-            playback: !matches!(platform, Platform::MacOs),
+            playback,
             platform,
         }
     }
@@ -82,6 +94,73 @@ async fn check_wayland_global_shortcuts_portal() -> bool {
             log::warn!("Wayland Global Shortcuts portal check timed out");
             false
         }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn check_pipewire() -> bool {
+    let socket_path = std::env::var("PIPEWIRE_RUNTIME_DIR")
+        .ok()
+        .or_else(|| std::env::var("XDG_RUNTIME_DIR").ok())
+        .map(|dir| {
+            let name = std::env::var("PIPEWIRE_REMOTE").unwrap_or("pipewire-0".to_string());
+            std::path::PathBuf::from(dir).join(name)
+        });
+
+    let Some(socket_path) = socket_path else {
+        log::warn!("PipeWire socket path could not be determined");
+        return false;
+    };
+
+    if !socket_path.exists() {
+        log::debug!("PipeWire socket not found at {}", socket_path.display());
+        return false;
+    }
+
+    log::debug!(
+        "PipeWire socket found at {}, probing daemon",
+        socket_path.display()
+    );
+
+    let probe_daemon = async || -> bool {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            tokio::task::spawn_blocking(|| {
+                pipewire::init();
+                let Ok(mainloop) = pipewire::main_loop::MainLoop::new(None) else {
+                    return false;
+                };
+                let Ok(context) = pipewire::context::Context::new(&mainloop) else {
+                    return false;
+                };
+                context.connect(None).is_ok()
+            }),
+        )
+        .await
+        {
+            Ok(Ok(connected)) => {
+                if connected {
+                    log::debug!("PipeWire is available");
+                } else {
+                    log::warn!("PipeWire daemon probe failed")
+                }
+                connected
+            }
+            Ok(Err(err)) => {
+                log::warn!("PipeWire check failed: {err}");
+                false
+            }
+            Err(_) => {
+                log::warn!("PipeWire check taimed out");
+                false
+            }
+        }
+    };
+
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        tokio::task::block_in_place(|| handle.block_on(probe_daemon()))
+    } else {
+        tauri::async_runtime::block_on(probe_daemon())
     }
 }
 
