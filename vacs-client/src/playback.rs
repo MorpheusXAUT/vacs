@@ -7,7 +7,6 @@ pub mod writer;
 
 use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::DynRadio;
-use crate::radio::track_audio::TrackAudioRadio;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -176,7 +175,7 @@ fn make_source(
 ) -> Result<Box<dyn source::PlaybackSource>, PlaybackError> {
     cfg_select! {
         any(target_os = "linux", target_os = "windows") => {
-            match radio.as_any().downcast::<TrackAudioRadio>() {
+            match radio.as_any().downcast::<crate::radio::track_audio::TrackAudioRadio>() {
                 Ok(radio) => Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
                 Err(_) => Err(PlaybackError::Unsupported),
             }
