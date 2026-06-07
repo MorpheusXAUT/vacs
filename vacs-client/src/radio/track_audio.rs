@@ -37,6 +37,7 @@ pub struct TrackAudioRadio {
     client: TrackAudioClient,
     active: Arc<AtomicBool>,
     state: Arc<TrackAudioState>,
+    #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
     events_tx: broadcast::Sender<trackaudio::Event>,
     cancellation_token: CancellationToken,
 }
@@ -99,11 +100,13 @@ impl TrackAudioRadio {
     }
 
     /// Subscribe to a fan-out of every [`trackaudio::Event`] received by this radio.
+    #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
     pub fn subscribe_events(&self) -> broadcast::Receiver<trackaudio::Event> {
         self.events_tx.subscribe()
     }
 
     /// Returns the cached `headset` flag for `frequency`, or `None` if the station is unknown.
+    #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
     pub fn headset_for_frequency(&self, frequency: Frequency) -> Option<bool> {
         self.state
             .stations

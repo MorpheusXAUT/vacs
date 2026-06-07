@@ -160,8 +160,11 @@ pub enum PlaybackError {
     Source(String),
     #[error("Playback capture not supported on this platform")]
     #[cfg_attr(
-        target_os = "linux",
-        allow(dead_code, reason = "constructed by make_source on non-Linux targets")
+        any(target_os = "linux", target_os = "windows"),
+        allow(
+            dead_code,
+            reason = "make_source returns Ok on Linux/Windows; only macOS uses this"
+        )
     )]
     Unsupported,
     #[error(transparent)]

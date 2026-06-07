@@ -17,6 +17,7 @@ use tokio::sync::mpsc;
 
 /// Lower-level event emitted by a platform loopback capture backend.
 #[derive(Debug, Clone)]
+#[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
 pub enum LoopbackEvent {
     Opened {
         tap: TapId,
@@ -38,6 +39,7 @@ pub enum LoopbackEvent {
 /// Implementations spawn whatever OS resources they need (PipeWire main loop on Linux,
 /// WASAPI process loopback on Windows, etc.) and forward [`LoopbackEvent`]s through the
 /// returned channel until [`LoopbackCapture::stop`] is called or the handle is dropped.
+#[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
 pub trait LoopbackCapture: Send + 'static {
     /// Start capturing. Returns the handle and the event receiver.
     fn start() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError>

@@ -17,6 +17,7 @@ use trackaudio::Frequency;
 
 /// One unit of work emitted by an [`PlaybackSource`].
 #[derive(Debug, Clone)]
+#[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
 pub enum PlaybackSourceEvent {
     TapOpened {
         tap: TapId,
@@ -52,6 +53,8 @@ pub trait PlaybackSource: Send {
 
 pub mod capture;
 
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod track_audio;
 
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub use track_audio::TrackAudioLoopbackSource;
