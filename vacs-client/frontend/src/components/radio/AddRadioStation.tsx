@@ -5,7 +5,7 @@ import {invoke} from "../../transport";
 import {useErrorOverlayStore} from "../../stores/error-overlay-store.ts";
 import {isError, openErrorOverlayFromUnknown} from "../../error.ts";
 
-const CALLSIGN_PATTERN = /^(?=.{4,12}$).+_[A-Z]{3}$/;
+const CALLSIGN_PATTERN = /^(?=.{4,12}$).+_[A-Z]{3,4}$/;
 
 function AddRadioStation() {
     const [value, setValue] = useState<string>("");
