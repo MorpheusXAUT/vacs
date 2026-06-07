@@ -53,7 +53,7 @@ impl PlaybackSource for TrackAudioLoopbackSource {
         tokio::spawn(async move {
             // Track which tap each currently-active receiver was opened on so that:
             //   1. RxEnd emits on the same tap RxBegin used (even if routing has since
-            //      flipped), keeping book-keeping symmetric.
+            //      flipped), keeping bookkeeping symmetric.
             //   2. When the user toggles speaker/headset for a frequency mid-RX, we
             //      synthesize RxEnd on the old tap + RxBegin on the new tap so the
             //      remainder of the transmission lands in a fresh clip on the new tap.

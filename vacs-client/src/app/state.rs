@@ -2,9 +2,9 @@ pub(crate) mod audio;
 pub(crate) mod http;
 pub(crate) mod keybinds;
 pub(crate) mod playback;
+pub(crate) mod radio;
 mod sealed;
 pub(crate) mod signaling;
-pub(crate) mod track_audio_radio;
 pub(crate) mod webrtc;
 
 use crate::app::state::signaling::{AppStateSignalingExt, ConnectionState};
@@ -14,7 +14,7 @@ use crate::config::AppConfig;
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::{KeybindEngine, KeybindEngineHandle};
 use crate::playback::recorder::PlaybackRecorderHandle;
-use crate::radio::track_audio::TrackAudioRadioHandle;
+use crate::radio::RadioHandle;
 use crate::signaling::auth::TauriTokenProvider;
 use notify_debouncer_full::notify::RecommendedWatcher;
 use notify_debouncer_full::{Debouncer, RecommendedCache};
@@ -37,7 +37,7 @@ pub struct AppStateInner {
     audio_manager: AudioManagerHandle,
     keybind_engine: KeybindEngineHandle,
     playback_recorder: PlaybackRecorderHandle,
-    track_audio_radio: TrackAudioRadioHandle,
+    radio: RadioHandle,
     active_call: Option<Call>,
     unanswered_call_guard: Option<UnansweredCallGuard>,
     held_calls: HashMap<CallId, Call>, // call_id -> call
@@ -84,7 +84,7 @@ impl AppStateInner {
                 shutdown_token.child_token(),
             ))),
             playback_recorder: Arc::new(RwLock::new(None)),
-            track_audio_radio: Arc::new(RwLock::new(None)),
+            radio: Arc::new(RwLock::new(None)),
             shutdown_token,
             active_call: None,
             unanswered_call_guard: None,

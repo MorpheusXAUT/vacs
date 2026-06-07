@@ -6,8 +6,7 @@ use crate::config::{KeybindsConfig, RadioConfig, TransmitConfig, TransmitMode};
 use crate::error::Error;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
 use crate::keybinds::{KeyEvent, Keybind};
-use crate::radio::track_audio::TrackAudioRadioHandle;
-use crate::radio::{DynRadio, RadioState, TransmissionState};
+use crate::radio::{DynRadio, RadioHandle, RadioState, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -31,7 +30,7 @@ pub struct KeybindEngine {
     radio_config: RadioConfig,
     app: AppHandle,
     listener: RwLock<Option<DynKeybindListener>>,
-    radio: RwLock<Option<DynRadio>>,
+    radio: RadioHandle,
     rx_task: Option<JoinHandle<()>>,
     shutdown_token: CancellationToken,
     stop_token: Option<CancellationToken>,
@@ -60,7 +59,7 @@ impl KeybindEngine {
             radio_config: radio_config.clone(),
             app,
             listener: RwLock::new(None),
-            radio: RwLock::new(None),
+            radio: Arc::new(RwLock::new(None)),
             rx_task: None,
             shutdown_token,
             stop_token: None,
@@ -99,7 +98,8 @@ impl KeybindEngine {
 
         if self.mode == TransmitMode::RadioIntegration {
             let radio = self.radio_config.radio(self.app.clone()).await?;
-            *self.radio.write() = radio;
+            *self.radio.write() = radio.clone();
+            *self.app.state::<RadioHandle>().write() = radio;
         } else {
             self.app.emit("radio:integration-available", false).ok();
         }
@@ -118,7 +118,7 @@ impl KeybindEngine {
         }
 
         self.radio.write().take();
-        self.app.state::<TrackAudioRadioHandle>().write().take();
+        self.app.state::<RadioHandle>().write().take();
         self.app.emit("radio:integration-available", false).ok();
 
         if let Some(stop_token) = self.stop_token.take() {

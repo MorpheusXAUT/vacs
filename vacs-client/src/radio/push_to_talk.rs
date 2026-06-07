@@ -28,6 +28,7 @@
 use crate::keybinds::runtime::{DynKeybindEmitter, KeybindEmitter, PlatformEmitter};
 use crate::radio::{Radio, RadioError, RadioState, TransmissionState};
 use keyboard_types::{Code, KeyState};
+use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter};
@@ -98,6 +99,10 @@ impl Radio for PushToTalkRadio {
         } else {
             RadioState::RxIdle
         }
+    }
+
+    fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self
     }
 }
 

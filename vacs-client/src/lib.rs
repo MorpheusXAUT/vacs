@@ -17,7 +17,7 @@ use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::http::HttpState;
 use crate::app::state::keybinds::AppStateKeybindsExt;
 use crate::app::state::playback::AppStatePlaybackExt;
-use crate::app::state::track_audio_radio::AppStateTrackAudioRadioExt;
+use crate::app::state::radio::AppStateRadioExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::AudioManagerHandle;
 use crate::build::VersionInfo;
@@ -26,7 +26,7 @@ use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
 use crate::playback::recorder::PlaybackRecorderHandle;
-use crate::radio::track_audio::TrackAudioRadioHandle;
+use crate::radio::RadioHandle;
 use crate::remote::{RemoteServer, RemoteServerHandle};
 use tauri::{App, Manager, RunEvent, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -101,7 +101,7 @@ pub fn run() {
                 app.manage::<PlaybackRecorderHandle>(
                     state.playback_recorder_handle(),
                 );
-                app.manage::<TrackAudioRadioHandle>(state.track_audio_radio_handle());
+                app.manage::<RadioHandle>(state.radio_handle());
                 app.manage::<AppState>(TokioMutex::new(state));
 
                 if capabilities.keybind_listener || capabilities.keybind_emitter {

@@ -5,8 +5,7 @@ use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfi
 use crate::error::Error;
 use crate::playback::recorder::{CLIP_PROGRESS_EVENT, PlaybackRecorderHandle};
 use crate::playback::{ClipMeta, PlaybackError};
-use crate::radio::track_audio::TrackAudioRadioHandle;
-use crate::radio::{Radio, RadioState};
+use crate::radio::{RadioHandle, RadioState};
 use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -48,9 +47,9 @@ pub async fn playback_set_enabled(
     persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
 
     if enabled {
-        // Start the recorder live if a TrackAudioRadio is currently active. If not, the
+        // Start the recorder live if the radio is currently active. If not, the
         // recorder will be started the next time the radio integration comes up.
-        let radio = app.state::<TrackAudioRadioHandle>().read().clone();
+        let radio = app.state::<RadioHandle>().read().clone();
         if let Some(radio) = radio
             && !matches!(
                 radio.state(),
@@ -59,7 +58,7 @@ pub async fn playback_set_enabled(
         {
             playback_config.start(&app, radio).await;
         } else {
-            log::info!("playback enabled in config but no TrackAudio radio is active");
+            log::info!("playback enabled in config but no radio is active");
         }
     } else {
         // Stop any currently running recorder. The slot stays in place; future

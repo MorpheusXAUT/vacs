@@ -1,9 +1,11 @@
 use crate::app::state::AppState;
 use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::{
-    Frequency, Radio, RadioError, RadioState, RadioStation, StationStateUpdate, TransmissionState,
+    Frequency, Radio, RadioError, RadioHandle, RadioState, RadioStation, StationStateUpdate,
+    TransmissionState,
 };
 use parking_lot::RwLock;
+use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -20,15 +22,6 @@ use trackaudio::{
 
 /// Capacity of the [`TrackAudioRadio`] event fan-out broadcast channel.
 const EVENT_FANOUT_CAPACITY: usize = 256;
-
-/// Shared, app-managed slot holding the (optionally running) [`TrackAudioRadio`].
-///
-/// The slot is created empty at startup and populated by [`crate::config::RadioConfig::radio`]
-/// whenever the TrackAudio integration is brought up. Code paths that need a live handle
-/// to the active radio (e.g. live-toggling the playback recorder) read from this slot
-/// instead of plumbing the [`std::sync::Arc`] through call chains that don't otherwise
-/// need it.
-pub type TrackAudioRadioHandle = Arc<RwLock<Option<Arc<TrackAudioRadio>>>>;
 
 #[derive(Clone)]
 pub struct TrackAudioRadio {
@@ -201,9 +194,9 @@ impl TrackAudioRadio {
                         let state = app.state::<AppState>();
                         let state = state.lock().await;
 
-                        let trackaudio_radio = app.state::<TrackAudioRadioHandle>().read().clone();
+                        let radio = app.state::<RadioHandle>().read().clone();
 
-                        if let Some(radio) = trackaudio_radio {
+                        if let Some(radio) = radio {
                             log::info!("trackaudio radio state connected; starting recorder");
                             state.config.client.playback.start(app, radio).await;
                         }
@@ -381,6 +374,10 @@ impl Radio for TrackAudioRadio {
 
     async fn get_stations(&self) -> Result<Vec<RadioStation>, RadioError> {
         Ok(self.state.stations())
+    }
+
+    fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self
     }
 }
 

@@ -113,7 +113,7 @@ export function PlaybackControls({
             </PlaybackControlButton>
             <PlaybackControlButton disabled={!active || nextClip === undefined} onClick={onNext}>
                 <svg
-                    transform="rotate(180)"
+                    className="rotate-180"
                     height="32"
                     viewBox="0 0 48 74"
                     fill="none"
@@ -124,7 +124,7 @@ export function PlaybackControls({
             </PlaybackControlButton>
             <PlaybackControlButton disabled={!active} onClick={onSeekForward}>
                 <svg
-                    transform="rotate(180)"
+                    className="rotate-180"
                     width="32"
                     height="32"
                     viewBox="0 0 74 74"

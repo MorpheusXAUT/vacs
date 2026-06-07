@@ -3,7 +3,6 @@ use crate::error::Error;
 use crate::playback::PlaybackConfig;
 use crate::radio::push_to_talk::PushToTalkRadio;
 use crate::radio::track_audio::TrackAudioRadio;
-use crate::radio::track_audio::TrackAudioRadioHandle;
 use crate::radio::{DynRadio, RadioIntegration};
 use crate::remote::RemoteConfig;
 use anyhow::Context;
@@ -15,7 +14,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition, PhysicalSize};
+use tauri::{AppHandle, LogicalSize, PhysicalPosition, PhysicalSize};
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::profile::client_page::{
@@ -633,9 +632,6 @@ impl RadioConfig {
                         .await
                         .map_err(Error::from)?,
                 );
-
-                *app.state::<TrackAudioRadioHandle>().write() = Some(radio.clone());
-
                 Ok(Some(radio))
             }
         }

@@ -6,11 +6,11 @@ pub mod storage;
 pub mod writer;
 
 use crate::playback::recorder::PlaybackRecorderHandle;
+use crate::radio::DynRadio;
 use crate::radio::track_audio::TrackAudioRadio;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::SystemTime;
 use tauri::{AppHandle, Manager};
 use thiserror::Error;
@@ -102,7 +102,7 @@ impl Default for PlaybackConfig {
 }
 
 impl PlaybackConfig {
-    pub async fn start(&self, app: &AppHandle, radio: Arc<TrackAudioRadio>) {
+    pub async fn start(&self, app: &AppHandle, radio: DynRadio) {
         if !self.enabled {
             log::info!("playback disabled by config");
             return;
@@ -174,18 +174,13 @@ pub enum PlaybackError {
 /// Build the platform-specific playback source. Returns [`PlaybackError::Unsupported`]
 /// on platforms where no loopback capture backend is implemented yet.
 fn make_source(
-    #[cfg_attr(not(target_os = "linux"), allow(unused_variables))] radio: Arc<TrackAudioRadio>,
+    #[cfg_attr(target_os = "macos", allow(unused_variables))] radio: DynRadio,
 ) -> Result<Box<dyn source::PlaybackSource>, PlaybackError> {
-    #[cfg(target_os = "linux")]
-    {
-        Ok(Box::new(source::TrackAudioLoopbackSource::new(radio)))
-    }
-    #[cfg(target_os = "windows")]
-    {
-        Ok(Box::new(source::TrackAudioLoopbackSource::new(radio)))
-    }
     #[cfg(target_os = "macos")]
-    {
-        Err(PlaybackError::Unsupported)
+    return Err(PlaybackError::Unsupported);
+
+    match radio.as_any().downcast::<TrackAudioRadio>() {
+        Ok(radio) => Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
+        Err(_) => Err(PlaybackError::Unsupported),
     }
 }

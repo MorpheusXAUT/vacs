@@ -4,7 +4,9 @@ pub mod track_audio;
 
 use crate::platform::Capabilities;
 use keyboard_types::KeyState;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -135,7 +137,7 @@ pub struct StationStateUpdate {
 }
 
 #[async_trait::async_trait]
-pub trait Radio: Send + Sync + Debug + 'static {
+pub trait Radio: Send + Sync + Debug + Any + 'static {
     async fn transmit(&self, state: TransmissionState) -> Result<(), RadioError>;
     async fn reconnect(&self) -> Result<(), RadioError> {
         Ok(())
@@ -158,6 +160,10 @@ pub trait Radio: Send + Sync + Debug + 'static {
     async fn get_stations(&self) -> Result<Vec<RadioStation>, RadioError> {
         Err(RadioError::NotSupported)
     }
+
+    fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
 
 pub type DynRadio = Arc<dyn Radio>;
+
+pub type RadioHandle = Arc<RwLock<Option<DynRadio>>>;
