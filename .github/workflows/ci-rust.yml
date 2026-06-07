@@ -84,7 +84,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install build dependencies
+      - name: Install build dependencies (Linux)
         uses: ./.github/actions/install-linux-deps
 
       - name: Free disk space on runner
@@ -110,7 +110,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "ubuntu-22.04"
+          - platform: "ubuntu-24.04"
             arch: "x86_64"
             target: "x86_64-unknown-linux-gnu"
           - platform: "windows-latest"
@@ -129,7 +129,7 @@ jobs:
           persist-credentials: false
 
       - name: Install build dependencies (Linux)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-24.04'
         uses: ./.github/actions/install-linux-deps
 
       - name: Install build dependencies (macOS, aarch64)
