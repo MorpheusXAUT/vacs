@@ -33,13 +33,7 @@ impl Capabilities {
 
         #[cfg(target_os = "linux")]
         let keybind_listener = if matches!(platform, Platform::LinuxWayland) {
-            if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                tokio::task::block_in_place(|| {
-                    handle.block_on(check_wayland_global_shortcuts_portal())
-                })
-            } else {
-                tauri::async_runtime::block_on(check_wayland_global_shortcuts_portal())
-            }
+            check_wayland_global_shortcuts_portal()
         } else {
             false
         };
@@ -76,24 +70,33 @@ impl Default for Capabilities {
 }
 
 #[cfg(target_os = "linux")]
-async fn check_wayland_global_shortcuts_portal() -> bool {
-    use ashpd::desktop::global_shortcuts::GlobalShortcuts;
-    use std::time::Duration;
-
+fn check_wayland_global_shortcuts_portal() -> bool {
     log::debug!("Checking availability of Wayland Global Shortcuts portal");
-    match tokio::time::timeout(Duration::from_secs(1), GlobalShortcuts::new()).await {
-        Ok(Ok(_)) => {
-            log::debug!("Wayland Global Shortcuts portal is available");
-            true
+
+    let probe_portal = async || -> bool {
+        use ashpd::desktop::global_shortcuts::GlobalShortcuts;
+
+        match tokio::time::timeout(std::time::Duration::from_secs(1), GlobalShortcuts::new()).await
+        {
+            Ok(Ok(_)) => {
+                log::debug!("Wayland Global Shortcuts portal is available");
+                true
+            }
+            Ok(Err(err)) => {
+                log::warn!("Wayland Global Shortcuts portal check failed: {err}");
+                false
+            }
+            Err(_) => {
+                log::warn!("Wayland Global Shortcuts portal check timed out");
+                false
+            }
         }
-        Ok(Err(err)) => {
-            log::warn!("Wayland Global Shortcuts portal check failed: {err}");
-            false
-        }
-        Err(_) => {
-            log::warn!("Wayland Global Shortcuts portal check timed out");
-            false
-        }
+    };
+
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        tokio::task::block_in_place(|| handle.block_on(probe_portal()))
+    } else {
+        tauri::async_runtime::block_on(probe_portal())
     }
 }
 
