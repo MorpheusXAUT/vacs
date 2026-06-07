@@ -161,6 +161,7 @@ pub trait Radio: Send + Sync + Debug + Any + 'static {
         Err(RadioError::NotSupported)
     }
 
+    #[cfg_attr(target_os = "macos", allow(unused))]
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
 
