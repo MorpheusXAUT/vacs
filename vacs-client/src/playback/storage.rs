@@ -3,9 +3,9 @@
 //! Directory layout under the configured root:
 //! ```text
 //! root/
-//!   clip-{unix_ms}-{tap}.wav    rolling deque entries (evictable)
+//!   clip-{unix_ms}.wav                        rolling deque entries (evictable)
 //!   saved/
-//!     clip-{unix_ms}-{tap}-{freq?}-{callsign}.wav   exported, never evicted, frequency is omitted if the clip has no recorded one
+//!     clip-{unix_ms}-{freq?}-{callsign}.wav   exported, never evicted, frequency is omitted if the clip has no recorded one
 //! ```
 //!
 //! Rolling clips are session-scoped: on [`ClipStore::open`] every `clip-*.wav` directly
@@ -144,18 +144,12 @@ impl ClipStore {
         let safe_callsigns = sanitize(callsigns);
         let base = match meta.frequency {
             Some(freq) => format!(
-                "{EXPORT_FILENAME_PREFIX}{}-{}-{}-{}",
+                "{EXPORT_FILENAME_PREFIX}{}-{}-{}",
                 unix_ms,
-                meta.tap.filename_token(),
                 format_frequency_mhz(freq),
                 safe_callsigns
             ),
-            None => format!(
-                "{EXPORT_FILENAME_PREFIX}{}-{}-{}",
-                unix_ms,
-                meta.tap.filename_token(),
-                safe_callsigns
-            ),
+            None => format!("{EXPORT_FILENAME_PREFIX}{}-{}", unix_ms, safe_callsigns),
         };
 
         let target = unique_path(dir, &base, "wav");
@@ -239,11 +233,10 @@ mod tests {
         w.finalize().unwrap();
     }
 
-    fn fresh_meta(id: u64, path: PathBuf, tap: TapId) -> ClipMeta {
+    fn fresh_meta(id: u64, path: PathBuf) -> ClipMeta {
         ClipMeta {
             id,
             path,
-            tap,
             callsigns: HashSet::from(["DLH123".to_string()]),
             frequency: Some(Frequency::from(121_500_000_u64)),
             started_at: SystemTime::UNIX_EPOCH + Duration::from_millis(1_700_000_000_000),
@@ -296,7 +289,7 @@ mod tests {
             let path = store.allocate(TapId::Headset, SystemTime::now());
             write_dummy_clip(&path);
             paths.push(path.clone());
-            let _ = store.commit(fresh_meta(id, path, TapId::Headset));
+            let _ = store.commit(fresh_meta(id, path));
         }
         let listed = store.list();
         assert_eq!(listed.len(), 2);
@@ -312,7 +305,7 @@ mod tests {
         let path = store.allocate(TapId::Speaker, SystemTime::now());
         write_dummy_clip(&path);
         let id = 1;
-        store.commit(fresh_meta(id, path.clone(), TapId::Speaker));
+        store.commit(fresh_meta(id, path.clone()));
 
         assert!(store.delete(id).unwrap());
         assert!(!path.exists());
@@ -327,7 +320,7 @@ mod tests {
         let path = store.allocate(TapId::Merged, SystemTime::now());
         write_dummy_clip(&path);
         let id = 1;
-        store.commit(fresh_meta(id, path, TapId::Merged));
+        store.commit(fresh_meta(id, path));
         let exported = store.export(id, None).unwrap();
         assert!(exported.exists());
 
@@ -367,7 +360,7 @@ mod tests {
                 let started = SystemTime::UNIX_EPOCH + Duration::from_millis(ts);
                 let path = store.allocate(TapId::Speaker, started);
                 write_dummy_clip(&path);
-                store.commit(fresh_meta(id as u64 + 1, path, TapId::Speaker));
+                store.commit(fresh_meta(id as u64 + 1, path));
             }
             let last_id = store.list().first().unwrap().id;
             store.export(last_id, None).unwrap()

@@ -32,7 +32,6 @@ pub const CLIP_PROGRESS_EVENT: &str = "playback:progress";
 struct OpenClip {
     writer: ClipWriter,
     path: PathBuf,
-    tap: crate::playback::TapId,
     callsigns: HashSet<String>,
     frequency: Option<trackaudio::Frequency>,
     started_at: SystemTime,
@@ -52,7 +51,6 @@ impl OpenClip {
         let OpenClip {
             writer,
             path,
-            tap,
             callsigns,
             frequency,
             started_at,
@@ -75,7 +73,6 @@ impl OpenClip {
         Ok(ClipMeta {
             id,
             path,
-            tap,
             callsigns,
             frequency,
             started_at,
@@ -267,7 +264,6 @@ fn apply_actions(
                             OpenClip {
                                 writer,
                                 path,
-                                tap,
                                 callsigns,
                                 frequency,
                                 started_at,

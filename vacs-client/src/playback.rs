@@ -28,7 +28,6 @@ use trackaudio::Frequency;
 /// - `Merged` is produced by sources that cannot separate streams (e.g. WASAPI process
 ///   loopback on Windows).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum TapId {
     Frequency(Frequency),
     Headset,
@@ -54,7 +53,6 @@ impl TapId {
 pub struct ClipMeta {
     pub id: u64,
     pub path: PathBuf,
-    pub tap: TapId,
     pub callsigns: HashSet<String>,
     pub frequency: Option<Frequency>,
     pub started_at: SystemTime,
