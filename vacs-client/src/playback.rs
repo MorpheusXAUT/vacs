@@ -174,11 +174,15 @@ pub enum PlaybackError {
 fn make_source(
     #[cfg_attr(target_os = "macos", allow(unused_variables))] radio: DynRadio,
 ) -> Result<Box<dyn source::PlaybackSource>, PlaybackError> {
-    #[cfg(target_os = "macos")]
-    return Err(PlaybackError::Unsupported);
-
-    match radio.as_any().downcast::<TrackAudioRadio>() {
-        Ok(radio) => Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
-        Err(_) => Err(PlaybackError::Unsupported),
+    cfg_select! {
+        any(target_os = "linux", target_os = "windows") => {
+            match radio.as_any().downcast::<TrackAudioRadio>() {
+                Ok(radio) => Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
+                Err(_) => Err(PlaybackError::Unsupported),
+            }
+        }
+        _ => {
+            Err(PlaybackError::Unsupported)
+        }
     }
 }
