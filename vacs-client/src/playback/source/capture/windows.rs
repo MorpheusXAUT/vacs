@@ -155,7 +155,6 @@ fn run_main_loop(
 
     let mut sample_queue: VecDeque<u8> = VecDeque::new();
 
-    // TODO: Check LoopbackEvents (which are send when)
     if let Err(err) = tx.try_send(LoopbackEvent::Opened {
         tap: TapId::Merged,
         sample_rate: SAMPLE_RATE as u32,

@@ -63,15 +63,12 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
     });
 
     const handleStop = useAsyncDebounce(
-        useCallback(
-            async (setState = true) => {
-                try {
-                    await invokeStrict("playback_stop");
-                    if (setState) setStatus(undefined);
-                } catch {}
-            },
-            [setStatus],
-        ),
+        useCallback(async () => {
+            try {
+                await invokeStrict("playback_stop");
+                setStatus(undefined);
+            } catch {}
+        }, [setStatus]),
     );
 
     const handleSeek = useAsyncDebounce(async (durationSecs: number) => {
@@ -123,19 +120,18 @@ export function usePlaybackControls({selectedClip, prevClip, nextClip}: Params) 
     const handleSeekBack = () => void handleSeek(-1);
     const handleSeekForward = () => void handleSeek(1);
 
-    // TODO: Should this continue a continuous playback?
     const handlePrev = async () => {
-        await handleStop(false);
         intendedClipChangeRef.current = true;
         setSelected(prev => prev + 1);
-        if (prevClip !== undefined) void handleStart(prevClip.id, playbackDevice);
+        if (prevClip !== undefined)
+            void handleStart(prevClip.id, playbackDevice, status?.continuously);
     };
 
     const handleNext = async () => {
-        await handleStop(false);
         intendedClipChangeRef.current = true;
         setSelected(prev => prev - 1);
-        if (nextClip !== undefined) void handleStart(nextClip.id, playbackDevice);
+        if (nextClip !== undefined)
+            void handleStart(nextClip.id, playbackDevice, status?.continuously);
     };
 
     useEffect(() => {
