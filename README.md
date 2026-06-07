@@ -62,9 +62,9 @@ As we're making changes to our service, we may occasionally introduce breaking/n
 
 ### Linux
 
-- Ubuntu 22.04+, Fedora 40+, or similar recommended
+- Ubuntu 24.04+, Fedora 40+, or similar recommended
 - Required system dependencies are automatically selected by the package manager during client installation
-- ALSA audio backend required (automatically provided by Pipewire and PulseAudio plugins installed as dependencies)
+- ALSA audio backend required (automatically provided by PipeWire and PulseAudio plugins installed as dependencies)
 
 > [!IMPORTANT]  
 > If you're running a Wayland-based display server, please see our [Wayland support doc](https://github.com/vacs-project/vacs/blob/main/vacs-client/docs/wayland.md) for details on limitations and supported features.  
