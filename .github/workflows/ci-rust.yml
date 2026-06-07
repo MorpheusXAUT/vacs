@@ -85,12 +85,7 @@ jobs:
           persist-credentials: false
 
       - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
-            libssl-dev libasound2-dev libgtk-3-dev libopus-dev \
-            cmake patchelf
+        uses: ./.github/actions/install-linux-deps
 
       - name: Free disk space on runner
         run: rm -rf /opt/hostedtoolcache
@@ -135,12 +130,7 @@ jobs:
 
       - name: Install build dependencies (Linux)
         if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
-            libssl-dev libasound2-dev libgtk-3-dev libopus-dev \
-            cmake patchelf
+        uses: ./.github/actions/install-linux-deps
 
       - name: Install build dependencies (macOS, aarch64)
         if: matrix.platform == 'macos-latest' && matrix.arch == 'aarch64'
