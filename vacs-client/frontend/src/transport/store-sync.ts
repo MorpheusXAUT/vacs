@@ -76,6 +76,23 @@ export const INSTANCE_ID = createInstanceId();
 // set to `true` while applying an incoming sync to prevent re-broadcast
 let applying = false;
 
+function deepEqual(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    if (Array.isArray(a) && Array.isArray(b)) {
+        return a.length === b.length && a.every((v, i) => deepEqual(v, b[i]));
+    }
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    return (
+        aKeys.length === bKeys.length &&
+        aKeys.every(k =>
+            deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+        )
+    );
+}
+
 function subscribeFields<K extends SyncStoreName, S>(
     store: {
         getState: () => S;
@@ -88,14 +105,14 @@ function subscribeFields<K extends SyncStoreName, S>(
     return store.subscribe((nextState, prevState) => {
         if (applying || skipSync?.(nextState, prevState)) return;
 
-        const next = JSON.stringify(select(nextState));
-        const prev = JSON.stringify(select(prevState));
+        const next = select(nextState);
+        const prev = select(prevState);
 
-        if (next === prev) return;
+        if (deepEqual(next, prev)) return;
 
         void invoke("remote_broadcast_store_sync", {
             store: name,
-            state: JSON.parse(next),
+            state: next,
             sourceId: INSTANCE_ID,
         });
     });
@@ -179,6 +196,22 @@ export function setupStoreSync(): () => void {
 function startSync(): () => void {
     const unlistenFns: (() => void)[] = [];
 
+    void listen<SyncPayload>("store:sync", event => {
+        if (event.payload.sourceId === INSTANCE_ID) return;
+        applying = true;
+        try {
+            applySync(event.payload);
+        } finally {
+            applying = false;
+        }
+    }).then(fn => unlistenFns.push(fn));
+
+    if (isTauri) {
+        void listen("store:sync:request", () => {
+            broadcastAllStoreState();
+        }).then(fn => unlistenFns.push(fn));
+    }
+
     unlistenFns.push(
         subscribeFields(useStationsStore, "stations", s => ({
             defaultSource: s.defaultSource,
@@ -241,28 +274,10 @@ function startSync(): () => void {
                 const next = {...nextState, status: nextStatusWithoutProgress};
                 const prev = {...prevState, status: prevStatusWithoutProgress};
 
-                return JSON.stringify(next) === JSON.stringify(prev);
+                return deepEqual(prev, next);
             },
         ),
     );
-
-    const unlistenSync = listen<SyncPayload>("store:sync", event => {
-        if (event.payload.sourceId === INSTANCE_ID) return;
-        applying = true;
-        try {
-            applySync(event.payload);
-        } finally {
-            applying = false;
-        }
-    });
-    unlistenFns.push(() => unlistenSync.then(fn => fn()));
-
-    if (isTauri) {
-        const unlistenSyncRequest = listen("store:sync:request", () => {
-            broadcastAllStoreState();
-        });
-        unlistenFns.push(() => unlistenSyncRequest.then(fn => fn()));
-    }
 
     return () => {
         unlistenFns.forEach(fn => fn());

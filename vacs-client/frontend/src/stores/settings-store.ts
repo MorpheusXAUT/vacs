@@ -1,8 +1,8 @@
 import {create} from "zustand/react";
 import {invokeStrict} from "../error.ts";
-import {CallConfig, ClockMode} from "../types/settings.ts";
+import {isTauri} from "../transport/index.ts";
 import {ClientPageConfig, ClientPageSettings} from "../types/client.ts";
-import {useStationsStore} from "./stations-store.ts";
+import {CallConfig, ClockMode} from "../types/settings.ts";
 import {
     RadioConfig,
     RadioConfigWithLabels,
@@ -11,6 +11,7 @@ import {
     withRadioLabels,
     withTransmitLabels,
 } from "../types/transmit.ts";
+import {useStationsStore} from "./stations-store.ts";
 
 type SettingsState = {
     callConfig: CallConfig;
@@ -37,7 +38,7 @@ const emptyClientPageConfig: ClientPageConfig = {
     grouping: "FirAndIcao",
 };
 
-export const useSettingsStore = create<SettingsState>()((set, get) => ({
+export const useSettingsStore = create<SettingsState>()(set => ({
     callConfig: {
         highlightIncomingCallTarget: true,
         enablePriorityCalls: true,
@@ -51,31 +52,16 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     radioConfig: undefined,
     clockMode: "Realtime",
     playbackEnabled: false,
-    setCallConfig: config => {
-        const defaultCallSourcesChanged =
-            config.useDefaultCallSources !== get().callConfig.useDefaultCallSources;
-
-        set({callConfig: config});
-
-        if (defaultCallSourcesChanged) {
-            const {stations, positionDefaultSources, setDefaultSource, getPositionDefaultSource} =
-                useStationsStore.getState();
-
-            setDefaultSource(getPositionDefaultSource(positionDefaultSources, stations));
-        }
-    },
+    setCallConfig: config => set({callConfig: config}),
     setClientPageConfig: config => set({selectedClientPageConfig: config}),
-    setClientPageSettings: settings => {
-        set({clientPageConfigs: {None: emptyClientPageConfig, ...settings.configs}});
-
-        if (settings.selected !== undefined) {
-            const config = settings.configs[settings.selected];
-            if (config !== undefined) {
-                useSettingsStore
-                    .getState()
-                    .setClientPageConfig({...config, name: settings.selected});
-            }
-        }
+    setClientPageSettings: ({selected, configs}) => {
+        const resolvedConfig = isTauri && selected !== undefined ? configs[selected] : undefined;
+        set({
+            clientPageConfigs: {None: emptyClientPageConfig, ...configs},
+            ...(resolvedConfig !== undefined && selected !== undefined
+                ? {selectedClientPageConfig: {...resolvedConfig, name: selected}}
+                : {}),
+        });
     },
     setTransmitConfig: config => set({transmitConfig: config}),
     setRadioConfig: config => set({radioConfig: config}),
@@ -83,50 +69,43 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     setPlaybackEnabled: enabled => set({playbackEnabled: enabled}),
 }));
 
-async function fetchCallConfig() {
-    try {
-        const callConfig = await invokeStrict<CallConfig>("app_get_call_config");
-        useSettingsStore.getState().setCallConfig(callConfig);
-    } catch {}
-}
+useSettingsStore.subscribe((state, prev) => {
+    if (state.callConfig.useDefaultCallSources === prev.callConfig.useDefaultCallSources) return;
+    const {stations, positionDefaultSources, setDefaultSource, getPositionDefaultSource} =
+        useStationsStore.getState();
+    setDefaultSource(getPositionDefaultSource(positionDefaultSources, stations));
+});
 
-async function fetchClientPageSettings() {
+async function fetchClientPageConfigs() {
     try {
-        const clientPageSettings = await invokeStrict<ClientPageSettings>(
-            "app_get_client_page_settings",
-        );
-        useSettingsStore.getState().setClientPageSettings(clientPageSettings);
-    } catch {}
-}
-
-async function fetchTransmitSettings() {
-    try {
-        const transmitConfig = await invokeStrict<TransmitConfig>("keybinds_get_transmit_config");
-        useSettingsStore.getState().setTransmitConfig(await withTransmitLabels(transmitConfig));
-
-        const radioConfig = await invokeStrict<RadioConfig>("keybinds_get_radio_config");
-        useSettingsStore.getState().setRadioConfig(await withRadioLabels(radioConfig));
-    } catch {}
-}
-
-async function fetchClockMode() {
-    try {
-        const clockMode = await invokeStrict<ClockMode>("app_get_clock_mode");
-        useSettingsStore.getState().setClockMode(clockMode);
-    } catch {}
-}
-
-async function fetchPlaybackEnabled() {
-    try {
-        const enabled = await invokeStrict<boolean>("playback_get_enabled");
-        useSettingsStore.getState().setPlaybackEnabled(enabled);
+        const settings = await invokeStrict<ClientPageSettings>("app_get_client_page_settings");
+        useSettingsStore.getState().setClientPageSettings(settings);
     } catch {}
 }
 
 export async function fetchSettings() {
-    void fetchCallConfig();
-    void fetchClientPageSettings();
-    void fetchClockMode();
-    void fetchTransmitSettings();
-    void fetchPlaybackEnabled();
+    void fetchClientPageConfigs();
+
+    if (!isTauri) return;
+
+    try {
+        const [callConfig, clockMode, transmitConfig, radioConfig, playbackEnabled] =
+            await Promise.all([
+                invokeStrict<CallConfig>("app_get_call_config"),
+                invokeStrict<ClockMode>("app_get_clock_mode"),
+                invokeStrict<TransmitConfig>("keybinds_get_transmit_config").then(
+                    withTransmitLabels,
+                ),
+                invokeStrict<RadioConfig>("keybinds_get_radio_config").then(withRadioLabels),
+                invokeStrict<boolean>("playback_get_enabled"),
+            ]);
+
+        useSettingsStore.setState({
+            callConfig,
+            clockMode,
+            transmitConfig,
+            radioConfig,
+            playbackEnabled,
+        });
+    } catch {}
 }

@@ -341,21 +341,9 @@ export function CloseButton({targetMenu, className}: {targetMenu?: Menu; classNa
                 className="w-full"
                 xmlns="http://www.w3.org/2000/svg"
             >
-                <g clipPath="url(#clip0_0_1)">
-                    <rect x="4" y="4" width="120" height="120" stroke="black" strokeWidth="14" />
-                    <path d="M98 30L30 98" stroke="black" strokeWidth="12" />
-                    <path d="M30 30L98 98" stroke="black" strokeWidth="12" />
-                </g>
-                <defs>
-                    <clipPath id="clip0_0_1">
-                        <rect
-                            width="128"
-                            height="128"
-                            fill="white"
-                            transform="matrix(-1 0 0 1 128 0)"
-                        />
-                    </clipPath>
-                </defs>
+                <rect x="4" y="4" width="120" height="120" stroke="black" strokeWidth="14" />
+                <path d="M98 30L30 98" stroke="black" strokeWidth="12" />
+                <path d="M30 30L98 98" stroke="black" strokeWidth="12" />
             </svg>
         </Button>
     );
