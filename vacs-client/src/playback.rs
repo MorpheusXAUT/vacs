@@ -119,7 +119,7 @@ impl PlaybackConfig {
             }
         };
 
-        let app_data_dir = match app.path().app_data_dir() {
+        let app_data_dir = match app.path().app_local_data_dir() {
             Ok(d) => d,
             Err(err) => {
                 log::error!("failed to resolve app_data_dir: {err}");

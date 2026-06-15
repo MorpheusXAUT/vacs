@@ -24,7 +24,7 @@ impl HttpState {
             .map_startup_err(StartupError::Config)?;
         let data_dir = app
             .path()
-            .app_data_dir()
+            .app_local_data_dir()
             .map_startup_err(StartupError::Config)?;
 
         let cookie_store = Arc::new(
