@@ -1,6 +1,7 @@
 import {clsx} from "clsx";
 import {ComponentChildren} from "preact";
 import speaker from "../../assets/speaker.svg";
+import headset from "../../assets/headset.svg";
 import {PlaybackStatusBase} from "../../stores/playback-store.ts";
 import {ClipMeta} from "../../types/playback.ts";
 import Button, {ButtonColor} from "../ui/Button.tsx";
@@ -62,7 +63,11 @@ export function PlaybackControls({
                 </svg>
             </PlaybackControlButton>
             <PlaybackControlButton onClick={onDeviceSwitch}>
-                {playbackDevice === "Output" ? "H" : <img src={speaker} alt="S" className="h-7" />}
+                <img
+                    src={playbackDevice === "Output" ? headset : speaker}
+                    alt={playbackDevice === "Output" ? "Headset" : "Speaker"}
+                    className="h-7"
+                />
             </PlaybackControlButton>
             <PlaybackControlButton
                 color={status?.continuously && (isPlaying || blink) ? "blue" : "gray"}

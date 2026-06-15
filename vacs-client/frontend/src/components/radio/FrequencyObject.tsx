@@ -50,7 +50,7 @@ function FrequencyObject({station, rxActive, txActive}: FrequencyObjectProps) {
                         <div className="h-full flex justify-between items-center pl-2.5 pr-3">
                             <img
                                 src={speaker}
-                                alt="XC"
+                                alt="Speaker"
                                 className={clsx("w-6 h-6", station.headset && "opacity-50")}
                                 onClick={() => update({headset: !station.headset})}
                             />
