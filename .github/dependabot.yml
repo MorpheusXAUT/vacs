@@ -27,6 +27,11 @@ updates:
     rebase-strategy: auto
     versioning-strategy: increase
     labels: ["dependencies", "node"]
+    groups:
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
