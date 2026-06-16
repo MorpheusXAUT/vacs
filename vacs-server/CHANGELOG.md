@@ -1,4 +1,4 @@
-# Changelog
+# Changelog 
 
 ## [2.3.3](https://github.com/vacs-project/vacs/compare/vacs-server-v2.3.2...vacs-server-v2.3.3) (2026-04-30)
 
