@@ -2,7 +2,7 @@ import {create} from "zustand/react";
 import {invokeStrict} from "../error.ts";
 import {isTauri} from "../transport";
 import {ClientPageConfig, ClientPageSettings} from "../types/client.ts";
-import {CallConfig, ClockMode, CplMode} from "../types/settings.ts";
+import {CallConfig, ClockMode} from "../types/settings.ts";
 import {
     RadioConfig,
     RadioConfigWithLabels,
@@ -20,7 +20,6 @@ type SettingsState = {
     transmitConfig: TransmitConfigWithLabels | undefined;
     radioConfig: RadioConfigWithLabels | undefined;
     clockMode: ClockMode;
-    cplMode: CplMode;
     playbackEnabled: boolean;
     setCallConfig: (config: CallConfig) => void;
     setClientPageConfig: (config: ClientPageConfig & {name: string}) => void;
@@ -28,7 +27,6 @@ type SettingsState = {
     setTransmitConfig: (config: TransmitConfigWithLabels) => void;
     setRadioConfig: (config: RadioConfigWithLabels) => void;
     setClockMode: (mode: ClockMode) => void;
-    setCplMode: (mode: CplMode) => void;
     setPlaybackEnabled: (enabled: boolean) => void;
 };
 
@@ -53,7 +51,6 @@ export const useSettingsStore = create<SettingsState>()(set => ({
     transmitConfig: undefined,
     radioConfig: undefined,
     clockMode: "Realtime",
-    cplMode: "Original",
     playbackEnabled: false,
     setCallConfig: config => set({callConfig: config}),
     setClientPageConfig: config => set({selectedClientPageConfig: config}),
@@ -69,7 +66,6 @@ export const useSettingsStore = create<SettingsState>()(set => ({
     setTransmitConfig: config => set({transmitConfig: config}),
     setRadioConfig: config => set({radioConfig: config}),
     setClockMode: mode => set({clockMode: mode}),
-    setCplMode: mode => set({cplMode: mode}),
     setPlaybackEnabled: enabled => set({playbackEnabled: enabled}),
 }));
 
@@ -93,11 +89,10 @@ export async function fetchSettings() {
     if (!isTauri) return;
 
     try {
-        const [callConfig, clockMode, cplMode, transmitConfig, radioConfig, playbackEnabled] =
+        const [callConfig, clockMode, transmitConfig, radioConfig, playbackEnabled] =
             await Promise.all([
                 invokeStrict<CallConfig>("app_get_call_config"),
                 invokeStrict<ClockMode>("app_get_clock_mode"),
-                invokeStrict<CplMode>("app_get_cpl_mode"),
                 invokeStrict<TransmitConfig>("keybinds_get_transmit_config").then(
                     withTransmitLabels,
                 ),
@@ -108,7 +103,6 @@ export async function fetchSettings() {
         useSettingsStore.setState({
             callConfig,
             clockMode,
-            cplMode,
             transmitConfig,
             radioConfig,
             playbackEnabled,
