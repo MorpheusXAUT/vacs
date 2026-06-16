@@ -22,6 +22,8 @@ export type RemoteCommand =
     | "app_get_version"
     | "app_get_clock_mode"
     | "app_set_clock_mode"
+    | "app_get_cpl_mode"
+    | "app_set_cpl_mode"
     | "audio_get_devices"
     | "audio_get_hosts"
     | "audio_get_volumes"

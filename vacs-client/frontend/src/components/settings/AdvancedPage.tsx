@@ -2,6 +2,7 @@ import RemoteControlSettings from "./RemoteControlSettings.tsx";
 import PlaybackSettings from "./PlaybackSettings.tsx";
 import SettingsSubPage from "./SettingsSubPage.tsx";
 import AudioHostSelector from "./AudioHostSelector.tsx";
+import CplModeSettings from "./CplModeSettings.tsx";
 
 function AdvancedPage() {
     return (
@@ -22,6 +23,7 @@ function AdvancedPage() {
             <div className="w-full py-3 px-4 border-b-2 border-zinc-200 flex flex-col gap-3">
                 <PlaybackSettings />
             </div>
+            <CplModeSettings />
         </SettingsSubPage>
     );
 }

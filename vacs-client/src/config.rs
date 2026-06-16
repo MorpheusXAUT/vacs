@@ -297,6 +297,8 @@ pub struct ClientConfig {
     pub zoom_level: f64,
     #[serde(default)]
     pub clock_mode: ClockMode,
+    #[serde(default)]
+    pub cpl_mode: CplMode,
 }
 
 fn default_zoom_level() -> f64 {
@@ -325,6 +327,7 @@ impl Default for ClientConfig {
             playback: PlaybackConfig::default(),
             zoom_level: 1.0f64,
             clock_mode: ClockMode::default(),
+            cpl_mode: CplMode::default(),
         }
     }
 }
@@ -335,6 +338,13 @@ pub enum ClockMode {
     Realtime,
     Relaxed,
     Day,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum CplMode {
+    #[default]
+    Original,
+    Fast,
 }
 
 impl ClientConfig {

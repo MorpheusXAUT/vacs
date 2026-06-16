@@ -4,7 +4,7 @@ use crate::audio::manager::AudioManagerHandle;
 use crate::audio::source_type::SourceType;
 use crate::build::VersionInfo;
 use crate::config::{
-    AppConfig, CLIENT_SETTINGS_FILE_NAME, ClientConfig, ClockMode, FrontendCallConfig,
+    AppConfig, CLIENT_SETTINGS_FILE_NAME, ClientConfig, ClockMode, CplMode, FrontendCallConfig,
     FrontendClientPageSettings, Persistable, PersistedClientConfig,
 };
 use crate::error::{Error, FrontendError};
@@ -634,6 +634,35 @@ pub async fn app_set_clock_mode(
     let config: PersistedClientConfig = {
         let mut state = app_state.lock().await;
         state.config.client.clock_mode = clock_mode;
+
+        state.config.client.clone().into()
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_get_cpl_mode(app_state: State<'_, AppState>) -> Result<CplMode, Error> {
+    Ok(app_state.lock().await.config.client.cpl_mode)
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn app_set_cpl_mode(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    cpl_mode: CplMode,
+) -> Result<(), Error> {
+    let config: PersistedClientConfig = {
+        let mut state = app_state.lock().await;
+        state.config.client.cpl_mode = cpl_mode;
 
         state.config.client.clone().into()
     };
