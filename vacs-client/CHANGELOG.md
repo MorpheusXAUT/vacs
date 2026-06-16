@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.4.0](https://github.com/vacs-project/vacs/compare/vacs-client-v2.3.0...vacs-client-v2.4.0) (2026-06-16)
+
+
+### Features
+
+* **vacs-client:** add fast couple functionality ([#925](https://github.com/vacs-project/vacs/issues/925)) ([a88d7e0](https://github.com/vacs-project/vacs/commit/a88d7e073a9d3dfca36f4053cfd63007e936f403))
+* **vacs-client:** add nsis uninstaller icon and header ([98a0461](https://github.com/vacs-project/vacs/commit/98a046109130d6c1582cd164e43d0ac7cbbafbc6))
+* **vacs-client:** add playback of TrackAudio radio transmissions ([#900](https://github.com/vacs-project/vacs/issues/900)) ([8b8faeb](https://github.com/vacs-project/vacs/commit/8b8faeb8b406967350b38502f1980608ca2cad4f))
+
+
+### Bug Fixes
+
+* **vacs-client:** fix sync logic and optimize settings store ([#911](https://github.com/vacs-project/vacs/issues/911)) ([9d3f9b6](https://github.com/vacs-project/vacs/commit/9d3f9b6a008603ef330cfa55b4d5ef7e91ad30b6))
+* **vacs-client:** fix volume preview playing on the wrong device ([#867](https://github.com/vacs-project/vacs/issues/867)) ([9828d52](https://github.com/vacs-project/vacs/commit/9828d5295bb04f9efbbdfaa21cc320fe71508ff3))
+* **vacs-client:** prevent page navigation when opening/closing menus ([#878](https://github.com/vacs-project/vacs/issues/878)) ([f1ad337](https://github.com/vacs-project/vacs/commit/f1ad337d3d70df5481510d93dfd009a85aff70c7))
+* **vacs-client:** update button border colors for better contrast ([#850](https://github.com/vacs-project/vacs/issues/850)) ([8bc077c](https://github.com/vacs-project/vacs/commit/8bc077c3247e334f1724fb171f20d7de675b3e40))
+* **vacs-client:** update callsign regex to allow ATIS suffix while adding radio stations ([#903](https://github.com/vacs-project/vacs/issues/903)) ([c58169d](https://github.com/vacs-project/vacs/commit/c58169dd42f7ca6652950979edb7fd48a92e3797))
+* **vacs-client:** use correct directory of local app data on Windows ([#922](https://github.com/vacs-project/vacs/issues/922)) ([02a9f71](https://github.com/vacs-project/vacs/commit/02a9f713f5ec5c70600ed0faa1146cc885d7e5bf))
+
 ## [2.3.0](https://github.com/vacs-project/vacs/compare/vacs-client-v2.2.0...vacs-client-v2.3.0) (2026-04-29)
 
 
