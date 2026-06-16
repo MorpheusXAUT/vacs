@@ -40,3 +40,12 @@ pub async fn radio_get_stations(
     let radio = radio(&keybind_engine).await?;
     Ok(radio.get_stations().await?)
 }
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn radio_fast_couple(
+    keybind_engine: State<'_, KeybindEngineHandle>,
+) -> Result<(), Error> {
+    let radio = radio(&keybind_engine).await?;
+    Ok(radio.fast_couple().await?)
+}

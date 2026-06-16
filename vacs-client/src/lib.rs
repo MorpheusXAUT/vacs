@@ -194,6 +194,7 @@ pub fn run() {
             playback::commands::playback_start,
             playback::commands::playback_stop,
             radio::commands::radio_add_station,
+            radio::commands::radio_fast_couple,
             radio::commands::radio_set_station_state,
             radio::commands::radio_get_stations,
             signaling::commands::signaling_accept_call,

@@ -30,6 +30,7 @@ export type ButtonProps = {
     className?: string;
     children?: ComponentChildren;
     onClick?: (event: MouseEvent) => void;
+    onDoubleClick?: (event: MouseEvent) => void;
     disabled?: boolean;
     softDisabled?: boolean;
     muted?: boolean;
@@ -125,6 +126,7 @@ function Button(props: ButtonProps) {
                 }
                 props.onClick?.(event);
             }}
+            onDblClick={event => props.onDoubleClick?.(event)}
             disabled={props.disabled}
             title={props.title}
         >

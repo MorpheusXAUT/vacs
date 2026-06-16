@@ -376,6 +376,24 @@ impl Radio for TrackAudioRadio {
         Ok(self.state.stations())
     }
 
+    async fn fast_couple(&self) -> Result<(), RadioError> {
+        for station in self.state.stations() {
+            if station.tx && !station.xca {
+                let cmd = SetStationState::new(station.frequency).xca(true);
+                if let Err(err) = self
+                    .client
+                    .api()
+                    .set_station_state(cmd, Some(Self::STATION_STATE_TIMEOUT))
+                    .await
+                {
+                    log::warn!("Failed to fast couple station {}: {err}", station.frequency);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self
     }

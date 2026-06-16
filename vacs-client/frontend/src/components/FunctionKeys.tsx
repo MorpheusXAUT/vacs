@@ -4,6 +4,7 @@ import {useCallStore} from "../stores/call-store.ts";
 import {useSettingsStore} from "../stores/settings-store.ts";
 import Button from "./ui/Button.tsx";
 import LinkButton from "./ui/LinkButton.tsx";
+import FastCplButton from "./ui/FastCplButton.tsx";
 
 function FunctionKeys() {
     const prio = useCallStore(state => state.prio);
@@ -22,9 +23,7 @@ function FunctionKeys() {
             <Button color="cyan" className="text-slate-400" disabled={true}>
                 HOLD
             </Button>
-            <Button color="cyan" className="text-slate-400" disabled={true}>
-                PICKUP
-            </Button>
+            <FastCplButton />
             <Button color="cyan" className="text-slate-400" disabled={true}>
                 <p>
                     SUITE

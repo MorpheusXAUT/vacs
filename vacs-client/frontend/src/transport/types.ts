@@ -46,6 +46,7 @@ export type RemoteCommand =
     | "keybinds_set_radio_config"
     | "keybinds_set_transmit_config"
     | "radio_add_station"
+    | "radio_fast_couple"
     | "radio_get_stations"
     | "radio_set_station_state"
     | "remote_broadcast_store_sync"
