@@ -1,5 +1,12 @@
 # Changelog 
 
+## [2.3.4](https://github.com/vacs-project/vacs/compare/vacs-server-v2.3.3...vacs-server-v2.3.4) (2026-06-16)
+
+
+### Bug Fixes
+
+* **vacs-vatsim:** support decimal values in GEO_PAGE_CONTAINER_SIZE ([#927](https://github.com/vacs-project/vacs/issues/927)) ([8bea773](https://github.com/vacs-project/vacs/commit/8bea773d86ee8782254f9e5351085f1e8794d5a7))
+
 ## [2.3.3](https://github.com/vacs-project/vacs/compare/vacs-server-v2.3.2...vacs-server-v2.3.3) (2026-04-30)
 
 
