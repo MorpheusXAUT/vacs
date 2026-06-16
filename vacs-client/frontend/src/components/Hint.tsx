@@ -14,12 +14,12 @@ type Position = {
 function Hint({children, maxWidth = 280}: HintProps) {
     const [visible, setVisible] = useState(false);
     const [position, setPosition] = useState<Position>({top: 0, left: 0});
-    const iconRef = useRef<SVGSVGElement>(null);
+    const wrapperRef = useRef<HTMLDivElement>(null);
     const tooltipRef = useRef<HTMLDivElement>(null);
 
     const show = () => {
-        if (!iconRef.current) return;
-        const rect = iconRef.current.getBoundingClientRect();
+        if (!wrapperRef.current) return;
+        const rect = wrapperRef.current.getBoundingClientRect();
         const estimatedHeight = 80;
         const centerX = rect.left + rect.width / 2;
         const top =
@@ -35,11 +35,16 @@ function Hint({children, maxWidth = 280}: HintProps) {
 
     const toggle = () => (visible ? hide() : show());
 
+    const handleTouchStart = (e: TouchEvent) => {
+        e.preventDefault();
+        toggle();
+    };
+
     useEffect(() => {
         if (!visible) return;
         const handleOutside = (e: MouseEvent | TouchEvent) => {
             const target = e.target as Node;
-            if (!iconRef.current?.contains(target) && !tooltipRef.current?.contains(target)) {
+            if (!wrapperRef.current?.contains(target) && !tooltipRef.current?.contains(target)) {
                 hide();
             }
         };
@@ -54,13 +59,13 @@ function Hint({children, maxWidth = 280}: HintProps) {
     return (
         <>
             <div
+                ref={wrapperRef}
                 className="inline-flex p-1 cursor-help"
                 onMouseEnter={show}
                 onMouseLeave={hide}
-                onClick={toggle}
+                onTouchStart={handleTouchStart}
             >
                 <svg
-                    ref={iconRef}
                     xmlns="http://www.w3.org/2000/svg"
                     width="14"
                     height="14"
