@@ -211,6 +211,7 @@ pub enum RemoteCommand {
     PlaybackExport,
 
     RadioAddStation,
+    RadioFastCouple,
     RadioSetStationState,
     RadioGetStations,
 

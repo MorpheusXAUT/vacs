@@ -653,6 +653,10 @@ async fn dispatch_command(
             let keybind_engine = app.state::<KeybindEngineHandle>();
             dispatch(radio_add_station(keybind_engine, callsign).await)
         }
+        RadioFastCouple => {
+            let keybind_engine = app.state::<KeybindEngineHandle>();
+            dispatch(radio_fast_couple(keybind_engine).await)
+        }
         RadioSetStationState => {
             let (frequency, update) = args!(args, "frequency", "update");
             let keybind_engine = app.state::<KeybindEngineHandle>();
