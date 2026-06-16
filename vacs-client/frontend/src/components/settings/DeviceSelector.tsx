@@ -103,7 +103,11 @@ function DeviceSelector(props: DeviceSelectorProps) {
             {props.deviceType === "Speaker" ? (
                 <div className="w-full flex flex-row gap-2 items-center justify-center">
                     <p className="text-center font-semibold">Speaker</p>
-                    <Hint hint="Optional device for playing notification sounds such as ring, priority ring and UI clicks separately. Note: Call audio including start and end sounds will always be played on the headset device." />
+                    <Hint>
+                        Optional device for playing notification sounds such as ring, priority ring
+                        and UI clicks separately. Note: Call audio including start and end sounds
+                        will always be played on the headset device.
+                    </Hint>
                 </div>
             ) : (
                 <p className="w-full text-center font-semibold">

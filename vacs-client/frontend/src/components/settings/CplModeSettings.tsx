@@ -27,7 +27,17 @@ function CplModeSettings() {
         <>
             <div className="w-full flex flex-row gap-2 items-center justify-center pt-1">
                 <p className="text-center uppercase font-semibold">Couple Mode</p>
-                <Hint hint="Original: Click CPL to enter Couple Mode, click a frequency to couple it, then click CPL again to exit. Double-clicking CPL while outside Couple Mode couples all TX-enabled frequencies at once. | Fast: Click FAST CPL to immediately couple all TX-enabled frequencies at once." />
+                <Hint>
+                    <p>
+                        <strong>Original:</strong> Click CPL to enter Couple Mode, click a frequency
+                        to couple it, then click CPL again to exit. Double-clicking CPL while
+                        outside Couple Mode couples all TX-enabled frequencies at once.
+                    </p>
+                    <p className="mt-1">
+                        <strong>Fast:</strong> Click FAST CPL to immediately couple all TX-enabled
+                        frequencies at once.
+                    </p>
+                </Hint>
             </div>
             <div className="w-full py-3 px-4 border-b-2 border-zinc-200 flex flex-col gap-3">
                 <Select
