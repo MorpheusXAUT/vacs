@@ -297,6 +297,8 @@ pub struct ClientConfig {
     pub zoom_level: f64,
     #[serde(default)]
     pub clock_mode: ClockMode,
+    #[serde(default)]
+    pub cpl_mode: CplMode,
 }
 
 fn default_zoom_level() -> f64 {
@@ -325,6 +327,7 @@ impl Default for ClientConfig {
             playback: PlaybackConfig::default(),
             zoom_level: 1.0f64,
             clock_mode: ClockMode::default(),
+            cpl_mode: CplMode::default(),
         }
     }
 }
@@ -335,6 +338,13 @@ pub enum ClockMode {
     Realtime,
     Relaxed,
     Day,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum CplMode {
+    #[default]
+    Original,
+    Fast,
 }
 
 impl ClientConfig {
@@ -563,7 +573,6 @@ pub struct RadioConfig {
     pub integration: RadioIntegration,
     pub audio_for_vatsim: Option<AudioForVatsimRadioConfig>,
     pub track_audio: Option<TrackAudioRadioConfig>,
-    pub cpl_mode: CplMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -582,7 +591,6 @@ pub struct FrontendRadioConfig {
     pub integration: RadioIntegration,
     pub audio_for_vatsim: Option<FrontendAudioForVatsimRadioConfig>,
     pub track_audio: Option<FrontendTrackAudioRadioConfig>,
-    pub cpl_mode: CplMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -595,13 +603,6 @@ pub struct FrontendAudioForVatsimRadioConfig {
 #[serde(rename_all = "camelCase")]
 pub struct FrontendTrackAudioRadioConfig {
     pub endpoint: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum CplMode {
-    #[default]
-    Original,
-    Fast,
 }
 
 impl RadioConfig {
@@ -653,7 +654,6 @@ impl From<RadioConfig> for FrontendRadioConfig {
             integration: radio_integration.integration,
             audio_for_vatsim: radio_integration.audio_for_vatsim.map(|c| c.into()),
             track_audio: radio_integration.track_audio.map(|c| c.into()),
-            cpl_mode: radio_integration.cpl_mode,
         }
     }
 }
@@ -682,7 +682,6 @@ impl TryFrom<FrontendRadioConfig> for RadioConfig {
             integration: value.integration,
             audio_for_vatsim: value.audio_for_vatsim.map(|c| c.try_into()).transpose()?,
             track_audio: value.track_audio.map(|c| c.try_into()).transpose()?,
-            cpl_mode: value.cpl_mode,
         })
     }
 }

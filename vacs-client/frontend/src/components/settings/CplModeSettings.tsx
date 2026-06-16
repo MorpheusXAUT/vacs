@@ -1,26 +1,27 @@
 import {invokeStrict} from "../../error.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {useSettingsStore} from "../../stores/settings-store.ts";
+import {ALL_CPL_MODES, isCplMode} from "../../types/settings.ts";
 import Hint from "../Hint.tsx";
 import Select from "../ui/Select.tsx";
-import {ALL_CPL_MODES, isCplMode, RadioConfig} from "../../types/transmit.ts";
 
 const CPL_MODE_OPTIONS = ALL_CPL_MODES.map(mode => ({value: mode, text: mode}));
 
 function CplModeSettings() {
-    const cplMode = useSettingsStore(state => state.radioConfig?.cplMode ?? "Original");
-    const setRadioConfig = useSettingsStore(state => state.setRadioConfig);
+    const cplMode = useSettingsStore(state => state.cplMode);
+    const setCplMode = useSettingsStore(state => state.setCplMode);
 
     const handleOnChange = useAsyncDebounce(async (value: string) => {
-        const radioConfig = useSettingsStore.getState().radioConfig;
-        if (!isCplMode(value) || radioConfig === undefined) return;
+        if (!isCplMode(value)) return;
+        const previousMode = cplMode;
 
-        const newRadioConfig: RadioConfig = {...radioConfig, cplMode: value};
+        setCplMode(value);
 
         try {
-            await invokeStrict("keybinds_set_radio_config", {radioConfig: newRadioConfig});
-            setRadioConfig({...radioConfig, cplMode: value});
-        } catch {}
+            await invokeStrict("app_set_cpl_mode", {cplMode: value});
+        } catch {
+            setCplMode(previousMode);
+        }
     });
 
     return (
