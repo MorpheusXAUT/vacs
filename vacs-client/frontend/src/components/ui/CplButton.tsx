@@ -9,7 +9,7 @@ import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 function CplButton() {
     const blink = useBlinkStore(state => state.blink);
 
-    const cplMode = useSettingsStore(state => state.radioConfig?.cplMode ?? "Original");
+    const cplMode = useSettingsStore(state => state.cplMode);
 
     const cpl = useRadioStore(state => state.cpl);
     const setCpl = useRadioStore(state => state.setCpl);
