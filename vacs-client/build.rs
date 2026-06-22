@@ -1,17 +1,17 @@
-use vergen_git2::{BuildBuilder, CargoBuilder, Emitter, Git2Builder, RustcBuilder};
+use vergen_git2::{Build, Cargo, Emitter, Git2, Rustc};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let git = Git2Builder::default()
+    let git = Git2::builder()
         .branch(true)
         .commit_date(true)
         .commit_message(true)
         .describe(true, true, None)
         .sha(false)
         .dirty(true)
-        .build()?;
-    let build = BuildBuilder::all_build()?;
-    let cargo = CargoBuilder::all_cargo()?;
-    let rustc = RustcBuilder::all_rustc()?;
+        .build();
+    let build = Build::all_build();
+    let cargo = Cargo::all_cargo();
+    let rustc = Rustc::all_rustc();
 
     Emitter::default()
         .add_instructions(&git)?
