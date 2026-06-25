@@ -4,11 +4,12 @@ use crate::radio::{DynRadio, Frequency, RadioStation, StationStateUpdate};
 use tauri::State;
 
 async fn radio(engine: &KeybindEngineHandle) -> Result<DynRadio, Error> {
-    engine
-        .read()
-        .await
-        .radio()
-        .ok_or_else(|| crate::radio::RadioError::Integration("No radio configured".into()).into())
+    // engine
+    //     .read()
+    //     .await
+    //     .radio()
+    //     .ok_or_else(|| crate::radio::RadioError::Integration("No radio configured".into()).into())
+    Err(Error::Other(Box::new(anyhow::anyhow!("No radio PUNKT.")))) // TODO
 }
 
 #[tauri::command]

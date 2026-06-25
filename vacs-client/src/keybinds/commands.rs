@@ -1,7 +1,7 @@
 use crate::app::state::AppState;
 use crate::config::{
     CLIENT_SETTINGS_FILE_NAME, FrontendKeybindsConfig, FrontendRadioConfig, FrontendTransmitConfig,
-    KeybindsConfig, Persistable, PersistedClientConfig, RadioConfig, TransmitConfig, TransmitMode,
+    KeybindsConfig, Persistable, PersistedClientConfig, RadioConfig, TransmitConfig,
 };
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
@@ -137,7 +137,7 @@ pub async fn keybinds_get_radio_config(
 pub async fn keybinds_set_radio_config(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    keybind_engine: State<'_, KeybindEngineHandle>,
+    // keybind_engine: State<'_, KeybindEngineHandle>,
     radio_config: FrontendRadioConfig,
 ) -> Result<(), Error> {
     let capabilities = Capabilities::default();
@@ -152,11 +152,12 @@ pub async fn keybinds_set_radio_config(
 
         validate_afv_radio_integration_config(&state.config.client.transmit_config, &radio_config)?;
 
-        keybind_engine
-            .write()
-            .await
-            .set_radio_config(&radio_config)
-            .await?;
+        // TODO
+        /* keybind_engine
+        .write()
+        .await
+        .set_radio_config(&radio_config)
+        .await?; */
 
         state.config.client.radio = radio_config;
         state.config.client.clone().into()
@@ -173,15 +174,15 @@ pub async fn keybinds_set_radio_config(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn keybinds_get_radio_state(
-    keybind_engine: State<'_, KeybindEngineHandle>,
-) -> Result<RadioState, Error> {
+pub async fn keybinds_get_radio_state(/* keybind_engine: State<'_, KeybindEngineHandle>, */)
+ -> Result<RadioState, Error> {
     let capabilities = Capabilities::default();
     if !capabilities.keybind_listener {
         return Ok(RadioState::NotConfigured);
     }
 
-    Ok(keybind_engine.read().await.radio_state())
+    Ok(RadioState::NotConfigured)
+    // Ok(keybind_engine.read().await.radio_state()) // TODO
 }
 
 #[tauri::command]
@@ -218,17 +219,17 @@ pub fn keybinds_open_system_shortcuts_settings() -> Result<(), Error> {
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn keybinds_reconnect_radio(
-    keybind_engine: State<'_, KeybindEngineHandle>,
-) -> Result<(), Error> {
-    keybind_engine.read().await.reconnect_radio().await
+pub async fn keybinds_reconnect_radio(/* keybind_engine: State<'_, KeybindEngineHandle>, */)
+ -> Result<(), Error> {
+    // keybind_engine.read().await.reconnect_radio().await // TODO
+    Ok(())
 }
 
 fn validate_afv_radio_integration_config(
     transmit_config: &TransmitConfig,
     radio_config: &RadioConfig,
 ) -> Result<(), Error> {
-    if transmit_config.mode == TransmitMode::RadioIntegration
+    if transmit_config.radio_push_to_talk.is_some()
         && radio_config.integration == RadioIntegration::AudioForVatsim
         && let Some(selected_key) = transmit_config.radio_push_to_talk
         && let Some(afv_key) = radio_config.audio_for_vatsim.as_ref().and_then(|c| c.emit)
