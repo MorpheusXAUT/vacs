@@ -2,11 +2,11 @@ use crate::app::state::AppState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::AudioManagerHandle;
-use crate::config::{KeybindsConfig, RadioConfig, TransmitConfig, TransmitMode};
+use crate::config::{CallMicMode, KeybindsConfig, TransmitConfig};
 use crate::error::Error;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
 use crate::keybinds::{KeyEvent, Keybind};
-use crate::radio::{DynRadio, RadioHandle, RadioState, TransmissionState};
+use crate::radio::{DynRadio, RadioHandle, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -22,19 +22,22 @@ use crate::platform::Platform;
 
 #[derive(Debug)]
 pub struct KeybindEngine {
-    mode: TransmitMode,
-    transmit_code: Option<Code>,
+    call_mic_mode: CallMicMode,
+    call_code: Option<Code>,
+    radio_code: Option<Code>,
+    /// Keybinds
     accept_call_code: Option<Code>,
     end_call_code: Option<Code>,
     toggle_radio_prio_code: Option<Code>,
-    radio_config: RadioConfig,
+    ///
     app: AppHandle,
     listener: RwLock<Option<DynKeybindListener>>,
-    radio: RadioHandle,
     rx_task: Option<JoinHandle<()>>,
     shutdown_token: CancellationToken,
     stop_token: Option<CancellationToken>,
-    pressed: Arc<AtomicBool>,
+    ///
+    call_pressed: Arc<AtomicBool>,
+    radio_pressed: Arc<AtomicBool>,
     call_active: Arc<AtomicBool>,
     radio_prio: Arc<AtomicBool>,
     implicit_radio_prio: Arc<AtomicBool>,
@@ -47,23 +50,22 @@ impl KeybindEngine {
         app: AppHandle,
         transmit_config: &TransmitConfig,
         call_control_config: &KeybindsConfig,
-        radio_config: &RadioConfig,
         shutdown_token: CancellationToken,
     ) -> Self {
         Self {
-            mode: transmit_config.mode,
-            transmit_code: Self::select_active_transmit_code(transmit_config),
+            call_mic_mode: transmit_config.mode,
+            call_code: Self::select_active_transmit_code(transmit_config),
+            radio_code: transmit_config.radio_push_to_talk,
             accept_call_code: Self::select_accept_call_code(call_control_config),
             end_call_code: Self::select_end_call_code(call_control_config),
             toggle_radio_prio_code: Self::select_toggle_radio_prio_code(call_control_config),
-            radio_config: radio_config.clone(),
             app,
             listener: RwLock::new(None),
-            radio: Arc::new(RwLock::new(None)),
             rx_task: None,
             shutdown_token,
             stop_token: None,
-            pressed: Arc::new(AtomicBool::new(false)),
+            call_pressed: Arc::new(AtomicBool::new(false)),
+            radio_pressed: Arc::new(AtomicBool::new(false)),
             call_active: Arc::new(AtomicBool::new(false)),
             radio_prio: Arc::new(AtomicBool::new(false)),
             implicit_radio_prio: Arc::new(AtomicBool::new(false)),
@@ -78,15 +80,18 @@ impl KeybindEngine {
             || self.end_call_code.is_some()
             || self.toggle_radio_prio_code.is_some();
 
-        if self.mode == TransmitMode::VoiceActivation && !has_call_controls {
+        if self.call_mic_mode == CallMicMode::VoiceActivation
+            && self.radio_code.is_none()
+            && !has_call_controls
+        {
             log::trace!(
-                "TransmitMode set to voice activation and no call controls defined, no keybind engine required"
+                "TransmitMode set to voice activation, no radio PTT set and no call controls defined -> no keybind engine required"
             );
             return Ok(());
-        } else if self.mode != TransmitMode::VoiceActivation && self.transmit_code.is_none() {
+        } else if self.call_mic_mode != CallMicMode::VoiceActivation && self.call_code.is_none() {
             log::trace!(
                 "No keybind set for TransmitMode {:?}, keybind engine not starting",
-                self.mode
+                self.call_mic_mode
             );
             return Ok(());
         }
@@ -96,13 +101,14 @@ impl KeybindEngine {
         let (listener, rx) = PlatformListener::start().await?;
         *self.listener.write() = Some(Arc::new(listener));
 
-        if self.mode == TransmitMode::RadioIntegration {
+        // TODO: this needs to be done by someone else, probably now depending on the presence of a radio key
+        /*if self.mode == TransmitMode::RadioIntegration {
             let radio = self.radio_config.radio(self.app.clone()).await?;
             *self.radio.write() = radio.clone();
             *self.app.state::<RadioHandle>().write() = radio;
         } else {
             self.app.emit("radio:integration-available", false).ok();
-        }
+        }*/
 
         self.spawn_rx_loop(rx);
 
@@ -117,9 +123,10 @@ impl KeybindEngine {
             }
         }
 
-        self.radio.write().take();
+        // TODO: should be done somewhere else
+        /* self.radio.write().take();
         self.app.state::<RadioHandle>().write().take();
-        self.app.emit("radio:integration-available", false).ok();
+        self.app.emit("radio:integration-available", false).ok(); */
 
         if let Some(stop_token) = self.stop_token.take() {
             stop_token.cancel();
@@ -142,8 +149,9 @@ impl KeybindEngine {
     ) -> Result<(), Error> {
         self.stop();
 
-        self.transmit_code = Self::select_active_transmit_code(transmit_config);
-        self.mode = transmit_config.mode;
+        self.call_mic_mode = transmit_config.mode;
+        self.call_code = Self::select_active_transmit_code(transmit_config);
+        self.radio_code = transmit_config.radio_push_to_talk;
 
         self.accept_call_code = Self::select_accept_call_code(keybinds_config);
         self.end_call_code = Self::select_end_call_code(keybinds_config);
@@ -156,7 +164,8 @@ impl KeybindEngine {
         Ok(())
     }
 
-    pub async fn set_radio_config(&mut self, config: &RadioConfig) -> Result<(), Error> {
+    // TODO: should be done somewhere else
+    /* pub async fn set_radio_config(&mut self, config: &RadioConfig) -> Result<(), Error> {
         self.stop();
 
         self.radio_config = config.clone();
@@ -166,9 +175,9 @@ impl KeybindEngine {
         self.start().await?;
 
         Ok(())
-    }
+    } */
 
-    pub async fn reconnect_radio(&self) -> Result<(), Error> {
+    /* pub async fn reconnect_radio(&self) -> Result<(), Error> {
         let radio = self.radio.read().clone();
         if let Some(radio) = radio {
             log::info!("Reconnecting radio integration");
@@ -178,19 +187,21 @@ impl KeybindEngine {
                 .map_err(|err| Error::Radio(Box::new(err)))?;
         }
         Ok(())
-    }
+    } */
 
     pub fn set_call_active(&self, active: bool) {
         self.call_active.store(active, Ordering::Relaxed);
 
         if active {
-            if matches!(self.mode, TransmitMode::RadioIntegration)
-                && self.pressed.load(Ordering::Relaxed)
+            if self.radio_code.is_some()
+                && self.radio_code == self.call_code
+                && self.radio_pressed.load(Ordering::Relaxed)
                 && !self.radio_prio.load(Ordering::Relaxed)
+                && self.call_mic_mode != CallMicMode::VoiceActivation
             {
                 log::trace!(
                     "Setting implicit radio prio after entering call while {:?} key is pressed",
-                    self.mode
+                    self.call_mic_mode
                 );
 
                 self.radio_prio.store(true, Ordering::Relaxed);
@@ -210,16 +221,19 @@ impl KeybindEngine {
 
     pub fn set_radio_prio(&self, prio: bool) {
         let prev_prio = self.radio_prio.swap(prio, Ordering::Relaxed);
-        if !prio && prev_prio && self.pressed.load(Ordering::Relaxed) {
+        if !prio && prev_prio && self.radio_pressed.load(Ordering::Relaxed) {
             log::trace!(
                 "Radio prio unset while {:?} key is pressed, setting implicit radio prio for cleanup",
-                self.mode
+                self.call_mic_mode
             );
             self.implicit_radio_prio.store(true, Ordering::Relaxed);
         }
 
-        match (&self.mode, self.pressed.load(Ordering::Relaxed)) {
-            (TransmitMode::VoiceActivation, _) | (TransmitMode::PushToMute, false) => {
+        match (
+            &self.call_mic_mode,
+            self.call_pressed.load(Ordering::Relaxed),
+        ) {
+            (CallMicMode::VoiceActivation, _) | (CallMicMode::PushToMute, false) => {
                 log::info!(
                     "Setting audio input {}",
                     if prio { "muted" } else { "unmuted" }
@@ -238,16 +252,27 @@ impl KeybindEngine {
     }
 
     pub fn should_attach_input_muted(&self) -> bool {
-        match (&self.mode, self.pressed.load(Ordering::Relaxed)) {
-            (TransmitMode::PushToTalk, false) => true,
-            (TransmitMode::PushToMute, true) => true,
-            (TransmitMode::RadioIntegration, false) => true,
-            (TransmitMode::RadioIntegration, true) => self.radio_prio.load(Ordering::Relaxed),
-            _ => false,
+        let call_pressed = self.call_pressed.load(Ordering::Relaxed);
+        let radio_pressed = self.radio_pressed.load(Ordering::Relaxed);
+        let radio_prio = self.radio_prio.load(Ordering::Relaxed);
+        let separate_keys = self.radio_code.is_some() && self.radio_code != self.call_code;
+        match self.call_mic_mode {
+            CallMicMode::VoiceActivation => false,
+            CallMicMode::PushToTalk => {
+                if separate_keys {
+                    // PTT-Diff: call PTT alone determines MIC state; prio has no effect (§8.4)
+                    !call_pressed
+                } else {
+                    // PTT-Same/None: prio can force mute even while key held
+                    !call_pressed || (radio_pressed && radio_prio)
+                }
+            }
+            CallMicMode::PushToMute => call_pressed,
         }
     }
 
-    pub fn radio_state(&self) -> RadioState {
+    // TODO: this needs to be elsewhere
+    /* pub fn radio_state(&self) -> RadioState {
         if let Some(radio) = self.radio.read().as_ref() {
             radio.state()
         } else {
@@ -257,7 +282,7 @@ impl KeybindEngine {
 
     pub fn radio(&self) -> Option<DynRadio> {
         self.radio.read().clone()
-    }
+    } */
 
     /// Get the external (OS-configured) key for a keybind, if available.
     ///
@@ -287,11 +312,12 @@ impl KeybindEngine {
     }
 
     fn reset_input_state(&self) {
-        self.pressed.store(false, Ordering::Relaxed);
+        self.call_pressed.store(false, Ordering::Relaxed);
+        self.radio_pressed.store(false, Ordering::Relaxed);
 
-        let muted = match &self.mode {
-            TransmitMode::PushToTalk | TransmitMode::RadioIntegration => true,
-            TransmitMode::PushToMute | TransmitMode::VoiceActivation => false,
+        let muted = match &self.call_mic_mode {
+            CallMicMode::PushToTalk => true,
+            CallMicMode::PushToMute | CallMicMode::VoiceActivation => false,
         };
 
         log::trace!(
@@ -374,33 +400,36 @@ impl KeybindEngine {
 
     fn spawn_rx_loop(&mut self, mut rx: UnboundedReceiver<KeyEvent>) {
         let app = self.app.clone();
-        let transmit = self.transmit_code;
+        let call_code = self.call_code;
+        let radio_code = self.radio_code;
         let accept_call = self.accept_call_code;
         let end_call = self.end_call_code;
         let toggle_radio_prio = self.toggle_radio_prio_code;
 
-        if transmit.is_none()
+        if call_code.is_none()
             && accept_call.is_none()
             && end_call.is_none()
             && toggle_radio_prio.is_none()
+            && radio_code.is_none()
         {
             return;
         }
 
-        let mode = self.mode;
+        let mode = self.call_mic_mode;
         let stop_token = self
             .stop_token
             .clone()
             .unwrap_or(self.shutdown_token.child_token());
-        let radio = self.radio.read().clone();
-        let pressed = self.pressed.clone();
+        // let radio = self.radio.read().clone();
+        let call_pressed = self.call_pressed.clone();
+        let radio_pressed = self.radio_pressed.clone();
         let call_active = self.call_active.clone();
-        let radio_prio = self.radio_prio.clone();
+        let radio_prio_arc = self.radio_prio.clone();
         let implicit_radio_prio = self.implicit_radio_prio.clone();
 
         let handle = tauri::async_runtime::spawn(async move {
             log::debug!(
-                "Keybind engine starting: mode={mode:?}, transmit={transmit:?}, accept_call={accept_call:?}, end_call={end_call:?}",
+                "Keybind engine starting: mode={mode:?}, transmit={call_code:?}, accept_call={accept_call:?}, end_call={end_call:?}",
             );
 
             loop {
@@ -414,64 +443,58 @@ impl KeybindEngine {
                             Self::handle_call_control_event(&app, &event.code, &accept_call, &end_call, &toggle_radio_prio).await;
                         }
 
-                        if transmit.is_none_or(|c| c != event.code) {
-                            continue;
+                        let is_call_key = Some(event.code) == call_code;
+                        let is_radio_key = Some(event.code) == radio_code;
+
+                        if !is_call_key && !is_radio_key { continue; }
+
+                        let key_down = event.state == KeyState::Down;
+
+                        if is_call_key && call_pressed.swap(key_down, Ordering::Relaxed) == key_down { continue; }
+                        if is_radio_key && radio_pressed.swap(key_down, Ordering::Relaxed) == key_down { continue; }
+
+                        let call_active = call_active.load(Ordering::Relaxed);
+                        let radio_prio = radio_prio_arc.load(Ordering::Relaxed);
+                        // Implicit prio (set at call entry for radio TX continuity) must not affect
+                        // MIC dispatch — only explicit (user-toggled) prio changes MIC behaviour.
+                        let effective_prio = radio_prio && !implicit_radio_prio.load(Ordering::Relaxed);
+
+                        let separate = is_call_key ^ is_radio_key;
+
+                        if is_radio_key && (separate || !call_active || radio_prio || mode != CallMicMode::PushToTalk) {
+                            // TODO set_radio_transmit(&radio_handle, key_down).await;
+                            log::debug!("Radio transmit: {key_down}");
                         }
 
-                        let muted = match (&mode, &event.state) {
-                            (TransmitMode::PushToTalk | TransmitMode::RadioIntegration, KeyState::Down) if !pressed.swap(true, Ordering::Relaxed) => false,
-                            (TransmitMode::PushToTalk | TransmitMode::RadioIntegration, KeyState::Up) if pressed.swap(false, Ordering::Relaxed) => true,
-                            (TransmitMode::PushToMute, KeyState::Down) if !pressed.swap(true, Ordering::Relaxed) => true,
-                            (TransmitMode::PushToMute, KeyState::Up) if pressed.swap(false, Ordering::Relaxed) => false,
-                            _ => continue,
-                        };
+                        if call_active {
+                            let mic_action = match (mode, is_call_key, effective_prio) {
+                                (CallMicMode::VoiceActivation, ..) => None,
 
-                        match (&mode, call_active.load(Ordering::Relaxed), radio_prio.load(Ordering::Relaxed)) {
-                            (TransmitMode::RadioIntegration, false, _) => {
-                                let state = event.state.into();
-                                if let Some(radio) = radio.as_ref() {
-                                    log::trace!("No call active, setting radio transmission {state:?}");
-                                    Self::set_radio_transmit(radio, state).await;
-                                } else {
-                                    log::trace!("No call active, radio not initialized, cannot set transmission {state:?}");
-                                }
-                            },
-                            (TransmitMode::RadioIntegration, true, false) => {
-                                log::trace!("Call active, no radio prio, setting audio input {}", if muted { "muted" } else { "unmuted" });
-                                Self::set_input_muted(&app, muted);
-                            },
-                            (TransmitMode::RadioIntegration, true, true) => {
-                                let state = event.state.into();
-                                if let Some(radio) = radio.as_ref() {
-                                    log::trace!("Call active, radio prio set, setting audio input muted and radio transmission {state:?}");
-                                    Self::set_input_muted(&app, true);
-                                    Self::set_radio_transmit(radio, state).await;
-                                } else {
-                                    log::trace!("Call active, radio prio set, radio not initialized, setting audio input muted, but cannot set transmission {state:?}");
-                                    Self::set_input_muted(&app, true);
-                                }
-                            }
-                            (TransmitMode::PushToTalk | TransmitMode::PushToMute, true, false) => {
-                                log::trace!("Call active, setting audio input {}", if muted { "muted" } else { "unmuted" });
-                                Self::set_input_muted(&app, muted);
-                            },
-                            (TransmitMode::PushToTalk, true, true) => {
-                                log::trace!("Call active, would set audio input {}, but radio prio is set, so keeping audio input muted", if muted { "muted" } else { "unmuted" });
-                                Self::set_input_muted(&app, true);
-                            }
-                            _ => {}
+                                // PTT call key: follows key state, or mute-locked when explicit prio is on (§8.3/§8.4/§8.5)
+                                (CallMicMode::PushToTalk, true, false) => Some(!key_down),
+                                (CallMicMode::PushToTalk, true, true) => Some(true),
 
+                                // PTM: follows key state; explicit prio suppresses MIC changes (§8.6/§8.7)
+                                (CallMicMode::PushToMute, _, false) => Some(key_down),
+
+                                // PTT radio key (Diff config): MIC unchanged; radio TX handled above (§8.4)
+                                _ => None,
+                            };
+
+                            if let Some(muted) = mic_action {
+                                Self::set_input_muted(&app, muted);
+                            }
                         }
 
-                        if event.state.is_up() && implicit_radio_prio.swap(false, Ordering::Relaxed) {
-                            if radio_prio.swap(false, Ordering::Relaxed) {
-                                log::trace!("Implicit radio prio cleared on {:?} key release", mode);
-                                app.emit("audio:implicit-radio-prio", false).ok();
-                            } else if let Some(radio) = radio.as_ref() {
-                                log::trace!("Implicit radio prio cleared on {mode:?} key release, but radio prio was not set. Setting transmission Inactive");
-                                Self::set_radio_transmit(radio, TransmissionState::Inactive).await;
-                            } else {
-                                log::trace!("Implicit radio prio cleared on {mode:?} key release, but radio not initialized, ignoring");
+                        if !key_down && is_radio_key {
+                            if implicit_radio_prio.swap(false, Ordering::Relaxed) {
+                                if radio_prio_arc.swap(false, Ordering::Relaxed) {
+                                    app.emit("audio:implicit-radio-prio", false).ok();
+                                } else {
+                                    // prio was already cleared externally; ensure radio TX stops
+                                    // TODO set_radio_transmit(&radio_handle, false).await;
+                                    log::debug!("Radio transmit: false (implicit)");
+                                }
                             }
                         }
                     }
@@ -502,10 +525,10 @@ impl KeybindEngine {
             // This effectively overrides the user-configured codes in the config file on Wayland,
             // since the actual key binding is managed by the desktop environment.
             let code = match config.mode {
-                TransmitMode::VoiceActivation => None,
-                TransmitMode::PushToTalk => Some(Code::F33),
-                TransmitMode::PushToMute => Some(Code::F34),
-                TransmitMode::RadioIntegration => Some(Code::F35),
+                CallMicMode::VoiceActivation => None,
+                CallMicMode::PushToTalk => Some(Code::F33),
+                CallMicMode::PushToMute => Some(Code::F34),
+                // CallMicMode::RadioIntegration => Some(Code::F35), // TODO
             };
             log::trace!(
                 "Using portal shortcut code {code:?} for transmit mode {:?}",
@@ -515,10 +538,9 @@ impl KeybindEngine {
         }
 
         match config.mode {
-            TransmitMode::VoiceActivation => None,
-            TransmitMode::PushToTalk => config.push_to_talk,
-            TransmitMode::PushToMute => config.push_to_mute,
-            TransmitMode::RadioIntegration => config.radio_push_to_talk,
+            CallMicMode::VoiceActivation => None,
+            CallMicMode::PushToTalk => config.push_to_talk,
+            CallMicMode::PushToMute => config.push_to_mute,
         }
     }
 

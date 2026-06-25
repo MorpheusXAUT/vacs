@@ -496,34 +496,33 @@ impl ClientConfig {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
-pub enum TransmitMode {
+pub enum CallMicMode {
     #[default]
     VoiceActivation,
     PushToTalk,
     PushToMute,
-    RadioIntegration,
 }
 
 /// Configuration for the transmission mode and associated keybinds.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TransmitConfig {
     /// The transmit mode to use.
-    pub mode: TransmitMode,
+    pub mode: CallMicMode,
     /// Key code for Push-to-Talk mode.
     /// Required if mode is `PushToTalk`.
     pub push_to_talk: Option<Code>,
     /// Key code for Push-to-Mute mode.
     /// Required if mode is `PushToMute`.
     pub push_to_mute: Option<Code>,
-    /// Key code for Radio Integration PTT.
-    /// Required if mode is `RadioIntegration`.
+    /// Key code for Radio PTT.
+    /// TODO: A radio backend should exist if present
     pub radio_push_to_talk: Option<Code>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FrontendTransmitConfig {
-    pub mode: TransmitMode,
+    pub mode: CallMicMode,
     pub push_to_talk: Option<String>,
     pub push_to_mute: Option<String>,
     pub radio_push_to_talk: Option<String>,
