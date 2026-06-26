@@ -8,7 +8,7 @@ use crate::remote::RemoteConfig;
 use anyhow::Context;
 use config::{Config, Environment, File};
 use keyboard_types::Code;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
@@ -102,11 +102,18 @@ impl AppConfig {
                 .add_source(Environment::with_prefix("vacs_client"));
         }
 
-        let config: AppConfig = builder
+        let mut config: AppConfig = builder
             .build()
             .context("Failed to build config")?
             .try_deserialize()
             .context("Failed to deserialize config")?;
+
+        // Migrate old transmit config to new radio config, if mode was not RadioIntegration
+        if let Some(was_radio_integration) = config.client.transmit_config.was_radio_integration
+            && !was_radio_integration
+        {
+            config.client.radio.integration = None;
+        }
 
         Ok(config)
     }
@@ -504,10 +511,10 @@ pub enum CallMicMode {
 }
 
 /// Configuration for the transmission mode and associated keybinds.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct TransmitConfig {
     /// The transmit mode to use.
-    pub mode: CallMicMode,
+    pub call_mic_mode: CallMicMode,
     /// Key code for Push-to-Talk mode.
     /// Required if mode is `PushToTalk`.
     pub push_to_talk: Option<Code>,
@@ -517,6 +524,79 @@ pub struct TransmitConfig {
     /// Key code for Radio PTT.
     /// TODO: A radio backend should exist if present
     pub radio_push_to_talk: Option<Code>,
+    #[serde(skip)]
+    pub was_radio_integration: Option<bool>,
+}
+
+impl<'de> Deserialize<'de> for TransmitConfig {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize, Default)]
+        enum TransmitMode {
+            #[default]
+            VoiceActivation,
+            PushToTalk,
+            PushToMute,
+            RadioIntegration,
+        }
+
+        #[derive(Deserialize, Default)]
+        struct TransmitConfigRaw {
+            call_mic_mode: Option<CallMicMode>,
+            mode: Option<TransmitMode>,
+            push_to_talk: Option<Code>,
+            push_to_mute: Option<Code>,
+            radio_push_to_talk: Option<Code>,
+        }
+
+        let raw = TransmitConfigRaw::deserialize(deserializer)?;
+
+        // TODO: first expr (depends on radio enable/disable)
+        if raw.radio_push_to_talk.is_some() && raw.radio_push_to_talk != raw.push_to_mute {
+            log::warn!(
+                "Unsupported PTM-Diff config (radio_push_to_talk != push_to_mute): clearing radio_push_to_talk"
+            );
+            // TODO "panic"
+        }
+
+        // Migrate old TransmitMode
+        if let Some(mode) = raw.mode {
+            let call_mic_mode = match mode {
+                TransmitMode::VoiceActivation => CallMicMode::VoiceActivation,
+                TransmitMode::PushToTalk | TransmitMode::RadioIntegration => {
+                    CallMicMode::PushToTalk
+                }
+                TransmitMode::PushToMute => CallMicMode::PushToMute,
+            };
+
+            let is_radio_integration = matches!(mode, TransmitMode::RadioIntegration);
+
+            let push_to_talk = if is_radio_integration {
+                raw.radio_push_to_talk
+            } else {
+                raw.push_to_talk
+            };
+
+            return Ok(TransmitConfig {
+                call_mic_mode,
+                push_to_talk,
+                push_to_mute: raw.push_to_mute,
+                radio_push_to_talk: raw.radio_push_to_talk,
+                was_radio_integration: Some(is_radio_integration),
+            });
+        }
+
+        if let Some(call_mic_mode) = raw.call_mic_mode {
+            return Ok(TransmitConfig {
+                call_mic_mode,
+                push_to_talk: raw.push_to_talk,
+                push_to_mute: raw.push_to_mute,
+                radio_push_to_talk: raw.radio_push_to_talk,
+                was_radio_integration: None,
+            });
+        }
+
+        return Ok(TransmitConfig::default());
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -531,7 +611,7 @@ pub struct FrontendTransmitConfig {
 impl From<TransmitConfig> for FrontendTransmitConfig {
     fn from(transmit_config: TransmitConfig) -> Self {
         Self {
-            mode: transmit_config.mode,
+            mode: transmit_config.call_mic_mode,
             push_to_talk: transmit_config.push_to_talk.map(|c| c.to_string()),
             push_to_mute: transmit_config.push_to_mute.map(|c| c.to_string()),
             radio_push_to_talk: transmit_config.radio_push_to_talk.map(|c| c.to_string()),
@@ -543,33 +623,47 @@ impl TryFrom<FrontendTransmitConfig> for TransmitConfig {
     type Error = Error;
 
     fn try_from(value: FrontendTransmitConfig) -> Result<Self, Self::Error> {
+        let push_to_talk = value
+            .push_to_talk
+            .as_ref()
+            .map(|s| s.parse::<Code>())
+            .transpose()
+            .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.push_to_talk.unwrap_or_default()))))?;
+        let push_to_mute = value
+            .push_to_mute
+            .as_ref()
+            .map(|s| s.parse::<Code>())
+            .transpose()
+            .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.push_to_mute.unwrap_or_default()))))?;
+        let radio_push_to_talk = value
+            .radio_push_to_talk
+            .as_ref()
+            .map(|s| s.parse::<Code>())
+            .transpose()
+            .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.radio_push_to_talk.unwrap_or_default()))))?;
+
+        if value.mode == CallMicMode::PushToMute
+            && radio_push_to_talk.is_some()
+            && radio_push_to_talk != push_to_mute
+        {
+            return Err(Error::Other(Box::new(anyhow::anyhow!(
+                "Push-to-Mute with a different radio PTT key is not supported."
+            ))));
+        }
+
         Ok(Self {
-            mode: value.mode,
-            push_to_talk: value
-                .push_to_talk
-                .as_ref()
-                .map(|s| s.parse::<Code>())
-                .transpose()
-                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.push_to_talk.unwrap_or_default()))))?,
-            push_to_mute: value
-                .push_to_mute
-                .as_ref()
-                .map(|s| s.parse::<Code>())
-                .transpose()
-                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.push_to_mute.unwrap_or_default()))))?,
-            radio_push_to_talk: value
-                .radio_push_to_talk
-                .as_ref()
-                .map(|s| s.parse::<Code>())
-                .transpose()
-                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.radio_push_to_talk.unwrap_or_default()))))?,
+            call_mic_mode: value.mode,
+            push_to_talk,
+            push_to_mute,
+            radio_push_to_talk,
+            was_radio_integration: None,
         })
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RadioConfig {
-    pub integration: RadioIntegration,
+    pub integration: Option<RadioIntegration>,
     pub audio_for_vatsim: Option<AudioForVatsimRadioConfig>,
     pub track_audio: Option<TrackAudioRadioConfig>,
 }
@@ -587,7 +681,7 @@ pub struct TrackAudioRadioConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FrontendRadioConfig {
-    pub integration: RadioIntegration,
+    pub integration: Option<RadioIntegration>,
     pub audio_for_vatsim: Option<FrontendAudioForVatsimRadioConfig>,
     pub track_audio: Option<FrontendTrackAudioRadioConfig>,
 }
@@ -622,7 +716,7 @@ impl RadioConfig {
     /// default radio implementation for Linux.
     pub async fn radio(&self, app: AppHandle) -> Result<Option<DynRadio>, Error> {
         match self.integration {
-            RadioIntegration::AudioForVatsim => {
+            Some(RadioIntegration::AudioForVatsim) => {
                 let Some(config) = self.audio_for_vatsim.as_ref() else {
                     return Ok(None);
                 };
@@ -633,7 +727,7 @@ impl RadioConfig {
                 let radio = PushToTalkRadio::new(app, emit).map_err(Error::from)?;
                 Ok(Some(Arc::new(radio)))
             }
-            RadioIntegration::TrackAudio => {
+            Some(RadioIntegration::TrackAudio) => {
                 let endpoint = self.track_audio.as_ref().and_then(|c| c.endpoint.as_ref());
                 log::debug!("Initializing TrackAudio radio integration (endpoint: {endpoint:?})");
                 let radio = Arc::new(
@@ -643,6 +737,7 @@ impl RadioConfig {
                 );
                 Ok(Some(radio))
             }
+            _ => Ok(None),
         }
     }
 }

@@ -230,7 +230,7 @@ fn validate_afv_radio_integration_config(
     radio_config: &RadioConfig,
 ) -> Result<(), Error> {
     if transmit_config.radio_push_to_talk.is_some()
-        && radio_config.integration == RadioIntegration::AudioForVatsim
+        && radio_config.integration == Some(RadioIntegration::AudioForVatsim)
         && let Some(selected_key) = transmit_config.radio_push_to_talk
         && let Some(afv_key) = radio_config.audio_for_vatsim.as_ref().and_then(|c| c.emit)
         && afv_key == selected_key
