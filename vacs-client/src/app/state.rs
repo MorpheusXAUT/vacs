@@ -80,6 +80,7 @@ impl AppStateInner {
                 app.clone(),
                 &config.client.transmit_config,
                 &config.client.keybinds,
+                config.client.radio.integration.is_some(),
                 shutdown_token.child_token(),
             ))),
             playback_recorder: Arc::new(RwLock::new(None)),

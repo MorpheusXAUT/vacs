@@ -50,12 +50,13 @@ impl KeybindEngine {
         app: AppHandle,
         transmit_config: &TransmitConfig,
         call_control_config: &KeybindsConfig,
+        radio_integration_enabled: bool,
         shutdown_token: CancellationToken,
     ) -> Self {
         Self {
-            call_mic_mode: transmit_config.mode,
+            call_mic_mode: transmit_config.call_mic_mode,
             call_code: Self::select_active_transmit_code(transmit_config),
-            radio_code: transmit_config.radio_push_to_talk,
+            radio_code: Self::select_active_radio_code(radio_integration_enabled, transmit_config),
             accept_call_code: Self::select_accept_call_code(call_control_config),
             end_call_code: Self::select_end_call_code(call_control_config),
             toggle_radio_prio_code: Self::select_toggle_radio_prio_code(call_control_config),
@@ -149,7 +150,7 @@ impl KeybindEngine {
     ) -> Result<(), Error> {
         self.stop();
 
-        self.call_mic_mode = transmit_config.mode;
+        self.call_mic_mode = transmit_config.call_mic_mode;
         self.call_code = Self::select_active_transmit_code(transmit_config);
         self.radio_code = transmit_config.radio_push_to_talk;
 
@@ -537,11 +538,51 @@ impl KeybindEngine {
             return code;
         }
 
-        match config.mode {
+        match config.call_mic_mode {
             CallMicMode::VoiceActivation => None,
             CallMicMode::PushToTalk => config.push_to_talk,
             CallMicMode::PushToMute => config.push_to_mute,
         }
+    }
+
+    #[inline]
+    fn select_active_radio_code(enabled: bool, config: &TransmitConfig) -> Option<Code> {
+        if !enabled {
+            return None;
+        }
+
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            // Wayland Code Mapping Strategy:
+            //
+            // On Wayland, shortcuts are configured at the OS level via the XDG Global Shortcuts
+            // portal. The portal allows complex key combinations (e.g., Ctrl+Alt+Shift+P) that
+            // cannot be represented as a single keyboard_types::Code.
+            //
+            // To work around this, we map each transmit mode to a unique, unlikely-to-be-pressed
+            // function key (F33-F35). These keys don't exist on most keyboards, so there's no
+            // conflict with user input. When the portal activates a shortcut, we emit the
+            // corresponding F-key code, and the rest of the keybind engine works unchanged.
+            //
+            // This effectively overrides the user-configured codes in the config file on Wayland,
+            // since the actual key binding is managed by the desktop environment.
+            // TODO
+            let code = match config.mode {
+                CallMicMode::VoiceActivation => None,
+                CallMicMode::PushToTalk => Some(Code::F33),
+                CallMicMode::PushToMute => Some(Code::F34),
+                // CallMicMode::RadioIntegration => Some(Code::F35),
+            };
+            log::trace!(
+                "Using portal shortcut code {code:?} for transmit mode {:?}",
+                config.mode
+            );
+            return code;
+        }
+
+        config
+            .radio_push_to_talk
+            .or_else(|| Self::select_active_transmit_code(config))
     }
 
     #[inline]
