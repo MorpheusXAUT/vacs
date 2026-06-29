@@ -550,14 +550,6 @@ impl<'de> Deserialize<'de> for TransmitConfig {
 
         let raw = TransmitConfigRaw::deserialize(deserializer)?;
 
-        // TODO: first expr (depends on radio enable/disable)
-        if raw.radio_push_to_talk.is_some() && raw.radio_push_to_talk != raw.push_to_mute {
-            log::warn!(
-                "Unsupported PTM-Diff config (radio_push_to_talk != push_to_mute): clearing radio_push_to_talk"
-            );
-            // TODO "panic"
-        }
-
         // Migrate old TransmitMode
         if let Some(mode) = raw.mode {
             let call_mic_mode = match mode {
@@ -567,6 +559,16 @@ impl<'de> Deserialize<'de> for TransmitConfig {
                 }
                 TransmitMode::PushToMute => CallMicMode::PushToMute,
             };
+
+            if call_mic_mode == CallMicMode::PushToMute
+                && raw.radio_push_to_talk.is_some()
+                && raw.radio_push_to_talk != raw.push_to_mute
+            {
+                return Err(serde::de::Error::custom(
+                    "Push-to-Mute with a different radio PTT key (PTM-Diff) is not supported. \
+                     Set radio_push_to_talk to the same key as push_to_mute, or remove it.",
+                ));
+            }
 
             let is_radio_integration = matches!(mode, TransmitMode::RadioIntegration);
 
@@ -586,6 +588,16 @@ impl<'de> Deserialize<'de> for TransmitConfig {
         }
 
         if let Some(call_mic_mode) = raw.call_mic_mode {
+            if call_mic_mode == CallMicMode::PushToMute
+                && raw.radio_push_to_talk.is_some()
+                && raw.radio_push_to_talk != raw.push_to_mute
+            {
+                return Err(serde::de::Error::custom(
+                    "Push-to-Mute with a different radio PTT key (PTM-Diff) is not supported. \
+                     Set radio_push_to_talk to the same key as push_to_mute, or remove it.",
+                ));
+            }
+
             return Ok(TransmitConfig {
                 call_mic_mode,
                 push_to_talk: raw.push_to_talk,
