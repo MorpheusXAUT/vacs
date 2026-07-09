@@ -1,12 +1,7 @@
 import {TransmitMode} from "./transmit";
 
 export type KeybindType =
-    | "PushToTalk"
-    | "PushToMute"
-    | "RadioIntegration"
-    | "AcceptCall"
-    | "EndCall"
-    | "ToggleRadioPrio";
+    "PushToTalk" | "PushToMute" | "RadioIntegration" | "AcceptCall" | "EndCall" | "ToggleRadioPrio";
 
 export type KeybindsConfig = {
     acceptCall: string | null;

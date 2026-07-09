@@ -27,9 +27,10 @@ function ClientPage({config}: ClientPageProps) {
                     client =>
                         client.displayName.startsWith(prefix) && client.displayName.includes("_"),
                 )
-                .reduce<
-                    Set<string>
-                >((acc, val) => acc.add(val.displayName.split("_")[0].slice(0, slice)), new Set([])),
+                .reduce<Set<string>>(
+                    (acc, val) => acc.add(val.displayName.split("_")[0].slice(0, slice)),
+                    new Set([]),
+                ),
         ];
 
         if (
