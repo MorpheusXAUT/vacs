@@ -1,9 +1,10 @@
 use crate::secrets;
 use crate::secrets::SecretKey;
 use anyhow::Context;
+use chacha20poly1305::aead::Generate;
 use chacha20poly1305::{
     ChaCha20Poly1305, Key, Nonce,
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
 };
 use cookie_store::{CookieStore, RawCookie, RawCookieParseError};
 use reqwest::header::HeaderValue;
@@ -12,7 +13,6 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use url::Url;
 
-const KEY_SIZE: usize = 32;
 const NONCE_SIZE: usize = 12;
 
 pub struct SecureCookieStore {
@@ -114,40 +114,27 @@ impl SecureCookieStore {
         Ok(())
     }
 
-    fn get_or_generate_encryption_key() -> anyhow::Result<Vec<u8>> {
+    fn get_or_generate_encryption_key() -> anyhow::Result<Key> {
+        let generate_and_store = || -> anyhow::Result<Key> {
+            let key = Key::generate();
+            secrets::set_binary(SecretKey::CookieStoreEncryptionKey, key.as_ref())
+                .context("Failed to save cookie store encryption key")?;
+            Ok(key)
+        };
+
         match secrets::get_binary(SecretKey::CookieStoreEncryptionKey) {
-            Ok(Some(key)) => {
-                let key = if key.len() == KEY_SIZE {
-                    key
-                } else {
+            Ok(Some(key)) => match Key::try_from(key.as_slice()) {
+                Ok(key) => Ok(key),
+                Err(_) => {
                     log::error!(
                         "Stored cookie store encryption key has invalid length, regenerating"
                     );
-
-                    let key = ChaCha20Poly1305::generate_key(&mut OsRng);
-                    if let Err(err) =
-                        secrets::set_binary(SecretKey::CookieStoreEncryptionKey, key.as_ref())
-                    {
-                        log::error!("Failed to save cookie store encryption key: {err}");
-                        return Err(err).context("Failed to save cookie store encryption key");
-                    }
-
-                    key.to_vec()
-                };
-                Ok(key)
-            }
+                    generate_and_store()
+                }
+            },
             Ok(None) => {
                 log::info!("Generating new cookie store encryption key");
-
-                let key = ChaCha20Poly1305::generate_key(&mut OsRng);
-                if let Err(err) =
-                    secrets::set_binary(SecretKey::CookieStoreEncryptionKey, key.as_ref())
-                {
-                    log::error!("Failed to save cookie store encryption key: {err}");
-                    return Err(err).context("Failed to save cookie store encryption key");
-                }
-
-                Ok(key.to_vec())
+                generate_and_store()
             }
             Err(err) => anyhow::bail!(err.context("Failed to get cookie store encryption key")),
         }
@@ -163,12 +150,14 @@ impl SecureCookieStore {
         }
 
         let (nonce, ciphertext) = encrypted.split_at(NONCE_SIZE);
-        let nonce = Nonce::from_slice(nonce);
+        let nonce = Nonce::try_from(nonce)
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("Failed to parse nonce")?;
         let key = Self::get_or_generate_encryption_key()?;
-        let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
+        let cipher = ChaCha20Poly1305::new(&key);
 
         let decrypted = cipher
-            .decrypt(nonce, ciphertext)
+            .decrypt(&nonce, ciphertext)
             .map_err(|e| anyhow::anyhow!(e))
             .context("Failed to decrypt cookie store")?;
 
@@ -180,8 +169,8 @@ impl SecureCookieStore {
 
     fn encrypt_store(store: &CookieStore) -> anyhow::Result<Vec<u8>> {
         let key = Self::get_or_generate_encryption_key()?;
-        let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
-        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let cipher = ChaCha20Poly1305::new(&key);
+        let nonce = Nonce::generate();
 
         let mut writer = std::io::BufWriter::new(Vec::new());
         cookie_store::serde::json::save(store, &mut writer)
