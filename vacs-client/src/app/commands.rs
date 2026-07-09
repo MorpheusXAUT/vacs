@@ -155,7 +155,7 @@ pub async fn app_update(app: AppHandle) -> Result<(), Error> {
     if let Some(update) = get_update(&app).await? {
         log::info!(
             "Downloading and installing update. Version: {}",
-            &update.version
+            update.version
         );
         let mut downloaded = 0;
         update

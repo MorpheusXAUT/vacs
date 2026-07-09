@@ -32,7 +32,7 @@ pub enum RadioIntegration {
 
 impl Default for RadioIntegration {
     fn default() -> Self {
-        if Capabilities::default().keybind_emitter {
+        if Capabilities::get().keybind_emitter {
             RadioIntegration::AudioForVatsim
         } else {
             RadioIntegration::TrackAudio

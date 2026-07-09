@@ -416,8 +416,8 @@ impl AppStateInner {
             } => {
                 log::debug!(
                     "Successfully connected to signaling server. Display name: {}, frequency: {}, profile: {profile}",
-                    &client_info.display_name,
-                    &client_info.frequency,
+                    client_info.display_name,
+                    client_info.frequency,
                 );
 
                 let session_info = server::SessionInfo {
@@ -780,8 +780,8 @@ impl AppStateInner {
             ServerMessage::SessionInfo(session_info) => {
                 log::trace!(
                     "Received session info for client {:?}: {}",
-                    &session_info.client,
-                    &session_info.profile
+                    session_info.client,
+                    session_info.profile
                 );
 
                 if let SessionProfile::Changed(ref active_profile) = session_info.profile {
