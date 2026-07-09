@@ -262,6 +262,7 @@ impl Platform {
         )
     }
 
+    #[allow(dead_code)]
     pub const fn as_str(&self) -> &'static str {
         match self {
             Platform::Windows => "Windows",
