@@ -522,7 +522,6 @@ pub struct TransmitConfig {
     /// Required if mode is `PushToMute`.
     pub push_to_mute: Option<Code>,
     /// Key code for Radio PTT.
-    /// TODO: A radio backend should exist if present
     pub radio_push_to_talk: Option<Code>,
     #[serde(skip)]
     pub was_radio_integration: Option<bool>,
@@ -560,16 +559,6 @@ impl<'de> Deserialize<'de> for TransmitConfig {
                 TransmitMode::PushToMute => CallMicMode::PushToMute,
             };
 
-            if call_mic_mode == CallMicMode::PushToMute
-                && raw.radio_push_to_talk.is_some()
-                && raw.radio_push_to_talk != raw.push_to_mute
-            {
-                return Err(serde::de::Error::custom(
-                    "Push-to-Mute with a different radio PTT key (PTM-Diff) is not supported. \
-                     Set radio_push_to_talk to the same key as push_to_mute, or remove it.",
-                ));
-            }
-
             let is_radio_integration = matches!(mode, TransmitMode::RadioIntegration);
 
             let push_to_talk = if is_radio_integration {
@@ -588,16 +577,6 @@ impl<'de> Deserialize<'de> for TransmitConfig {
         }
 
         if let Some(call_mic_mode) = raw.call_mic_mode {
-            if call_mic_mode == CallMicMode::PushToMute
-                && raw.radio_push_to_talk.is_some()
-                && raw.radio_push_to_talk != raw.push_to_mute
-            {
-                return Err(serde::de::Error::custom(
-                    "Push-to-Mute with a different radio PTT key (PTM-Diff) is not supported. \
-                     Set radio_push_to_talk to the same key as push_to_mute, or remove it.",
-                ));
-            }
-
             return Ok(TransmitConfig {
                 call_mic_mode,
                 push_to_talk: raw.push_to_talk,
@@ -607,14 +586,14 @@ impl<'de> Deserialize<'de> for TransmitConfig {
             });
         }
 
-        return Ok(TransmitConfig::default());
+        Ok(TransmitConfig::default())
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FrontendTransmitConfig {
-    pub mode: CallMicMode,
+    pub call_mic_mode: CallMicMode,
     pub push_to_talk: Option<String>,
     pub push_to_mute: Option<String>,
     pub radio_push_to_talk: Option<String>,
@@ -623,7 +602,7 @@ pub struct FrontendTransmitConfig {
 impl From<TransmitConfig> for FrontendTransmitConfig {
     fn from(transmit_config: TransmitConfig) -> Self {
         Self {
-            mode: transmit_config.call_mic_mode,
+            call_mic_mode: transmit_config.call_mic_mode,
             push_to_talk: transmit_config.push_to_talk.map(|c| c.to_string()),
             push_to_mute: transmit_config.push_to_mute.map(|c| c.to_string()),
             radio_push_to_talk: transmit_config.radio_push_to_talk.map(|c| c.to_string()),
@@ -654,17 +633,8 @@ impl TryFrom<FrontendTransmitConfig> for TransmitConfig {
             .transpose()
             .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.radio_push_to_talk.unwrap_or_default()))))?;
 
-        if value.mode == CallMicMode::PushToMute
-            && radio_push_to_talk.is_some()
-            && radio_push_to_talk != push_to_mute
-        {
-            return Err(Error::Other(Box::new(anyhow::anyhow!(
-                "Push-to-Mute with a different radio PTT key is not supported."
-            ))));
-        }
-
         Ok(Self {
-            call_mic_mode: value.mode,
+            call_mic_mode: value.call_mic_mode,
             push_to_talk,
             push_to_mute,
             radio_push_to_talk,

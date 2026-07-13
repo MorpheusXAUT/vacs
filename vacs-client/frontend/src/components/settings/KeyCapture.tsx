@@ -4,6 +4,7 @@ import {invokeSafe} from "../../error.ts";
 
 type KeyCaptureProps = {
     label: string | null;
+    className?: string;
     onCapture: (code: string) => Promise<void>;
     onRemove: () => Promise<void>;
     disabled?: boolean;
@@ -98,6 +99,7 @@ function KeyCapture(props: KeyCaptureProps) {
                         ? "border-r-gray-100 border-b-gray-100 border-t-gray-700 border-l-gray-700 [&>*]:translate-y-[1px] [&>*]:translate-x-[1px]"
                         : "border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
                     props.disabled ? "brightness-90 cursor-not-allowed" : "cursor-pointer",
+                    props.className,
                 )}
             >
                 <p className="truncate max-w-full">
