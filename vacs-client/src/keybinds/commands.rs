@@ -44,12 +44,16 @@ pub async fn keybinds_set_transmit_config(
 
         let transmit_config: TransmitConfig = transmit_config.try_into()?;
 
-        validate_afv_radio_integration_config(&transmit_config, &state.config.client.radio)?;
+        validate_radio_integration_config(&transmit_config, &state.config.client.radio)?;
 
         keybind_engine
             .write()
             .await
-            .set_config(&transmit_config, &state.config.client.keybinds)
+            .set_config(
+                &transmit_config,
+                &state.config.client.keybinds,
+                state.config.client.radio.integration.is_some(),
+            )
             .await?;
 
         state.config.client.transmit_config = transmit_config;
@@ -108,7 +112,11 @@ pub async fn keybinds_set_binding(
         keybind_engine
             .write()
             .await
-            .set_config(&state.config.client.transmit_config, &keybinds_config)
+            .set_config(
+                &state.config.client.transmit_config,
+                &keybinds_config,
+                state.config.client.radio.integration.is_some(),
+            )
             .await?;
 
         state.config.client.keybinds = keybinds_config;
@@ -150,7 +158,7 @@ pub async fn keybinds_set_radio_config(
 
         let radio_config: RadioConfig = radio_config.try_into()?;
 
-        validate_afv_radio_integration_config(&state.config.client.transmit_config, &radio_config)?;
+        validate_radio_integration_config(&state.config.client.transmit_config, &radio_config)?;
 
         // TODO
         /* keybind_engine
@@ -225,7 +233,7 @@ pub async fn keybinds_reconnect_radio(/* keybind_engine: State<'_, KeybindEngine
     Ok(())
 }
 
-fn validate_afv_radio_integration_config(
+fn validate_radio_integration_config(
     transmit_config: &TransmitConfig,
     radio_config: &RadioConfig,
 ) -> Result<(), Error> {

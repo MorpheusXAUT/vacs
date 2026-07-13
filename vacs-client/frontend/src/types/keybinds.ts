@@ -1,4 +1,4 @@
-import {TransmitMode} from "./transmit";
+import {CallMicMode} from "./transmit.ts";
 
 export type KeybindType =
     "PushToTalk" | "PushToMute" | "RadioIntegration" | "AcceptCall" | "EndCall" | "ToggleRadioPrio";
@@ -9,14 +9,12 @@ export type KeybindsConfig = {
     toggleRadioPrio: string | null;
 };
 
-export function transmitModeToKeybind(mode: TransmitMode): KeybindType | null {
+export function callMicModeToKeybind(mode: CallMicMode): KeybindType | null {
     switch (mode) {
         case "PushToTalk":
             return "PushToTalk";
         case "PushToMute":
             return "PushToMute";
-        case "RadioIntegration":
-            return "RadioIntegration";
         case "VoiceActivation":
             return null;
     }

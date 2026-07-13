@@ -1,13 +1,8 @@
-const ALL_TRANSMIT_MODES = [
-    "VoiceActivation",
-    "PushToTalk",
-    "PushToMute",
-    "RadioIntegration",
-] as const;
-export type TransmitMode = (typeof ALL_TRANSMIT_MODES)[number];
+const ALL_CALL_MIC_MODES = ["VoiceActivation", "PushToTalk", "PushToMute"] as const;
+export type CallMicMode = (typeof ALL_CALL_MIC_MODES)[number];
 
-export function isTransmitMode(value: string): value is TransmitMode {
-    return ALL_TRANSMIT_MODES.includes(value as TransmitMode);
+export function isCallMicMode(value: string): value is CallMicMode {
+    return ALL_CALL_MIC_MODES.includes(value as CallMicMode);
 }
 
 const ALL_RADIO_INTEGRATIONS = ["AudioForVatsim", "TrackAudio"] as const;
@@ -18,7 +13,7 @@ export function isRadioIntegration(value: string): value is RadioIntegration {
 }
 
 export type TransmitConfig = {
-    mode: TransmitMode;
+    callMicMode: CallMicMode;
     pushToTalk: string | null;
     pushToMute: string | null;
     radioPushToTalk: string | null;
@@ -31,7 +26,7 @@ export type TransmitConfigWithLabels = TransmitConfig & {
 };
 
 export type RadioConfig = {
-    integration: RadioIntegration;
+    integration: RadioIntegration | null;
     audioForVatsim: AudioForVatsimRadioConfig | null;
     trackAudio: TrackAudioRadioConfig | null;
 };

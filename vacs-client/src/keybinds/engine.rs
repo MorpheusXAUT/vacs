@@ -6,7 +6,7 @@ use crate::config::{CallMicMode, KeybindsConfig, TransmitConfig};
 use crate::error::Error;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
 use crate::keybinds::{KeyEvent, Keybind};
-use crate::radio::{DynRadio, RadioHandle, TransmissionState};
+use crate::radio::{DynRadio, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -147,12 +147,14 @@ impl KeybindEngine {
         &mut self,
         transmit_config: &TransmitConfig,
         keybinds_config: &KeybindsConfig,
+        radio_integration_enabled: bool,
     ) -> Result<(), Error> {
         self.stop();
 
         self.call_mic_mode = transmit_config.call_mic_mode;
         self.call_code = Self::select_active_transmit_code(transmit_config);
-        self.radio_code = transmit_config.radio_push_to_talk;
+        self.radio_code =
+            Self::select_active_radio_code(radio_integration_enabled, transmit_config);
 
         self.accept_call_code = Self::select_accept_call_code(keybinds_config);
         self.end_call_code = Self::select_end_call_code(keybinds_config);
@@ -580,9 +582,13 @@ impl KeybindEngine {
             return code;
         }
 
-        config
-            .radio_push_to_talk
-            .or_else(|| Self::select_active_transmit_code(config))
+        match config.call_mic_mode {
+            CallMicMode::VoiceActivation => config.radio_push_to_talk,
+            CallMicMode::PushToTalk => config
+                .radio_push_to_talk
+                .or_else(|| Self::select_active_transmit_code(config)),
+            CallMicMode::PushToMute => config.push_to_mute,
+        }
     }
 
     #[inline]
