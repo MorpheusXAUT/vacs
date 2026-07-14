@@ -6,7 +6,7 @@ use crate::config::{CallMicMode, KeybindsConfig, TransmitConfig};
 use crate::error::Error;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
 use crate::keybinds::{KeyEvent, Keybind};
-use crate::radio::{DynRadio, RadioHandle, TransmissionState};
+use crate::radio::{RadioHandle, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -29,13 +29,11 @@ pub struct KeybindEngine {
     accept_call_code: Option<Code>,
     end_call_code: Option<Code>,
     toggle_radio_prio_code: Option<Code>,
-    ///
     app: AppHandle,
     listener: RwLock<Option<DynKeybindListener>>,
     rx_task: Option<JoinHandle<()>>,
     shutdown_token: CancellationToken,
     stop_token: Option<CancellationToken>,
-    ///
     call_pressed: Arc<AtomicBool>,
     radio_pressed: Arc<AtomicBool>,
     call_active: Arc<AtomicBool>,
@@ -414,7 +412,7 @@ impl KeybindEngine {
             .stop_token
             .clone()
             .unwrap_or(self.shutdown_token.child_token());
-        let radio_handle = self.app.state::<RadioHandle>().clone();
+        let radio_handle = self.app.state::<RadioHandle>().inner().clone();
         let call_pressed = self.call_pressed.clone();
         let radio_pressed = self.radio_pressed.clone();
         let call_active = self.call_active.clone();
@@ -480,15 +478,13 @@ impl KeybindEngine {
                             }
                         }
 
-                        if !key_down && is_radio_key {
-                            if implicit_radio_prio.swap(false, Ordering::Relaxed) {
-                                if radio_prio_arc.swap(false, Ordering::Relaxed) {
-                                    app.emit("audio:implicit-radio-prio", false).ok();
-                                } else {
-                                    // prio was already cleared externally; ensure radio TX stops
-                                    Self::set_radio_transmit(&radio_handle, TransmissionState::Inactive).await;
-                                    log::debug!("Radio transmit: false (implicit)");
-                                }
+                        if !key_down && is_radio_key && implicit_radio_prio.swap(false, Ordering::Relaxed) {
+                            if radio_prio_arc.swap(false, Ordering::Relaxed) {
+                                app.emit("audio:implicit-radio-prio", false).ok();
+                            } else {
+                                // prio was already cleared externally; ensure radio TX stops
+                                Self::set_radio_transmit(&radio_handle, TransmissionState::Inactive).await;
+                                log::debug!("Radio transmit: false (implicit)");
                             }
                         }
                     }
@@ -518,15 +514,15 @@ impl KeybindEngine {
             //
             // This effectively overrides the user-configured codes in the config file on Wayland,
             // since the actual key binding is managed by the desktop environment.
-            let code = match config.mode {
+            let code = match config.call_mic_mode {
                 CallMicMode::VoiceActivation => None,
                 CallMicMode::PushToTalk => Some(Code::F33),
                 CallMicMode::PushToMute => Some(Code::F34),
                 // CallMicMode::RadioIntegration => Some(Code::F35), // TODO
             };
             log::trace!(
-                "Using portal shortcut code {code:?} for transmit mode {:?}",
-                config.mode
+                "Using portal shortcut code {code:?} for call mic mode {:?}",
+                config.call_mic_mode
             );
             return code;
         }
@@ -559,16 +555,15 @@ impl KeybindEngine {
             //
             // This effectively overrides the user-configured codes in the config file on Wayland,
             // since the actual key binding is managed by the desktop environment.
-            // TODO
-            let code = match config.mode {
+            let code = match config.call_mic_mode {
                 CallMicMode::VoiceActivation => None,
                 CallMicMode::PushToTalk => Some(Code::F33),
                 CallMicMode::PushToMute => Some(Code::F34),
-                // CallMicMode::RadioIntegration => Some(Code::F35),
+                // CallMicMode::RadioIntegration => Some(Code::F35), // TODO
             };
             log::trace!(
-                "Using portal shortcut code {code:?} for transmit mode {:?}",
-                config.mode
+                "Using portal shortcut code {code:?} for call mic mode {:?}",
+                config.call_mic_mode
             );
             return code;
         }
@@ -631,10 +626,11 @@ impl KeybindEngine {
 
     #[inline]
     async fn set_radio_transmit(radio_handle: &RadioHandle, state: TransmissionState) {
-        if let Some(radio) = radio_handle.read().as_ref() {
-            if let Err(err) = radio.transmit(state).await {
-                log::warn!("Failed to set radio transmission state {state:?}: {err}");
-            }
+        let radio = radio_handle.read().clone();
+        if let Some(radio) = radio
+            && let Err(err) = radio.transmit(state).await
+        {
+            log::warn!("Failed to set radio transmission state {state:?}: {err}");
         }
     }
 }
