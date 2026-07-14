@@ -1,52 +1,46 @@
 use crate::error::Error;
-use crate::keybinds::engine::KeybindEngineHandle;
-use crate::radio::{DynRadio, Frequency, RadioStation, StationStateUpdate};
+use crate::radio::{DynRadio, Frequency, RadioHandle, RadioStation, StationStateUpdate};
 use tauri::State;
 
-async fn radio(engine: &KeybindEngineHandle) -> Result<DynRadio, Error> {
-    // engine
-    //     .read()
-    //     .await
-    //     .radio()
-    //     .ok_or_else(|| crate::radio::RadioError::Integration("No radio configured".into()).into())
-    Err(Error::Other(Box::new(anyhow::anyhow!("No radio PUNKT.")))) // TODO
+fn radio(radio: &RadioHandle) -> Result<DynRadio, Error> {
+    let guard = radio.read();
+    Ok(guard
+        .as_ref()
+        .ok_or_else(|| crate::radio::RadioError::Integration("No radio configured".into()))?
+        .clone())
 }
 
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn radio_add_station(
-    keybind_engine: State<'_, KeybindEngineHandle>,
+    radio_handle: State<'_, RadioHandle>,
     callsign: String,
 ) -> Result<RadioStation, Error> {
-    let radio = radio(&keybind_engine).await?;
-    Ok(radio.add_station(&callsign).await?)
+    Ok(radio(&radio_handle)?.add_station(&callsign).await?)
 }
 
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn radio_set_station_state(
-    keybind_engine: State<'_, KeybindEngineHandle>,
+    radio_handle: State<'_, RadioHandle>,
     frequency: Frequency,
     update: StationStateUpdate,
 ) -> Result<RadioStation, Error> {
-    let radio = radio(&keybind_engine).await?;
-    Ok(radio.set_station_state(frequency, update).await?)
+    Ok(radio(&radio_handle)?
+        .set_station_state(frequency, update)
+        .await?)
 }
 
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn radio_get_stations(
-    keybind_engine: State<'_, KeybindEngineHandle>,
+    radio_handle: State<'_, RadioHandle>,
 ) -> Result<Vec<RadioStation>, Error> {
-    let radio = radio(&keybind_engine).await?;
-    Ok(radio.get_stations().await?)
+    Ok(radio(&radio_handle)?.get_stations().await?)
 }
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn radio_fast_couple(
-    keybind_engine: State<'_, KeybindEngineHandle>,
-) -> Result<(), Error> {
-    let radio = radio(&keybind_engine).await?;
-    Ok(radio.fast_couple().await?)
+pub async fn radio_fast_couple(radio_handle: State<'_, RadioHandle>) -> Result<(), Error> {
+    Ok(radio(&radio_handle)?.fast_couple().await?)
 }
