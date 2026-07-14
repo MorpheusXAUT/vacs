@@ -7,7 +7,7 @@ use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::keybinds::{Keybind, KeybindsError};
 use crate::platform::Capabilities;
-use crate::radio::{RadioIntegration, RadioState};
+use crate::radio::RadioIntegration;
 use keyboard_types::Code;
 use tauri::{AppHandle, Manager, State};
 
@@ -182,19 +182,6 @@ pub async fn keybinds_set_radio_config(
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn keybinds_get_radio_state(/* keybind_engine: State<'_, KeybindEngineHandle>, */)
- -> Result<RadioState, Error> {
-    let capabilities = Capabilities::default();
-    if !capabilities.keybind_listener {
-        return Ok(RadioState::NotConfigured);
-    }
-
-    Ok(RadioState::NotConfigured)
-    // Ok(keybind_engine.read().await.radio_state()) // TODO
-}
-
-#[tauri::command]
-#[vacs_macros::log_err]
 pub async fn keybinds_get_external_binding(
     keybind_engine: State<'_, KeybindEngineHandle>,
     keybind: Keybind,
@@ -223,14 +210,6 @@ pub fn keybinds_open_system_shortcuts_settings() -> Result<(), Error> {
             "Opening keyboard shortcuts settings is only supported on Linux"
         ))));
     }
-}
-
-#[tauri::command]
-#[vacs_macros::log_err]
-pub async fn keybinds_reconnect_radio(/* keybind_engine: State<'_, KeybindEngineHandle>, */)
- -> Result<(), Error> {
-    // keybind_engine.read().await.reconnect_radio().await // TODO
-    Ok(())
 }
 
 fn validate_radio_integration_config(

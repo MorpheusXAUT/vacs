@@ -556,7 +556,7 @@ function TrackAudioStatusIndicator() {
 
     const handleButtonClick = useAsyncDebounce(async () => {
         if (canReconnect) {
-            await invokeStrict("keybinds_reconnect_radio");
+            await invokeStrict("radio_reconnect");
         }
     });
 
