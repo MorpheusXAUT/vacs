@@ -95,17 +95,6 @@ impl PortalShortcutId {
             PortalShortcutId::ToggleRadioPrio,
         ]
     }
-
-    pub const fn from_transmit_mode(mode: crate::config::TransmitMode) -> Option<Self> {
-        match mode {
-            crate::config::TransmitMode::PushToTalk => Some(PortalShortcutId::PushToTalk),
-            crate::config::TransmitMode::PushToMute => Some(PortalShortcutId::PushToMute),
-            crate::config::TransmitMode::RadioIntegration => {
-                Some(PortalShortcutId::RadioIntegration)
-            }
-            _ => None,
-        }
-    }
 }
 
 impl FromStr for PortalShortcutId {
