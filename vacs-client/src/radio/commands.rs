@@ -1,5 +1,7 @@
 use crate::error::Error;
-use crate::radio::{DynRadio, Frequency, RadioHandle, RadioStation, StationStateUpdate};
+use crate::radio::{
+    DynRadio, Frequency, RadioHandle, RadioState, RadioStation, StationStateUpdate,
+};
 use tauri::State;
 
 fn radio(radio: &RadioHandle) -> Result<DynRadio, Error> {
@@ -43,4 +45,19 @@ pub async fn radio_get_stations(
 #[vacs_macros::log_err]
 pub async fn radio_fast_couple(radio_handle: State<'_, RadioHandle>) -> Result<(), Error> {
     Ok(radio(&radio_handle)?.fast_couple().await?)
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn radio_reconnect(radio_handle: State<'_, RadioHandle>) -> Result<(), Error> {
+    Ok(radio(&radio_handle)?.reconnect().await?)
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn radio_get_state(radio_handle: State<'_, RadioHandle>) -> Result<RadioState, Error> {
+    Ok(radio_handle
+        .read()
+        .as_ref()
+        .map_or(RadioState::NotConfigured, |radio| radio.state()))
 }

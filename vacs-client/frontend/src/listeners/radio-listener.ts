@@ -25,7 +25,7 @@ export function setupRadioListener() {
 
 export async function fetchRadioState() {
     try {
-        const state = await invokeStrict<RadioState>("keybinds_get_radio_state");
+        const state = await invokeStrict<RadioState>("radio_get_state");
         useRadioStore.getState().setRadioState(state);
     } catch {}
 }
