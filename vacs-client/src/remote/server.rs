@@ -12,6 +12,7 @@ use crate::playback::commands::{
     playback_stop,
 };
 use crate::playback::recorder::PlaybackRecorderHandle;
+use crate::radio::RadioHandle;
 use crate::remote::RemoteStatus;
 use crate::remote::commands::FrontendRemoteConfigWithStatus;
 use crate::remote::protocol::{
@@ -647,21 +648,21 @@ async fn dispatch_command(
 
         RadioAddStation => {
             let callsign = args!(args, "callsign");
-            let keybind_engine = app.state::<KeybindEngineHandle>();
-            dispatch(radio_add_station(keybind_engine, callsign).await)
+            let radio = app.state::<RadioHandle>();
+            dispatch(radio_add_station(radio, callsign).await)
         }
         RadioFastCouple => {
-            let keybind_engine = app.state::<KeybindEngineHandle>();
-            dispatch(radio_fast_couple(keybind_engine).await)
+            let radio = app.state::<RadioHandle>();
+            dispatch(radio_fast_couple(radio).await)
         }
         RadioSetStationState => {
             let (frequency, update) = args!(args, "frequency", "update");
-            let keybind_engine = app.state::<KeybindEngineHandle>();
-            dispatch(radio_set_station_state(keybind_engine, frequency, update).await)
+            let radio = app.state::<RadioHandle>();
+            dispatch(radio_set_station_state(radio, frequency, update).await)
         }
         RadioGetStations => {
-            let keybind_engine = app.state::<KeybindEngineHandle>();
-            dispatch(radio_get_stations(keybind_engine).await)
+            let radio = app.state::<RadioHandle>();
+            dispatch(radio_get_stations(radio).await)
         }
 
         SignalingConnect => {

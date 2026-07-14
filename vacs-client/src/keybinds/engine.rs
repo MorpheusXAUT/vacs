@@ -6,7 +6,7 @@ use crate::config::{CallMicMode, KeybindsConfig, TransmitConfig};
 use crate::error::Error;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
 use crate::keybinds::{KeyEvent, Keybind};
-use crate::radio::{DynRadio, TransmissionState};
+use crate::radio::{DynRadio, RadioHandle, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -101,15 +101,6 @@ impl KeybindEngine {
 
         let (listener, rx) = PlatformListener::start().await?;
         *self.listener.write() = Some(Arc::new(listener));
-
-        // TODO: this needs to be done by someone else, probably now depending on the presence of a radio key
-        /*if self.mode == TransmitMode::RadioIntegration {
-            let radio = self.radio_config.radio(self.app.clone()).await?;
-            *self.radio.write() = radio.clone();
-            *self.app.state::<RadioHandle>().write() = radio;
-        } else {
-            self.app.emit("radio:integration-available", false).ok();
-        }*/
 
         self.spawn_rx_loop(rx);
 
@@ -423,7 +414,7 @@ impl KeybindEngine {
             .stop_token
             .clone()
             .unwrap_or(self.shutdown_token.child_token());
-        // let radio = self.radio.read().clone();
+        let radio_handle = self.app.state::<RadioHandle>().clone();
         let call_pressed = self.call_pressed.clone();
         let radio_pressed = self.radio_pressed.clone();
         let call_active = self.call_active.clone();
@@ -465,7 +456,7 @@ impl KeybindEngine {
                         let separate = is_call_key ^ is_radio_key;
 
                         if is_radio_key && (separate || !call_active || radio_prio || mode != CallMicMode::PushToTalk) {
-                            // TODO set_radio_transmit(&radio_handle, key_down).await;
+                            Self::set_radio_transmit(&radio_handle, event.state.into()).await;
                             log::debug!("Radio transmit: {key_down}");
                         }
 
@@ -495,7 +486,7 @@ impl KeybindEngine {
                                     app.emit("audio:implicit-radio-prio", false).ok();
                                 } else {
                                     // prio was already cleared externally; ensure radio TX stops
-                                    // TODO set_radio_transmit(&radio_handle, false).await;
+                                    Self::set_radio_transmit(&radio_handle, TransmissionState::Inactive).await;
                                     log::debug!("Radio transmit: false (implicit)");
                                 }
                             }
@@ -639,9 +630,11 @@ impl KeybindEngine {
     }
 
     #[inline]
-    async fn set_radio_transmit(radio: &DynRadio, state: TransmissionState) {
-        if let Err(err) = radio.transmit(state).await {
-            log::warn!("Failed to set radio transmission state {state:?}: {err}");
+    async fn set_radio_transmit(radio_handle: &RadioHandle, state: TransmissionState) {
+        if let Some(radio) = radio_handle.read().as_ref() {
+            if let Err(err) = radio.transmit(state).await {
+                log::warn!("Failed to set radio transmission state {state:?}: {err}");
+            }
         }
     }
 }
