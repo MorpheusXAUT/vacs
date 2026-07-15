@@ -186,6 +186,7 @@ pub fn run() {
             keybinds::commands::keybinds_get_external_binding,
             keybinds::commands::keybinds_get_keybinds_config,
             keybinds::commands::keybinds_get_transmit_config,
+            keybinds::commands::keybinds_is_portal_shortcut_bound,
             keybinds::commands::keybinds_open_system_shortcuts_settings,
             keybinds::commands::keybinds_set_binding,
             keybinds::commands::keybinds_set_transmit_config,

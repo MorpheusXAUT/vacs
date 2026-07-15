@@ -74,7 +74,7 @@ impl PortalShortcutId {
         match self {
             PortalShortcutId::PushToTalk => "push_to_talk",
             PortalShortcutId::PushToMute => "push_to_mute",
-            PortalShortcutId::RadioPushToTalk => "radio_integration",
+            PortalShortcutId::RadioPushToTalk => "radio_push_to_talk",
             PortalShortcutId::CallControl => "call_control",
             PortalShortcutId::ToggleRadioPrio => "toggle_radio_prio",
         }

@@ -566,6 +566,10 @@ async fn dispatch_command(
             let keybind_engine = app.state::<KeybindEngineHandle>();
             dispatch(keybinds_get_external_binding(keybind_engine, keybind).await)
         }
+        KeybindsIsPortalShortcutBound => {
+            let keybind = args!(args, "keybind");
+            dispatch(keybinds_is_portal_shortcut_bound(keybind).await)
+        }
 
         PlaybackGetEnabled => {
             let app_state = app.state::<AppState>();

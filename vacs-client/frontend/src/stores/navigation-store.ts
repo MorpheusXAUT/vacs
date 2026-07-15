@@ -4,10 +4,7 @@ type Page = "phone" | "radio";
 export type Menu = "settings" | "mission" | "telephone" | "playback";
 
 type SettingsSubmenu =
-    | "settings-transmit"
-    | "settings-hotkeys"
-    | "settings-call"
-    | "settings-advanced";
+    "settings-transmit" | "settings-hotkeys" | "settings-call" | "settings-advanced";
 type Submenu = SettingsSubmenu;
 
 type NavigationState = {
