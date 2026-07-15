@@ -40,6 +40,7 @@ export type RemoteCommand =
     | "keybinds_get_external_binding"
     | "keybinds_get_keybinds_config"
     | "keybinds_get_transmit_config"
+    | "keybinds_is_portal_shortcut_bound"
     | "keybinds_open_system_shortcuts_settings"
     | "keybinds_set_binding"
     | "keybinds_set_transmit_config"

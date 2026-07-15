@@ -1,13 +1,13 @@
 import {clsx} from "clsx";
 import {TargetedEvent} from "preact";
 import {useEffect, useState} from "preact/hooks";
-import {invokeSafe, invokeStrict} from "../../error.ts";
+import {invokeStrict} from "../../error.ts";
 import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
 import {setPage} from "../../stores/navigation-store.ts";
 import {useRadioStore} from "../../stores/radio-store.ts";
 import {useSettingsStore} from "../../stores/settings-store.ts";
-import {callMicModeToKeybind} from "../../types/keybinds.ts";
+import {callMicModeToKeybind, KeybindType} from "../../types/keybinds.ts";
 import {RadioState} from "../../types/radio.ts";
 import {
     CallMicMode,
@@ -24,6 +24,7 @@ import {openUrl} from "../../utils/tauri.ts";
 import Select from "../ui/Select.tsx";
 import StatusIndicator, {Status} from "../ui/StatusIndicator.tsx";
 import KeyCapture from "./KeyCapture.tsx";
+import ExternalKeybindField from "./ExternalKeybindField.tsx";
 
 function TransmitModeSettings() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
@@ -118,7 +119,6 @@ type TransmitConfigSettingsProps = {
 
 function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitConfigSettingsProps) {
     const capPlatform = useCapabilitiesStore(state => state.platform);
-    const [waylandBinding, setWaylandBinding] = useState<string | undefined>(undefined);
 
     const handleOnTransmitCapture = async (code: string) => {
         if (transmitConfig === undefined || transmitConfig.callMicMode === "VoiceActivation")
@@ -180,33 +180,6 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
         } catch {}
     };
 
-    const handleOpenSystemShortcutsOnClick = useAsyncDebounce(async () => {
-        await invokeSafe("keybinds_open_system_shortcuts_settings");
-    });
-
-    useEffect(() => {
-        const fetchExternalBinding = async () => {
-            const keybind = callMicModeToKeybind(transmitConfig.callMicMode);
-            if (keybind === null) {
-                setWaylandBinding(undefined);
-                return;
-            }
-
-            const binding = await invokeSafe<string | null>("keybinds_get_external_binding", {
-                keybind,
-            });
-            setWaylandBinding(binding ?? undefined);
-        };
-
-        if (capPlatform === "LinuxWayland" && transmitConfig !== undefined) {
-            if (transmitConfig.callMicMode === "VoiceActivation") {
-                setWaylandBinding(undefined);
-            } else {
-                void fetchExternalBinding();
-            }
-        }
-    }, [capPlatform, transmitConfig]);
-
     return (
         <>
             <Select
@@ -221,27 +194,7 @@ function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitCon
                 onChange={handleOnTransmitModeChange}
             />
             {capPlatform === "LinuxWayland" ? (
-                <div
-                    onClick={handleOpenSystemShortcutsOnClick}
-                    title={
-                        transmitConfig.callMicMode !== "VoiceActivation"
-                            ? "On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings. Click this field to try opening the appropriate system settings."
-                            : ""
-                    }
-                    className={clsx(
-                        "w-full h-full min-w-0 min-h-8 grow text-sm py-1 px-2 rounded text-center flex items-center justify-center",
-                        "bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
-                        "brightness-90 cursor-help",
-                        transmitConfig.callMicMode === "VoiceActivation" &&
-                            "brightness-90 cursor-not-allowed",
-                    )}
-                >
-                    <p className="truncate max-w-full">
-                        {transmitConfig.callMicMode !== "VoiceActivation"
-                            ? waylandBinding || "Not bound"
-                            : ""}
-                    </p>
-                </div>
+                <ExternalKeybindField type={callMicModeToKeybind(transmitConfig.callMicMode)} />
             ) : (
                 <KeyCapture
                     label={
@@ -273,10 +226,38 @@ function RadioIntegrationSettings({
     setTransmitConfig,
     setRadioConfig,
 }: RadioIntegrationSettingsProps) {
+    const capPlatform = useCapabilitiesStore(state => state.platform);
     const capKeybindEmitter = useCapabilitiesStore(state => state.keybindEmitter);
     const [trackAudioEndpoint, setTrackAudioEndpoint] = useState<string>(
         radioConfig.trackAudio?.endpoint ?? "",
     );
+    const [waylandRadioKeybindType, setWaylandRadioKeybindType] = useState<KeybindType | null>(
+        null,
+    );
+
+    useEffect(() => {
+        const fetchWaylandRadioKeybind = async () => {
+            if (radioConfig.integration === null) {
+                setWaylandRadioKeybindType(null);
+                return;
+            } else if (transmitConfig.callMicMode === "PushToMute") {
+                setWaylandRadioKeybindType("PushToMute");
+                return;
+            } else if (transmitConfig.callMicMode === "VoiceActivation") {
+                setWaylandRadioKeybindType("RadioPushToTalk");
+                return;
+            }
+
+            try {
+                const isBound = await invokeStrict<boolean>("keybinds_is_portal_shortcut_bound", {
+                    keybind: "RadioPushToTalk",
+                });
+                setWaylandRadioKeybindType(isBound ? "RadioPushToTalk" : "PushToTalk");
+            } catch {}
+        };
+
+        void fetchWaylandRadioKeybind();
+    }, [transmitConfig.callMicMode, radioConfig.integration]);
 
     const handleOnRadioIntegrationChange = async (value: string) => {
         if (radioConfig === undefined) return;
@@ -434,27 +415,41 @@ function RadioIntegrationSettings({
                     selected={radioConfig.integration ?? "None"}
                     onChange={handleOnRadioIntegrationChange}
                 />
-                <KeyCapture
-                    label={
-                        radioConfig.integration === null
-                            ? ""
-                            : transmitConfig.callMicMode === "VoiceActivation"
-                              ? transmitConfig.radioPushToTalkLabel
-                              : transmitConfig.callMicMode === "PushToTalk"
-                                ? (transmitConfig.radioPushToTalkLabel ??
-                                  transmitConfig.pushToTalkLabel)
-                                : transmitConfig.pushToMuteLabel
-                    }
-                    className={clsx(
-                        transmitConfig.radioPushToTalkLabel === null && "text-gray-500",
-                    )}
-                    disabled={
-                        radioConfig.integration === null ||
-                        transmitConfig.callMicMode === "PushToMute"
-                    }
-                    onCapture={handleOnRadioPushToTalkCapture}
-                    onRemove={handleOnRadioPushToTalkRemoveClick}
-                />
+                {capPlatform === "LinuxWayland" ? (
+                    <ExternalKeybindField
+                        className={clsx(
+                            callMicModeToKeybind(transmitConfig.callMicMode) ===
+                                waylandRadioKeybindType && "text-gray-500",
+                        )}
+                        type={waylandRadioKeybindType}
+                        disabled={
+                            radioConfig.integration === null ||
+                            transmitConfig.callMicMode === "PushToMute"
+                        }
+                    />
+                ) : (
+                    <KeyCapture
+                        label={
+                            radioConfig.integration === null
+                                ? ""
+                                : transmitConfig.callMicMode === "VoiceActivation"
+                                  ? transmitConfig.radioPushToTalkLabel
+                                  : transmitConfig.callMicMode === "PushToTalk"
+                                    ? (transmitConfig.radioPushToTalkLabel ??
+                                      transmitConfig.pushToTalkLabel)
+                                    : transmitConfig.pushToMuteLabel
+                        }
+                        className={clsx(
+                            transmitConfig.radioPushToTalkLabel === null && "text-gray-500",
+                        )}
+                        disabled={
+                            radioConfig.integration === null ||
+                            transmitConfig.callMicMode === "PushToMute"
+                        }
+                        onCapture={handleOnRadioPushToTalkCapture}
+                        onRemove={handleOnRadioPushToTalkRemoveClick}
+                    />
+                )}
             </div>
             {radioConfig.integration === "TrackAudio" ? (
                 <>
@@ -524,9 +519,14 @@ function RadioIntegrationSettings({
                     <br />
                     <b>TrackAudio: </b> vacs can connect to your TrackAudio client to trigger
                     transmissions, manage radio & frequency state and play back radio transmissions.
-                    <br />
-                    <b>Audio for Vatsim: </b> vacs simulates a key press for you to trigger a radio
-                    transmission in AFV. The radio page and playback recording are not available.
+                    {capKeybindEmitter && (
+                        <>
+                            <br />
+                            <b>Audio for Vatsim: </b> vacs simulates a key press for you to trigger
+                            a radio transmission in AFV. The radio page and playback recording are
+                            not available.
+                        </>
+                    )}
                 </p>
             )}
         </div>

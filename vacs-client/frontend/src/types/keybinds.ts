@@ -1,7 +1,7 @@
 import {CallMicMode} from "./transmit.ts";
 
 export type KeybindType =
-    "PushToTalk" | "PushToMute" | "RadioIntegration" | "AcceptCall" | "EndCall" | "ToggleRadioPrio";
+    "PushToTalk" | "PushToMute" | "RadioPushToTalk" | "AcceptCall" | "EndCall" | "ToggleRadioPrio";
 
 export type KeybindsConfig = {
     acceptCall: string | null;

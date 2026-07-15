@@ -104,7 +104,7 @@ class RemoteTransport {
                 if (listeners) {
                     for (const cb of listeners) {
                         try {
-                            cb({payload: msg.payload as never});
+                            cb({payload: msg.payload});
                         } catch (e) {
                             console.error(`[remote] Event listener error for %s:`, msg.name, e);
                         }

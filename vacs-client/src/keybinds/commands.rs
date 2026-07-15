@@ -162,3 +162,20 @@ pub fn keybinds_open_system_shortcuts_settings() -> Result<(), Error> {
         ))));
     }
 }
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn keybinds_is_portal_shortcut_bound(keybind: Keybind) -> Result<bool, Error> {
+    #[cfg(target_os = "linux")]
+    {
+        use crate::keybinds::runtime;
+        return Ok(runtime::is_portal_shortcut_bound(keybind.into()).await);
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        return Err(Error::Other(Box::new(anyhow::anyhow!(
+            "Checking portal shortcut bindings is only supported on Linux"
+        ))));
+    }
+}

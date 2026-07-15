@@ -193,6 +193,7 @@ pub enum RemoteCommand {
     KeybindsSetBinding,
     KeybindsGetExternalBinding,
     KeybindsOpenSystemShortcutsSettings,
+    KeybindsIsPortalShortcutBound,
 
     PlaybackGetEnabled,
     PlaybackSetEnabled,

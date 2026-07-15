@@ -2,11 +2,10 @@ import KeyCapture from "./KeyCapture.tsx";
 import {codeToLabel} from "../../types/transmit.ts";
 import {useEffect, useState} from "preact/hooks";
 import {KeybindsConfig, KeybindType} from "../../types/keybinds.ts";
-import {invokeSafe, invokeStrict} from "../../error.ts";
+import {invokeStrict} from "../../error.ts";
 import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
-import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
-import {clsx} from "clsx";
 import SettingsSubPage from "./SettingsSubPage.tsx";
+import ExternalKeybindField from "./ExternalKeybindField.tsx";
 
 type Keybind = {
     code: string | null;
@@ -93,41 +92,6 @@ function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
                 <p>Loading...</p>
             )}
         </>
-    );
-}
-
-function ExternalKeybindField({type}: {type: KeybindType}) {
-    const [binding, setBinding] = useState<string | null | undefined>(undefined);
-
-    const handleOpenSystemShortcutsOnClick = useAsyncDebounce(async () => {
-        await invokeSafe("keybinds_open_system_shortcuts_settings");
-    });
-
-    useEffect(() => {
-        const fetchExternalBinding = async () => {
-            try {
-                const binding = await invokeStrict<string | null>("keybinds_get_external_binding", {
-                    keybind: type,
-                });
-                setBinding(binding);
-            } catch {}
-        };
-
-        void fetchExternalBinding();
-    }, [type]);
-
-    return (
-        <div
-            onClick={handleOpenSystemShortcutsOnClick}
-            title="On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings. Click this field to try opening the appropriate system settings."
-            className={clsx(
-                "w-full h-full min-w-10 min-h-8 grow text-sm py-1 px-2 rounded text-center flex items-center justify-center",
-                "bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
-                "brightness-90 cursor-help",
-            )}
-        >
-            <p className="truncate max-w-full">{binding || "Not bound"}</p>
-        </div>
     );
 }
 
