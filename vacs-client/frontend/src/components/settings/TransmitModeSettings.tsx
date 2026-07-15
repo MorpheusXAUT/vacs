@@ -10,6 +10,7 @@ import {useSettingsStore} from "../../stores/settings-store.ts";
 import {callMicModeToKeybind} from "../../types/keybinds.ts";
 import {RadioState} from "../../types/radio.ts";
 import {
+    CallMicMode,
     RadioConfig,
     RadioConfigWithLabels,
     TransmitConfig,
@@ -19,10 +20,10 @@ import {
     withRadioLabels,
     withTransmitLabels,
 } from "../../types/transmit.ts";
+import {openUrl} from "../../utils/tauri.ts";
 import Select from "../ui/Select.tsx";
 import StatusIndicator, {Status} from "../ui/StatusIndicator.tsx";
 import KeyCapture from "./KeyCapture.tsx";
-import {openUrl} from "../../utils/tauri.ts";
 
 function TransmitModeSettings() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
@@ -457,10 +458,7 @@ function RadioIntegrationSettings({
             </div>
             {radioConfig.integration === "TrackAudio" ? (
                 <>
-                    <p className="py-1 text-sm text-gray-800 leading-4.5 w-full">
-                        The above configured key is your radio push to talk.
-                        {/*    TODO */}
-                    </p>
+                    <RadioPttDescription callMicMode={transmitConfig.callMicMode} />
                     <p className="text-sm text-gray-800 leading-4.5">
                         Connection status is indicated by the button color:{" "}
                         <span className="bg-[#05cf9c] border-2 border-t-green-200 border-l-green-200 border-r-green-950 border-b-green-950 rounded px-1 text-xs text-black font-semibold">
@@ -504,13 +502,10 @@ function RadioIntegrationSettings({
                 </>
             ) : radioConfig.integration === "AudioForVatsim" ? (
                 <>
-                    <p className="py-1 text-sm text-gray-800 leading-4.5 w-full">
-                        The above configured key is your radio push to talk.
-                        {/*    TODO */}
-                    </p>
+                    <RadioPttDescription callMicMode={transmitConfig.callMicMode} />
                     <p className="text-sm text-gray-800 leading-4.5">
-                        Set the emit key as your PTT key in AFV. You will not press it yourself,
-                        vacs will do so automatically for you. Choosing a rarely used key such as
+                        Set the emit key as your PTT key in AFV. You do not press it yourself, vacs
+                        will do so automatically for you. Choosing a rarely used key such as
                         ScrollLock helps avoid accidental triggers.
                     </p>
                     <div className="w-full flex flex-row gap-3 items-center justify-center">
@@ -535,6 +530,47 @@ function RadioIntegrationSettings({
                 </p>
             )}
         </div>
+    );
+}
+
+function RadioPrioBadge() {
+    return (
+        <span className="bg-[#92e1fe] border-2 border-t-cyan-100 border-l-cyan-100 border-r-cyan-950 border-b-cyan-950 rounded px-1 text-xs text-black font-semibold">
+            RADIO PRIO
+        </span>
+    );
+}
+
+function RadioPttDescription({callMicMode}: {callMicMode: CallMicMode}) {
+    return (
+        <p className="py-1 text-sm text-gray-800 leading-4.5 w-full min-h-14">
+            The key configured above is your radio push to talk. You must not bind it in your radio
+            client.{" "}
+            {callMicMode === "VoiceActivation" && (
+                <>
+                    Pressing it will transmit your voice on frequency.{" "}
+                    <span className="text-red-600 font-semibold">IMPORTANT:</span> Unless you
+                    manually toggle <RadioPrioBadge />, your radio transmission will be heard during
+                    a call.
+                    <br />
+                    <br />
+                </>
+            )}
+            {callMicMode === "PushToTalk" && (
+                <>
+                    When using the same key as your call PTT, toggling <RadioPrioBadge /> allows you
+                    to transmit on frequency during a call. Binding a different key lets you operate
+                    the radio independently.
+                </>
+            )}
+            {callMicMode === "PushToMute" && (
+                <>
+                    Pressing this key during a call will transmit on frequency without being audible
+                    in the call. A different radio key is not supported in push-to-mute mode, hence
+                    the key capture above is disabled.
+                </>
+            )}
+        </p>
     );
 }
 
