@@ -165,7 +165,9 @@ pub fn keybinds_open_system_shortcuts_settings() -> Result<(), Error> {
 
 #[tauri::command]
 #[vacs_macros::log_err]
-pub async fn keybinds_is_portal_shortcut_bound(keybind: Keybind) -> Result<bool, Error> {
+pub async fn keybinds_is_portal_shortcut_bound(
+    #[cfg_attr(not(target_os = "linux"), allow(unused_variables))] keybind: Keybind,
+) -> Result<bool, Error> {
     #[cfg(target_os = "linux")]
     {
         use crate::keybinds::runtime;
