@@ -64,13 +64,6 @@ impl AppStateInner {
         let config = AppConfig::parse(&config_dir).map_startup_err(StartupError::Config)?;
         let shutdown_token = CancellationToken::new();
 
-        let radio = config
-            .client
-            .radio
-            .radio(app.clone())
-            .await
-            .map_startup_err(StartupError::Radio)?;
-
         Ok(Self {
             config: config.clone(),
             signaling_client: Self::new_signaling_client(
@@ -83,15 +76,18 @@ impl AppStateInner {
                 AudioManager::new(app.clone(), &config.audio)
                     .map_startup_err(StartupError::Audio)?,
             )),
-            keybind_engine: Arc::new(TokioRwLock::new(KeybindEngine::new(
-                app.clone(),
-                &config.client.transmit_config,
-                &config.client.keybinds,
-                config.client.radio.integration.is_some(),
-                shutdown_token.child_token(),
-            ))),
+            keybind_engine: Arc::new(TokioRwLock::new(
+                KeybindEngine::new(
+                    app.clone(),
+                    &config.client.transmit_config,
+                    &config.client.keybinds,
+                    config.client.radio.integration.is_some(),
+                    shutdown_token.child_token(),
+                )
+                .await,
+            )),
             playback_recorder: Arc::new(RwLock::new(None)),
-            radio: Arc::new(RwLock::new(radio)),
+            radio: Arc::new(RwLock::new(None)),
             shutdown_token,
             active_call: None,
             unanswered_call_guard: None,

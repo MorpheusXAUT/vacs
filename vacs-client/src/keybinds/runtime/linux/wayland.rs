@@ -28,7 +28,7 @@
 //! - `CallControl` → `Code::F32`
 //! - `PushToTalk` → `Code::F33`
 //! - `PushToMute` → `Code::F34`
-//! - `RadioIntegration` → `Code::F35`
+//! - `RadioPushToTalk` → `Code::F35`
 //!
 //! These keys don't exist on most keyboards, avoiding conflicts with user input. When the
 //! portal activates a shortcut, we emit the corresponding F-key code, and the rest of the
@@ -42,12 +42,16 @@
 //! 4. User can reconfigure shortcuts in their desktop environment settings
 
 mod listener;
+
 pub use listener::*;
+use std::collections::HashMap;
 
 use crate::keybinds::Keybind;
 use ashpd::desktop::global_shortcuts::NewShortcut;
 use keyboard_types::Code;
+use parking_lot::RwLock;
 use std::str::FromStr;
+use std::sync::Arc;
 
 /// Identifiers for shortcuts registered with the XDG Global Shortcuts portal.
 ///
@@ -60,7 +64,7 @@ use std::str::FromStr;
 pub enum PortalShortcutId {
     PushToTalk,
     PushToMute,
-    RadioIntegration,
+    RadioPushToTalk,
     CallControl,
     ToggleRadioPrio,
 }
@@ -70,7 +74,7 @@ impl PortalShortcutId {
         match self {
             PortalShortcutId::PushToTalk => "push_to_talk",
             PortalShortcutId::PushToMute => "push_to_mute",
-            PortalShortcutId::RadioIntegration => "radio_integration",
+            PortalShortcutId::RadioPushToTalk => "radio_integration",
             PortalShortcutId::CallControl => "call_control",
             PortalShortcutId::ToggleRadioPrio => "toggle_radio_prio",
         }
@@ -80,7 +84,9 @@ impl PortalShortcutId {
         match self {
             PortalShortcutId::PushToTalk => "Push-to-talk (activate voice transmission while held)",
             PortalShortcutId::PushToMute => "Push-to-mute (mute microphone while held)",
-            PortalShortcutId::RadioIntegration => "Radio Integration",
+            PortalShortcutId::RadioPushToTalk => {
+                "Radio Push-to-talk (activate radio transmission while held)"
+            }
             PortalShortcutId::CallControl => "Call Control (end active/accept next)",
             PortalShortcutId::ToggleRadioPrio => "Toggle Radio Priority (during active call)",
         }
@@ -90,7 +96,7 @@ impl PortalShortcutId {
         &[
             PortalShortcutId::PushToTalk,
             PortalShortcutId::PushToMute,
-            PortalShortcutId::RadioIntegration,
+            PortalShortcutId::RadioPushToTalk,
             PortalShortcutId::CallControl,
             PortalShortcutId::ToggleRadioPrio,
         ]
@@ -103,7 +109,7 @@ impl FromStr for PortalShortcutId {
         match s.trim().to_ascii_lowercase().as_str() {
             "push_to_talk" => Ok(PortalShortcutId::PushToTalk),
             "push_to_mute" => Ok(PortalShortcutId::PushToMute),
-            "radio_integration" => Ok(PortalShortcutId::RadioIntegration),
+            "radio_push_to_talk" => Ok(PortalShortcutId::RadioPushToTalk),
             "call_control" => Ok(PortalShortcutId::CallControl),
             "toggle_radio_prio" => Ok(PortalShortcutId::ToggleRadioPrio),
             _ => Err(format!("unknown portal shortcut id {s}")),
@@ -150,7 +156,7 @@ impl From<PortalShortcutId> for Code {
             PortalShortcutId::CallControl => Code::F32,
             PortalShortcutId::PushToTalk => Code::F33,
             PortalShortcutId::PushToMute => Code::F34,
-            PortalShortcutId::RadioIntegration => Code::F35,
+            PortalShortcutId::RadioPushToTalk => Code::F35,
         }
     }
 }
@@ -163,7 +169,7 @@ impl TryFrom<Code> for PortalShortcutId {
             Code::F32 => Ok(PortalShortcutId::CallControl),
             Code::F33 => Ok(PortalShortcutId::PushToTalk),
             Code::F34 => Ok(PortalShortcutId::PushToMute),
-            Code::F35 => Ok(PortalShortcutId::RadioIntegration),
+            Code::F35 => Ok(PortalShortcutId::RadioPushToTalk),
             _ => Err(format!("unknown portal shortcut code {value}")),
         }
     }
@@ -174,10 +180,32 @@ impl From<Keybind> for PortalShortcutId {
         match value {
             Keybind::PushToTalk => PortalShortcutId::PushToTalk,
             Keybind::PushToMute => PortalShortcutId::PushToMute,
-            Keybind::RadioIntegration => PortalShortcutId::RadioIntegration,
+            Keybind::RadioPushToTalk => PortalShortcutId::RadioPushToTalk,
             Keybind::AcceptCall => PortalShortcutId::CallControl,
             Keybind::EndCall => PortalShortcutId::CallControl,
             Keybind::ToggleRadioPrio => PortalShortcutId::ToggleRadioPrio,
         }
     }
+}
+
+pub async fn is_portal_shortcut_bound(shortcut_id: PortalShortcutId) -> bool {
+    let (proxy, session) = match initialize_portal(&mut None).await {
+        Ok(res) => res,
+        Err(err) => {
+            log::error!("Failed to initialize Wayland Global Shortcuts portal: {err}");
+            return false;
+        }
+    };
+
+    let shortcuts = Arc::new(RwLock::new(HashMap::new()));
+
+    match check_existing_shortcuts(&proxy, &session, &mut None, &shortcuts).await {
+        Ok(needs_bind) => needs_bind,
+        Err(err) => {
+            log::error!("Failed to check existing Wayland Global Shortcuts: {err}");
+            return false;
+        }
+    };
+
+    shortcuts.read().contains_key(&shortcut_id)
 }

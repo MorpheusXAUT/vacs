@@ -26,6 +26,7 @@
 //! no standard cross-desktop solution for X11 either.
 
 mod wayland;
+pub use wayland::{PortalShortcutId, is_portal_shortcut_bound};
 
 use crate::keybinds::runtime::{KeybindEmitter, KeybindListener, stub};
 use crate::keybinds::{KeyEvent, Keybind, KeybindsError};

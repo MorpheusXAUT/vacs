@@ -96,6 +96,7 @@ cfg_select! {
         mod stub;
         pub use linux::LinuxKeybindEmitter as PlatformEmitter;
         pub use linux::LinuxKeybindListener as PlatformListener;
+        pub use linux::{is_portal_shortcut_bound, PortalShortcutId};
     }
     _ => {
         mod stub;
