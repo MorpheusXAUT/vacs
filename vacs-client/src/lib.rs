@@ -96,6 +96,8 @@ pub fn run() {
                 let call_control_config = state.config.client.keybinds.clone();
                 let keybind_engine = state.keybind_engine_handle();
                 let remote_config = state.config.client.remote.clone();
+                let radio = state.radio_handle();
+                let radio_config = state.config.client.radio.clone();
                 let radio_integration_enabled = state.config.client.radio.integration.is_some();
 
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
@@ -103,8 +105,14 @@ pub fn run() {
                 app.manage::<PlaybackRecorderHandle>(
                     state.playback_recorder_handle(),
                 );
-                app.manage::<RadioHandle>(state.radio_handle());
                 app.manage::<AppState>(TokioMutex::new(state));
+
+                *radio.write() = radio_config
+                    .radio(app.handle().clone())
+                    .await
+                    .map_startup_err(StartupError::Radio)?;
+
+                app.manage::<RadioHandle>(radio);
 
                 if capabilities.keybind_listener || capabilities.keybind_emitter {
                     keybind_engine

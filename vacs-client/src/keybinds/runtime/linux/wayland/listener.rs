@@ -232,7 +232,7 @@ async fn setup_shortcuts_listener(
     res
 }
 
-async fn initialize_portal(
+pub(super) async fn initialize_portal(
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,
 ) -> ashpd::Result<(GlobalShortcuts, ashpd::desktop::Session<GlobalShortcuts>)> {
     let proxy = match tokio::time::timeout(Duration::from_secs(5), GlobalShortcuts::new()).await {
@@ -287,7 +287,7 @@ async fn initialize_portal(
     Ok((proxy, session))
 }
 
-async fn check_existing_shortcuts(
+pub(super) async fn check_existing_shortcuts(
     proxy: &GlobalShortcuts,
     session: &ashpd::desktop::Session<GlobalShortcuts>,
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,

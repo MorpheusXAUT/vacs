@@ -25,7 +25,6 @@ pub struct KeybindEngine {
     call_mic_mode: CallMicMode,
     call_code: Option<Code>,
     radio_code: Option<Code>,
-    /// Keybinds
     accept_call_code: Option<Code>,
     end_call_code: Option<Code>,
     toggle_radio_prio_code: Option<Code>,
@@ -44,7 +43,7 @@ pub struct KeybindEngine {
 pub type KeybindEngineHandle = Arc<TokioRwLock<KeybindEngine>>;
 
 impl KeybindEngine {
-    pub fn new(
+    pub async fn new(
         app: AppHandle,
         transmit_config: &TransmitConfig,
         call_control_config: &KeybindsConfig,
@@ -53,8 +52,9 @@ impl KeybindEngine {
     ) -> Self {
         Self {
             call_mic_mode: transmit_config.call_mic_mode,
-            call_code: Self::select_active_transmit_code(transmit_config),
-            radio_code: Self::select_active_radio_code(radio_integration_enabled, transmit_config),
+            call_code: Self::select_active_call_code(transmit_config),
+            radio_code: Self::select_active_radio_code(radio_integration_enabled, transmit_config)
+                .await,
             accept_call_code: Self::select_accept_call_code(call_control_config),
             end_call_code: Self::select_end_call_code(call_control_config),
             toggle_radio_prio_code: Self::select_toggle_radio_prio_code(call_control_config),
@@ -136,9 +136,9 @@ impl KeybindEngine {
         self.stop();
 
         self.call_mic_mode = transmit_config.call_mic_mode;
-        self.call_code = Self::select_active_transmit_code(transmit_config);
+        self.call_code = Self::select_active_call_code(transmit_config);
         self.radio_code =
-            Self::select_active_radio_code(radio_integration_enabled, transmit_config);
+            Self::select_active_radio_code(radio_integration_enabled, transmit_config).await;
 
         self.accept_call_code = Self::select_accept_call_code(keybinds_config);
         self.end_call_code = Self::select_end_call_code(keybinds_config);
@@ -455,7 +455,7 @@ impl KeybindEngine {
     }
 
     #[inline]
-    fn select_active_transmit_code(config: &TransmitConfig) -> Option<Code> {
+    fn select_active_call_code(config: &TransmitConfig) -> Option<Code> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
             // Wayland Code Mapping Strategy:
@@ -475,7 +475,6 @@ impl KeybindEngine {
                 CallMicMode::VoiceActivation => None,
                 CallMicMode::PushToTalk => Some(Code::F33),
                 CallMicMode::PushToMute => Some(Code::F34),
-                // CallMicMode::RadioIntegration => Some(Code::F35), // TODO
             };
             log::trace!(
                 "Using portal shortcut code {code:?} for call mic mode {:?}",
@@ -492,13 +491,15 @@ impl KeybindEngine {
     }
 
     #[inline]
-    fn select_active_radio_code(enabled: bool, config: &TransmitConfig) -> Option<Code> {
+    async fn select_active_radio_code(enabled: bool, config: &TransmitConfig) -> Option<Code> {
         if !enabled {
             return None;
         }
 
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
+            use crate::keybinds::runtime;
+
             // Wayland Code Mapping Strategy:
             //
             // On Wayland, shortcuts are configured at the OS level via the XDG Global Shortcuts
@@ -513,10 +514,17 @@ impl KeybindEngine {
             // This effectively overrides the user-configured codes in the config file on Wayland,
             // since the actual key binding is managed by the desktop environment.
             let code = match config.call_mic_mode {
-                CallMicMode::VoiceActivation => None,
-                CallMicMode::PushToTalk => Some(Code::F33),
+                CallMicMode::VoiceActivation => Some(Code::F35),
+                CallMicMode::PushToTalk => {
+                    if runtime::is_portal_shortcut_bound(runtime::PortalShortcutId::RadioPushToTalk)
+                        .await
+                    {
+                        Some(Code::F35)
+                    } else {
+                        Some(Code::F33)
+                    }
+                }
                 CallMicMode::PushToMute => Some(Code::F34),
-                // CallMicMode::RadioIntegration => Some(Code::F35), // TODO
             };
             log::trace!(
                 "Using portal shortcut code {code:?} for call mic mode {:?}",
@@ -529,7 +537,7 @@ impl KeybindEngine {
             CallMicMode::VoiceActivation => config.radio_push_to_talk,
             CallMicMode::PushToTalk => config
                 .radio_push_to_talk
-                .or_else(|| Self::select_active_transmit_code(config)),
+                .or_else(|| Self::select_active_call_code(config)),
             CallMicMode::PushToMute => config.push_to_mute,
         }
     }

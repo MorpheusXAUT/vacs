@@ -32,7 +32,7 @@ pub struct KeyEvent {
 pub enum Keybind {
     PushToTalk,
     PushToMute,
-    RadioIntegration,
+    RadioPushToTalk,
     AcceptCall,
     EndCall,
     ToggleRadioPrio,
