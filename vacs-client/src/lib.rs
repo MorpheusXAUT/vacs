@@ -24,6 +24,7 @@ use crate::build::VersionInfo;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::KeybindEngineHandle;
+use crate::platform::Capabilities;
 use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::RadioHandle;
 use crate::remote::{RemoteServer, RemoteServerHandle};
@@ -86,11 +87,15 @@ pub fn run() {
                         .map_startup_err(StartupError::Other)?;
                 }
 
+                let capabilities = Capabilities::default();
+
                 let state = AppStateInner::new(app.handle()).await?;
 
+                let transmit_config = state.config.client.transmit_config.clone();
+                let call_control_config = state.config.client.keybinds.clone();
                 let keybind_engine = state.keybind_engine_handle();
-                let radio = state.radio_handle();
                 let remote_config = state.config.client.remote.clone();
+                let radio_integration_enabled = state.config.client.radio.integration.is_some();
 
                 app.manage::<HttpState>(HttpState::new(app.handle())?);
                 app.manage::<AudioManagerHandle>(state.audio_manager_handle());
@@ -100,8 +105,18 @@ pub fn run() {
                 app.manage::<RadioHandle>(state.radio_handle());
                 app.manage::<AppState>(TokioMutex::new(state));
 
+                if capabilities.keybind_listener || capabilities.keybind_emitter {
+                    keybind_engine
+                        .write()
+                        .await
+                        .set_config(&transmit_config, &call_control_config, radio_integration_enabled)
+                        .await
+                        .map_startup_err(StartupError::Keybinds)?;
+                } else {
+                    log::warn!("Your platform ({}) does not support keybind listener and emitter, skipping registration", capabilities.platform);
+                }
+
                 app.manage::<KeybindEngineHandle>(keybind_engine);
-                app.manage::<RadioHandle>(radio);
 
                 let mut remote_handle = RemoteServer::new(app.handle().clone());
                 if remote_config.enabled {

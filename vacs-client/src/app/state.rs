@@ -13,7 +13,6 @@ use crate::audio::manager::{AudioManager, AudioManagerHandle};
 use crate::config::AppConfig;
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::{KeybindEngine, KeybindEngineHandle};
-use crate::platform::Capabilities;
 use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::RadioHandle;
 use crate::signaling::auth::TauriTokenProvider;
@@ -62,33 +61,8 @@ impl AppStateInner {
             .app_config_dir()
             .map_startup_err(StartupError::Config)?;
 
-        let capabilities = Capabilities::default();
-
         let config = AppConfig::parse(&config_dir).map_startup_err(StartupError::Config)?;
         let shutdown_token = CancellationToken::new();
-
-        let mut keybind_engine = KeybindEngine::new(
-            app.clone(),
-            &config.client.transmit_config,
-            &config.client.keybinds,
-            config.client.radio.integration.is_some(),
-            shutdown_token.child_token(),
-        );
-        if capabilities.keybind_listener || capabilities.keybind_emitter {
-            keybind_engine
-                .set_config(
-                    &config.client.transmit_config,
-                    &config.client.keybinds,
-                    config.client.radio.integration.is_some(),
-                )
-                .await
-                .map_startup_err(StartupError::Keybinds)?;
-        } else {
-            log::warn!(
-                "Your platform ({}) does not support keybind listener and emitter, skipping registration",
-                capabilities.platform
-            );
-        }
 
         let radio = config
             .client
@@ -109,7 +83,13 @@ impl AppStateInner {
                 AudioManager::new(app.clone(), &config.audio)
                     .map_startup_err(StartupError::Audio)?,
             )),
-            keybind_engine: Arc::new(TokioRwLock::new(keybind_engine)),
+            keybind_engine: Arc::new(TokioRwLock::new(KeybindEngine::new(
+                app.clone(),
+                &config.client.transmit_config,
+                &config.client.keybinds,
+                config.client.radio.integration.is_some(),
+                shutdown_token.child_token(),
+            ))),
             playback_recorder: Arc::new(RwLock::new(None)),
             radio: Arc::new(RwLock::new(radio)),
             shutdown_token,
