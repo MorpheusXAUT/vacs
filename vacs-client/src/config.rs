@@ -1,5 +1,6 @@
 use crate::app::window::WindowProvider;
 use crate::error::Error;
+use crate::keybinds::KeybindsError;
 use crate::playback::PlaybackConfig;
 use crate::radio::push_to_talk::PushToTalkRadio;
 use crate::radio::track_audio::TrackAudioRadio;
@@ -721,6 +722,22 @@ impl RadioConfig {
             }
             _ => Ok(None),
         }
+    }
+
+    pub fn validate(&self, transmit_config: &TransmitConfig) -> Result<(), Error> {
+        if transmit_config.radio_push_to_talk.is_some()
+            && self.integration == Some(RadioIntegration::AudioForVatsim)
+            && let Some(selected_key) = transmit_config.radio_push_to_talk
+            && let Some(afv_key) = self.audio_for_vatsim.as_ref().and_then(|c| c.emit)
+            && afv_key == selected_key
+        {
+            return Err(KeybindsError::Other(
+                "AFV emit key must be distinct from your radio integration push-to-talk key"
+                    .to_string(),
+            )
+            .into());
+        }
+        Ok(())
     }
 }
 

@@ -22,9 +22,7 @@ function PlaybackPage() {
     const capPlatform = useCapabilitiesStore(state => state.platform);
 
     const trackAudioRadioEnabled = useSettingsStore(
-        state =>
-            state.transmitConfig?.mode === "RadioIntegration" &&
-            state.radioConfig?.integration === "TrackAudio",
+        state => state.radioConfig?.integration === "TrackAudio",
     );
 
     const playbackEnabled = useSettingsStore(state => state.playbackEnabled);
