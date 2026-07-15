@@ -113,11 +113,6 @@ impl KeybindEngine {
             }
         }
 
-        // TODO: should be done somewhere else
-        /* self.radio.write().take();
-        self.app.state::<RadioHandle>().write().take();
-        self.app.emit("radio:integration-available", false).ok(); */
-
         if let Some(stop_token) = self.stop_token.take() {
             stop_token.cancel();
         }
@@ -166,18 +161,6 @@ impl KeybindEngine {
 
         self.start().await?;
 
-        Ok(())
-    } */
-
-    /* pub async fn reconnect_radio(&self) -> Result<(), Error> {
-        let radio = self.radio.read().clone();
-        if let Some(radio) = radio {
-            log::info!("Reconnecting radio integration");
-            radio
-                .reconnect()
-                .await
-                .map_err(|err| Error::Radio(Box::new(err)))?;
-        }
         Ok(())
     } */
 
@@ -262,19 +245,6 @@ impl KeybindEngine {
             CallMicMode::PushToMute => call_pressed,
         }
     }
-
-    // TODO: this needs to be elsewhere
-    /* pub fn radio_state(&self) -> RadioState {
-        if let Some(radio) = self.radio.read().as_ref() {
-            radio.state()
-        } else {
-            RadioState::NotConfigured
-        }
-    }
-
-    pub fn radio(&self) -> Option<DynRadio> {
-        self.radio.read().clone()
-    } */
 
     /// Get the external (OS-configured) key for a keybind, if available.
     ///
