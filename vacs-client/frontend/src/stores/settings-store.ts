@@ -108,7 +108,7 @@ export async function fetchSettings() {
                 invokeStrict<TransmitConfig>("keybinds_get_transmit_config").then(
                     withTransmitLabels,
                 ),
-                invokeStrict<RadioConfig>("keybinds_get_radio_config").then(withRadioLabels),
+                invokeStrict<RadioConfig>("radio_get_config").then(withRadioLabels),
                 invokeStrict<boolean>("playback_get_enabled"),
             ]);
 

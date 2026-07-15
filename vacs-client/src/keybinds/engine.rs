@@ -151,19 +151,6 @@ impl KeybindEngine {
         Ok(())
     }
 
-    // TODO: should be done somewhere else
-    /* pub async fn set_radio_config(&mut self, config: &RadioConfig) -> Result<(), Error> {
-        self.stop();
-
-        self.radio_config = config.clone();
-
-        self.reset_input_state();
-
-        self.start().await?;
-
-        Ok(())
-    } */
-
     pub fn set_call_active(&self, active: bool) {
         self.call_active.store(active, Ordering::Relaxed);
 

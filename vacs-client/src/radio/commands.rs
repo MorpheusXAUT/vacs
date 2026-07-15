@@ -1,8 +1,14 @@
+use crate::app::state::AppState;
+use crate::config::{
+    CLIENT_SETTINGS_FILE_NAME, FrontendRadioConfig, Persistable, PersistedClientConfig, RadioConfig,
+};
 use crate::error::Error;
+use crate::keybinds::engine::KeybindEngineHandle;
+use crate::platform::Capabilities;
 use crate::radio::{
     DynRadio, Frequency, RadioHandle, RadioState, RadioStation, StationStateUpdate,
 };
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 fn radio(radio: &RadioHandle) -> Result<DynRadio, Error> {
     let guard = radio.read();
@@ -10,6 +16,67 @@ fn radio(radio: &RadioHandle) -> Result<DynRadio, Error> {
         .as_ref()
         .ok_or_else(|| crate::radio::RadioError::Integration("No radio configured".into()))?
         .clone())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn radio_get_config(
+    app_state: State<'_, AppState>,
+) -> Result<FrontendRadioConfig, Error> {
+    Ok(app_state.lock().await.config.client.radio.clone().into())
+}
+
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn radio_set_config(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    keybind_engine: State<'_, KeybindEngineHandle>,
+    radio_handle: State<'_, RadioHandle>,
+    radio_config: FrontendRadioConfig,
+) -> Result<(), Error> {
+    let capabilities = Capabilities::default();
+    if !capabilities.keybind_listener {
+        return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
+    }
+
+    let radio_config: RadioConfig = {
+        let state = app_state.lock().await;
+        let radio_config: RadioConfig = radio_config.try_into()?;
+        radio_config.validate(&state.config.client.transmit_config)?;
+        radio_config
+    };
+
+    radio_handle.write().take();
+
+    let new_radio = radio_config.radio(app.clone()).await?;
+
+    let persisted_client_config: PersistedClientConfig = {
+        let mut state = app_state.lock().await;
+        let radio_integration_enabled = radio_config.integration.is_some();
+        if radio_integration_enabled != state.config.client.radio.integration.is_some() {
+            keybind_engine
+                .write()
+                .await
+                .set_config(
+                    &state.config.client.transmit_config,
+                    &state.config.client.keybinds,
+                    radio_integration_enabled,
+                )
+                .await?;
+        }
+        state.config.client.radio = radio_config;
+        state.config.client.clone().into()
+    };
+    *radio_handle.write() = new_radio;
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    Ok(())
 }
 
 #[tauri::command]

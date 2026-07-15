@@ -561,16 +561,6 @@ async fn dispatch_command(
                 keybinds_set_binding(app.clone(), app_state, keybind_engine, code, keybind).await,
             )
         }
-        KeybindsGetRadioConfig => {
-            let app_state = app.state::<AppState>();
-            dispatch(keybinds_get_radio_config(app_state).await)
-        }
-        KeybindsSetRadioConfig => {
-            let radio_config = args!(args, "radioConfig");
-            let app_state = app.state::<AppState>();
-            //let keybind_engine = app.state::<KeybindEngineHandle>();
-            dispatch(keybinds_set_radio_config(app.clone(), app_state, radio_config).await)
-        }
         KeybindsGetExternalBinding => {
             let keybind = args!(args, "keybind");
             let keybind_engine = app.state::<KeybindEngineHandle>();
@@ -647,9 +637,23 @@ async fn dispatch_command(
             let radio = app.state::<RadioHandle>();
             dispatch(radio_fast_couple(radio).await)
         }
+
+        RadioGetConfig => {
+            let app_state = app.state::<AppState>();
+            dispatch(radio_get_config(app_state).await)
+        }
         RadioReconnect => {
             let radio = app.state::<RadioHandle>();
             dispatch(radio_reconnect(radio).await)
+        }
+        RadioSetConfig => {
+            let radio_config = args!(args, "radioConfig");
+            let app_state = app.state::<AppState>();
+            let radio = app.state::<RadioHandle>();
+            let keybind_engine = app.state::<KeybindEngineHandle>();
+            dispatch(
+                radio_set_config(app.clone(), app_state, keybind_engine, radio, radio_config).await,
+            )
         }
         RadioSetStationState => {
             let (frequency, update) = args!(args, "frequency", "update");

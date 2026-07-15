@@ -294,7 +294,7 @@ function RadioIntegrationSettings({
         setRadioConfig(newRadioConfig);
 
         try {
-            await invokeStrict("keybinds_set_radio_config", {radioConfig: newRadioConfig});
+            await invokeStrict("radio_set_config", {radioConfig: newRadioConfig});
             if (value === "AudioForVatsim") {
                 setPage("phone");
             }
@@ -359,7 +359,7 @@ function RadioIntegrationSettings({
         }
 
         try {
-            await invokeStrict("keybinds_set_radio_config", {radioConfig: newConfig});
+            await invokeStrict("radio_set_config", {radioConfig: newConfig});
             setRadioConfig(await withRadioLabels(newConfig));
         } catch {}
     };
@@ -382,7 +382,7 @@ function RadioIntegrationSettings({
         }
 
         try {
-            await invokeStrict("keybinds_set_radio_config", {radioConfig: newConfig});
+            await invokeStrict("radio_set_config", {radioConfig: newConfig});
             setRadioConfig(await withRadioLabels(newConfig));
         } catch {}
     };
@@ -409,7 +409,7 @@ function RadioIntegrationSettings({
                 },
             };
             try {
-                await invokeStrict("keybinds_set_radio_config", {radioConfig: newConfig});
+                await invokeStrict("radio_set_config", {radioConfig: newConfig});
                 setRadioConfig(await withRadioLabels(newConfig));
             } catch {
                 setTrackAudioEndpoint(radioConfig.trackAudio?.endpoint ?? "");
