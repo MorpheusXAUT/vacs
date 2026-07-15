@@ -235,30 +235,6 @@ function RadioIntegrationSettings({
         null,
     );
 
-    useEffect(() => {
-        const fetchWaylandRadioKeybind = async () => {
-            if (radioConfig.integration === null) {
-                setWaylandRadioKeybindType(null);
-                return;
-            } else if (transmitConfig.callMicMode === "PushToMute") {
-                setWaylandRadioKeybindType("PushToMute");
-                return;
-            } else if (transmitConfig.callMicMode === "VoiceActivation") {
-                setWaylandRadioKeybindType("RadioPushToTalk");
-                return;
-            }
-
-            try {
-                const isBound = await invokeStrict<boolean>("keybinds_is_portal_shortcut_bound", {
-                    keybind: "RadioPushToTalk",
-                });
-                setWaylandRadioKeybindType(isBound ? "RadioPushToTalk" : "PushToTalk");
-            } catch {}
-        };
-
-        void fetchWaylandRadioKeybind();
-    }, [transmitConfig.callMicMode, radioConfig.integration]);
-
     const handleOnRadioIntegrationChange = async (value: string) => {
         if (radioConfig === undefined) return;
 
@@ -398,6 +374,32 @@ function RadioIntegrationSettings({
             }
         }
     };
+
+    useEffect(() => {
+        const setWaylandRadioKeybind = async () => {
+            if (radioConfig.integration === null) {
+                setWaylandRadioKeybindType(null);
+                return;
+            } else if (transmitConfig.callMicMode === "PushToMute") {
+                setWaylandRadioKeybindType("PushToMute");
+                return;
+            } else if (transmitConfig.callMicMode === "VoiceActivation") {
+                setWaylandRadioKeybindType("RadioPushToTalk");
+                return;
+            }
+
+            try {
+                const isBound = await invokeStrict<boolean>("keybinds_is_portal_shortcut_bound", {
+                    keybind: "RadioPushToTalk",
+                });
+                setWaylandRadioKeybindType(isBound ? "RadioPushToTalk" : "PushToTalk");
+            } catch {}
+        };
+
+        if (capPlatform === "LinuxWayland") {
+            void setWaylandRadioKeybind();
+        }
+    }, [transmitConfig.callMicMode, radioConfig.integration, capPlatform]);
 
     return (
         <div className="w-full px-3 flex flex-col gap-2 items-center justify-center">
