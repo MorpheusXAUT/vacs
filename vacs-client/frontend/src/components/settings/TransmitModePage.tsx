@@ -25,7 +25,7 @@ function TransmitModePage() {
                 <div className="flex flex-col gap-0.5">
                     <div className="w-full mb-1 flex flex-row gap-2 items-center justify-center border-b-2 border-zinc-200">
                         <p className="font-semibold uppercase">Call Mode</p>
-                        <HelpIcon url="https://docs.vacs.network/settings/transmit" /> {/* TODO */}
+                        <HelpIcon url="https://docs.vacs.network/settings/transmit#call-mic-mode" />
                     </div>
                     {!capKeybindListener ? (
                         <div className="w-full px-3 flex flex-row gap-3 items-center justify-center">
@@ -64,7 +64,7 @@ function TransmitModePage() {
                 <div className="grow flex flex-col gap-0.5">
                     <div className="w-full pt-1 mb-1 flex flex-row gap-2 items-center justify-center border-t-2 border-zinc-200">
                         <p className="font-semibold uppercase">Radio Integration</p>
-                        <HelpIcon url="https://docs.vacs.network/settings/transmit" /> {/* TODO */}
+                        <HelpIcon url="https://docs.vacs.network/settings/transmit#radio-integration" />
                     </div>
                     {!capKeybindListener ? (
                         <div className="w-full px-3 flex flex-row gap-3 items-center justify-center">
