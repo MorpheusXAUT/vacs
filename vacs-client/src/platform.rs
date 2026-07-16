@@ -157,7 +157,7 @@ fn check_pipewire() -> bool {
                 false
             }
             Err(_) => {
-                log::warn!("PipeWire check taimed out");
+                log::warn!("PipeWire check timed out");
                 false
             }
         }

@@ -127,54 +127,39 @@ fn spawn_pipewire_thread(
 ) -> Result<(ShutdownFn, JoinHandle<()>), PlaybackError> {
     // We use a oneshot to surface init failures from the thread back to the caller
     // synchronously, so `AfvNativePipewireCapture::start` returns a meaningful error.
-    let (init_tx, init_rx) = std::sync::mpsc::sync_channel::<Result<MainLoopHandle, String>>(1);
+    let (init_tx, init_rx) = std::sync::mpsc::sync_channel::<Result<(), String>>(1);
+    // Cross-thread shutdown signal: the receiver is attached to the PipeWire loop
+    // inside `run_main_loop`, so `quit()` always executes on the loop's own thread.
+    // Sending after the loop thread has exited just returns an error.
+    let (quit_tx, quit_rx) = pipewire::channel::channel::<()>();
     let tx_thread = tx.clone();
 
     let thread = std::thread::Builder::new()
         .name("vacs-playback-pipewire".to_owned())
-        .spawn(move || run_main_loop(tx_thread, init_tx))
+        .spawn(move || run_main_loop(tx_thread, init_tx, quit_rx))
         .map_err(PlaybackError::Io)?;
 
-    let handle = match init_rx.recv() {
-        Ok(Ok(h)) => h,
+    match init_rx.recv() {
+        Ok(Ok(())) => {}
         Ok(Err(err)) => return Err(PlaybackError::Source(err)),
         Err(_) => {
             return Err(PlaybackError::Source(
                 "PipeWire capture thread exited before init".to_owned(),
             ));
         }
-    };
+    }
 
-    let shutdown = Box::new(move || handle.quit());
+    let shutdown = Box::new(move || {
+        let _ = quit_tx.send(());
+    });
 
     Ok((shutdown, thread))
 }
 
-/// Raw `pw_main_loop*` handle used to request shutdown from another thread.
-///
-/// We deliberately don't use `pipewire::main_loop::MainLoopWeak` here: it wraps a
-/// `std::rc::Weak`, and upgrading it mutates a non-atomic refcount, so calling it
-/// from a thread other than the one owning the `MainLoopRc` would race with that
-/// thread's own clones/drops. A raw pointer sidesteps this entirely — we only ever
-/// call `quit()` before `run_main_loop` drops the loop (see below), and PipeWire
-/// documents `pw_main_loop_quit` as thread-safe (it just calls
-/// `pw_loop_invoke`/`pw_loop_signal_event` internally).
-struct MainLoopHandle {
-    ptr: std::ptr::NonNull<pipewire::sys::pw_main_loop>,
-}
-unsafe impl Send for MainLoopHandle {}
-
-impl MainLoopHandle {
-    fn quit(self) {
-        unsafe {
-            pipewire::sys::pw_main_loop_quit(self.ptr.as_ptr());
-        }
-    }
-}
-
 fn run_main_loop(
     tx: mpsc::Sender<LoopbackEvent>,
-    init_tx: std::sync::mpsc::SyncSender<Result<MainLoopHandle, String>>,
+    init_tx: std::sync::mpsc::SyncSender<Result<(), String>>,
+    quit_rx: pipewire::channel::Receiver<()>,
 ) {
     pipewire::init();
 
@@ -185,6 +170,12 @@ fn run_main_loop(
             return;
         }
     };
+
+    // Dispatch quit requests from the `ShutdownFn` onto this thread.
+    let _quit_receiver = quit_rx.attach(mainloop.loop_(), {
+        let mainloop = mainloop.clone();
+        move |()| mainloop.quit()
+    });
 
     let context = match ContextRc::new(&mainloop, None) {
         Ok(c) => c,
@@ -319,11 +310,7 @@ fn run_main_loop(
         })
         .register();
 
-    let handle = MainLoopHandle {
-        ptr: std::ptr::NonNull::new(mainloop.as_raw_ptr())
-            .expect("pw_main_loop pointer is never null"),
-    };
-    if init_tx.send(Ok(handle)).is_err() {
+    if init_tx.send(Ok(())).is_err() {
         log::warn!("caller disappeared before PipeWire init completed");
         return;
     }
@@ -332,13 +319,9 @@ fn run_main_loop(
     mainloop.run();
     log::debug!("PipeWire main loop exited");
 
-    // Stream/listener drops (in `captures`) tear down before unsafe bindings outlive
-    // anything; explicit drop here makes that ordering obvious.
-    drop(captures);
-    drop(registry);
-    drop(core);
-    drop(context);
-    drop(mainloop);
+    // Teardown order is enforced by the Rc keepalive graph (streams and the
+    // registry own the core, the core owns the context, the context owns the
+    // loop), so plain scope-end drops destroy everything safely.
 }
 
 fn build_capture(
@@ -421,21 +404,29 @@ fn build_capture(
 
             // We requested interleaved F32LE, so samples for all channels live in datas[0].
             let data = &mut datas[0];
+            let offset = data.chunk().offset() as usize;
             let size = data.chunk().size() as usize;
             if size == 0 {
                 return;
             }
 
             let Some(bytes) = data.data() else { return };
-            let stride = std::mem::size_of::<f32>();
-            if bytes.len() < size {
-                log::warn!("short PipeWire buffer ({} < {size})", bytes.len());
+            // Valid samples live at `offset..offset + size`; clamp both to the
+            // mapped region (like pw-cat), since producers may set an offset.
+            let offset = offset.min(bytes.len());
+            let size = size.min(bytes.len() - offset);
+            if size == 0 {
+                log::warn!(
+                    "PipeWire chunk outside mapped buffer ({} bytes)",
+                    bytes.len()
+                );
                 return;
             }
 
+            let stride = std::mem::size_of::<f32>();
             let n_samples = size / stride;
             let mut samples = Vec::with_capacity(n_samples);
-            for chunk_bytes in bytes[..size].chunks_exact(stride) {
+            for chunk_bytes in bytes[offset..offset + size].chunks_exact(stride) {
                 samples.push(f32::from_le_bytes([
                     chunk_bytes[0],
                     chunk_bytes[1],
@@ -496,7 +487,7 @@ fn build_capture(
 /// Pair up known target outputs with our stream's inputs and create any missing
 /// links via the `link-factory`. Idempotent: only links beyond `capture.links.len()`
 /// are created.
-fn try_link(core: &pipewire::core::Core, capture: &mut Capture) {
+fn try_link(core: &CoreRc, capture: &mut Capture) {
     let Some(my_node_id) = capture.own_node_id else {
         return;
     };
