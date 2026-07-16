@@ -6,7 +6,6 @@ import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
 import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
 import {setPage} from "../../stores/navigation-store.ts";
 import {useRadioStore} from "../../stores/radio-store.ts";
-import {useSettingsStore} from "../../stores/settings-store.ts";
 import {callMicModeToKeybind, KeybindType} from "../../types/keybinds.ts";
 import {RadioState} from "../../types/radio.ts";
 import {
@@ -15,203 +14,17 @@ import {
     RadioConfigWithLabels,
     TransmitConfig,
     TransmitConfigWithLabels,
-    isCallMicMode,
     isRadioIntegration,
     withRadioLabels,
     withTransmitLabels,
 } from "../../types/transmit.ts";
-import {openUrl} from "../../utils/tauri.ts";
+import RadioPrioBadge from "../ui/RadioPrioBadge.tsx";
 import Select from "../ui/Select.tsx";
 import StatusIndicator, {Status} from "../ui/StatusIndicator.tsx";
-import KeyCapture from "./KeyCapture.tsx";
 import ExternalKeybindField from "./ExternalKeybindField.tsx";
+import KeyCapture from "./KeyCapture.tsx";
 
-function TransmitModeSettings() {
-    const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
-    const capPlatform = useCapabilitiesStore(state => state.platform);
-
-    const transmitConfig = useSettingsStore(state => state.transmitConfig);
-    const setTransmitConfig = useSettingsStore(state => state.setTransmitConfig);
-    const radioConfig = useSettingsStore(state => state.radioConfig);
-    const setRadioConfig = useSettingsStore(state => state.setRadioConfig);
-
-    return (
-        <div className="h-full flex flex-col">
-            <div className="flex flex-col gap-0.5">
-                <div className="w-full mb-1 flex flex-row gap-2 items-center justify-center border-b-2 border-zinc-200">
-                    <p className="font-semibold uppercase">Call Mode</p>
-                    <HelpIcon url="https://docs.vacs.network/settings/transmit" /> {/* TODO */}
-                </div>
-                {!capKeybindListener ? (
-                    <div className="w-full px-3 flex flex-row gap-3 items-center justify-center">
-                        <p
-                            className="text-sm text-gray-700 py-1.5 cursor-help"
-                            title={`Unfortunately, keybinds are not yet supported on ${capPlatform}`}
-                        >
-                            Not available.
-                        </p>
-                    </div>
-                ) : (
-                    <>
-                        <div className="w-full px-3 flex flex-row gap-3 items-center justify-center">
-                            {transmitConfig !== undefined ? (
-                                <TransmitConfigSettings
-                                    transmitConfig={transmitConfig}
-                                    setTransmitConfig={setTransmitConfig}
-                                />
-                            ) : (
-                                <p className="w-full text-center">Loading...</p>
-                            )}
-                        </div>
-                        <p className="py-2 px-3 text-sm text-gray-800">
-                            <b>Voice activation:</b> Mic unmuted, toggle{" "}
-                            <span className="bg-[#92e1fe] border-2 border-t-cyan-100 border-l-cyan-100 border-r-cyan-950 border-b-cyan-950 rounded px-1 text-xs text-black font-semibold">
-                                RADIO PRIO
-                            </span>{" "}
-                            to mute.
-                            <br />
-                            <b>Push-to-talk:</b> Mic muted, press and hold key to talk in a call.
-                            <br />
-                            <b>Push-to-mute:</b> Mic unmuted, press and hold key to mute in a call.
-                        </p>
-                    </>
-                )}
-            </div>
-            <div className="grow flex flex-col gap-0.5">
-                <div className="w-full pt-1 mb-1 flex flex-row gap-2 items-center justify-center border-t-2 border-zinc-200">
-                    <p className="font-semibold uppercase">Radio Integration</p>
-                    <HelpIcon url="https://docs.vacs.network/settings/transmit" /> {/* TODO */}
-                </div>
-                {!capKeybindListener ? (
-                    <div className="w-full px-3 flex flex-row gap-3 items-center justify-center">
-                        <p
-                            className="text-sm text-gray-700 py-1.5 cursor-help"
-                            title={`Unfortunately, keybind emitters are not yet supported on ${capPlatform}`}
-                        >
-                            Not available.
-                        </p>
-                    </div>
-                ) : (
-                    <>
-                        {transmitConfig !== undefined && radioConfig !== undefined ? (
-                            <RadioIntegrationSettings
-                                transmitConfig={transmitConfig}
-                                radioConfig={radioConfig}
-                                setTransmitConfig={setTransmitConfig}
-                                setRadioConfig={setRadioConfig}
-                            />
-                        ) : (
-                            <div className="w-full px-3 flex items-center justify-center">
-                                <p className="w-full text-center">Loading...</p>
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-        </div>
-    );
-}
-
-type TransmitConfigSettingsProps = {
-    transmitConfig: TransmitConfigWithLabels;
-    setTransmitConfig: (config: TransmitConfigWithLabels) => void;
-};
-
-function TransmitConfigSettings({transmitConfig, setTransmitConfig}: TransmitConfigSettingsProps) {
-    const capPlatform = useCapabilitiesStore(state => state.platform);
-
-    const handleOnTransmitCapture = async (code: string) => {
-        if (transmitConfig === undefined || transmitConfig.callMicMode === "VoiceActivation")
-            return;
-
-        let newConfig: TransmitConfig;
-        switch (transmitConfig.callMicMode) {
-            case "PushToTalk":
-                newConfig = {...transmitConfig, pushToTalk: code};
-                break;
-            case "PushToMute":
-                newConfig = {...transmitConfig, pushToMute: code};
-                break;
-        }
-
-        if (code === transmitConfig.radioPushToTalk) {
-            newConfig.radioPushToTalk = null;
-        }
-
-        try {
-            await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
-            setTransmitConfig(await withTransmitLabels(newConfig));
-        } catch {}
-    };
-
-    const handleOnTransmitModeChange = async (value: string) => {
-        if (!isCallMicMode(value) || transmitConfig === undefined) return;
-
-        const previousTransmitConfig = transmitConfig;
-        const newTransmitConfig: TransmitConfigWithLabels = {...transmitConfig, callMicMode: value};
-
-        setTransmitConfig(newTransmitConfig);
-
-        try {
-            await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newTransmitConfig});
-        } catch {
-            setTransmitConfig(previousTransmitConfig);
-        }
-    };
-
-    const handleOnTransmitRemoveClick = async () => {
-        if (transmitConfig === undefined || transmitConfig.callMicMode === "VoiceActivation") {
-            return;
-        }
-
-        let newConfig: TransmitConfig;
-        switch (transmitConfig.callMicMode) {
-            case "PushToTalk":
-                newConfig = {...transmitConfig, pushToTalk: null};
-                break;
-            case "PushToMute":
-                newConfig = {...transmitConfig, pushToMute: null};
-                break;
-        }
-
-        try {
-            await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
-            setTransmitConfig(await withTransmitLabels(newConfig));
-        } catch {}
-    };
-
-    return (
-        <>
-            <Select
-                className="w-[21ch]! h-full"
-                name="keybind-mode"
-                options={[
-                    {value: "VoiceActivation", text: "Voice activation"},
-                    {value: "PushToTalk", text: "Push-to-talk"},
-                    {value: "PushToMute", text: "Push-to-mute"},
-                ]}
-                selected={transmitConfig.callMicMode}
-                onChange={handleOnTransmitModeChange}
-            />
-            {capPlatform === "LinuxWayland" ? (
-                <ExternalKeybindField type={callMicModeToKeybind(transmitConfig.callMicMode)} />
-            ) : (
-                <KeyCapture
-                    label={
-                        transmitConfig.callMicMode === "PushToTalk"
-                            ? transmitConfig.pushToTalkLabel
-                            : transmitConfig.callMicMode === "PushToMute"
-                              ? transmitConfig.pushToMuteLabel
-                              : ""
-                    }
-                    onCapture={handleOnTransmitCapture}
-                    onRemove={handleOnTransmitRemoveClick}
-                    disabled={transmitConfig.callMicMode === "VoiceActivation"}
-                />
-            )}
-        </>
-    );
-}
+// --- RadioIntegrationSettings ---
 
 type RadioIntegrationSettingsProps = {
     transmitConfig: TransmitConfigWithLabels;
@@ -236,8 +49,6 @@ function RadioIntegrationSettings({
     );
 
     const handleOnRadioIntegrationChange = async (value: string) => {
-        if (radioConfig === undefined) return;
-
         const previousRadioConfig = radioConfig;
 
         let newRadioConfig;
@@ -262,9 +73,7 @@ function RadioIntegrationSettings({
     };
 
     const handleOnRadioPushToTalkCapture = async (code: string) => {
-        if (transmitConfig === undefined || code === transmitConfig.radioPushToTalk) {
-            return;
-        }
+        if (code === transmitConfig.radioPushToTalk) return;
 
         let newConfig: TransmitConfig = {...transmitConfig, radioPushToTalk: code};
         if (transmitConfig.callMicMode !== "VoiceActivation") {
@@ -285,11 +94,7 @@ function RadioIntegrationSettings({
     };
 
     const handleOnRadioPushToTalkRemoveClick = async () => {
-        if (transmitConfig === undefined) {
-            return;
-        }
-
-        let newConfig: TransmitConfig = {...transmitConfig, radioPushToTalk: null};
+        const newConfig: TransmitConfig = {...transmitConfig, radioPushToTalk: null};
 
         try {
             await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
@@ -298,23 +103,12 @@ function RadioIntegrationSettings({
     };
 
     const handleOnAfvEmitCapture = async (code: string) => {
-        if (transmitConfig === undefined || radioConfig === undefined) {
-            return;
-        }
+        if (radioConfig.integration !== "AudioForVatsim") return;
 
-        let newConfig: RadioConfig;
-        switch (radioConfig.integration) {
-            case "AudioForVatsim":
-                newConfig = {
-                    ...radioConfig,
-                    audioForVatsim: {
-                        emit: code,
-                    },
-                };
-                break;
-            default:
-                return;
-        }
+        const newConfig: RadioConfig = {
+            ...radioConfig,
+            audioForVatsim: {emit: code},
+        };
 
         try {
             await invokeStrict("radio_set_config", {radioConfig: newConfig});
@@ -323,21 +117,12 @@ function RadioIntegrationSettings({
     };
 
     const handleOnAfvEmitRemoveClick = async () => {
-        if (radioConfig === undefined) return;
+        if (radioConfig.integration !== "AudioForVatsim") return;
 
-        let newConfig: RadioConfig;
-        switch (radioConfig.integration) {
-            case "AudioForVatsim":
-                newConfig = {
-                    ...radioConfig,
-                    audioForVatsim: {
-                        emit: null,
-                    },
-                };
-                break;
-            default:
-                return;
-        }
+        const newConfig: RadioConfig = {
+            ...radioConfig,
+            audioForVatsim: {emit: null},
+        };
 
         try {
             await invokeStrict("radio_set_config", {radioConfig: newConfig});
@@ -351,27 +136,21 @@ function RadioIntegrationSettings({
     };
 
     const handleOnTrackAudioEndpointCommit = async () => {
-        if (transmitConfig === undefined || radioConfig === undefined) {
-            return;
-        }
+        if (radioConfig.integration !== "TrackAudio") return;
 
         const endpoint = trackAudioEndpoint.trim() === "" ? null : trackAudioEndpoint.trim();
         if (endpoint === radioConfig.trackAudio?.endpoint) return;
 
-        let newConfig: RadioConfig;
-        if (radioConfig.integration === "TrackAudio") {
-            newConfig = {
-                ...radioConfig,
-                trackAudio: {
-                    endpoint: endpoint,
-                },
-            };
-            try {
-                await invokeStrict("radio_set_config", {radioConfig: newConfig});
-                setRadioConfig(await withRadioLabels(newConfig));
-            } catch {
-                setTrackAudioEndpoint(radioConfig.trackAudio?.endpoint ?? "");
-            }
+        const newConfig: RadioConfig = {
+            ...radioConfig,
+            trackAudio: {endpoint},
+        };
+
+        try {
+            await invokeStrict("radio_set_config", {radioConfig: newConfig});
+            setRadioConfig(await withRadioLabels(newConfig));
+        } catch {
+            setTrackAudioEndpoint(radioConfig.trackAudio?.endpoint ?? "");
         }
     };
 
@@ -535,13 +314,9 @@ function RadioIntegrationSettings({
     );
 }
 
-function RadioPrioBadge() {
-    return (
-        <span className="bg-[#92e1fe] border-2 border-t-cyan-100 border-l-cyan-100 border-r-cyan-950 border-b-cyan-950 rounded px-1 text-xs text-black font-semibold">
-            RADIO PRIO
-        </span>
-    );
-}
+export default RadioIntegrationSettings;
+
+// --- RadioPttDescription ---
 
 function RadioPttDescription({callMicMode}: {callMicMode: CallMicMode}) {
     return (
@@ -575,6 +350,8 @@ function RadioPttDescription({callMicMode}: {callMicMode: CallMicMode}) {
         </p>
     );
 }
+
+// --- TrackAudioStatusIndicator ---
 
 const RadioStateAsIndicatorState: {[key in RadioState["state"]]: Status} = {
     NotConfigured: "gray",
@@ -613,27 +390,3 @@ function TrackAudioStatusIndicator() {
         />
     );
 }
-
-function HelpIcon({url}: {url: string}) {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="stroke-gray-600 cursor-pointer"
-            onClick={() => openUrl(url)}
-        >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-            <path d="M12 17h.01" />
-        </svg>
-    );
-}
-
-export default TransmitModeSettings;

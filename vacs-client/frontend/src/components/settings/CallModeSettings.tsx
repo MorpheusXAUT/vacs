@@ -1,0 +1,112 @@
+import {invokeStrict} from "../../error.ts";
+import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
+import {callMicModeToKeybind} from "../../types/keybinds.ts";
+import {
+    TransmitConfig,
+    TransmitConfigWithLabels,
+    isCallMicMode,
+    withTransmitLabels,
+} from "../../types/transmit.ts";
+import Select from "../ui/Select.tsx";
+import ExternalKeybindField from "./ExternalKeybindField.tsx";
+import KeyCapture from "./KeyCapture.tsx";
+
+type CallModeSettingsProps = {
+    transmitConfig: TransmitConfigWithLabels;
+    setTransmitConfig: (config: TransmitConfigWithLabels) => void;
+};
+
+function CallModeSettings({transmitConfig, setTransmitConfig}: CallModeSettingsProps) {
+    const capPlatform = useCapabilitiesStore(state => state.platform);
+
+    const handleOnTransmitCapture = async (code: string) => {
+        if (transmitConfig.callMicMode === "VoiceActivation") return;
+
+        let newConfig: TransmitConfig;
+        switch (transmitConfig.callMicMode) {
+            case "PushToTalk":
+                newConfig = {...transmitConfig, pushToTalk: code};
+                break;
+            case "PushToMute":
+                newConfig = {...transmitConfig, pushToMute: code};
+                break;
+        }
+
+        if (code === transmitConfig.radioPushToTalk) {
+            newConfig.radioPushToTalk = null;
+        }
+
+        try {
+            await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
+            setTransmitConfig(await withTransmitLabels(newConfig));
+        } catch {}
+    };
+
+    const handleOnTransmitModeChange = async (value: string) => {
+        if (!isCallMicMode(value)) return;
+
+        const previousTransmitConfig = transmitConfig;
+        const newTransmitConfig: TransmitConfigWithLabels = {...transmitConfig, callMicMode: value};
+
+        setTransmitConfig(newTransmitConfig);
+
+        try {
+            await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newTransmitConfig});
+        } catch {
+            setTransmitConfig(previousTransmitConfig);
+        }
+    };
+
+    const handleOnTransmitRemoveClick = async () => {
+        if (transmitConfig.callMicMode === "VoiceActivation") return;
+
+        let newConfig: TransmitConfig;
+        switch (transmitConfig.callMicMode) {
+            case "PushToTalk":
+                newConfig = {...transmitConfig, pushToTalk: null};
+                break;
+            case "PushToMute":
+                newConfig = {...transmitConfig, pushToMute: null};
+                break;
+        }
+
+        try {
+            await invokeStrict("keybinds_set_transmit_config", {transmitConfig: newConfig});
+            setTransmitConfig(await withTransmitLabels(newConfig));
+        } catch {}
+    };
+
+    return (
+        <>
+            <Select
+                className="w-[21ch]! h-full"
+                name="keybind-mode"
+                options={[
+                    {value: "VoiceActivation", text: "Voice activation"},
+                    {value: "PushToTalk", text: "Push-to-talk"},
+                    {value: "PushToMute", text: "Push-to-mute"},
+                ]}
+                selected={transmitConfig.callMicMode}
+                onChange={handleOnTransmitModeChange}
+            />
+            {capPlatform === "LinuxWayland" ? (
+                <ExternalKeybindField type={callMicModeToKeybind(transmitConfig.callMicMode)} />
+            ) : (
+                <KeyCapture
+                    label={
+                        transmitConfig.callMicMode === "PushToTalk"
+                            ? transmitConfig.pushToTalkLabel
+                            : transmitConfig.callMicMode === "PushToMute"
+                              ? transmitConfig.pushToMuteLabel
+                              : ""
+                    }
+                    onCapture={handleOnTransmitCapture}
+                    onRemove={handleOnTransmitRemoveClick}
+                    disabled={transmitConfig.callMicMode === "VoiceActivation"}
+                />
+            )}
+        </>
+    );
+}
+
+export default CallModeSettings;
