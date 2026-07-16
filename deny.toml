@@ -68,7 +68,8 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
     "https://github.com/MorpheusXAUT/axum-login",
     "https://github.com/maxcountryman/tower-sessions-stores",
-    "https://github.com/SpaceManiac/opus-rs"
+    "https://github.com/SpaceManiac/opus-rs",
+    "https://github.com/MorpheusXAUT/redis-protocol.rs"
 ]
 
 [sources.allow-org]

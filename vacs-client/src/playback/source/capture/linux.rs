@@ -11,10 +11,11 @@
 
 use super::{LoopbackCapture, LoopbackEvent};
 use crate::playback::{PlaybackError, TapId};
-use pipewire::context::Context;
+use pipewire::context::ContextRc;
+use pipewire::core::CoreRc;
 use pipewire::keys;
 use pipewire::link::Link;
-use pipewire::main_loop::MainLoop;
+use pipewire::main_loop::MainLoopRc;
 use pipewire::properties::properties;
 use pipewire::spa::param::ParamType;
 use pipewire::spa::param::audio::{AudioFormat, AudioInfoRaw};
@@ -22,7 +23,7 @@ use pipewire::spa::pod::Pod;
 use pipewire::spa::pod::serialize::PodSerializer;
 use pipewire::spa::pod::{Object, Value};
 use pipewire::spa::utils::{Direction, SpaTypes};
-use pipewire::stream::{Stream, StreamFlags, StreamListener, StreamState as PwStreamState};
+use pipewire::stream::{StreamFlags, StreamListener, StreamRc, StreamState as PwStreamState};
 use pipewire::types::ObjectType;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -108,7 +109,7 @@ struct Capture {
     target_node_id: u32,
     tap: TapId,
     // Owning the listeners keeps the callbacks alive.
-    _stream: Stream,
+    _stream: StreamRc,
     _listener: StreamListener<CaptureUserData>,
     /// Registry id of our own capture stream's node, populated when its node global
     /// arrives.
@@ -144,23 +145,29 @@ fn spawn_pipewire_thread(
         }
     };
 
-    let weak = handle;
-    let shutdown = Box::new(move || weak.quit());
+    let shutdown = Box::new(move || handle.quit());
 
     Ok((shutdown, thread))
 }
 
+/// Raw `pw_main_loop*` handle used to request shutdown from another thread.
+///
+/// We deliberately don't use `pipewire::main_loop::MainLoopWeak` here: it wraps a
+/// `std::rc::Weak`, and upgrading it mutates a non-atomic refcount, so calling it
+/// from a thread other than the one owning the `MainLoopRc` would race with that
+/// thread's own clones/drops. A raw pointer sidesteps this entirely — we only ever
+/// call `quit()` before `run_main_loop` drops the loop (see below), and PipeWire
+/// documents `pw_main_loop_quit` as thread-safe (it just calls
+/// `pw_loop_invoke`/`pw_loop_signal_event` internally).
 struct MainLoopHandle {
-    weak: pipewire::main_loop::WeakMainLoop,
+    ptr: std::ptr::NonNull<pipewire::sys::pw_main_loop>,
 }
-// SAFETY: `WeakMainLoop` wraps a `pw_main_loop *` whose `quit()` is documented as
-// thread-safe (it just calls `pw_loop_invoke`/`pw_loop_signal_event` internally).
 unsafe impl Send for MainLoopHandle {}
 
 impl MainLoopHandle {
     fn quit(self) {
-        if let Some(strong) = self.weak.upgrade() {
-            strong.quit();
+        unsafe {
+            pipewire::sys::pw_main_loop_quit(self.ptr.as_ptr());
         }
     }
 }
@@ -171,7 +178,7 @@ fn run_main_loop(
 ) {
     pipewire::init();
 
-    let mainloop = match MainLoop::new(None) {
+    let mainloop = match MainLoopRc::new(None) {
         Ok(m) => m,
         Err(err) => {
             let _ = init_tx.send(Err(format!("PipeWire MainLoop::new failed: {err}")));
@@ -179,7 +186,7 @@ fn run_main_loop(
         }
     };
 
-    let context = match Context::new(&mainloop) {
+    let context = match ContextRc::new(&mainloop, None) {
         Ok(c) => c,
         Err(err) => {
             let _ = init_tx.send(Err(format!("PipeWire Context::new failed: {err}")));
@@ -187,7 +194,7 @@ fn run_main_loop(
         }
     };
 
-    let core = match context.connect(None) {
+    let core = match context.connect_rc(None) {
         Ok(c) => c,
         Err(err) => {
             let _ = init_tx.send(Err(format!("PipeWire Context::connect failed: {err}")));
@@ -195,7 +202,7 @@ fn run_main_loop(
         }
     };
 
-    let registry = match core.get_registry() {
+    let registry = match core.get_registry_rc() {
         Ok(r) => r,
         Err(err) => {
             let _ = init_tx.send(Err(format!("PipeWire core.get_registry failed: {err}")));
@@ -313,7 +320,8 @@ fn run_main_loop(
         .register();
 
     let handle = MainLoopHandle {
-        weak: mainloop.downgrade(),
+        ptr: std::ptr::NonNull::new(mainloop.as_raw_ptr())
+            .expect("pw_main_loop pointer is never null"),
     };
     if init_tx.send(Ok(handle)).is_err() {
         log::warn!("caller disappeared before PipeWire init completed");
@@ -334,7 +342,7 @@ fn run_main_loop(
 }
 
 fn build_capture(
-    core: &pipewire::core::Core,
+    core: &CoreRc,
     node_id: u32,
     tap: TapId,
     tx: mpsc::Sender<LoopbackEvent>,
@@ -353,7 +361,7 @@ fn build_capture(
         "node.autoconnect" => "false",
     };
 
-    let stream = Stream::new(core, "vacs-playback-tap", props)
+    let stream = StreamRc::new(core.clone(), "vacs-playback-tap", props)
         .map_err(|e| format!("Stream::new failed: {e}"))?;
 
     let user_data = CaptureUserData {

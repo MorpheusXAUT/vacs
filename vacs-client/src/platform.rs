@@ -133,10 +133,10 @@ fn check_pipewire() -> bool {
             std::time::Duration::from_secs(1),
             tokio::task::spawn_blocking(|| {
                 pipewire::init();
-                let Ok(mainloop) = pipewire::main_loop::MainLoop::new(None) else {
+                let Ok(mainloop) = pipewire::main_loop::MainLoopBox::new(None) else {
                     return false;
                 };
-                let Ok(context) = pipewire::context::Context::new(&mainloop) else {
+                let Ok(context) = pipewire::context::ContextBox::new(mainloop.loop_(), None) else {
                     return false;
                 };
                 context.connect(None).is_ok()
