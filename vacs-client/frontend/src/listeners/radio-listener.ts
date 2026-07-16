@@ -11,7 +11,6 @@ export function setupRadioListener() {
     const init = () => {
         unlistenFns.push(
             listen<RadioState>("radio:state", event => {
-                console.log("Radio state:", event.payload);
                 setRadioState(event.payload);
             }),
         );

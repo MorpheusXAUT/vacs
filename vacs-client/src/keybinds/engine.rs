@@ -87,7 +87,10 @@ impl KeybindEngine {
                 "TransmitMode set to voice activation, no radio PTT set and no call controls defined -> no keybind engine required"
             );
             return Ok(());
-        } else if self.call_mic_mode != CallMicMode::VoiceActivation && self.call_code.is_none() {
+        } else if self.call_mic_mode != CallMicMode::VoiceActivation
+            && self.call_code.is_none()
+            && self.radio_code.is_none()
+        {
             log::trace!(
                 "No keybind set for TransmitMode {:?}, keybind engine not starting",
                 self.call_mic_mode
