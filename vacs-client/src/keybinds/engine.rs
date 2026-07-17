@@ -37,6 +37,7 @@ pub struct KeybindEngine {
     call_active: Arc<AtomicBool>,
     radio_prio: Arc<AtomicBool>,
     implicit_radio_prio: Arc<AtomicBool>,
+    radio_transmitting: Arc<AtomicBool>,
 }
 
 pub type KeybindEngineHandle = Arc<TokioRwLock<KeybindEngine>>;
@@ -68,6 +69,7 @@ impl KeybindEngine {
             call_active: Arc::new(AtomicBool::new(false)),
             radio_prio: Arc::new(AtomicBool::new(false)),
             implicit_radio_prio: Arc::new(AtomicBool::new(false)),
+            radio_transmitting: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -162,6 +164,7 @@ impl KeybindEngine {
             if self.radio_code.is_some()
                 && self.radio_code == self.call_code
                 && self.radio_pressed.load(Ordering::Relaxed)
+                && self.radio_transmitting.load(Ordering::Relaxed)
                 && !self.radio_prio.load(Ordering::Relaxed)
                 && self.call_mic_mode != CallMicMode::VoiceActivation
             {
@@ -267,6 +270,7 @@ impl KeybindEngine {
     fn reset_input_state(&self) {
         self.call_pressed.store(false, Ordering::Relaxed);
         self.radio_pressed.store(false, Ordering::Relaxed);
+        self.radio_transmitting.store(false, Ordering::Relaxed);
 
         let muted = match &self.call_mic_mode {
             CallMicMode::PushToTalk => true,
@@ -379,6 +383,7 @@ impl KeybindEngine {
         let call_active = self.call_active.clone();
         let radio_prio_arc = self.radio_prio.clone();
         let implicit_radio_prio = self.implicit_radio_prio.clone();
+        let radio_transmitting = self.radio_transmitting.clone();
 
         let handle = tauri::async_runtime::spawn(async move {
             log::debug!(
@@ -415,6 +420,7 @@ impl KeybindEngine {
                         let separate = is_call_key ^ is_radio_key;
 
                         if is_radio_key && (separate || !call_active || radio_prio || mode != CallMicMode::PushToTalk) {
+                            radio_transmitting.store(key_down, Ordering::Relaxed);
                             Self::set_radio_transmit(&radio_handle, event.state.into()).await;
                             log::debug!("Radio transmit: {key_down}");
                         }
@@ -443,6 +449,7 @@ impl KeybindEngine {
                             if radio_prio_arc.swap(false, Ordering::Relaxed) {
                                 app.emit("audio:implicit-radio-prio", false).ok();
                             } else {
+                                radio_transmitting.store(false, Ordering::Relaxed);
                                 // prio was already cleared externally; ensure radio TX stops
                                 Self::set_radio_transmit(&radio_handle, TransmissionState::Inactive).await;
                                 log::debug!("Radio transmit: false (implicit)");
