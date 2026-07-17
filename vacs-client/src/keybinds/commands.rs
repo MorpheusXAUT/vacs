@@ -1,11 +1,10 @@
 use crate::app::state::AppState;
-use crate::config::{
-    CLIENT_SETTINGS_FILE_NAME, FrontendKeybindsConfig, FrontendTransmitConfig, KeybindsConfig,
-    Persistable, PersistedClientConfig, TransmitConfig,
-};
+use crate::app::PersistedClientConfig;
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::Error;
 use crate::keybinds::Keybind;
 use crate::keybinds::engine::KeybindEngineHandle;
+use crate::keybinds::{FrontendKeybindsConfig, FrontendTransmitConfig, KeybindsConfig, TransmitConfig};
 use crate::platform::Capabilities;
 use keyboard_types::Code;
 use tauri::{AppHandle, Manager, State};

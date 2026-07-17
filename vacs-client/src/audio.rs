@@ -5,6 +5,59 @@ pub(crate) mod commands;
 pub(crate) mod manager;
 pub(crate) mod source_type;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioConfig {
+    pub host_name: Option<String>, // Name of audio backend host, None means default host
+    pub input_device_name: Option<String>, // None means default device
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_device_id: Option<String>, // Stable device ID for reliable matching, None means default device
+    pub output_device_name: Option<String>, // None means default device
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_device_id: Option<String>, // Stable device ID for reliable matching, None means default device
+    pub speaker_enabled: bool,
+    pub speaker_device_name: Option<String>, // None means default device
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speaker_device_id: Option<String>, // Stable device ID for reliable matching, None means default device
+    pub input_device_volume: f32,
+    pub input_device_volume_amp: f32,
+    pub output_device_volume: f32,
+    pub output_device_volume_amp: f32,
+    pub click_volume: f32,
+    pub chime_volume: f32,
+}
+
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self {
+            host_name: None,
+            input_device_name: None,
+            input_device_id: None,
+            output_device_name: None,
+            output_device_id: None,
+            speaker_enabled: false,
+            speaker_device_name: None,
+            speaker_device_id: None,
+            input_device_volume: 0.5,
+            input_device_volume_amp: 4.0,
+            output_device_volume: 0.5,
+            output_device_volume_amp: 2.0,
+            click_volume: 0.5,
+            chime_volume: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct PersistedAudioConfig {
+    pub audio: AudioConfig,
+}
+
+impl From<AudioConfig> for PersistedAudioConfig {
+    fn from(audio: AudioConfig) -> Self {
+        Self { audio }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioHosts {

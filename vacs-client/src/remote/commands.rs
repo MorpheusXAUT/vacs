@@ -1,5 +1,6 @@
+use crate::app::PersistedClientConfig;
 use crate::app::state::AppState;
-use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::Error;
 use crate::remote::server::RemoteServerHandle;
 use crate::remote::{FrontendRemoteConfig, RemoteStatus};

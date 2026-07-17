@@ -1,8 +1,8 @@
 use crate::app::state::AppState;
 use crate::app::state::http::HttpState;
 use crate::app::state::signaling::ConnectionState;
+use crate::app::{ClockMode, FrontendCallConfig, FrontendClientPageSettings};
 use crate::audio::manager::AudioManagerHandle;
-use crate::config::{ClockMode, FrontendCallConfig, FrontendClientPageSettings};
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;

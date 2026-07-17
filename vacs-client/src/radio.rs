@@ -2,15 +2,19 @@ pub mod commands;
 pub mod push_to_talk;
 pub mod track_audio;
 
+use crate::error::Error;
+use crate::keybinds::{KeybindsError, TransmitConfig};
 use crate::platform::Capabilities;
-use keyboard_types::KeyState;
+use crate::radio::push_to_talk::PushToTalkRadio;
+use crate::radio::track_audio::TrackAudioRadio;
+use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tauri::Emitter;
+use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 pub use trackaudio::Frequency;
 
@@ -172,3 +176,162 @@ pub trait Radio: Send + Sync + Debug + Any + 'static {
 pub type DynRadio = Arc<dyn Radio>;
 
 pub type RadioHandle = Arc<RwLock<Option<DynRadio>>>;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RadioConfig {
+    pub integration: Option<RadioIntegration>,
+    pub audio_for_vatsim: Option<AudioForVatsimRadioConfig>,
+    pub track_audio: Option<TrackAudioRadioConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AudioForVatsimRadioConfig {
+    pub emit: Option<Code>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TrackAudioRadioConfig {
+    pub endpoint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendRadioConfig {
+    pub integration: Option<RadioIntegration>,
+    pub audio_for_vatsim: Option<FrontendAudioForVatsimRadioConfig>,
+    pub track_audio: Option<FrontendTrackAudioRadioConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendAudioForVatsimRadioConfig {
+    pub emit: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendTrackAudioRadioConfig {
+    pub endpoint: Option<String>,
+}
+
+impl RadioConfig {
+    /// Create a radio integration instance based on the configured integration type.
+    ///
+    /// Returns `None` if the integration is not configured or if the emit key is not set.
+    ///
+    /// # Platform Limitation
+    ///
+    /// **Important**: AudioForVatsim Radio integration requires a functional `KeybindEmitter` to
+    /// inject key presses into external applications. This works on Windows and macOS, but NOT
+    /// on Linux where the emitter is a no-op stub due to Wayland's security model.
+    ///
+    /// On Linux, this method will successfully create a radio instance, but it will
+    /// silently do nothing when `transmit()` is called.
+    ///
+    /// The TrackAudio integration is not affected by this platform limitation and is thus the
+    /// default radio implementation for Linux.
+    pub async fn radio(&self, app: AppHandle) -> Result<Option<DynRadio>, Error> {
+        match self.integration {
+            Some(RadioIntegration::AudioForVatsim) => {
+                let Some(config) = self.audio_for_vatsim.as_ref() else {
+                    return Ok(None);
+                };
+                let Some(emit) = config.emit else {
+                    return Ok(None);
+                };
+                log::debug!("Initializing AudioForVatsim radio integration");
+                let radio = PushToTalkRadio::new(app, emit).map_err(Error::from)?;
+                Ok(Some(Arc::new(radio)))
+            }
+            Some(RadioIntegration::TrackAudio) => {
+                let endpoint = self.track_audio.as_ref().and_then(|c| c.endpoint.as_ref());
+                log::debug!("Initializing TrackAudio radio integration (endpoint: {endpoint:?})");
+                let radio = Arc::new(
+                    TrackAudioRadio::new(app.clone(), endpoint)
+                        .await
+                        .map_err(Error::from)?,
+                );
+                Ok(Some(radio))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    pub async fn validate(&self, transmit_config: &TransmitConfig) -> Result<(), Error> {
+        if self.integration == Some(RadioIntegration::AudioForVatsim)
+            && let Some(afv_code) = self.audio_for_vatsim.as_ref().and_then(|c| c.emit)
+            && let Some(radio_code) = transmit_config.active_radio_code(true).await
+            && afv_code == radio_code
+        {
+            return Err(KeybindsError::Other(
+                "AFV emit key must be distinct from your radio integration push-to-talk key"
+                    .to_string(),
+            )
+            .into());
+        }
+        Ok(())
+    }
+}
+
+impl From<RadioConfig> for FrontendRadioConfig {
+    fn from(radio_integration: RadioConfig) -> Self {
+        Self {
+            integration: radio_integration.integration,
+            audio_for_vatsim: radio_integration.audio_for_vatsim.map(|c| c.into()),
+            track_audio: radio_integration.track_audio.map(|c| c.into()),
+        }
+    }
+}
+
+impl From<AudioForVatsimRadioConfig> for FrontendAudioForVatsimRadioConfig {
+    fn from(value: AudioForVatsimRadioConfig) -> Self {
+        Self {
+            emit: value.emit.map(|c| c.to_string()),
+        }
+    }
+}
+
+impl From<TrackAudioRadioConfig> for FrontendTrackAudioRadioConfig {
+    fn from(value: TrackAudioRadioConfig) -> Self {
+        Self {
+            endpoint: value.endpoint,
+        }
+    }
+}
+
+impl TryFrom<FrontendRadioConfig> for RadioConfig {
+    type Error = Error;
+
+    fn try_from(value: FrontendRadioConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            integration: value.integration,
+            audio_for_vatsim: value.audio_for_vatsim.map(|c| c.try_into()).transpose()?,
+            track_audio: value.track_audio.map(|c| c.try_into()).transpose()?,
+        })
+    }
+}
+
+impl TryFrom<FrontendAudioForVatsimRadioConfig> for AudioForVatsimRadioConfig {
+    type Error = Error;
+
+    fn try_from(value: FrontendAudioForVatsimRadioConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            emit: value
+                .emit
+                .as_ref()
+                .map(|s| s.parse::<Code>())
+                .transpose()
+                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.emit.unwrap_or_default()))))?,
+        })
+    }
+}
+
+impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
+    type Error = Error;
+
+    fn try_from(value: FrontendTrackAudioRadioConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            endpoint: value.endpoint,
+        })
+    }
+}

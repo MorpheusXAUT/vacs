@@ -1,12 +1,12 @@
 use crate::app::state::AppState;
-use crate::config::{
-    CLIENT_SETTINGS_FILE_NAME, FrontendRadioConfig, Persistable, PersistedClientConfig, RadioConfig,
-};
+use crate::app::PersistedClientConfig;
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
 use crate::radio::{
-    DynRadio, Frequency, RadioHandle, RadioState, RadioStation, StationStateUpdate,
+    DynRadio, Frequency, FrontendRadioConfig, RadioConfig, RadioHandle, RadioState, RadioStation,
+    StationStateUpdate,
 };
 use tauri::{AppHandle, Manager, State};
 

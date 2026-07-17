@@ -1,9 +1,8 @@
 use crate::app::state::AppState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
-use crate::audio::PlaybackDeviceType;
 use crate::audio::source_type::SourceType;
-use crate::config::AudioConfig;
+use crate::audio::{AudioConfig, PlaybackDeviceType};
 use crate::error::{Error, FrontendError};
 use parking_lot::RwLock;
 use serde_json::Value;
