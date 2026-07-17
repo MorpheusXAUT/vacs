@@ -69,13 +69,13 @@ pub async fn audio_set_host(
             app.clone(),
             &audio_config,
             PlaybackDeviceType::Output,
-            false,
+            None,
         )?;
         audio_manager.write().switch_playback_device(
             app.clone(),
             &audio_config,
             PlaybackDeviceType::Speaker,
-            false,
+            None,
         )?;
 
         state.config.audio = audio_config;
@@ -173,7 +173,7 @@ pub async fn audio_set_device(
                     app.clone(),
                     &audio_config,
                     PlaybackDeviceType::Output,
-                    false,
+                    None,
                 )?;
 
                 state.config.audio = audio_config;
@@ -188,7 +188,7 @@ pub async fn audio_set_device(
                     app.clone(),
                     &audio_config,
                     PlaybackDeviceType::Speaker,
-                    false,
+                    None,
                 )?;
 
                 state.config.audio = audio_config;

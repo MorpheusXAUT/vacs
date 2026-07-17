@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
 use vacs_audio::EncodedAudioFrame;
@@ -23,6 +23,8 @@ use vacs_signaling::protocol::ws::shared;
 use vacs_signaling::protocol::ws::shared::CallErrorReason;
 
 const AUDIO_STREAM_ERROR_CHANNEL_SIZE: usize = 32;
+
+const RESTART_COOLDOWN: Duration = Duration::from_secs(2);
 
 type SourceMap = HashMap<SourceType, AudioSourceId>;
 
@@ -49,7 +51,7 @@ impl AudioManager {
             output_device,
             is_fallback,
             audio_config,
-            false,
+            None,
             PlaybackDeviceType::Output,
         )?;
 
@@ -65,7 +67,7 @@ impl AudioManager {
                 speaker_device,
                 is_fallback,
                 audio_config,
-                false,
+                None,
                 PlaybackDeviceType::Speaker,
             )?;
             (Some(speaker), speaker_source_ids)
@@ -95,7 +97,7 @@ impl AudioManager {
         app: AppHandle,
         audio_config: &AudioConfig,
         device_type: PlaybackDeviceType,
-        restarting: bool,
+        restarted_at: Option<Instant>,
     ) -> Result<(), Error> {
         if device_type == PlaybackDeviceType::Speaker && !audio_config.speaker_enabled {
             self.speaker = None;
@@ -125,7 +127,7 @@ impl AudioManager {
             output_device,
             is_fallback,
             audio_config,
-            restarting,
+            restarted_at,
             device_type,
         )?;
 
@@ -387,7 +389,7 @@ impl AudioManager {
         device: StreamDevice,
         is_fallback: bool,
         audio_config: &AudioConfig,
-        restarting: bool,
+        restarted_at: Option<Instant>,
         device_type: PlaybackDeviceType,
     ) -> Result<(PlaybackStream, SourceMap), Error> {
         if is_fallback {
@@ -407,7 +409,7 @@ impl AudioManager {
             while let Some(err) = error_rx.recv().await {
                 handle_playback_stream_error(
                     err,
-                    restarting,
+                    restarted_at,
                     &audio_config_clone,
                     device_type,
                     app.clone(),
@@ -532,14 +534,16 @@ impl AudioManager {
 
 async fn handle_playback_stream_error(
     err: AudioError,
-    restarting: bool,
+    restarted_at: Option<Instant>,
     audio_config: &AudioConfig,
     device_type: PlaybackDeviceType,
     app: AppHandle,
 ) {
-    if restarting {
+    let in_restart_cooldown = restarted_at.is_some_and(|t| t.elapsed() < RESTART_COOLDOWN);
+
+    if in_restart_cooldown {
         log::error!(
-            "Restarting {device_type} device after failure errored, cannot recover: {:?}",
+            "Restarting {device_type} device after failure errored again within {RESTART_COOLDOWN:?}, cannot recover: {:?}",
             err
         );
         app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
@@ -575,7 +579,12 @@ async fn handle_playback_stream_error(
             let audio_manager = app.state::<AudioManagerHandle>();
             let mut audio_manager = audio_manager.write();
 
-            audio_manager.switch_playback_device(app.clone(), audio_config, device_type, true)
+            audio_manager.switch_playback_device(
+                app.clone(),
+                audio_config,
+                device_type,
+                Some(Instant::now()),
+            )
         };
 
         if let Err(err) = res {
