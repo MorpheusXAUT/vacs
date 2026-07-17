@@ -264,9 +264,8 @@ jobs:
           TAURI_SIGNING_RPM_KEY_PASSPHRASE: ${{ secrets.TAURI_SIGNING_RPM_KEY_PASSPHRASE }}
         with:
           projectPath: vacs-client
-          appVersion: ${{ needs.prep.outputs.version }}
           args: ${{ matrix.target && format('--target {0}', matrix.target) }} ${{ env.EXTRA_TAURI_ARGS }} ${{ env.CARGO_FEATURES }}
-          includeUpdaterJson: false
+          uploadUpdaterJson: false
 
       - name: Rename macOS bundles to include version & architecture
         if: matrix.platform == 'macos-latest'
