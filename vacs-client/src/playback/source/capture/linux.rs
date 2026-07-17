@@ -9,7 +9,7 @@
 //! The PipeWire main loop runs on a dedicated OS thread. All event delivery to async
 //! consumers is non-blocking from the PipeWire side.
 
-use super::{LoopbackCapture, LoopbackEvent};
+use super::{CaptureSource, LoopbackCapture, LoopbackEvent};
 use crate::playback::{PlaybackError, TapId};
 use pipewire::context::ContextRc;
 use pipewire::core::CoreRc;

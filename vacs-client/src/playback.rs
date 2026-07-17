@@ -176,7 +176,13 @@ fn make_source(
     #[cfg_attr(target_os = "macos", allow(unused_variables))] radio: DynRadio,
 ) -> Result<Box<dyn source::PlaybackSource>, PlaybackError> {
     cfg_select! {
-        any(target_os = "linux", target_os = "windows") => {
+        target_os = "linux" => {
+            match radio.as_any().downcast::<crate::radio::track_audio::TrackAudioRadio>() {
+                Ok(radio) => Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
+                Err(_) => Err(PlaybackError::Unsupported),
+            }
+        }
+        target_os = "windows" => {
             let radio = match radio.as_any().downcast::<crate::radio::track_audio::TrackAudioRadio>() {
                 Ok(radio) => return Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
                 Err(radio) => radio,

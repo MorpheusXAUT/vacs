@@ -38,6 +38,7 @@ pub enum LoopbackEvent {
 pub enum CaptureSource {
     #[default]
     TrackAudio,
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     AudioForVatsim,
 }
 
