@@ -8,6 +8,7 @@ use crate::audio::{
 use crate::config::{AUDIO_SETTINGS_FILE_NAME, AudioConfig, Persistable, PersistedAudioConfig};
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use vacs_audio::device::{DeviceSelector, DeviceType};
@@ -208,9 +209,10 @@ pub async fn audio_set_device(
             audio_manager.attach_input_level_meter(
                 app.clone(),
                 &state.config.audio,
-                Box::new(move |level| {
+                Arc::new(move |level| {
                     app.emit("audio:input-level", level).ok();
                 }),
+                None,
             )?;
         }
 
@@ -337,9 +339,10 @@ pub async fn audio_start_input_level_meter(
     audio_manager.attach_input_level_meter(
         app.clone(),
         audio_config,
-        Box::new(move |level| {
+        Arc::new(move |level| {
             app.emit("audio:input-level", level).ok();
         }),
+        None,
     )?;
 
     Ok(())

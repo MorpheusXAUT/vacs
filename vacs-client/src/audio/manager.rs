@@ -221,7 +221,8 @@ impl AudioManager {
         &mut self,
         app: AppHandle,
         audio_config: &AudioConfig,
-        emit: Box<dyn Fn(InputLevel) + Send>,
+        emit: Arc<dyn Fn(InputLevel) + Send + Sync>,
+        restarted_at: Option<Instant>,
     ) -> Result<(), Error> {
         let (device, _) = DeviceSelector::open(
             DeviceType::Input,
@@ -232,22 +233,73 @@ impl AudioManager {
 
         let (error_tx, mut error_rx) = mpsc::channel(AUDIO_STREAM_ERROR_CHANNEL_SIZE);
 
+        let audio_config_clone = audio_config.clone();
+        let emit_clone = emit.clone();
         tauri::async_runtime::spawn(async move {
             while let Some(err) = error_rx.recv().await {
-                app.state::<AudioManagerHandle>()
-                    .write()
-                    .detach_input_device();
+                let in_restart_cooldown =
+                    restarted_at.is_some_and(|t| t.elapsed() < RESTART_COOLDOWN);
 
-                app.emit("audio:stop-input-level-meter", Value::Null).ok();
-                app.emit::<FrontendError>("error", Error::from(err).into())
+                if in_restart_cooldown {
+                    log::error!(
+                        "Restarting input level meter after failure errored again within {RESTART_COOLDOWN:?}, cannot recover: {:?}",
+                        err
+                    );
+
+                    app.state::<AudioManagerHandle>()
+                        .write()
+                        .detach_input_device();
+                    app.emit("audio:stop-input-level-meter", Value::Null).ok();
+
+                    app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
+                        anyhow::anyhow!("Audio input level meter failed to start irrecoverably, check your audio settings and reopen the settings page.")
+                    ))).into()).ok();
+                } else {
+                    let res = app
+                        .state::<AudioManagerHandle>()
+                        .write()
+                        .attach_input_level_meter(
+                            app.clone(),
+                            &audio_config_clone,
+                            emit_clone.clone(),
+                            Some(Instant::now()),
+                        );
+
+                    if let Err(err) = res {
+                        log::error!(
+                            "Failed to switch input level meter after failure: {:?}",
+                            err
+                        );
+
+                        app.state::<AudioManagerHandle>()
+                            .write()
+                            .detach_input_device();
+                        app.emit("audio:stop-input-level-meter", Value::Null).ok();
+
+                        app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
+                            anyhow::anyhow!("Audio input level meter failed to start irrecoverably, check your audio settings and reopen the settings page.")
+                        ))).into()).ok();
+
+                        return;
+                    } else {
+                        log::info!(
+                            "Successfully restarted input level meter after failure, continuing capture"
+                        );
+                    }
+
+                    app.emit::<FrontendError>(
+                        "error",
+                        FrontendError::from(Error::from(err)).non_critical(),
+                    )
                     .ok();
+                }
             }
             log::debug!("Playback capture error receiver closed");
         });
 
         self.input = Some(CaptureStream::start_level_meter(
             device,
-            emit,
+            Box::new(move |level| emit(level)),
             audio_config.input_device_volume,
             audio_config.input_device_volume_amp,
             error_tx,
