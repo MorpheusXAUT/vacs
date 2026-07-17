@@ -43,7 +43,7 @@ pub async fn keybinds_set_transmit_config(
 
         let transmit_config: TransmitConfig = transmit_config.try_into()?;
 
-        state.config.client.radio.validate(&transmit_config)?;
+        state.config.client.radio.validate(&transmit_config).await?;
 
         keybind_engine
             .write()
