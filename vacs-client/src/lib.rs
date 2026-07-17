@@ -11,6 +11,7 @@ mod radio;
 mod remote;
 mod secrets;
 mod signaling;
+mod utils;
 
 use crate::app::open_fatal_error_dialog;
 use crate::app::state::audio::AppStateAudioExt;

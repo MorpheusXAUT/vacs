@@ -9,6 +9,7 @@
 
 use super::capture::{DefaultLoopbackCapture, LoopbackCapture, LoopbackEvent};
 use super::{PlaybackSource, PlaybackSourceEvent};
+use crate::playback::source::capture::CaptureSource;
 use crate::playback::{PlaybackError, TapId, Transmitter};
 use crate::radio::track_audio::TrackAudioRadio;
 use std::collections::HashMap;
@@ -44,7 +45,7 @@ impl PlaybackSource for TrackAudioLoopbackSource {
     async fn start(&mut self) -> Result<mpsc::Receiver<PlaybackSourceEvent>, PlaybackError> {
         let (tx, rx) = mpsc::channel::<PlaybackSourceEvent>(EVENT_CHANNEL_CAPACITY);
 
-        let (capture, mut capture_rx) = DefaultLoopbackCapture::start()?;
+        let (capture, mut capture_rx) = DefaultLoopbackCapture::start(CaptureSource::TrackAudio)?;
 
         let mut events = self.radio.subscribe_events();
         let radio = self.radio.clone();

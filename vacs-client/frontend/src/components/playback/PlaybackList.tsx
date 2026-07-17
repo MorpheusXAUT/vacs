@@ -69,9 +69,19 @@ function PlaybackEntryRow(props: PlaybackEntryRowProps) {
 }
 
 function clipToTarget(clip: ClipMeta): string {
-    const freq = clip.frequency ? (clip.frequency / 1000).toString() : "";
+    let callsignsString = clip?.callsigns.join("|");
+    if (callsignsString.length > 0) {
+        callsignsString += "\\";
+    }
+
+    if (clip.frequency === null || clip.frequency === 0) {
+        return `${callsignsString}<UNKNOWN>`;
+    }
+
+    const freq = (clip.frequency / 1000).toString();
     const freqString = `${freq.substring(0, 3)}.${freq.substring(3)}`;
-    return `${clip?.callsigns.join("|") ?? ""}\\${freqString}`;
+
+    return `${callsignsString}${freqString}`;
 }
 
 export default PlaybackList;

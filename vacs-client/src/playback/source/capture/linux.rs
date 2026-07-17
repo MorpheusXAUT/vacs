@@ -80,7 +80,9 @@ impl AfvNativePipewireCapture {
 }
 
 impl LoopbackCapture for AfvNativePipewireCapture {
-    fn start() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
+    fn start(
+        _source: CaptureSource,
+    ) -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
         Self::start_inner()
     }
 

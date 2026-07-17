@@ -99,10 +99,10 @@ impl Default for PlaybackConfig {
 }
 
 impl PlaybackConfig {
-    pub async fn start(&self, app: &AppHandle, radio: DynRadio) {
+    pub async fn start(&self, app: &AppHandle, radio: DynRadio) -> Result<(), PlaybackError> {
         if !self.enabled {
             log::info!("playback disabled by config");
-            return;
+            return Ok(());
         }
 
         let source = match make_source(radio) {
@@ -111,11 +111,11 @@ impl PlaybackConfig {
                 log::warn!(
                     "playback enabled in config, but capture is not supported on this platform"
                 );
-                return;
+                return Err(PlaybackError::Unsupported);
             }
             Err(err) => {
                 log::error!("failed to build playback source: {err}");
-                return;
+                return Err(err);
             }
         };
 
@@ -123,7 +123,7 @@ impl PlaybackConfig {
             Ok(d) => d,
             Err(err) => {
                 log::error!("failed to resolve app_data_dir: {err}");
-                return;
+                return Err(PlaybackError::Other(err.into()));
             }
         };
         let clip_dir = app_data_dir.join("playback");
@@ -139,9 +139,11 @@ impl PlaybackConfig {
                 }
                 *slot = Some(recorder);
                 log::debug!("recorder running");
+                Ok(())
             }
             Err(err) => {
                 log::error!("failed to start recorder: {err}");
+                Err(err)
             }
         }
     }
@@ -175,8 +177,13 @@ fn make_source(
 ) -> Result<Box<dyn source::PlaybackSource>, PlaybackError> {
     cfg_select! {
         any(target_os = "linux", target_os = "windows") => {
-            match radio.as_any().downcast::<crate::radio::track_audio::TrackAudioRadio>() {
-                Ok(radio) => Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
+            let radio = match radio.as_any().downcast::<crate::radio::track_audio::TrackAudioRadio>() {
+                Ok(radio) => return Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
+                Err(radio) => radio,
+            };
+
+            match radio.downcast::<crate::radio::push_to_talk::PushToTalkRadio>() {
+                Ok(_) => Ok(Box::new(source::AudioForVatsimLoopbackSource::new())),
                 Err(_) => Err(PlaybackError::Unsupported),
             }
         }

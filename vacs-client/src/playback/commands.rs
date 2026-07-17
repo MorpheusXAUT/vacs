@@ -56,7 +56,7 @@ pub async fn playback_set_enabled(
                 RadioState::NotConfigured | RadioState::Disconnected
             )
         {
-            playback_config.start(&app, radio).await;
+            playback_config.start(&app, radio).await?;
         } else {
             log::info!("playback enabled in config but no radio is active");
         }

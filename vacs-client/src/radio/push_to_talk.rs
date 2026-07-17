@@ -25,13 +25,18 @@
 //! - Configure vacs and their radio client separately with different PTT keys
 //! - Use "Push-to-Mute" transmit mode instead of "Radio Integration"
 
+use crate::app::state::AppState;
+use crate::app::state::radio::AppStateRadioExt;
 use crate::keybinds::runtime::{DynKeybindEmitter, KeybindEmitter, PlatformEmitter};
 use crate::radio::{Radio, RadioError, RadioState, TransmissionState};
+use crate::utils::BackoffStrategy;
 use keyboard_types::{Code, KeyState};
 use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Emitter};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager};
+use tokio_util::sync::CancellationToken;
 
 /// Radio integration that emits key presses to external applications.
 ///
@@ -45,20 +50,62 @@ pub struct PushToTalkRadio {
     code: Code,
     emitter: DynKeybindEmitter,
     active: Arc<AtomicBool>,
+    cancel: CancellationToken,
 }
 
 impl PushToTalkRadio {
     pub fn new(app: AppHandle, code: Code) -> Result<Self, RadioError> {
         log::trace!("PushToTalkRadio starting: code {:?}", code);
 
+        let cancel = CancellationToken::new();
         let radio = Self {
-            app,
+            app: app.clone(),
             code,
             emitter: Arc::new(
                 PlatformEmitter::start().map_err(|err| RadioError::Integration(err.to_string()))?,
             ),
             active: Arc::new(AtomicBool::new(false)),
+            cancel: cancel.clone(),
         };
+
+        tauri::async_runtime::spawn(async move {
+            let strategy =
+                BackoffStrategy::new(Duration::from_millis(500), Duration::from_secs(30), 2.0);
+            let mut attempt = 0usize;
+
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = cancel.cancelled() => {
+                        log::debug!("Push to talk radio recorder task shutting down");
+                        break;
+                    }
+                    _ = tokio::time::sleep(strategy.timeout(attempt)) => {
+                        let state = app.state::<AppState>();
+                        let state = state.lock().await;
+
+                        let radio = state.radio_handle().read().clone();
+
+                        if let Some(radio) = radio {
+                            log::info!("Push to talk radio created; starting recorder");
+                            if state
+                                .config
+                                .client
+                                .playback
+                                .start(&app, radio)
+                                .await
+                                .is_ok()
+                            {
+                                break;
+                            }
+                        }
+
+                        attempt += 1;
+                        log::warn!("Attempting to restart recorder (attempt = {attempt})");
+                    }
+                }
+            }
+        });
 
         radio.app.emit("radio:state", RadioState::RxIdle).ok();
 
@@ -124,6 +171,8 @@ impl Drop for PushToTalkRadio {
         {
             log::warn!("Failed to release PTT key while dropping: {err}");
         }
+
+        self.cancel.cancel();
 
         self.app.emit("radio:state", RadioState::NotConfigured).ok();
     }

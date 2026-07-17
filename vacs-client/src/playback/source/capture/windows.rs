@@ -1,7 +1,8 @@
-use crate::playback::source::capture::{LoopbackCapture, LoopbackEvent};
+use crate::playback::source::capture::{CaptureSource, LoopbackCapture, LoopbackEvent};
 use crate::playback::{PlaybackError, TapId};
 use std::collections::VecDeque;
 use std::ffi::OsStr;
+use std::fmt::Display;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -16,17 +17,17 @@ const CHUNKSIZE: usize = 1024;
 const SAMPLE_RATE: usize = 48000;
 const CHANNELS: usize = 2;
 
-const TRACKAUDIO_APP_NAME: &str = "trackaudio.exe";
-
 pub struct WindowsApplicationCapture {
     shutdown: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
 
 impl WindowsApplicationCapture {
-    fn start_inner() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
+    fn start_inner(
+        source: CaptureSource,
+    ) -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
         let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
-        let (shutdown, thread) = spawn_wasapi_thread(tx)?;
+        let (shutdown, thread) = spawn_wasapi_thread(source, tx)?;
         Ok((
             Self {
                 shutdown,
@@ -47,8 +48,10 @@ impl WindowsApplicationCapture {
 }
 
 impl LoopbackCapture for WindowsApplicationCapture {
-    fn start() -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
-        Self::start_inner()
+    fn start(
+        source: CaptureSource,
+    ) -> Result<(Self, mpsc::Receiver<LoopbackEvent>), PlaybackError> {
+        Self::start_inner(source)
     }
 
     fn stop(&mut self) {
@@ -63,11 +66,13 @@ impl Drop for WindowsApplicationCapture {
 }
 
 fn spawn_wasapi_thread(
+    source: CaptureSource,
     tx: mpsc::Sender<LoopbackEvent>,
 ) -> Result<(Arc<AtomicBool>, JoinHandle<()>), PlaybackError> {
     let refreshes = RefreshKind::nothing().with_processes(ProcessRefreshKind::everything());
     let system = System::new_with_specifics(refreshes);
-    let process_ids = system.processes_by_name(OsStr::new(TRACKAUDIO_APP_NAME));
+    let source_app_name = source.to_string();
+    let process_ids = system.processes_by_name(OsStr::new(source_app_name.as_str()));
     let mut process_id = 0;
     for process in process_ids {
         // Note: When capturing audio windows allows you to capture an app's entire process tree,
@@ -77,7 +82,7 @@ fn spawn_wasapi_thread(
 
     if process_id == 0 {
         return Err(PlaybackError::Source(format!(
-            "Can not find {TRACKAUDIO_APP_NAME} process"
+            "Can not find {source_app_name} process"
         )));
     }
 
@@ -233,4 +238,13 @@ fn bytes_to_f32(samples: &[u8]) -> Vec<f32> {
         .chunks_exact(4)
         .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
         .collect()
+}
+
+impl Display for CaptureSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CaptureSource::TrackAudio => f.write_str("trackaudio.exe"),
+            CaptureSource::AudioForVatsim => f.write_str("AudioForVATSIM.exe"),
+        }
+    }
 }

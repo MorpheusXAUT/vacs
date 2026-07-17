@@ -56,5 +56,11 @@ pub mod capture;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod track_audio;
 
+#[cfg(target_os = "windows")]
+pub mod audio_for_vatsim;
+
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub use track_audio::TrackAudioLoopbackSource;
+
+#[cfg(target_os = "windows")]
+pub use audio_for_vatsim::AudioForVatsimLoopbackSource;

@@ -198,7 +198,7 @@ impl TrackAudioRadio {
 
                         if let Some(radio) = radio {
                             log::info!("trackaudio radio state connected; starting recorder");
-                            state.config.client.playback.start(app, radio).await;
+                            let _ = state.config.client.playback.start(app, radio).await;
                         }
                     }
                     _ => {
