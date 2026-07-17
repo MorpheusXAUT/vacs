@@ -201,6 +201,38 @@ impl Default for BackendEndpointsConfigs {
     }
 }
 
+/// Generates the boilerplate conversions between a persisted config type and its
+/// camelCase `Frontend*` mirror: an infallible `From<$backend> for $frontend` and a
+/// fallible `TryFrom<$frontend> for $backend`.
+///
+/// Each field is tagged with how it is converted:
+/// - `plain` — moved as-is (both structs share the field type).
+/// - `key` — `Option<Code>` on the backend, `Option<String>` on the frontend; converted
+///   via [`Code::to_string`] and [`crate::keybinds::parse_key_code`].
+/// - `nested` — an `Option<sub-config>` whose element implements this same conversion pair.
+macro_rules! frontend_config {
+    ($backend:path => $frontend:path { $($kind:ident $field:ident),+ $(,)? }) => {
+        impl ::core::convert::From<$backend> for $frontend {
+            fn from(value: $backend) -> Self {
+                Self { $($field: frontend_config!(@to $kind value.$field),)+ }
+            }
+        }
+        impl ::core::convert::TryFrom<$frontend> for $backend {
+            type Error = $crate::error::Error;
+            fn try_from(value: $frontend) -> ::core::result::Result<Self, Self::Error> {
+                Ok(Self { $($field: frontend_config!(@from $kind value.$field),)+ })
+            }
+        }
+    };
+    (@to plain $e:expr) => { $e };
+    (@to key $e:expr) => { $e.map(|c| c.to_string()) };
+    (@to nested $e:expr) => { $e.map(::core::convert::Into::into) };
+    (@from plain $e:expr) => { $e };
+    (@from key $e:expr) => { $crate::keybinds::parse_key_code($e)? };
+    (@from nested $e:expr) => { $e.map(::core::convert::TryInto::try_into).transpose()? };
+}
+pub(crate) use frontend_config;
+
 pub trait Persistable {
     fn persist(&self, config_dir: &Path, file_name: &str) -> anyhow::Result<()>;
 }

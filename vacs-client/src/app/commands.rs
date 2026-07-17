@@ -392,7 +392,7 @@ pub async fn app_set_call_config(
             audio_manager.read().restart(SourceType::CallEnd);
         }
 
-        state.config.client.call = call_config.into();
+        state.config.client.call = call_config.try_into()?;
         state.config.client.clone().into()
     };
 

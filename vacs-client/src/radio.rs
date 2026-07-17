@@ -2,6 +2,7 @@ pub mod commands;
 pub mod push_to_talk;
 pub mod track_audio;
 
+use crate::config::frontend_config;
 use crate::error::Error;
 use crate::keybinds::{KeybindsError, TransmitConfig};
 use crate::platform::Capabilities;
@@ -273,65 +274,16 @@ impl RadioConfig {
     }
 }
 
-impl From<RadioConfig> for FrontendRadioConfig {
-    fn from(radio_integration: RadioConfig) -> Self {
-        Self {
-            integration: radio_integration.integration,
-            audio_for_vatsim: radio_integration.audio_for_vatsim.map(|c| c.into()),
-            track_audio: radio_integration.track_audio.map(|c| c.into()),
-        }
-    }
-}
+frontend_config!(RadioConfig => FrontendRadioConfig {
+    plain integration,
+    nested audio_for_vatsim,
+    nested track_audio,
+});
 
-impl From<AudioForVatsimRadioConfig> for FrontendAudioForVatsimRadioConfig {
-    fn from(value: AudioForVatsimRadioConfig) -> Self {
-        Self {
-            emit: value.emit.map(|c| c.to_string()),
-        }
-    }
-}
+frontend_config!(AudioForVatsimRadioConfig => FrontendAudioForVatsimRadioConfig {
+    key emit,
+});
 
-impl From<TrackAudioRadioConfig> for FrontendTrackAudioRadioConfig {
-    fn from(value: TrackAudioRadioConfig) -> Self {
-        Self {
-            endpoint: value.endpoint,
-        }
-    }
-}
-
-impl TryFrom<FrontendRadioConfig> for RadioConfig {
-    type Error = Error;
-
-    fn try_from(value: FrontendRadioConfig) -> Result<Self, Self::Error> {
-        Ok(Self {
-            integration: value.integration,
-            audio_for_vatsim: value.audio_for_vatsim.map(|c| c.try_into()).transpose()?,
-            track_audio: value.track_audio.map(|c| c.try_into()).transpose()?,
-        })
-    }
-}
-
-impl TryFrom<FrontendAudioForVatsimRadioConfig> for AudioForVatsimRadioConfig {
-    type Error = Error;
-
-    fn try_from(value: FrontendAudioForVatsimRadioConfig) -> Result<Self, Self::Error> {
-        Ok(Self {
-            emit: value
-                .emit
-                .as_ref()
-                .map(|s| s.parse::<Code>())
-                .transpose()
-                .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", value.emit.unwrap_or_default()))))?,
-        })
-    }
-}
-
-impl TryFrom<FrontendTrackAudioRadioConfig> for TrackAudioRadioConfig {
-    type Error = Error;
-
-    fn try_from(value: FrontendTrackAudioRadioConfig) -> Result<Self, Self::Error> {
-        Ok(Self {
-            endpoint: value.endpoint,
-        })
-    }
-}
+frontend_config!(TrackAudioRadioConfig => FrontendTrackAudioRadioConfig {
+    plain endpoint,
+});

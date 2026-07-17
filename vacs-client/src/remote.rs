@@ -2,6 +2,7 @@ pub mod commands;
 pub mod protocol;
 pub mod server;
 
+use crate::config::frontend_config;
 use serde::{Deserialize, Serialize};
 pub use server::{RemoteServer, RemoteServerHandle};
 use std::net::SocketAddr;
@@ -43,25 +44,11 @@ impl Default for FrontendRemoteConfig {
     }
 }
 
-impl From<RemoteConfig> for FrontendRemoteConfig {
-    fn from(config: RemoteConfig) -> Self {
-        Self {
-            enabled: config.enabled,
-            listen_addr: config.listen_addr,
-            serve_frontend: config.serve_frontend,
-        }
-    }
-}
-
-impl From<FrontendRemoteConfig> for RemoteConfig {
-    fn from(config: FrontendRemoteConfig) -> Self {
-        Self {
-            enabled: config.enabled,
-            listen_addr: config.listen_addr,
-            serve_frontend: config.serve_frontend,
-        }
-    }
-}
+frontend_config!(RemoteConfig => FrontendRemoteConfig {
+    plain enabled,
+    plain listen_addr,
+    plain serve_frontend,
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

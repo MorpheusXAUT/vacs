@@ -12,13 +12,13 @@ mod remote;
 mod secrets;
 mod signaling;
 
+use crate::app::PersistedClientConfig;
 use crate::app::open_fatal_error_dialog;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::http::HttpState;
 use crate::app::state::keybinds::AppStateKeybindsExt;
 use crate::app::state::playback::AppStatePlaybackExt;
 use crate::app::state::radio::AppStateRadioExt;
-use crate::app::PersistedClientConfig;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::AudioManagerHandle;
 use crate::build::VersionInfo;

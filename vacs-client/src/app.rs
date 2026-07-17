@@ -2,8 +2,8 @@ use crate::app::state::AppState;
 use crate::app::window::WindowProvider;
 use crate::auth;
 use crate::config::BackendEndpoint;
+use crate::config::{AppConfig, frontend_config};
 use crate::error::{Error, FrontendError};
-use crate::config::AppConfig;
 use crate::keybinds::{KeybindsConfig, TransmitConfig};
 use crate::playback::PlaybackConfig;
 use crate::radio::RadioConfig;
@@ -433,39 +433,17 @@ impl Default for CallConfig {
 
 impl Default for FrontendCallConfig {
     fn default() -> Self {
-        Self {
-            highlight_incoming_call_target: true,
-            enable_priority_calls: true,
-            enable_call_start_sound: true,
-            enable_call_end_sound: true,
-            use_default_call_sources: true,
-        }
+        CallConfig::default().into()
     }
 }
 
-impl From<CallConfig> for FrontendCallConfig {
-    fn from(call_config: CallConfig) -> Self {
-        Self {
-            highlight_incoming_call_target: call_config.highlight_incoming_call_target,
-            enable_priority_calls: call_config.enable_priority_calls,
-            enable_call_start_sound: call_config.enable_call_start_sound,
-            enable_call_end_sound: call_config.enable_call_end_sound,
-            use_default_call_sources: call_config.use_default_call_sources,
-        }
-    }
-}
-
-impl From<FrontendCallConfig> for CallConfig {
-    fn from(frontend_call_config: FrontendCallConfig) -> Self {
-        Self {
-            highlight_incoming_call_target: frontend_call_config.highlight_incoming_call_target,
-            enable_priority_calls: frontend_call_config.enable_priority_calls,
-            enable_call_start_sound: frontend_call_config.enable_call_start_sound,
-            enable_call_end_sound: frontend_call_config.enable_call_end_sound,
-            use_default_call_sources: frontend_call_config.use_default_call_sources,
-        }
-    }
-}
+frontend_config!(CallConfig => FrontendCallConfig {
+    plain highlight_incoming_call_target,
+    plain enable_priority_calls,
+    plain enable_call_start_sound,
+    plain enable_call_end_sound,
+    plain use_default_call_sources,
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ClientPageSettings {
