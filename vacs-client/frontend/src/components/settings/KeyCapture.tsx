@@ -10,15 +10,34 @@ type KeyCaptureProps = {
     disabled?: boolean;
 };
 
+// On Windows, pressing the physical AltGr/right-Alt key makes the browser fire a synthetic
+// ControlLeft keydown immediately before the real AltRight keydown. We only hold back a
+// ControlLeft capture by this long to let a following AltRight supersede it as the ghost
+// event; every other key still commits immediately.
+const CONTROL_LEFT_DEBOUNCE_MS = 50;
+
 function KeyCapture(props: KeyCaptureProps) {
     const {onCapture} = props;
     const [capturing, setCapturing] = useState<boolean>(false);
     const keySelectRef = useRef<HTMLDivElement | null>(null);
+    const captureTimerRef = useRef<number | undefined>(undefined);
 
     const isRemoveDisabled = props.disabled || props.label === null;
 
+    const commitCapture = useCallback(
+        async (code: string) => {
+            captureTimerRef.current = undefined;
+            try {
+                await onCapture(code);
+            } finally {
+                setCapturing(false);
+            }
+        },
+        [onCapture],
+    );
+
     const handleKeyDownEvent = useCallback(
-        async (event: KeyboardEvent) => {
+        (event: KeyboardEvent) => {
             event.preventDefault();
 
             // For some keys (e.g., the MediaPlayPause one), the code returned is empty and the event only contains a key.
@@ -35,13 +54,18 @@ function KeyCapture(props: KeyCaptureProps) {
                 code = event.key;
             }
 
-            try {
-                await onCapture(code);
-            } finally {
-                setCapturing(false);
+            window.clearTimeout(captureTimerRef.current);
+
+            if (code === "ControlLeft") {
+                captureTimerRef.current = window.setTimeout(() => {
+                    void commitCapture(code);
+                }, CONTROL_LEFT_DEBOUNCE_MS);
+                return;
             }
+
+            void commitCapture(code);
         },
-        [onCapture],
+        [commitCapture],
     );
 
     const handleClickOutside = useCallback((event: MouseEvent) => {
@@ -83,6 +107,8 @@ function KeyCapture(props: KeyCaptureProps) {
                 document.removeEventListener("keydown", handleKeyDownEvent);
                 document.removeEventListener("keyup", preventKeyUpEvent);
                 document.removeEventListener("click", handleClickOutside);
+                window.clearTimeout(captureTimerRef.current);
+                captureTimerRef.current = undefined;
             }
         };
     }, [capturing, handleKeyDownEvent, handleClickOutside]);
@@ -96,7 +122,7 @@ function KeyCapture(props: KeyCaptureProps) {
                     "w-full h-full min-w-10 min-h-8 grow text-sm py-1 px-2 rounded text-center flex items-center justify-center",
                     "bg-gray-300 border-2",
                     capturing
-                        ? "border-r-gray-100 border-b-gray-100 border-t-gray-700 border-l-gray-700 [&>*]:translate-y-[1px] [&>*]:translate-x-[1px]"
+                        ? "border-r-gray-100 border-b-gray-100 border-t-gray-700 border-l-gray-700 *:translate-y-px *:translate-x-px"
                         : "border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
                     props.disabled ? "brightness-90 cursor-not-allowed" : "cursor-pointer",
                     props.className,

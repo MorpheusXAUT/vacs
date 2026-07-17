@@ -24,8 +24,6 @@ import StatusIndicator, {Status} from "../ui/StatusIndicator.tsx";
 import ExternalKeybindField from "./ExternalKeybindField.tsx";
 import KeyCapture from "./KeyCapture.tsx";
 
-// --- RadioIntegrationSettings ---
-
 type RadioIntegrationSettingsProps = {
     transmitConfig: TransmitConfigWithLabels;
     radioConfig: RadioConfigWithLabels;
@@ -76,6 +74,7 @@ function RadioIntegrationSettings({
         if (code === transmitConfig.radioPushToTalk) return;
 
         let newConfig: TransmitConfig = {...transmitConfig, radioPushToTalk: code};
+
         if (transmitConfig.callMicMode !== "VoiceActivation") {
             const callKey =
                 transmitConfig.callMicMode === "PushToTalk"
@@ -314,10 +313,6 @@ function RadioIntegrationSettings({
     );
 }
 
-export default RadioIntegrationSettings;
-
-// --- RadioPttDescription ---
-
 function RadioPttDescription({callMicMode}: {callMicMode: CallMicMode}) {
     return (
         <p className="py-1 text-sm text-gray-800 leading-4.5 w-full min-h-14">
@@ -350,8 +345,6 @@ function RadioPttDescription({callMicMode}: {callMicMode: CallMicMode}) {
         </p>
     );
 }
-
-// --- TrackAudioStatusIndicator ---
 
 const RadioStateAsIndicatorState: {[key in RadioState["state"]]: Status} = {
     NotConfigured: "gray",
@@ -390,3 +383,5 @@ function TrackAudioStatusIndicator() {
         />
     );
 }
+
+export default RadioIntegrationSettings;
