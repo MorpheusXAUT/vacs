@@ -316,8 +316,8 @@ function RadioIntegrationSettings({
 function RadioPttDescription({callMicMode}: {callMicMode: CallMicMode}) {
     return (
         <p className="py-1 text-sm text-gray-800 leading-4.5 w-full min-h-14">
-            The key configured above is your radio push to talk. You must not bind it in your radio
-            client.{" "}
+            The key configured above is your radio push to talk.{" "}
+            <b>You must not bind it in your radio client.</b>{" "}
             {callMicMode === "VoiceActivation" && (
                 <>
                     Pressing it will transmit your voice on frequency.{" "}
