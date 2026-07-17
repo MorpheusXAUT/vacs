@@ -4,6 +4,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use vacs_macros::Frontend;
 
+#[cfg(target_os = "linux")]
+use crate::platform::Platform;
+
 pub mod commands;
 pub mod engine;
 pub mod runtime;

@@ -9,9 +9,6 @@ use std::time::Duration;
 use vacs_signaling::protocol::http::webrtc::IceConfig;
 use vacs_signaling::protocol::vatsim::PositionId;
 
-#[cfg(target_os = "linux")]
-use crate::platform::Platform;
-
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 pub const DEFAULT_SETTINGS_FILE_NAME: &str = "config.toml";
