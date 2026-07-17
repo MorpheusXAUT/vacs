@@ -43,7 +43,9 @@ pub async fn radio_set_config(
     let radio_config: RadioConfig = {
         let state = app_state.lock().await;
         let radio_config: RadioConfig = radio_config.try_into()?;
-        radio_config.validate(&state.config.client.transmit_config)?;
+        radio_config
+            .validate(&state.config.client.transmit_config)
+            .await?;
         radio_config
     };
 

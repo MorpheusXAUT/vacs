@@ -528,6 +528,94 @@ pub struct TransmitConfig {
     pub was_radio_integration: Option<bool>,
 }
 
+impl TransmitConfig {
+    #[inline]
+    pub fn active_call_code(&self) -> Option<Code> {
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            // Wayland Code Mapping Strategy:
+            //
+            // On Wayland, shortcuts are configured at the OS level via the XDG Global Shortcuts
+            // portal. The portal allows complex key combinations (e.g., Ctrl+Alt+Shift+P) that
+            // cannot be represented as a single keyboard_types::Code.
+            //
+            // To work around this, we map each transmit mode to a unique, unlikely-to-be-pressed
+            // function key (F33-F35). These keys don't exist on most keyboards, so there's no
+            // conflict with user input. When the portal activates a shortcut, we emit the
+            // corresponding F-key code, and the rest of the keybind engine works unchanged.
+            //
+            // This effectively overrides the user-configured codes in the config file on Wayland,
+            // since the actual key binding is managed by the desktop environment.
+            let code = match self.call_mic_mode {
+                CallMicMode::VoiceActivation => None,
+                CallMicMode::PushToTalk => Some(Code::F33),
+                CallMicMode::PushToMute => Some(Code::F34),
+            };
+            log::trace!(
+                "Using portal shortcut code {code:?} for call mic mode {:?}",
+                self.call_mic_mode
+            );
+            return code;
+        }
+
+        match self.call_mic_mode {
+            CallMicMode::VoiceActivation => None,
+            CallMicMode::PushToTalk => self.push_to_talk,
+            CallMicMode::PushToMute => self.push_to_mute,
+        }
+    }
+
+    #[inline]
+    pub async fn active_radio_code(&self, enabled: bool) -> Option<Code> {
+        if !enabled {
+            return None;
+        }
+
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            use crate::keybinds::runtime;
+
+            // Wayland Code Mapping Strategy:
+            //
+            // On Wayland, shortcuts are configured at the OS level via the XDG Global Shortcuts
+            // portal. The portal allows complex key combinations (e.g., Ctrl+Alt+Shift+P) that
+            // cannot be represented as a single keyboard_types::Code.
+            //
+            // To work around this, we map each transmit mode to a unique, unlikely-to-be-pressed
+            // function key (F33-F35). These keys don't exist on most keyboards, so there's no
+            // conflict with user input. When the portal activates a shortcut, we emit the
+            // corresponding F-key code, and the rest of the keybind engine works unchanged.
+            //
+            // This effectively overrides the user-configured codes in the config file on Wayland,
+            // since the actual key binding is managed by the desktop environment.
+            let code = match self.call_mic_mode {
+                CallMicMode::VoiceActivation => Some(Code::F35),
+                CallMicMode::PushToTalk => {
+                    if runtime::is_portal_shortcut_bound(runtime::PortalShortcutId::RadioPushToTalk)
+                        .await
+                    {
+                        Some(Code::F35)
+                    } else {
+                        Some(Code::F33)
+                    }
+                }
+                CallMicMode::PushToMute => Some(Code::F34),
+            };
+            log::trace!(
+                "Using portal shortcut code {code:?} for call mic mode {:?}",
+                self.call_mic_mode
+            );
+            return code;
+        }
+
+        match self.call_mic_mode {
+            CallMicMode::VoiceActivation => self.radio_push_to_talk,
+            CallMicMode::PushToTalk => self.radio_push_to_talk.or_else(|| self.active_call_code()),
+            CallMicMode::PushToMute => self.push_to_mute,
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for TransmitConfig {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(Deserialize, Default)]
@@ -724,12 +812,11 @@ impl RadioConfig {
         }
     }
 
-    pub fn validate(&self, transmit_config: &TransmitConfig) -> Result<(), Error> {
-        if transmit_config.radio_push_to_talk.is_some()
-            && self.integration == Some(RadioIntegration::AudioForVatsim)
-            && let Some(selected_key) = transmit_config.radio_push_to_talk
-            && let Some(afv_key) = self.audio_for_vatsim.as_ref().and_then(|c| c.emit)
-            && afv_key == selected_key
+    pub async fn validate(&self, transmit_config: &TransmitConfig) -> Result<(), Error> {
+        if self.integration == Some(RadioIntegration::AudioForVatsim)
+            && let Some(afv_code) = self.audio_for_vatsim.as_ref().and_then(|c| c.emit)
+            && let Some(radio_code) = transmit_config.active_radio_code(true).await
+            && afv_code == radio_code
         {
             return Err(KeybindsError::Other(
                 "AFV emit key must be distinct from your radio integration push-to-talk key"
