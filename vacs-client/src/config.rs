@@ -23,6 +23,9 @@ use vacs_signaling::protocol::profile::client_page::{
 };
 use vacs_signaling::protocol::vatsim::{ClientId, PositionId};
 
+#[cfg(target_os = "linux")]
+use crate::platform::Platform;
+
 /// User-Agent string used for all HTTP requests.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 pub const WS_LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
