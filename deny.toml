@@ -69,7 +69,7 @@ allow-git = [
     "https://github.com/MorpheusXAUT/axum-login",
     "https://github.com/maxcountryman/tower-sessions-stores",
     "https://github.com/SpaceManiac/opus-rs",
-    "https://github.com/MorpheusXAUT/redis-protocol.rs"
+    "https://github.com/aembke/redis-protocol.rs"
 ]
 
 [sources.allow-org]

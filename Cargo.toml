@@ -124,9 +124,9 @@ wiremock = "0.6.5"
 [patch.crates-io]
 # redis-protocol 6.0.0 pins cookie-factory to the exact version "=0.3.2", which
 # conflicts with libspa >=0.9 (needs cookie-factory ^0.3.3) and blocks bumping
-# pipewire past 0.8.0. This fork relaxes the pin to "^0.3.2"; drop once upstream
-# (aembke/redis-protocol.rs) merges the same fix.
-redis-protocol = { git = "https://github.com/MorpheusXAUT/redis-protocol.rs", rev = "9481da5350d894ad3d6c9c81b7ee2802bbfeaa32" }
+# pipewire past 0.8.0. This branch is currently unreleased and relaxes the pin to "^0.3.2";
+# drop once upstream (aembke/redis-protocol.rs) publishes 6.1.0.
+redis-protocol = { git = "https://github.com/aembke/redis-protocol.rs", rev = "cdd4535155437d08171a68c9965963fc1092eeb6" }
 
 [workspace.lints.clippy]
 semicolon-if-nothing-returned = "warn"

@@ -6191,15 +6191,15 @@ dependencies = [
 
 [[package]]
 name = "redis-protocol"
-version = "6.0.0"
-source = "git+https://github.com/MorpheusXAUT/redis-protocol.rs?rev=9481da5350d894ad3d6c9c81b7ee2802bbfeaa32#9481da5350d894ad3d6c9c81b7ee2802bbfeaa32"
+version = "6.1.0"
+source = "git+https://github.com/aembke/redis-protocol.rs?rev=cdd4535155437d08171a68c9965963fc1092eeb6#cdd4535155437d08171a68c9965963fc1092eeb6"
 dependencies = [
  "bytes",
  "bytes-utils",
  "cookie-factory",
  "crc16",
  "log",
- "nom 7.1.3",
+ "nom 8.0.0",
 ]
 
 [[package]]
