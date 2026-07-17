@@ -1,13 +1,13 @@
+use crate::app::PersistedClientConfig;
 use crate::app::state::AppState;
-use crate::config::{
-    CLIENT_SETTINGS_FILE_NAME, FrontendKeybindsConfig, FrontendTransmitConfig, KeybindsConfig,
-    Persistable, PersistedClientConfig, TransmitConfig,
-};
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::Error;
-use crate::keybinds::Keybind;
 use crate::keybinds::engine::KeybindEngineHandle;
+use crate::keybinds::{
+    FrontendKeybindsConfig, FrontendTransmitConfig, Keybind, KeybindsConfig, TransmitConfig,
+    parse_key_code,
+};
 use crate::platform::Capabilities;
-use keyboard_types::Code;
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
@@ -90,11 +90,7 @@ pub async fn keybinds_set_binding(
         return Err(Error::CapabilityNotAvailable("Keybinds".to_string()));
     }
 
-    let code = code
-        .as_ref()
-        .map(|s| s.parse::<Code>())
-        .transpose()
-        .map_err(|_| Error::Other(Box::new(anyhow::anyhow!("Unrecognized key code: {}. Please report this error in our GitHub repository's issue tracker.", code.unwrap_or_default()))))?;
+    let code = parse_key_code(code)?;
 
     let persisted_client_config: PersistedClientConfig = {
         let mut state = app_state.lock().await;

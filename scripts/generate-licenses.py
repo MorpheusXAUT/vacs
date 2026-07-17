@@ -202,7 +202,7 @@ def _spdx_display_name(spdx_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Other (manually-tracked) licenses — fonts, vendored assets, etc.
+# Other (manually-tracked) licenses - fonts, vendored assets, etc.
 # ---------------------------------------------------------------------------
 
 # Each entry: (spdx_id, name, version, repository, license_file_relative_to_workspace_root)

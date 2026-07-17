@@ -5,9 +5,10 @@ pub mod server;
 use serde::{Deserialize, Serialize};
 pub use server::{RemoteServer, RemoteServerHandle};
 use std::net::SocketAddr;
+use vacs_macros::Frontend;
 
 /// Configuration for the embedded remote-control server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Frontend)]
 pub struct RemoteConfig {
     /// Whether the remote control server is enabled.
     pub enabled: bool,
@@ -25,40 +26,6 @@ impl Default for RemoteConfig {
             enabled: false,
             listen_addr: "0.0.0.0:9600".parse().unwrap(),
             serve_frontend: true,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendRemoteConfig {
-    pub enabled: bool,
-    pub listen_addr: SocketAddr,
-    pub serve_frontend: bool,
-}
-
-impl Default for FrontendRemoteConfig {
-    fn default() -> Self {
-        Self::from(RemoteConfig::default())
-    }
-}
-
-impl From<RemoteConfig> for FrontendRemoteConfig {
-    fn from(config: RemoteConfig) -> Self {
-        Self {
-            enabled: config.enabled,
-            listen_addr: config.listen_addr,
-            serve_frontend: config.serve_frontend,
-        }
-    }
-}
-
-impl From<FrontendRemoteConfig> for RemoteConfig {
-    fn from(config: FrontendRemoteConfig) -> Self {
-        Self {
-            enabled: config.enabled,
-            listen_addr: config.listen_addr,
-            serve_frontend: config.serve_frontend,
         }
     }
 }

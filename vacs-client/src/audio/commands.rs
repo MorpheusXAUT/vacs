@@ -3,9 +3,10 @@ use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::AudioManagerHandle;
 use crate::audio::source_type::SourceType;
 use crate::audio::{
-    AudioDevices, AudioHosts, AudioVolumes, ClientAudioDeviceType, PlaybackDeviceType, VolumeType,
+    AudioConfig, AudioDevices, AudioHosts, AudioVolumes, ClientAudioDeviceType,
+    PersistedAudioConfig, PlaybackDeviceType, VolumeType,
 };
-use crate::config::{AUDIO_SETTINGS_FILE_NAME, AudioConfig, Persistable, PersistedAudioConfig};
+use crate::config::{AUDIO_SETTINGS_FILE_NAME, Persistable};
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use std::sync::Arc;

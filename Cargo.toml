@@ -61,6 +61,7 @@ opus = { git = "https://github.com/SpaceManiac/opus-rs", rev = "559876660603dc80
 parking_lot = "0.12.5"
 pipewire = "0.10.0"
 pretty_assertions = "1.4.1"
+proc-macro2 = "1.0.95"
 quote = "1.0.45"
 rand = "0.10.1"
 regex = "1.12.3"

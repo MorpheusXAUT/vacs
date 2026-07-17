@@ -2,17 +2,22 @@ pub mod commands;
 pub mod push_to_talk;
 pub mod track_audio;
 
+use crate::error::Error;
+use crate::keybinds::{KeybindsError, TransmitConfig};
 use crate::platform::Capabilities;
-use keyboard_types::KeyState;
+use crate::radio::push_to_talk::PushToTalkRadio;
+use crate::radio::track_audio::TrackAudioRadio;
+use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tauri::Emitter;
+use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 pub use trackaudio::Frequency;
+use vacs_macros::Frontend;
 
 #[derive(Debug, Clone, Error)]
 pub enum RadioError {
@@ -172,3 +177,82 @@ pub trait Radio: Send + Sync + Debug + Any + 'static {
 pub type DynRadio = Arc<dyn Radio>;
 
 pub type RadioHandle = Arc<RwLock<Option<DynRadio>>>;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Frontend)]
+pub struct RadioConfig {
+    pub integration: Option<RadioIntegration>,
+    #[frontend(nested)]
+    pub audio_for_vatsim: Option<AudioForVatsimRadioConfig>,
+    #[frontend(nested)]
+    pub track_audio: Option<TrackAudioRadioConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Frontend)]
+pub struct AudioForVatsimRadioConfig {
+    #[frontend(key)]
+    pub emit: Option<Code>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Frontend)]
+pub struct TrackAudioRadioConfig {
+    pub endpoint: Option<String>,
+}
+
+impl RadioConfig {
+    /// Create a radio integration instance based on the configured integration type.
+    ///
+    /// Returns `None` if the integration is not configured or if the emit key is not set.
+    ///
+    /// # Platform Limitation
+    ///
+    /// **Important**: AudioForVatsim Radio integration requires a functional `KeybindEmitter` to
+    /// inject key presses into external applications. This works on Windows and macOS, but NOT
+    /// on Linux where the emitter is a no-op stub due to Wayland's security model.
+    ///
+    /// On Linux, this method will successfully create a radio instance, but it will
+    /// silently do nothing when `transmit()` is called.
+    ///
+    /// The TrackAudio integration is not affected by this platform limitation and is thus the
+    /// default radio implementation for Linux.
+    pub async fn radio(&self, app: AppHandle) -> Result<Option<DynRadio>, Error> {
+        match self.integration {
+            Some(RadioIntegration::AudioForVatsim) => {
+                let Some(config) = self.audio_for_vatsim.as_ref() else {
+                    return Ok(None);
+                };
+                let Some(emit) = config.emit else {
+                    return Ok(None);
+                };
+                log::debug!("Initializing AudioForVatsim radio integration");
+                let radio = PushToTalkRadio::new(app, emit).map_err(Error::from)?;
+                Ok(Some(Arc::new(radio)))
+            }
+            Some(RadioIntegration::TrackAudio) => {
+                let endpoint = self.track_audio.as_ref().and_then(|c| c.endpoint.as_ref());
+                log::debug!("Initializing TrackAudio radio integration (endpoint: {endpoint:?})");
+                let radio = Arc::new(
+                    TrackAudioRadio::new(app.clone(), endpoint)
+                        .await
+                        .map_err(Error::from)?,
+                );
+                Ok(Some(radio))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    pub async fn validate(&self, transmit_config: &TransmitConfig) -> Result<(), Error> {
+        if self.integration == Some(RadioIntegration::AudioForVatsim)
+            && let Some(afv_code) = self.audio_for_vatsim.as_ref().and_then(|c| c.emit)
+            && let Some(radio_code) = transmit_config.active_radio_code(true).await
+            && afv_code == radio_code
+        {
+            return Err(KeybindsError::Other(
+                "AFV emit key must be distinct from your radio integration push-to-talk key"
+                    .to_string(),
+            )
+            .into());
+        }
+        Ok(())
+    }
+}

@@ -2,10 +2,9 @@ use crate::app::state::AppState;
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::AudioManagerHandle;
-use crate::config::{CallMicMode, KeybindsConfig, TransmitConfig};
 use crate::error::Error;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
-use crate::keybinds::{KeyEvent, Keybind};
+use crate::keybinds::{CallMicMode, KeyEvent, Keybind, KeybindsConfig, TransmitConfig};
 use crate::radio::{RadioHandle, TransmissionState};
 use keyboard_types::{Code, KeyState};
 use parking_lot::RwLock;
@@ -410,7 +409,7 @@ impl KeybindEngine {
                         let call_active = call_active.load(Ordering::Relaxed);
                         let radio_prio = radio_prio_arc.load(Ordering::Relaxed);
                         // Implicit prio (set at call entry for radio TX continuity) must not affect
-                        // MIC dispatch — only explicit (user-toggled) prio changes MIC behaviour.
+                        // MIC dispatch - only explicit (user-toggled) prio changes MIC behaviour.
                         let effective_prio = radio_prio && !implicit_radio_prio.load(Ordering::Relaxed);
 
                         let separate = is_call_key ^ is_radio_key;

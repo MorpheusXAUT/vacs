@@ -13,6 +13,7 @@ mod secrets;
 mod signaling;
 mod utils;
 
+use crate::app::PersistedClientConfig;
 use crate::app::open_fatal_error_dialog;
 use crate::app::state::audio::AppStateAudioExt;
 use crate::app::state::http::HttpState;
@@ -22,7 +23,7 @@ use crate::app::state::radio::AppStateRadioExt;
 use crate::app::state::{AppState, AppStateInner};
 use crate::audio::manager::AudioManagerHandle;
 use crate::build::VersionInfo;
-use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;

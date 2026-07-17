@@ -1,7 +1,8 @@
+use crate::app::PersistedClientConfig;
 use crate::app::state::AppState;
 use crate::audio::PlaybackDeviceType;
 use crate::audio::manager::AudioManagerHandle;
-use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::Error;
 use crate::playback::recorder::{CLIP_PROGRESS_EVENT, PlaybackRecorderHandle};
 use crate::playback::{ClipMeta, PlaybackError};

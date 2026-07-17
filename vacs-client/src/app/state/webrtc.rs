@@ -1,11 +1,10 @@
 use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::{AppState, AppStateInner, sealed};
 use crate::audio::source_type::SourceType;
-use crate::config::{ENCODED_AUDIO_FRAME_BUFFER_SIZE, ICE_CONFIG_EXPIRY_LEEWAY};
 use crate::error::{CallError, Error};
 use anyhow::Context;
 use std::fmt::{Debug, Formatter};
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
@@ -17,6 +16,9 @@ use vacs_signaling::protocol::ws::shared;
 use vacs_signaling::protocol::ws::shared::{CallErrorReason, CallId};
 use vacs_webrtc::error::WebrtcError;
 use vacs_webrtc::{Peer, PeerConnectionState, PeerEvent};
+
+const ENCODED_AUDIO_FRAME_BUFFER_SIZE: usize = 512;
+const ICE_CONFIG_EXPIRY_LEEWAY: Duration = Duration::from_mins(15);
 
 #[derive(Debug)]
 pub struct UnansweredCallGuard {

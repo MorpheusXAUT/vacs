@@ -1,12 +1,12 @@
 use crate::app::state::AppState;
-use crate::app::{AppFolder, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog};
+use crate::app::{
+    AppFolder, ClientConfig, ClockMode, CplMode, FrontendCallConfig, FrontendClientPageSettings,
+    PersistedClientConfig, UpdateInfo, get_update, open_app_folder, open_fatal_error_dialog,
+};
 use crate::audio::manager::AudioManagerHandle;
 use crate::audio::source_type::SourceType;
 use crate::build::VersionInfo;
-use crate::config::{
-    AppConfig, CLIENT_SETTINGS_FILE_NAME, ClientConfig, ClockMode, CplMode, FrontendCallConfig,
-    FrontendClientPageSettings, Persistable, PersistedClientConfig,
-};
+use crate::config::{AppConfig, CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::{Error, FrontendError};
 use crate::platform::Capabilities;
 use anyhow::Context;
@@ -392,7 +392,7 @@ pub async fn app_set_call_config(
             audio_manager.read().restart(SourceType::CallEnd);
         }
 
-        state.config.client.call = call_config.into();
+        state.config.client.call = call_config.try_into()?;
         state.config.client.clone().into()
     };
 

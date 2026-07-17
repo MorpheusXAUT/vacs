@@ -1,5 +1,6 @@
+use crate::app::PersistedClientConfig;
 use crate::app::state::AppState;
-use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable, PersistedClientConfig};
+use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::Error;
 use crate::remote::server::RemoteServerHandle;
 use crate::remote::{FrontendRemoteConfig, RemoteStatus};
@@ -64,7 +65,7 @@ pub async fn remote_set_config(
         let changed = remote.listen_addr != remote_config.listen_addr
             || remote.enabled != remote_config.enabled;
 
-        state.config.client.remote = remote_config.into();
+        state.config.client.remote = remote_config.try_into()?;
         (
             PersistedClientConfig::from(state.config.client.clone()),
             changed,
