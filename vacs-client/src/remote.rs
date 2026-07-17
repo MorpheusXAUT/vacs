@@ -2,13 +2,13 @@ pub mod commands;
 pub mod protocol;
 pub mod server;
 
-use crate::config::frontend_config;
 use serde::{Deserialize, Serialize};
 pub use server::{RemoteServer, RemoteServerHandle};
 use std::net::SocketAddr;
+use vacs_macros::Frontend;
 
 /// Configuration for the embedded remote-control server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Frontend)]
 pub struct RemoteConfig {
     /// Whether the remote control server is enabled.
     pub enabled: bool,
@@ -29,26 +29,6 @@ impl Default for RemoteConfig {
         }
     }
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendRemoteConfig {
-    pub enabled: bool,
-    pub listen_addr: SocketAddr,
-    pub serve_frontend: bool,
-}
-
-impl Default for FrontendRemoteConfig {
-    fn default() -> Self {
-        Self::from(RemoteConfig::default())
-    }
-}
-
-frontend_config!(RemoteConfig => FrontendRemoteConfig {
-    plain enabled,
-    plain listen_addr,
-    plain serve_frontend,
-});
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

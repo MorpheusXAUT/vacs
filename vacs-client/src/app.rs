@@ -1,8 +1,8 @@
 use crate::app::state::AppState;
 use crate::app::window::WindowProvider;
 use crate::auth;
+use crate::config::AppConfig;
 use crate::config::BackendEndpoint;
-use crate::config::{AppConfig, frontend_config};
 use crate::error::{Error, FrontendError};
 use crate::keybinds::{KeybindsConfig, TransmitConfig};
 use crate::playback::PlaybackConfig;
@@ -17,6 +17,7 @@ use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, Physical
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 use url::Url;
+use vacs_macros::Frontend;
 use vacs_signaling::protocol::http::version::ReleaseChannel;
 use vacs_signaling::protocol::profile::client_page::{
     ClientGroupMode, ClientPageConfig, FrequencyDisplayMode,
@@ -386,7 +387,7 @@ impl ClientConfig {
 }
 
 /// Various settings regarding calls.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Frontend)]
 pub struct CallConfig {
     /// Toggles highlighting of incoming call target DA keys.
     #[serde(default = "default_true")]
@@ -409,16 +410,6 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendCallConfig {
-    pub highlight_incoming_call_target: bool,
-    pub enable_priority_calls: bool,
-    pub enable_call_start_sound: bool,
-    pub enable_call_end_sound: bool,
-    pub use_default_call_sources: bool,
-}
-
 impl Default for CallConfig {
     fn default() -> Self {
         Self {
@@ -430,20 +421,6 @@ impl Default for CallConfig {
         }
     }
 }
-
-impl Default for FrontendCallConfig {
-    fn default() -> Self {
-        CallConfig::default().into()
-    }
-}
-
-frontend_config!(CallConfig => FrontendCallConfig {
-    plain highlight_incoming_call_target,
-    plain enable_priority_calls,
-    plain enable_call_start_sound,
-    plain enable_call_end_sound,
-    plain use_default_call_sources,
-});
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ClientPageSettings {

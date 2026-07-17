@@ -1,8 +1,8 @@
-use crate::config::frontend_config;
 use crate::error::Error as VacsError;
 use keyboard_types::{Code, KeyState};
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
+use vacs_macros::Frontend;
 
 pub mod commands;
 pub mod engine;
@@ -63,19 +63,23 @@ pub enum CallMicMode {
 }
 
 /// Configuration for the transmission mode and associated keybinds.
-#[derive(Debug, Clone, Serialize, Default)]
+#[derive(Debug, Clone, Serialize, Default, Frontend)]
 pub struct TransmitConfig {
     /// The transmit mode to use.
     pub call_mic_mode: CallMicMode,
     /// Key code for Push-to-Talk mode.
     /// Required if mode is `PushToTalk`.
+    #[frontend(key)]
     pub push_to_talk: Option<Code>,
     /// Key code for Push-to-Mute mode.
     /// Required if mode is `PushToMute`.
+    #[frontend(key)]
     pub push_to_mute: Option<Code>,
     /// Key code for Radio PTT.
+    #[frontend(key)]
     pub radio_push_to_talk: Option<Code>,
     #[serde(skip)]
+    #[frontend(skip)]
     pub was_radio_integration: Option<bool>,
 }
 
@@ -230,64 +234,19 @@ impl<'de> Deserialize<'de> for TransmitConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendTransmitConfig {
-    pub call_mic_mode: CallMicMode,
-    pub push_to_talk: Option<String>,
-    pub push_to_mute: Option<String>,
-    pub radio_push_to_talk: Option<String>,
-}
-
-impl From<TransmitConfig> for FrontendTransmitConfig {
-    fn from(transmit_config: TransmitConfig) -> Self {
-        Self {
-            call_mic_mode: transmit_config.call_mic_mode,
-            push_to_talk: transmit_config.push_to_talk.map(|c| c.to_string()),
-            push_to_mute: transmit_config.push_to_mute.map(|c| c.to_string()),
-            radio_push_to_talk: transmit_config.radio_push_to_talk.map(|c| c.to_string()),
-        }
-    }
-}
-
-impl TryFrom<FrontendTransmitConfig> for TransmitConfig {
-    type Error = VacsError;
-
-    fn try_from(value: FrontendTransmitConfig) -> Result<Self, Self::Error> {
-        Ok(Self {
-            call_mic_mode: value.call_mic_mode,
-            push_to_talk: parse_key_code(value.push_to_talk)?,
-            push_to_mute: parse_key_code(value.push_to_mute)?,
-            radio_push_to_talk: parse_key_code(value.radio_push_to_talk)?,
-            was_radio_integration: None,
-        })
-    }
-}
-
 /// Configuration for generic call control keybinds.
 ///
 /// These keybinds allow accepting and ending calls as well as toggling radio prio without needing
 /// to use the UI and can be used independently of the transmit mode.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Frontend)]
 pub struct KeybindsConfig {
     /// Key code to accept an incoming call.
+    #[frontend(key)]
     pub accept_call: Option<Code>,
     /// Key code to end an active call.
+    #[frontend(key)]
     pub end_call: Option<Code>,
     /// Key code to toggle radio prio during an active call.
+    #[frontend(key)]
     pub toggle_radio_prio: Option<Code>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendKeybindsConfig {
-    pub accept_call: Option<String>,
-    pub end_call: Option<String>,
-    pub toggle_radio_prio: Option<String>,
-}
-
-frontend_config!(KeybindsConfig => FrontendKeybindsConfig {
-    key accept_call,
-    key end_call,
-    key toggle_radio_prio,
-});

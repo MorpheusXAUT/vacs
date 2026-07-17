@@ -2,7 +2,6 @@ pub mod commands;
 pub mod push_to_talk;
 pub mod track_audio;
 
-use crate::config::frontend_config;
 use crate::error::Error;
 use crate::keybinds::{KeybindsError, TransmitConfig};
 use crate::platform::Capabilities;
@@ -18,6 +17,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 pub use trackaudio::Frequency;
+use vacs_macros::Frontend;
 
 #[derive(Debug, Clone, Error)]
 pub enum RadioError {
@@ -178,40 +178,23 @@ pub type DynRadio = Arc<dyn Radio>;
 
 pub type RadioHandle = Arc<RwLock<Option<DynRadio>>>;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Frontend)]
 pub struct RadioConfig {
     pub integration: Option<RadioIntegration>,
+    #[frontend(nested)]
     pub audio_for_vatsim: Option<AudioForVatsimRadioConfig>,
+    #[frontend(nested)]
     pub track_audio: Option<TrackAudioRadioConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Frontend)]
 pub struct AudioForVatsimRadioConfig {
+    #[frontend(key)]
     pub emit: Option<Code>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Frontend)]
 pub struct TrackAudioRadioConfig {
-    pub endpoint: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendRadioConfig {
-    pub integration: Option<RadioIntegration>,
-    pub audio_for_vatsim: Option<FrontendAudioForVatsimRadioConfig>,
-    pub track_audio: Option<FrontendTrackAudioRadioConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendAudioForVatsimRadioConfig {
-    pub emit: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct FrontendTrackAudioRadioConfig {
     pub endpoint: Option<String>,
 }
 
@@ -273,17 +256,3 @@ impl RadioConfig {
         Ok(())
     }
 }
-
-frontend_config!(RadioConfig => FrontendRadioConfig {
-    plain integration,
-    nested audio_for_vatsim,
-    nested track_audio,
-});
-
-frontend_config!(AudioForVatsimRadioConfig => FrontendAudioForVatsimRadioConfig {
-    key emit,
-});
-
-frontend_config!(TrackAudioRadioConfig => FrontendTrackAudioRadioConfig {
-    plain endpoint,
-});
