@@ -92,20 +92,19 @@ impl TrackAudioRadio {
         Ok(radio)
     }
 
-    /// Subscribe to a fan-out of every [`trackaudio::Event`] received by this radio.
+    /// Independent, cloneable handle to this radio's event stream. Safe for long-lived
+    /// consumers (e.g. the playback recorder) to hold onto without keeping the radio itself
+    /// alive — subscribing via the returned `Sender` doesn't require the radio to still exist.
     #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
-    pub fn subscribe_events(&self) -> broadcast::Receiver<trackaudio::Event> {
-        self.events_tx.subscribe()
+    pub fn events(&self) -> broadcast::Sender<trackaudio::Event> {
+        self.events_tx.clone()
     }
 
-    /// Returns the cached `headset` flag for `frequency`, or `None` if the station is unknown.
+    /// Independent handle to this radio's cached connection/station state. Safe for
+    /// long-lived consumers to hold onto without keeping the radio itself alive.
     #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
-    pub fn headset_for_frequency(&self, frequency: Frequency) -> Option<bool> {
-        self.state
-            .stations
-            .read()
-            .get(&frequency)
-            .map(|s| s.headset)
+    pub fn state_handle(&self) -> Arc<TrackAudioState> {
+        self.state.clone()
     }
 
     async fn events_task(
@@ -426,7 +425,7 @@ impl Drop for TrackAudioRadio {
 }
 
 #[derive(Default)]
-struct TrackAudioState {
+pub(crate) struct TrackAudioState {
     connected: AtomicBool,
     voice_connected: AtomicBool,
     transmitting: AtomicBool,
@@ -509,6 +508,11 @@ impl TrackAudioState {
         self.transmitting.store(false, Ordering::Relaxed);
         self.receiving.write().clear();
         self.stations.write().clear();
+    }
+
+    /// Returns the cached `headset` flag for `frequency`, or `None` if the station is unknown.
+    pub(crate) fn headset_for_frequency(&self, frequency: Frequency) -> Option<bool> {
+        self.stations.read().get(&frequency).map(|s| s.headset)
     }
 
     fn set_transmitting(&self, app: &AppHandle, active: bool) {

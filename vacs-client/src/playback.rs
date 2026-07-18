@@ -178,13 +178,13 @@ fn make_source(
     cfg_select! {
         target_os = "linux" => {
             match radio.as_any().downcast::<crate::radio::track_audio::TrackAudioRadio>() {
-                Ok(radio) => Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
+                Ok(radio) => Ok(Box::new(source::TrackAudioLoopbackSource::new(radio.events(), radio.state_handle()))),
                 Err(_) => Err(PlaybackError::Unsupported),
             }
         }
         target_os = "windows" => {
             let radio = match radio.as_any().downcast::<crate::radio::track_audio::TrackAudioRadio>() {
-                Ok(radio) => return Ok(Box::new(source::TrackAudioLoopbackSource::new(radio))),
+                Ok(radio) => return Ok(Box::new(source::TrackAudioLoopbackSource::new(radio.events(), radio.state_handle()))),
                 Err(radio) => radio,
             };
 

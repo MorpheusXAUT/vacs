@@ -11,10 +11,10 @@ use super::capture::{DefaultLoopbackCapture, LoopbackCapture, LoopbackEvent};
 use super::{PlaybackSource, PlaybackSourceEvent};
 use crate::playback::source::capture::CaptureSource;
 use crate::playback::{PlaybackError, TapId, Transmitter};
-use crate::radio::track_audio::TrackAudioRadio;
+use crate::radio::track_audio::TrackAudioState;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -25,17 +25,26 @@ const EVENT_CHANNEL_CAPACITY: usize = 1024;
 /// - `TrackAudioRadio` event broadcast for `RxBegin`/`RxEnd` gating, with the
 ///   tap's `headset` flag mapping each event to either [`TapId::Headset`]
 ///   or [`TapId::Speaker`].
+///
+/// Holds only an independent event-stream handle and a cached-state `Arc`, not the radio
+/// itself — the radio's lifetime is owned solely by `RadioHandle`, so this source doesn't
+/// artificially keep a superseded radio alive after `radio_set_config` swaps it out.
 pub struct TrackAudioLoopbackSource {
-    radio: Arc<TrackAudioRadio>,
+    events_tx: broadcast::Sender<trackaudio::Event>,
+    state: Arc<TrackAudioState>,
     capture: Option<DefaultLoopbackCapture>,
     cancel: CancellationToken,
     forwarder: Option<JoinHandle<()>>,
 }
 
 impl TrackAudioLoopbackSource {
-    pub fn new(radio: Arc<TrackAudioRadio>) -> Self {
+    pub fn new(
+        events_tx: broadcast::Sender<trackaudio::Event>,
+        state: Arc<TrackAudioState>,
+    ) -> Self {
         Self {
-            radio,
+            events_tx,
+            state,
             capture: None,
             cancel: CancellationToken::new(),
             forwarder: None,
@@ -50,8 +59,8 @@ impl PlaybackSource for TrackAudioLoopbackSource {
 
         let (capture, mut capture_rx) = DefaultLoopbackCapture::start(CaptureSource::TrackAudio)?;
 
-        let mut events = self.radio.subscribe_events();
-        let radio = self.radio.clone();
+        let mut events = self.events_tx.subscribe();
+        let state = self.state.clone();
         let cancel = self.cancel.clone();
 
         let forwarder = tokio::spawn(async move {
@@ -93,7 +102,7 @@ impl PlaybackSource for TrackAudioLoopbackSource {
                     evt = events.recv() => {
                         match evt {
                             Ok(trackaudio::Event::RxBegin(rx)) => {
-                                let tap = tap_for(&radio, rx.frequency);
+                                let tap = tap_for(&state, rx.frequency);
                                 log::trace!(
                                     "RxBegin callsign={} freq={:?} -> {tap:?}",
                                     rx.callsign,
@@ -121,7 +130,7 @@ impl PlaybackSource for TrackAudioLoopbackSource {
                                         callsign: rx.callsign.clone(),
                                         frequency: rx.frequency,
                                     })
-                                    .unwrap_or_else(|| tap_for(&radio, rx.frequency));
+                                    .unwrap_or_else(|| tap_for(&state, rx.frequency));
                                 log::trace!(
                                     "RxEnd callsign={} freq={:?} -> {tap:?} active={:?}",
                                     rx.callsign,
@@ -204,8 +213,8 @@ impl PlaybackSource for TrackAudioLoopbackSource {
     }
 }
 
-fn tap_for(radio: &TrackAudioRadio, frequency: trackaudio::Frequency) -> TapId {
-    match radio.headset_for_frequency(frequency) {
+fn tap_for(state: &TrackAudioState, frequency: trackaudio::Frequency) -> TapId {
+    match state.headset_for_frequency(frequency) {
         Some(true) => TapId::Headset,
         Some(false) => TapId::Speaker,
         // Station unknown: fall back to headset which is afv-native's default routing.
