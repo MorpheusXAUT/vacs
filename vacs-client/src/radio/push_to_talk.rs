@@ -28,6 +28,7 @@
 use crate::app::state::AppState;
 use crate::app::state::radio::AppStateRadioExt;
 use crate::keybinds::runtime::{DynKeybindEmitter, KeybindEmitter, PlatformEmitter};
+use crate::playback::PlaybackError;
 use crate::radio::{Radio, RadioError, RadioState, TransmissionState};
 use crate::utils::BackoffStrategy;
 use keyboard_types::{Code, KeyState};
@@ -88,15 +89,17 @@ impl PushToTalkRadio {
 
                         if let Some(radio) = radio {
                             log::info!("Push to talk radio created; starting recorder");
-                            if state
-                                .config
-                                .client
-                                .playback
-                                .start(&app, radio)
-                                .await
-                                .is_ok()
-                            {
-                                break;
+                            match state.config.client.playback.start(&app, radio).await {
+                                Ok(()) => break,
+                                // `Unsupported` is a permanent platform limitation (no AFV
+                                // loopback capture on this OS), so retrying can never succeed.
+                                Err(PlaybackError::Unsupported) => {
+                                    log::info!(
+                                        "Playback recorder unsupported for this integration on this platform; not retrying"
+                                    );
+                                    break;
+                                }
+                                Err(err) => log::warn!("Failed to start recorder: {err}"),
                             }
                         }
 

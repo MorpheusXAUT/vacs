@@ -79,7 +79,7 @@ function PlaybackPage() {
                 </div>
             ) : !radioConnected ? (
                 <div className="w-full grow rounded-b-sm bg-[#B5BBC6] flex flex-col justify-center items-center text-slate-600">
-                    <p>No TrackAudio connection.</p>
+                    <p>No radio connection.</p>
                 </div>
             ) : (
                 <PlaybackPageInner />

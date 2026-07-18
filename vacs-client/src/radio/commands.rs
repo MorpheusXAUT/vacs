@@ -4,6 +4,7 @@ use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::platform::Capabilities;
+use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::{
     DynRadio, Frequency, FrontendRadioConfig, RadioConfig, RadioHandle, RadioState, RadioStation,
     StationStateUpdate,
@@ -33,6 +34,7 @@ pub async fn radio_set_config(
     app_state: State<'_, AppState>,
     keybind_engine: State<'_, KeybindEngineHandle>,
     radio_handle: State<'_, RadioHandle>,
+    playback_recorder: State<'_, PlaybackRecorderHandle>,
     radio_config: FrontendRadioConfig,
 ) -> Result<(), Error> {
     let capabilities = Capabilities::default();
@@ -50,6 +52,15 @@ pub async fn radio_set_config(
     };
 
     radio_handle.write().take();
+
+    // The recorder holds its own Arc clone of the old radio (see `TrackAudioLoopbackSource`),
+    // so dropping `radio_handle` above doesn't release it. It's only re-created lazily once a
+    // new recorder starts, which never happens for integrations `make_source` doesn't support
+    // (e.g. AudioForVatsim on Linux) — leaving the old radio's connection running forever.
+    if let Some(recorder) = playback_recorder.write().take() {
+        recorder.shutdown();
+        drop(recorder);
+    }
 
     let new_radio = radio_config.radio(app.clone()).await?;
 

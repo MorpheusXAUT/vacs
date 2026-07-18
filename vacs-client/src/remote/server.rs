@@ -655,8 +655,17 @@ async fn dispatch_command(
             let app_state = app.state::<AppState>();
             let radio = app.state::<RadioHandle>();
             let keybind_engine = app.state::<KeybindEngineHandle>();
+            let recorder = app.state::<PlaybackRecorderHandle>();
             dispatch(
-                radio_set_config(app.clone(), app_state, keybind_engine, radio, radio_config).await,
+                radio_set_config(
+                    app.clone(),
+                    app_state,
+                    keybind_engine,
+                    radio,
+                    recorder,
+                    radio_config,
+                )
+                .await,
             )
         }
         RadioSetStationState => {
