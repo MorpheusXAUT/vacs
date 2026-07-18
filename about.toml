@@ -15,7 +15,6 @@ accepted = [
 ignore-build-dependencies = false
 ignore-dev-dependencies = false
 ignore-transitive-dependencies = false
-filter-noassertion = true
 
 workarounds = [
     "cocoa",
