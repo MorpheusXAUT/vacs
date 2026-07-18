@@ -166,7 +166,7 @@ pub async fn start_server(
         client_count,
     };
 
-    register_event_forwarders(&app_handle, &event_tx);
+    let forwarder_ids = register_event_forwarders(&app_handle, &event_tx);
 
     let mut router = Router::new().route("/ws", get(ws_handler));
 
@@ -178,16 +178,29 @@ pub async fn start_server(
 
     log::info!("Remote control server listening on http://{listen_addr}");
 
-    let listener = tokio::net::TcpListener::bind(listen_addr).await?;
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown.cancelled_owned())
-    .await?;
+    let result = async {
+        let listener = tokio::net::TcpListener::bind(listen_addr).await?;
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(shutdown.cancelled_owned())
+        .await?;
+        anyhow::Ok(())
+    }
+    .await;
 
-    log::info!("Remote control server stopped");
-    Ok(())
+    // The forwarders must not outlive the server: they are registered globally
+    // on the app, so leaving them behind would pile up another full set of
+    // listeners on every server restart.
+    for id in forwarder_ids {
+        app_handle.unlisten(id);
+    }
+
+    if result.is_ok() {
+        log::info!("Remote control server stopped");
+    }
+    result
 }
 
 async fn serve_embedded_asset(State(state): State<RemoteServerState>, uri: Uri) -> Response {
@@ -210,21 +223,27 @@ async fn serve_embedded_asset(State(state): State<RemoteServerState>, uri: Uri) 
         .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
 }
 
-fn register_event_forwarders(app: &AppHandle, event_tx: &broadcast::Sender<ServerMessage>) {
-    for &remote_event in RemoteEvent::ALL {
-        let tx = event_tx.clone();
-        app.listen(remote_event.as_str(), move |event| {
-            let payload = serde_json::from_str(event.payload())
-                .unwrap_or(serde_json::Value::String(event.payload().to_string()));
-            let msg = ServerMessage::Event {
-                name: remote_event,
-                payload,
-            };
-            if tx.receiver_count() > 0 {
-                let _ = tx.send(msg);
-            }
-        });
-    }
+fn register_event_forwarders(
+    app: &AppHandle,
+    event_tx: &broadcast::Sender<ServerMessage>,
+) -> Vec<tauri::EventId> {
+    RemoteEvent::ALL
+        .iter()
+        .map(|&remote_event| {
+            let tx = event_tx.clone();
+            app.listen(remote_event.as_str(), move |event| {
+                let payload = serde_json::from_str(event.payload())
+                    .unwrap_or(serde_json::Value::String(event.payload().to_string()));
+                let msg = ServerMessage::Event {
+                    name: remote_event,
+                    payload,
+                };
+                if tx.receiver_count() > 0 {
+                    let _ = tx.send(msg);
+                }
+            })
+        })
+        .collect()
 }
 
 async fn ws_handler(
@@ -285,9 +304,27 @@ async fn handle_ws_connection(socket: WebSocket, state: RemoteServerState, peer:
     while let Some(Ok(msg)) = ws_rx.next().await {
         match msg {
             Message::Text(text) => {
-                let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) else {
-                    log::warn!("[{peer}] Failed to parse remote client message: {text}");
-                    continue;
+                let client_msg = match serde_json::from_str::<ClientMessage>(&text) {
+                    Ok(msg) => msg,
+                    Err(err) => {
+                        log::warn!(
+                            "[{peer}] Failed to parse remote client message ({err}): {text}"
+                        );
+                        // If this was an invoke, settle the client's pending request
+                        // with an error instead of leaving its promise hanging forever.
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text)
+                            && value.get("type").and_then(serde_json::Value::as_str)
+                                == Some("invoke")
+                            && let Some(id) = value.get("id").and_then(serde_json::Value::as_str)
+                        {
+                            let response = ServerMessage::err(
+                                id.to_string(),
+                                ProblemDetails::invalid_message(),
+                            );
+                            let _ = client_tx.send(response).await;
+                        }
+                        continue;
+                    }
                 };
 
                 match client_msg {
@@ -457,6 +494,15 @@ async fn dispatch_command(
             let clock_mode: ClockMode = args!(args, "clockMode");
             let app_state = app.state::<AppState>();
             dispatch(app_set_clock_mode(app.clone(), app_state, clock_mode).await)
+        }
+        AppGetCplMode => {
+            let app_state = app.state::<AppState>();
+            dispatch(app_get_cpl_mode(app_state).await)
+        }
+        AppSetCplMode => {
+            let cpl_mode = args!(args, "cplMode");
+            let app_state = app.state::<AppState>();
+            dispatch(app_set_cpl_mode(app.clone(), app_state, cpl_mode).await)
         }
 
         AudioGetHosts => {
@@ -753,6 +799,11 @@ async fn dispatch_command(
         RemoteRequestStoreSync => {
             app.emit("store:sync:request", ()).ok();
             DispatchResult::Ok(serde_json::Value::Null)
+        }
+
+        RemoteIsEnabled => {
+            let app_state = app.state::<AppState>();
+            dispatch(crate::remote::commands::remote_is_enabled(app_state).await)
         }
 
         RemoteGetConfig => {

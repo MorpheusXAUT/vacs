@@ -8,7 +8,7 @@ import {useStationsStore} from "../stores/stations-store.ts";
 import {PlaybackDeviceType} from "../types/audio.ts";
 import type {ClientPageConfig} from "../types/client.ts";
 import type {CallId, StationId} from "../types/generic.ts";
-import type {CallConfig, ClockMode} from "../types/settings.ts";
+import type {CallConfig, ClockMode, CplMode, RemoteStatus} from "../types/settings.ts";
 import type {RadioConfigWithLabels, TransmitConfigWithLabels} from "../types/transmit.ts";
 import {invoke, isRemote, isTauri, listen} from "./index.ts";
 
@@ -30,6 +30,7 @@ type SettingsSync = {
     callConfig: CallConfig;
     selectedClientPageConfig: ClientPageConfig & {name: string};
     clockMode: ClockMode;
+    cplMode: CplMode;
     playbackEnabled: boolean;
     transmitConfig: TransmitConfigWithLabels | undefined;
     radioConfig: RadioConfigWithLabels | undefined;
@@ -73,8 +74,23 @@ function createInstanceId(): string {
 // Unique ID for this client instance so we can ignore our own broadcasts.
 export const INSTANCE_ID = createInstanceId();
 
-// set to `true` while applying an incoming sync to prevent re-broadcast
+// set to `true` while applying remote-sourced state to prevent re-broadcast
 let applying = false;
+
+/**
+ * Runs `fn` with sync re-broadcast suppressed. Must wrap any store writes whose
+ * values originate from another instance (incoming syncs, snapshot hydration),
+ * otherwise they are echoed back and clobber the other instance's stores.
+ */
+export function withSyncSuppressed(fn: () => void): void {
+    const prev = applying;
+    applying = true;
+    try {
+        fn();
+    } finally {
+        applying = prev;
+    }
+}
 
 function deepEqual(a: unknown, b: unknown): boolean {
     if (a === b) return true;
@@ -149,6 +165,7 @@ function applySync(payload: SyncPayload) {
                 callConfig: payload.state.callConfig,
                 selectedClientPageConfig: payload.state.selectedClientPageConfig,
                 clockMode: payload.state.clockMode,
+                cplMode: payload.state.cplMode,
                 playbackEnabled: payload.state.playbackEnabled,
                 transmitConfig: payload.state.transmitConfig,
                 radioConfig: payload.state.radioConfig,
@@ -178,18 +195,39 @@ function applySync(payload: SyncPayload) {
 
 export function setupStoreSync(): () => void {
     let teardown: (() => void) | undefined;
+    let unlistenStatus: (() => void) | undefined;
 
-    const shouldEnable: Promise<boolean> = isRemote()
-        ? Promise.resolve(true)
-        : invoke<boolean>("remote_is_enabled").catch(() => false);
+    const start = () => {
+        teardown ??= startSync();
+    };
+    const stop = () => {
+        teardown?.();
+        teardown = undefined;
+    };
 
-    void shouldEnable.then(enabled => {
-        if (!enabled) return;
-        teardown = startSync();
-    });
+    if (isRemote()) {
+        start();
+    } else {
+        void invoke<boolean>("remote_is_enabled")
+            .then(enabled => {
+                if (enabled) start();
+            })
+            .catch(() => {});
+
+        // Arm/disarm syncing when the remote server is enabled or disabled at
+        // runtime; the initial query alone would miss later settings changes.
+        void listen<RemoteStatus>("remote:status", event => {
+            if (event.payload.listening) {
+                start();
+            } else {
+                stop();
+            }
+        }).then(fn => (unlistenStatus = fn));
+    }
 
     return () => {
-        teardown?.();
+        stop();
+        unlistenStatus?.();
     };
 }
 
@@ -198,12 +236,7 @@ function startSync(): () => void {
 
     void listen<SyncPayload>("store:sync", event => {
         if (event.payload.sourceId === INSTANCE_ID) return;
-        applying = true;
-        try {
-            applySync(event.payload);
-        } finally {
-            applying = false;
-        }
+        withSyncSuppressed(() => applySync(event.payload));
     }).then(fn => unlistenFns.push(fn));
 
     if (isTauri) {
@@ -243,6 +276,7 @@ function startSync(): () => void {
             callConfig: s.callConfig,
             selectedClientPageConfig: s.selectedClientPageConfig,
             clockMode: s.clockMode,
+            cplMode: s.cplMode,
             playbackEnabled: s.playbackEnabled,
             transmitConfig: s.transmitConfig,
             radioConfig: s.radioConfig,
@@ -311,6 +345,7 @@ function broadcastAllStoreState() {
         callConfig: settings.callConfig,
         selectedClientPageConfig: settings.selectedClientPageConfig,
         clockMode: settings.clockMode,
+        cplMode: settings.cplMode,
         playbackEnabled: settings.playbackEnabled,
         transmitConfig: settings.transmitConfig,
         radioConfig: settings.radioConfig,

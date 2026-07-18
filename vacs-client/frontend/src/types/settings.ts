@@ -9,6 +9,9 @@ export type CallConfig = {
 export type RemoteConfig = {
     enabled: boolean;
     listenAddr: string;
+    // Not exposed in the UI, but required by the backend's RemoteConfig schema;
+    // it must round-trip through remote_get_config -> remote_set_config intact.
+    serveFrontend: boolean;
 };
 
 export type RemoteStatus = {
