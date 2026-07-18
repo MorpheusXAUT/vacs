@@ -165,12 +165,12 @@ impl KeybindEngine {
     }
 
     pub fn stop(&mut self) {
-        {
-            let mut listener = self.listener.write();
-            if listener.take().is_some() {
-                self.reset_input_state();
-            }
-        }
+        // The engine may run without a platform listener (joystick-only mode
+        // when the keyboard listener failed to start), so the running state is
+        // tracked by the rx task, not the listener.
+        let was_running = self.rx_task.is_some();
+
+        self.listener.write().take();
 
         if let Some(stop_token) = self.stop_token.take() {
             stop_token.cancel();
@@ -178,6 +178,10 @@ impl KeybindEngine {
 
         if let Some(rx_task) = self.rx_task.take() {
             rx_task.abort();
+        }
+
+        if was_running {
+            self.reset_input_state();
         }
     }
 
@@ -216,7 +220,7 @@ impl KeybindEngine {
 
         if active {
             if !self.radio_triggers.is_empty()
-                && self.radio_triggers == self.call_triggers
+                && same_triggers(&self.radio_triggers, &self.call_triggers)
                 && self.radio_pressed.load(Ordering::Relaxed)
                 && self.radio_transmitting.load(Ordering::Relaxed)
                 && !self.radio_prio.load(Ordering::Relaxed)
@@ -278,8 +282,8 @@ impl KeybindEngine {
         let call_pressed = self.call_pressed.load(Ordering::Relaxed);
         let radio_pressed = self.radio_pressed.load(Ordering::Relaxed);
         let radio_prio = self.radio_prio.load(Ordering::Relaxed);
-        let separate_keys =
-            !self.radio_triggers.is_empty() && self.radio_triggers != self.call_triggers;
+        let separate_keys = !self.radio_triggers.is_empty()
+            && !same_triggers(&self.radio_triggers, &self.call_triggers);
         match self.call_mic_mode {
             CallMicMode::VoiceActivation => false,
             CallMicMode::PushToTalk => {
@@ -655,6 +659,15 @@ impl KeybindEngine {
             log::warn!("Failed to set radio transmission state {state:?}: {err}");
         }
     }
+}
+
+/// Whether two trigger lists bind the same set of inputs, regardless of order.
+///
+/// Trigger lists are tiny (at most two entries) and duplicate-free by
+/// construction, so a containment check both suffices and avoids needing an
+/// `Ord` impl consistent with `JoystickButton`'s name-ignoring equality.
+fn same_triggers(a: &[Trigger], b: &[Trigger]) -> bool {
+    a.len() == b.len() && a.iter().all(|trigger| b.contains(trigger))
 }
 
 impl Drop for KeybindEngine {

@@ -15,7 +15,7 @@ impl KeybindListener for NoopKeybindListener {
         Self: Sized,
     {
         log::warn!(
-            "No keybind listener available, using stub noop implementation. Your selected keybinds will not work!"
+            "No global keyboard listener available on this platform, using stub noop implementation. Keyboard keybinds will not work; joystick bindings are unaffected."
         );
         let (tx, rx) = unbounded_channel();
         Ok((Self { _tx: tx }, rx))
@@ -32,7 +32,7 @@ impl KeybindEmitter for NoopKeybindEmitter {
         Self: Sized,
     {
         log::warn!(
-            "No keybind emitter available, using stub noop implementation. Your selected keybinds will not work!"
+            "No keybind emitter available on this platform, using stub noop implementation. Emitting keys to external applications (AudioForVatsim radio integration) will not work."
         );
         Ok(Self)
     }

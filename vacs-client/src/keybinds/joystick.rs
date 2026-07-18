@@ -128,10 +128,15 @@ impl JoystickService {
         if let Some(mut running) = running {
             log::debug!("Stopping SDL joystick poller");
             running.stop.store(true, Ordering::Relaxed);
-            if let Some(thread) = running.thread.take()
-                && thread.join().is_err()
-            {
-                log::warn!("SDL joystick poller thread panicked");
+            if let Some(thread) = running.thread.take() {
+                // The poller notices the stop flag within its event-wait timeout
+                // (up to 250ms); join off the async runtime to avoid stalling a
+                // worker thread for that long.
+                match tauri::async_runtime::spawn_blocking(move || thread.join()).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(_)) => log::warn!("SDL joystick poller thread panicked"),
+                    Err(err) => log::warn!("Failed to join SDL joystick poller thread: {err}"),
+                }
             }
         }
     }
