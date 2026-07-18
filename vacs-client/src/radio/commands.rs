@@ -53,10 +53,11 @@ pub async fn radio_set_config(
 
     radio_handle.write().take();
 
-    // The recorder holds its own Arc clone of the old radio (see `TrackAudioLoopbackSource`),
-    // so dropping `radio_handle` above doesn't release it on its own. `shutdown` cancels the
-    // recorder's background task and awaits its exit, which guarantees the old radio's Arc
-    // clone has been released by the time we return here.
+    // The recorder outlives the radio it was gating on: left running, it would keep capturing
+    // with the dead radio's stale event stream — forever, if the new integration is one
+    // `make_source` doesn't support and thus never re-creates it. `shutdown` cancels the
+    // recorder's background task and awaits its exit, including the underlying source's
+    // capture teardown.
     let old_recorder = playback_recorder.write().take();
     if let Some(recorder) = old_recorder {
         recorder.shutdown().await;

@@ -23,7 +23,9 @@ use trackaudio::{
 /// Capacity of the [`TrackAudioRadio`] event fan-out broadcast channel.
 const EVENT_FANOUT_CAPACITY: usize = 256;
 
-#[derive(Clone)]
+// Deliberately not `Clone`: `Drop` cancels the shared cancellation token (killing the events
+// task), so a dropped by-value clone would tear down the original radio's machinery. The radio
+// is only ever shared via `Arc` (see `RadioConfig::radio`).
 pub struct TrackAudioRadio {
     #[allow(dead_code)]
     app: AppHandle,
@@ -511,6 +513,7 @@ impl TrackAudioState {
     }
 
     /// Returns the cached `headset` flag for `frequency`, or `None` if the station is unknown.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     pub(crate) fn headset_for_frequency(&self, frequency: Frequency) -> Option<bool> {
         self.stations.read().get(&frequency).map(|s| s.headset)
     }
