@@ -303,8 +303,8 @@ function RadioIntegrationSettings({
                         <>
                             <br />
                             <b>Audio for Vatsim: </b> vacs simulates a key press for you to trigger
-                            a radio transmission in AFV. The radio page and playback recording are
-                            not available.
+                            a radio transmission in AFV and records incoming radio calls. The radio
+                            page is not available.
                         </>
                     )}
                 </p>
