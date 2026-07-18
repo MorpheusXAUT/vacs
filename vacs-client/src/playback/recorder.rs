@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use vacs_audio::sources::AudioSourceId;
 
@@ -87,6 +88,7 @@ pub struct PlaybackRecorder {
     store: Arc<Mutex<ClipStore>>,
     playing_source_id: Option<(AudioSourceId, PlaybackDeviceType)>,
     cancel: CancellationToken,
+    join: Option<JoinHandle<()>>,
 }
 
 /// Shared, app-managed slot holding the (optionally running) recorder, mirroring
@@ -113,16 +115,17 @@ impl PlaybackRecorder {
         let rx = source.start().await?;
         let cancel = CancellationToken::new();
 
-        {
+        let join = {
             let store = store.clone();
             let cancel = cancel.clone();
-            tokio::spawn(run(app, config, store, source, rx, cancel));
-        }
+            tokio::spawn(run(app, config, store, source, rx, cancel))
+        };
 
         Ok(Self {
             store,
             playing_source_id: None,
             cancel,
+            join: Some(join),
         })
     }
 
@@ -162,11 +165,23 @@ impl PlaybackRecorder {
         self.playing_source_id
     }
 
-    pub fn shutdown(&self) {
+    /// Cancel the recorder's background task and wait for it to fully exit, including its
+    /// underlying [`PlaybackSource`]. Once this returns, any resources the source held (e.g.
+    /// a radio's `Arc`) are guaranteed to have been released.
+    pub async fn shutdown(mut self) {
         self.cancel.cancel();
+        if let Some(join) = self.join.take()
+            && let Err(err) = join.await
+        {
+            log::warn!("playback recorder task panicked: {err}");
+        }
     }
 }
 
+/// Best-effort fallback for recorders dropped without an explicit [`PlaybackRecorder::shutdown`]
+/// call. `drop` can't await the background task's exit, so this only requests cancellation —
+/// callers that need the underlying [`PlaybackSource`] to have released its resources by the
+/// time they continue must call `shutdown` instead.
 impl Drop for PlaybackRecorder {
     fn drop(&mut self) {
         self.cancel.cancel();
@@ -216,6 +231,11 @@ async fn run(
             }
         }
     }
+
+    // Drop the receiver before awaiting the source's shutdown below: the source's forwarder
+    // task(s) may still be mid-`send` on this channel, and with nobody left to drain it a full
+    // channel would block that send forever. A closed receiver makes `send` fail fast instead.
+    drop(rx);
 
     // Finalize any in-flight clips on shutdown so we don't leak partial files.
     for (clip_id, clip) in open.drain() {

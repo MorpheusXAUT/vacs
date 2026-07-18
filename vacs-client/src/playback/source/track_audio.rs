@@ -15,6 +15,7 @@ use crate::radio::track_audio::TrackAudioRadio;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 const EVENT_CHANNEL_CAPACITY: usize = 1024;
@@ -28,6 +29,7 @@ pub struct TrackAudioLoopbackSource {
     radio: Arc<TrackAudioRadio>,
     capture: Option<DefaultLoopbackCapture>,
     cancel: CancellationToken,
+    forwarder: Option<JoinHandle<()>>,
 }
 
 impl TrackAudioLoopbackSource {
@@ -36,6 +38,7 @@ impl TrackAudioLoopbackSource {
             radio,
             capture: None,
             cancel: CancellationToken::new(),
+            forwarder: None,
         }
     }
 }
@@ -51,7 +54,7 @@ impl PlaybackSource for TrackAudioLoopbackSource {
         let radio = self.radio.clone();
         let cancel = self.cancel.clone();
 
-        tokio::spawn(async move {
+        let forwarder = tokio::spawn(async move {
             // Track which tap each currently-active receiver was opened on so that:
             //   1. RxEnd emits on the same tap RxBegin used (even if routing has since
             //      flipped), keeping bookkeeping symmetric.
@@ -184,11 +187,17 @@ impl PlaybackSource for TrackAudioLoopbackSource {
         });
 
         self.capture = Some(capture);
+        self.forwarder = Some(forwarder);
         Ok(rx)
     }
 
     async fn stop(&mut self) {
         self.cancel.cancel();
+        if let Some(forwarder) = self.forwarder.take()
+            && let Err(err) = forwarder.await
+        {
+            log::warn!("trackaudio playback forwarder task panicked: {err}");
+        }
         if let Some(mut capture) = self.capture.take() {
             capture.stop();
         }

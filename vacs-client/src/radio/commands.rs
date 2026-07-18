@@ -54,12 +54,12 @@ pub async fn radio_set_config(
     radio_handle.write().take();
 
     // The recorder holds its own Arc clone of the old radio (see `TrackAudioLoopbackSource`),
-    // so dropping `radio_handle` above doesn't release it. It's only re-created lazily once a
-    // new recorder starts, which never happens for integrations `make_source` doesn't support
-    // (e.g. AudioForVatsim on Linux) — leaving the old radio's connection running forever.
-    if let Some(recorder) = playback_recorder.write().take() {
-        recorder.shutdown();
-        drop(recorder);
+    // so dropping `radio_handle` above doesn't release it on its own. `shutdown` cancels the
+    // recorder's background task and awaits its exit, which guarantees the old radio's Arc
+    // clone has been released by the time we return here.
+    let old_recorder = playback_recorder.write().take();
+    if let Some(recorder) = old_recorder {
+        recorder.shutdown().await;
     }
 
     let new_radio = radio_config.radio(app.clone()).await?;

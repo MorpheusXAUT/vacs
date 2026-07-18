@@ -67,7 +67,7 @@ pub async fn playback_set_enabled(
         let handle = app.state::<PlaybackRecorderHandle>();
         let existing = handle.write().take();
         if let Some(recorder) = existing {
-            recorder.shutdown();
+            recorder.shutdown().await;
             log::info!("playback disabled; stopped active recorder");
         }
     }

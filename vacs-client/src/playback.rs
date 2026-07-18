@@ -133,11 +133,11 @@ impl PlaybackConfig {
         match recorder::PlaybackRecorder::spawn(app.clone(), self.clone(), clip_dir, source).await {
             Ok(recorder) => {
                 let handle = app.state::<PlaybackRecorderHandle>();
-                let mut slot = handle.write();
-                if let Some(existing) = slot.take() {
-                    existing.shutdown();
+                let existing = handle.write().take();
+                if let Some(existing) = existing {
+                    existing.shutdown().await;
                 }
-                *slot = Some(recorder);
+                *handle.write() = Some(recorder);
                 log::debug!("recorder running");
                 Ok(())
             }

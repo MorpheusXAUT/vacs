@@ -261,7 +261,7 @@ pub fn run() {
                         .await
                         .stop();
 
-                    app_handle.state::<AppState>().lock().await.shutdown();
+                    app_handle.state::<AppState>().lock().await.shutdown().await;
                 });
             }
         });

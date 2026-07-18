@@ -6,6 +6,7 @@ use crate::playback::{
     },
 };
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use trackaudio::Frequency;
 
@@ -14,6 +15,7 @@ const EVENT_CHANNEL_CAPACITY: usize = 1024;
 pub struct AudioForVatsimLoopbackSource {
     capture: Option<DefaultLoopbackCapture>,
     cancel: CancellationToken,
+    forwarder: Option<JoinHandle<()>>,
 }
 
 impl AudioForVatsimLoopbackSource {
@@ -21,6 +23,7 @@ impl AudioForVatsimLoopbackSource {
         Self {
             capture: None,
             cancel: CancellationToken::new(),
+            forwarder: None,
         }
     }
 }
@@ -35,7 +38,7 @@ impl PlaybackSource for AudioForVatsimLoopbackSource {
 
         let cancel = self.cancel.clone();
 
-        tokio::spawn(async move {
+        let forwarder = tokio::spawn(async move {
             let mut receiving = false;
 
             loop {
@@ -91,11 +94,17 @@ impl PlaybackSource for AudioForVatsimLoopbackSource {
         });
 
         self.capture = Some(capture);
+        self.forwarder = Some(forwarder);
         Ok(rx)
     }
 
     async fn stop(&mut self) {
         self.cancel.cancel();
+        if let Some(forwarder) = self.forwarder.take()
+            && let Err(err) = forwarder.await
+        {
+            log::warn!("audio-for-vatsim playback forwarder task panicked: {err}");
+        }
         if let Some(mut capture) = self.capture.take() {
             capture.stop();
         }

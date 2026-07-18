@@ -104,10 +104,11 @@ impl AppStateInner {
         })
     }
 
-    pub fn shutdown(&self) {
+    pub async fn shutdown(&self) {
         self.shutdown_token.cancel();
-        if let Some(recorder) = self.playback_recorder.read().as_ref() {
-            recorder.shutdown();
+        let recorder = self.playback_recorder.write().take();
+        if let Some(recorder) = recorder {
+            recorder.shutdown().await;
         }
     }
 }

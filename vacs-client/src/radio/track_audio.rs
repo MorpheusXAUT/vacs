@@ -205,7 +205,7 @@ impl TrackAudioRadio {
                         let handle = app.state::<PlaybackRecorderHandle>();
                         let existing = handle.write().take();
                         if let Some(recorder) = existing {
-                            recorder.shutdown();
+                            recorder.shutdown().await;
                             log::info!(
                                 "trackaudio radio state changed to {connection_state:?}; stopped active recorder"
                             );
