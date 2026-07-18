@@ -153,6 +153,11 @@ fn run_poller(
     // Must be set before SDL_Init for the Windows backends to deliver events
     // while another window (e.g. a radar client) has focus.
     sdl3::hint::set("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1");
+    // SDL's events subsystem catches SIGINT/SIGTERM by default and converts
+    // them into an SDL_EVENT_QUIT (which this poller ignores), which would
+    // prevent the whole application from terminating on Ctrl+C. Tauri owns the
+    // process lifecycle, so keep SDL away from signal handling.
+    sdl3::hint::set("SDL_NO_SIGNAL_HANDLERS", "1");
 
     let init = || -> Result<(sdl3::JoystickSubsystem, sdl3::EventPump), String> {
         let sdl = sdl3::init().map_err(|err| format!("SDL init failed: {err}"))?;
