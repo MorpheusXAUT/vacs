@@ -600,12 +600,25 @@ async fn dispatch_command(
             dispatch(keybinds_get_keybinds_config(app_state).await)
         }
         KeybindsSetBinding => {
-            let (code, keybind) = args!(args, "code", "keybind");
+            let (input, keybind) = args!(args, "input", "keybind");
             let app_state = app.state::<AppState>();
             let keybind_engine = app.state::<KeybindEngineHandle>();
             dispatch(
-                keybinds_set_binding(app.clone(), app_state, keybind_engine, code, keybind).await,
+                keybinds_set_binding(app.clone(), app_state, keybind_engine, input, keybind).await,
             )
+        }
+        KeybindsCaptureJoystickButton => {
+            let capture_id = args!(args, "captureId");
+            let capture_state = app.state::<crate::keybinds::commands::JoystickCaptureState>();
+            let joystick = app.state::<crate::keybinds::joystick::JoystickServiceHandle>();
+            dispatch(
+                keybinds_capture_joystick_button(capture_state, joystick, capture_id, None).await,
+            )
+        }
+        KeybindsCancelJoystickCapture => {
+            let capture_id = args!(args, "captureId");
+            let capture_state = app.state::<crate::keybinds::commands::JoystickCaptureState>();
+            dispatch(keybinds_cancel_joystick_capture(capture_state, capture_id).await)
         }
         KeybindsGetExternalBinding => {
             let keybind = args!(args, "keybind");
