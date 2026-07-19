@@ -8,7 +8,10 @@ import SettingsSubPage from "./SettingsSubPage.tsx";
 
 function TransmitModePage() {
     const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
+    const capJoystick = useCapabilitiesStore(state => state.joystick);
     const capPlatform = useCapabilitiesStore(state => state.platform);
+    // Without a keyboard listener (e.g. X11), joystick buttons can still be bound.
+    const capAnyInput = capKeybindListener || capJoystick;
 
     const transmitConfig = useSettingsStore(state => state.transmitConfig);
     const setTransmitConfig = useSettingsStore(state => state.setTransmitConfig);
@@ -27,7 +30,7 @@ function TransmitModePage() {
                         <p className="font-semibold uppercase">Call Mic Mode</p>
                         <HelpIcon url="https://docs.vacs.network/settings/transmit#call-mic-mode" />
                     </div>
-                    {!capKeybindListener ? (
+                    {!capAnyInput ? (
                         <div className="w-full px-3 flex flex-row gap-3 items-center justify-center">
                             <p
                                 className="text-sm text-gray-700 py-1.5 cursor-help"
@@ -66,7 +69,7 @@ function TransmitModePage() {
                         <p className="font-semibold uppercase">Radio Integration</p>
                         <HelpIcon url="https://docs.vacs.network/settings/transmit#radio-integration" />
                     </div>
-                    {!capKeybindListener ? (
+                    {!capAnyInput ? (
                         <div className="w-full px-3 flex flex-row gap-3 items-center justify-center">
                             <p
                                 className="text-sm text-gray-700 py-1.5 cursor-help"

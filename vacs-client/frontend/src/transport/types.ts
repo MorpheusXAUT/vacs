@@ -37,6 +37,8 @@ export type RemoteCommand =
     | "auth_check_session"
     | "auth_logout"
     | "auth_open_oauth_url"
+    | "keybinds_cancel_joystick_capture"
+    | "keybinds_capture_joystick_button"
     | "keybinds_get_external_binding"
     | "keybinds_get_keybinds_config"
     | "keybinds_get_transmit_config"

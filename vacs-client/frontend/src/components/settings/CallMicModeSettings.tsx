@@ -2,9 +2,12 @@ import {invokeStrict} from "../../error.ts";
 import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
 import {callMicModeToKeybind} from "../../types/keybinds.ts";
 import {
+    InputBinding,
     TransmitConfig,
     TransmitConfigWithLabels,
+    inputEquals,
     isCallMicMode,
+    isJoystickButton,
     withTransmitLabels,
 } from "../../types/transmit.ts";
 import Select from "../ui/Select.tsx";
@@ -18,21 +21,22 @@ type CallMicModeSettingsProps = {
 
 function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSettingsProps) {
     const capPlatform = useCapabilitiesStore(state => state.platform);
+    const capJoystick = useCapabilitiesStore(state => state.joystick);
 
-    const handleOnTransmitCapture = async (code: string) => {
+    const handleOnTransmitCapture = async (input: InputBinding) => {
         if (transmitConfig.callMicMode === "VoiceActivation") return;
 
         let newConfig: TransmitConfig;
         switch (transmitConfig.callMicMode) {
             case "PushToTalk":
-                newConfig = {...transmitConfig, pushToTalk: code};
+                newConfig = {...transmitConfig, pushToTalk: input};
                 break;
             case "PushToMute":
-                newConfig = {...transmitConfig, pushToMute: code};
+                newConfig = {...transmitConfig, pushToMute: input};
                 break;
         }
 
-        if (code === transmitConfig.radioPushToTalk) {
+        if (inputEquals(input, transmitConfig.radioPushToTalk)) {
             newConfig.radioPushToTalk = null;
         }
 
@@ -76,6 +80,20 @@ function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSet
         } catch {}
     };
 
+    const activeCallBinding =
+        transmitConfig.callMicMode === "PushToTalk"
+            ? transmitConfig.pushToTalk
+            : transmitConfig.callMicMode === "PushToMute"
+              ? transmitConfig.pushToMute
+              : null;
+
+    const activeCallLabel =
+        transmitConfig.callMicMode === "PushToTalk"
+            ? transmitConfig.pushToTalkLabel
+            : transmitConfig.callMicMode === "PushToMute"
+              ? transmitConfig.pushToMuteLabel
+              : "";
+
     return (
         <>
             <Select
@@ -90,16 +108,24 @@ function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSet
                 onChange={handleOnTransmitModeChange}
             />
             {capPlatform === "LinuxWayland" ? (
-                <ExternalKeybindField type={callMicModeToKeybind(transmitConfig.callMicMode)} />
+                // The keyboard shortcut is managed by the desktop environment,
+                // while a joystick button can be bound in parallel (joystick
+                // input bypasses the portal).
+                <>
+                    <ExternalKeybindField type={callMicModeToKeybind(transmitConfig.callMicMode)} />
+                    {capJoystick && (
+                        <KeyCapture
+                            label={isJoystickButton(activeCallBinding) ? activeCallLabel : null}
+                            keyboardEnabled={false}
+                            disabled={transmitConfig.callMicMode === "VoiceActivation"}
+                            onCapture={handleOnTransmitCapture}
+                            onRemove={handleOnTransmitRemoveClick}
+                        />
+                    )}
+                </>
             ) : (
                 <KeyCapture
-                    label={
-                        transmitConfig.callMicMode === "PushToTalk"
-                            ? transmitConfig.pushToTalkLabel
-                            : transmitConfig.callMicMode === "PushToMute"
-                              ? transmitConfig.pushToMuteLabel
-                              : ""
-                    }
+                    label={activeCallLabel}
                     onCapture={handleOnTransmitCapture}
                     onRemove={handleOnTransmitRemoveClick}
                     disabled={transmitConfig.callMicMode === "VoiceActivation"}

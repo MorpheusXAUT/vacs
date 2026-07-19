@@ -10,10 +10,13 @@ import {callMicModeToKeybind, KeybindType} from "../../types/keybinds.ts";
 import {RadioState} from "../../types/radio.ts";
 import {
     CallMicMode,
+    InputBinding,
     RadioConfig,
     RadioConfigWithLabels,
     TransmitConfig,
     TransmitConfigWithLabels,
+    inputEquals,
+    isJoystickButton,
     isRadioIntegration,
     withRadioLabels,
     withTransmitLabels,
@@ -39,6 +42,7 @@ function RadioIntegrationSettings({
 }: RadioIntegrationSettingsProps) {
     const capPlatform = useCapabilitiesStore(state => state.platform);
     const capKeybindEmitter = useCapabilitiesStore(state => state.keybindEmitter);
+    const capJoystick = useCapabilitiesStore(state => state.joystick);
     const [trackAudioEndpoint, setTrackAudioEndpoint] = useState<string>(
         radioConfig.trackAudio?.endpoint ?? "",
     );
@@ -70,10 +74,10 @@ function RadioIntegrationSettings({
         }
     };
 
-    const handleOnRadioPushToTalkCapture = async (code: string) => {
-        if (code === transmitConfig.radioPushToTalk) return;
+    const handleOnRadioPushToTalkCapture = async (input: InputBinding) => {
+        if (inputEquals(input, transmitConfig.radioPushToTalk)) return;
 
-        let newConfig: TransmitConfig = {...transmitConfig, radioPushToTalk: code};
+        let newConfig: TransmitConfig = {...transmitConfig, radioPushToTalk: input};
 
         if (transmitConfig.callMicMode !== "VoiceActivation") {
             const callKey =
@@ -81,7 +85,7 @@ function RadioIntegrationSettings({
                     ? transmitConfig.pushToTalk
                     : transmitConfig.pushToMute;
 
-            if (callKey === code) {
+            if (inputEquals(callKey, input)) {
                 newConfig.radioPushToTalk = null;
             }
         }
@@ -101,12 +105,15 @@ function RadioIntegrationSettings({
         } catch {}
     };
 
-    const handleOnAfvEmitCapture = async (code: string) => {
-        if (radioConfig.integration !== "AudioForVatsim") return;
+    const handleOnAfvEmitCapture = async (input: InputBinding) => {
+        // The AFV emit key is injected into another application by the keybind
+        // emitter, so it must be a keyboard key (joystick capture is disabled
+        // on its KeyCapture field).
+        if (radioConfig.integration !== "AudioForVatsim" || typeof input !== "string") return;
 
         const newConfig: RadioConfig = {
             ...radioConfig,
-            audioForVatsim: {emit: code},
+            audioForVatsim: {emit: input},
         };
 
         try {
@@ -196,17 +203,38 @@ function RadioIntegrationSettings({
                     onChange={handleOnRadioIntegrationChange}
                 />
                 {capPlatform === "LinuxWayland" ? (
-                    <ExternalKeybindField
-                        className={clsx(
-                            callMicModeToKeybind(transmitConfig.callMicMode) ===
-                                waylandRadioKeybindType && "text-gray-500",
+                    // The keyboard shortcut is managed by the desktop environment,
+                    // while a joystick button can be bound in parallel (joystick
+                    // input bypasses the portal).
+                    <>
+                        <ExternalKeybindField
+                            className={clsx(
+                                callMicModeToKeybind(transmitConfig.callMicMode) ===
+                                    waylandRadioKeybindType && "text-gray-500",
+                            )}
+                            type={waylandRadioKeybindType}
+                            disabled={
+                                radioConfig.integration === null ||
+                                transmitConfig.callMicMode === "PushToMute"
+                            }
+                        />
+                        {capJoystick && (
+                            <KeyCapture
+                                label={
+                                    isJoystickButton(transmitConfig.radioPushToTalk)
+                                        ? transmitConfig.radioPushToTalkLabel
+                                        : null
+                                }
+                                keyboardEnabled={false}
+                                disabled={
+                                    radioConfig.integration === null ||
+                                    transmitConfig.callMicMode === "PushToMute"
+                                }
+                                onCapture={handleOnRadioPushToTalkCapture}
+                                onRemove={handleOnRadioPushToTalkRemoveClick}
+                            />
                         )}
-                        type={waylandRadioKeybindType}
-                        disabled={
-                            radioConfig.integration === null ||
-                            transmitConfig.callMicMode === "PushToMute"
-                        }
-                    />
+                    </>
                 ) : (
                     <KeyCapture
                         label={
@@ -287,6 +315,7 @@ function RadioIntegrationSettings({
                         <p className="text-sm w-[21ch]! shrink-0 text-right">Emit key:</p>
                         <KeyCapture
                             label={radioConfig.audioForVatsim?.emitLabel ?? null}
+                            joystickEnabled={false}
                             onCapture={handleOnAfvEmitCapture}
                             onRemove={handleOnAfvEmitRemoveClick}
                         />

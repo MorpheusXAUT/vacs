@@ -38,6 +38,7 @@ const snapshot: SessionStateSnapshot = {
         alwaysOnTop: true,
         keybindListener: true,
         keybindEmitter: true,
+        joystick: true,
         playback: true,
         platform: "Windows",
     },

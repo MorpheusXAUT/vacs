@@ -1,5 +1,5 @@
 import KeyCapture from "./KeyCapture.tsx";
-import {codeToLabel} from "../../types/transmit.ts";
+import {InputBinding, inputToLabel, isJoystickButton} from "../../types/transmit.ts";
 import {useEffect, useState} from "preact/hooks";
 import {KeybindsConfig, KeybindType} from "../../types/keybinds.ts";
 import {invokeStrict} from "../../error.ts";
@@ -8,12 +8,12 @@ import SettingsSubPage from "./SettingsSubPage.tsx";
 import ExternalKeybindField from "./ExternalKeybindField.tsx";
 
 type Keybind = {
-    code: string | null;
+    input: InputBinding | null;
     label: string | null;
 };
 
-async function codeToKeybind(code: string | null): Promise<Keybind> {
-    return {code, label: code && (await codeToLabel(code))};
+async function inputToKeybind(input: InputBinding | null): Promise<Keybind> {
+    return {input, label: input && (await inputToLabel(input))};
 }
 
 function HotkeysConfigPage() {
@@ -25,9 +25,9 @@ function HotkeysConfigPage() {
         const fetchConfig = async () => {
             try {
                 const config = await invokeStrict<KeybindsConfig>("keybinds_get_keybinds_config");
-                setAcceptCall(await codeToKeybind(config.acceptCall));
-                setEndCall(await codeToKeybind(config.endCall));
-                setToggleRadioPrio(await codeToKeybind(config.toggleRadioPrio));
+                setAcceptCall(await inputToKeybind(config.acceptCall));
+                setEndCall(await inputToKeybind(config.endCall));
+                setToggleRadioPrio(await inputToKeybind(config.toggleRadioPrio));
             } catch {}
         };
 
@@ -69,11 +69,12 @@ type KeybindFieldProps = {
 
 function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
     const hasExternal = useCapabilitiesStore(state => state.platform === "LinuxWayland");
+    const capJoystick = useCapabilitiesStore(state => state.joystick);
 
-    const handleOnCapture = async (code: string | null) => {
+    const handleOnCapture = async (input: InputBinding | null) => {
         try {
-            await invokeStrict("keybinds_set_binding", {keybind: type, code});
-            setKeybind(await codeToKeybind(code));
+            await invokeStrict("keybinds_set_binding", {keybind: type, input});
+            setKeybind(await inputToKeybind(input));
         } catch {}
     };
 
@@ -81,7 +82,24 @@ function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
         <>
             <p>{label}</p>
             {hasExternal ? (
-                <ExternalKeybindField type={type} />
+                // On Wayland the keyboard shortcut is managed by the desktop
+                // environment, while a joystick button can be bound in parallel
+                // (joystick input bypasses the portal).
+                <div className="flex flex-row items-center gap-2 min-w-0">
+                    <ExternalKeybindField type={type} />
+                    {capJoystick && (
+                        <KeyCapture
+                            label={
+                                keybind !== undefined && isJoystickButton(keybind.input)
+                                    ? keybind.label
+                                    : null
+                            }
+                            keyboardEnabled={false}
+                            onCapture={handleOnCapture}
+                            onRemove={() => handleOnCapture(null)}
+                        />
+                    )}
+                </div>
             ) : keybind !== undefined ? (
                 <KeyCapture
                     label={keybind.label}
