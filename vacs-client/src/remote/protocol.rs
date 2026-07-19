@@ -309,7 +309,9 @@ pub enum RemoteEvent {
     StoreSyncRequest,
     UpdateProgress,
     WebrtcCallConnected,
+    WebrtcCallDegraded,
     WebrtcCallDisconnected,
+    WebrtcCallReconnecting,
     StoreSync,
     WebrtcCallError,
 }
@@ -355,8 +357,10 @@ impl RemoteEvent {
         Self::StoreSyncRequest,
         Self::UpdateProgress,
         Self::WebrtcCallConnected,
+        Self::WebrtcCallDegraded,
         Self::WebrtcCallDisconnected,
         Self::WebrtcCallError,
+        Self::WebrtcCallReconnecting,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -400,7 +404,9 @@ impl RemoteEvent {
             Self::StoreSyncRequest => "store:sync:request",
             Self::UpdateProgress => "update:progress",
             Self::WebrtcCallConnected => "webrtc:call-connected",
+            Self::WebrtcCallDegraded => "webrtc:call-degraded",
             Self::WebrtcCallDisconnected => "webrtc:call-disconnected",
+            Self::WebrtcCallReconnecting => "webrtc:call-reconnecting",
             Self::WebrtcCallError => "webrtc:call-error",
         }
     }

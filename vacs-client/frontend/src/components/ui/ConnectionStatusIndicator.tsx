@@ -7,7 +7,11 @@ function ConnectionStatusIndicator() {
     const callConnectionState = useCallStore(state => state.callDisplay?.connectionState);
     const status = ((): Status => {
         if (connected) {
-            if (callConnectionState === "connecting" || callConnectionState === "disconnected") {
+            if (
+                callConnectionState === "connecting" ||
+                callConnectionState === "degraded" ||
+                callConnectionState === "disconnected"
+            ) {
                 return "yellow";
             }
 

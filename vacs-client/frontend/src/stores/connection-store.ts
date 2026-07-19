@@ -5,7 +5,8 @@ import {ClientInfo} from "../types/client.ts";
 import {PositionId} from "../types/generic.ts";
 import {useProfileStore} from "./profile-store.ts";
 
-type State = "test" | "connecting" | "connected" | "disconnected";
+export type SignalingConnectionState = "test" | "connecting" | "connected" | "disconnected";
+type State = SignalingConnectionState;
 type ClientInfoWithoutId = Omit<ClientInfo, "id">;
 
 type ConnectionState = {

@@ -198,6 +198,9 @@ impl AppStateWebrtcExt for AppStateInner {
             "Received new WebRTC offer for active call {call_id}, replacing peer connection"
         );
 
+        // Shows as "connecting" until the replacement peer emits call-connected
+        app.emit("webrtc:call-reconnecting", &call_id).ok();
+
         let old_call = self
             .active_call
             .take()
@@ -496,6 +499,7 @@ impl AppStateInner {
             log::warn!(
                 "No inbound media although the call is already relayed, not reconnecting again"
             );
+            app.emit("webrtc:call-degraded", call_id).ok();
             return Ok(None);
         }
         if !call.peer_supports_reconnect {
@@ -504,9 +508,14 @@ impl AppStateInner {
                  support in-call reconnects, leaving the call as-is. Enabling force relay (call \
                  settings) may help if this happens regularly"
             );
+            app.emit("webrtc:call-degraded", call_id).ok();
             return Ok(None);
         }
         log::warn!("No inbound media on call {call_id}, reconnecting via relay");
+
+        // Shows as "connecting" until the replacement peer emits call-connected (or the call
+        // fails and errors out)
+        app.emit("webrtc:call-reconnecting", call_id).ok();
 
         let old_call = self
             .active_call

@@ -9,7 +9,7 @@ import {useCallListStore} from "./call-list-store.ts";
 import {useStationsStore} from "./stations-store.ts";
 import {startBlink, tryStopBlink} from "./blink-store.ts";
 
-export type ConnectionState = "connecting" | "connected" | "disconnected";
+export type ConnectionState = "connecting" | "connected" | "degraded" | "disconnected";
 export type CallDisplayType = "outgoing" | "accepted" | "rejected" | "error";
 
 export type CallDisplay = {

@@ -4,8 +4,8 @@ import type {StationInfo} from "../types/station.ts";
 import type {CallConfig} from "../types/settings.ts";
 import type {Capabilities} from "../types/capabilities.ts";
 import type {Call} from "../types/call.ts";
-import {type ConnectionState, useCallStore} from "../stores/call-store.ts";
-import {useConnectionStore} from "../stores/connection-store.ts";
+import {useCallStore} from "../stores/call-store.ts";
+import {type SignalingConnectionState, useConnectionStore} from "../stores/connection-store.ts";
 import {useAuthStore} from "../stores/auth-store.ts";
 import {useClientsStore} from "../stores/clients-store.ts";
 import {useStationsStore} from "../stores/stations-store.ts";
@@ -15,7 +15,7 @@ import {useProfileStore} from "../stores/profile-store.ts";
 import {withSyncSuppressed} from "./store-sync.ts";
 
 export type SessionStateSnapshot = {
-    connectionState: ConnectionState;
+    connectionState: SignalingConnectionState;
     sessionInfo: SessionInfo | null;
     defaultCallSources: StationId[];
     stations: StationInfo[];

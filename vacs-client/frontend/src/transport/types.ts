@@ -120,6 +120,8 @@ export type RemoteEvent =
     | "store:sync:request"
     | "webrtc:call-connected"
     | "webrtc:call-disconnected"
+    | "webrtc:call-degraded"
+    | "webrtc:call-reconnecting"
     | "webrtc:call-error"
     | "update:progress"
     | "remote:status"
