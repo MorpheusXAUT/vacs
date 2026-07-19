@@ -105,6 +105,14 @@ jobs:
       - name: Joystick service end-to-end tests
         run: cargo test --locked -p vacs-client --all-features virtual_joystick -- --include-ignored
 
+      # The X11 keybind roundtrip test injects global key events via XTest and
+      # is therefore #[ignore]d for regular runs; execute it explicitly against
+      # an isolated headless X server.
+      - name: X11 keybind end-to-end tests
+        run: |
+          sudo apt-get install -y --no-install-recommends xvfb
+          xvfb-run --auto-servernum cargo test --locked -p vacs-client --all-features x11 -- --include-ignored
+
       - name: Summary
         run: echo "### ✅ Tests - all workspace tests passed" >> $GITHUB_STEP_SUMMARY
 
