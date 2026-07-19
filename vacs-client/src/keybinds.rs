@@ -570,6 +570,52 @@ mod tests {
     }
 
     #[test]
+    fn active_triggers_in_push_to_mute_mode_follow_ptm_binding() {
+        // Only run the non-Wayland branch deterministically; the Wayland
+        // composition itself is covered by the compose_wayland_triggers tests.
+        if cfg!(target_os = "linux") && matches!(Platform::get(), Platform::LinuxWayland) {
+            return;
+        }
+
+        let config = TransmitConfig {
+            call_mic_mode: CallMicMode::PushToMute,
+            push_to_mute: Some(button("guid", 1, None)),
+            // Deliberately set: a dedicated radio binding is not supported in
+            // PTM mode, so radio TX must follow the PTM binding instead.
+            radio_push_to_talk: Some(button("guid", 2, None)),
+            ..Default::default()
+        };
+
+        let expected = vec![Trigger::Input(button("guid", 1, None))];
+        assert_eq!(config.active_call_triggers(), expected);
+        assert_eq!(
+            tauri::async_runtime::block_on(config.active_radio_triggers(true)),
+            expected
+        );
+    }
+
+    #[test]
+    fn active_triggers_in_voice_activation_mode() {
+        if cfg!(target_os = "linux") && matches!(Platform::get(), Platform::LinuxWayland) {
+            return;
+        }
+
+        let config = TransmitConfig {
+            call_mic_mode: CallMicMode::VoiceActivation,
+            // Ignored: no call key exists in voice activation mode
+            push_to_talk: Some(button("guid", 1, None)),
+            radio_push_to_talk: Some(button("guid", 2, None)),
+            ..Default::default()
+        };
+
+        assert!(config.active_call_triggers().is_empty());
+        assert_eq!(
+            tauri::async_runtime::block_on(config.active_radio_triggers(true)),
+            vec![Trigger::Input(button("guid", 2, None))]
+        );
+    }
+
+    #[test]
     fn active_triggers_use_configured_bindings() {
         // Only run the non-Wayland branch deterministically; the Wayland
         // composition itself is covered by the compose_wayland_triggers tests.

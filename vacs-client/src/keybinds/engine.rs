@@ -675,3 +675,49 @@ impl Drop for KeybindEngine {
         self.stop();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keybinds::{JoystickButton, PortalAction};
+    use keyboard_types::Code;
+
+    fn key(code: Code) -> Trigger {
+        Trigger::Input(InputCode::Key(code))
+    }
+
+    fn button(device: &str, index: u32) -> Trigger {
+        Trigger::Input(InputCode::Button(JoystickButton {
+            device: device.to_string(),
+            button: index,
+            name: None,
+        }))
+    }
+
+    #[test]
+    fn same_triggers_ignores_order() {
+        let portal = Trigger::Portal(PortalAction::PushToTalk);
+        let a = vec![portal.clone(), button("guid", 2)];
+        let b = vec![button("guid", 2), portal];
+
+        assert!(same_triggers(&a, &b));
+        assert!(same_triggers(&[], &[]));
+        assert!(same_triggers(&[key(Code::F13)], &[key(Code::F13)]));
+    }
+
+    #[test]
+    fn same_triggers_rejects_differing_sets() {
+        // subset
+        assert!(!same_triggers(
+            &[key(Code::F13)],
+            &[key(Code::F13), button("guid", 2)]
+        ));
+        // disjoint
+        assert!(!same_triggers(&[key(Code::F13)], &[key(Code::F14)]));
+        // same button index on different devices
+        assert!(!same_triggers(
+            &[button("yoke", 2)],
+            &[button("throttle", 2)]
+        ));
+    }
+}
