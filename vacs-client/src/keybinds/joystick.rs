@@ -277,3 +277,135 @@ fn button_event(guid: &str, name: &str, button: u32, state: KeyState) -> KeyEven
         state,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keybinds::{InputCode, Trigger};
+    use sdl3::sys::joystick::{
+        SDL_AttachVirtualJoystick, SDL_CloseJoystick, SDL_DetachVirtualJoystick, SDL_Joystick,
+        SDL_OpenJoystick, SDL_SetJoystickVirtualButton, SDL_VirtualJoystickDesc,
+    };
+    use std::time::Duration;
+
+    const VIRTUAL_NAME: &str = "VACS Virtual Test Stick";
+
+    /// A process-local virtual joystick, driven through the raw SDL FFI.
+    ///
+    /// The safe sdl3 wrapper cannot be used here: it binds `Sdl` contexts to the
+    /// first-initializing thread, which is the service's poller thread. The C
+    /// joystick API itself is internally synchronized and safe to call from the
+    /// test thread while the poller pumps events.
+    struct VirtualJoystick {
+        id: sdl3::sys::joystick::SDL_JoystickID,
+        handle: *mut SDL_Joystick,
+    }
+
+    impl VirtualJoystick {
+        fn attach(name: &std::ffi::CStr, buttons: u16) -> Self {
+            let mut desc = SDL_VirtualJoystickDesc::new();
+            desc.name = name.as_ptr();
+            desc.nbuttons = buttons;
+
+            let id = unsafe { SDL_AttachVirtualJoystick(&desc) };
+            assert_ne!(id.0, 0, "failed to attach virtual joystick");
+
+            // Events are only generated for opened joysticks; the poller opens
+            // it too once it sees the added event.
+            let handle = unsafe { SDL_OpenJoystick(id) };
+            assert!(!handle.is_null(), "failed to open virtual joystick");
+
+            Self { id, handle }
+        }
+
+        fn set_button(&self, button: i32, down: bool) {
+            assert!(unsafe { SDL_SetJoystickVirtualButton(self.handle, button, down) });
+        }
+
+        /// Detach the device, simulating an unplug.
+        fn detach(self) {
+            unsafe {
+                SDL_CloseJoystick(self.handle);
+                SDL_DetachVirtualJoystick(self.id);
+            }
+        }
+    }
+
+    /// Receive the next event originating from the virtual test device,
+    /// skipping chatter from real joysticks attached to the machine running
+    /// the tests.
+    async fn next_virtual_event(
+        rx: &mut broadcast::Receiver<KeyEvent>,
+    ) -> (JoystickButton, KeyState) {
+        loop {
+            let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+                .await
+                .expect("timed out waiting for joystick event")
+                .expect("joystick event stream closed");
+            if let Trigger::Input(InputCode::Button(button)) = event.trigger
+                && button.name.as_deref() == Some(VIRTUAL_NAME)
+            {
+                return (button, event.state);
+            }
+        }
+    }
+
+    /// End-to-end roundtrip through the SDL poller using a process-local
+    /// virtual joystick (no hardware or display required): button transitions
+    /// arrive as broadcast events on all subscriptions, and detaching the
+    /// device while a button is held synthesizes its release (stuck-PTT guard).
+    #[test]
+    #[ignore = "initializes SDL and drives its event loop"]
+    fn virtual_joystick_roundtrip() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let service = JoystickService::new();
+            let mut rx = service
+                .subscribe()
+                .await
+                .expect("joystick service failed to start");
+            let mut rx_second = service
+                .subscribe()
+                .await
+                .expect("second subscription failed");
+
+            let name = std::ffi::CString::new(VIRTUAL_NAME).unwrap();
+            let device = VirtualJoystick::attach(&name, 2);
+
+            // press/release reaches subscribers with the raw button index
+            device.set_button(0, true);
+            let (button, state) = next_virtual_event(&mut rx).await;
+            assert_eq!(state, KeyState::Down);
+            assert_eq!(button.button, 0);
+            let guid = button.device.clone();
+
+            // both subscriptions observe the same event (engine and binding
+            // capture consume the broadcast concurrently in production)
+            let (second_button, second_state) = next_virtual_event(&mut rx_second).await;
+            assert_eq!((second_button, second_state), (button, KeyState::Down));
+
+            device.set_button(0, false);
+            let (button, state) = next_virtual_event(&mut rx).await;
+            assert_eq!((button.button, state), (0, KeyState::Up));
+
+            // hold a button and "unplug" the device: a release must arrive so
+            // a PTT bound to it cannot get stuck transmitting
+            device.set_button(1, true);
+            let (button, state) = next_virtual_event(&mut rx).await;
+            assert_eq!((button.button, state), (1, KeyState::Down));
+
+            device.detach();
+
+            let (button, state) = next_virtual_event(&mut rx).await;
+            assert_eq!(state, KeyState::Up);
+            assert_eq!(button.button, 1);
+            assert_eq!(button.device, guid);
+
+            service.shutdown().await;
+        });
+    }
+}
