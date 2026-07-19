@@ -11,12 +11,12 @@ import Select from "../ui/Select.tsx";
 import ExternalKeybindField from "./ExternalKeybindField.tsx";
 import KeyCapture from "./KeyCapture.tsx";
 
-type CallModeSettingsProps = {
+type CallMicModeSettingsProps = {
     transmitConfig: TransmitConfigWithLabels;
     setTransmitConfig: (config: TransmitConfigWithLabels) => void;
 };
 
-function CallModeSettings({transmitConfig, setTransmitConfig}: CallModeSettingsProps) {
+function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSettingsProps) {
     const capPlatform = useCapabilitiesStore(state => state.platform);
 
     const handleOnTransmitCapture = async (code: string) => {
@@ -109,4 +109,4 @@ function CallModeSettings({transmitConfig, setTransmitConfig}: CallModeSettingsP
     );
 }
 
-export default CallModeSettings;
+export default CallMicModeSettings;
