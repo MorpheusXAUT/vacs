@@ -51,6 +51,8 @@ exceptions = [
     { allow = ["CC0-1.0"], crate = "notify" },
     { allow = ["CC0-1.0"], crate = "tiny-keccak" },
     { allow = ["Zlib"], crate = "foldhash" },
+    { allow = ["Zlib"], crate = "sdl3-sys" },
+    { allow = ["Zlib"], crate = "sdl3-src" },
 ]
 
 [licenses.private]
