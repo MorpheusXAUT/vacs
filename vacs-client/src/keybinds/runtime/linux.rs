@@ -6,7 +6,7 @@
 //!
 //! - **Wayland**: Uses XDG Global Shortcuts portal for listening. Emitter is not supported
 //!   due to Wayland's security model (no global input injection).
-//! - **X11**: Currently uses stub implementations (to be implemented in the future).
+//! - **X11**: Listens via XInput2 raw events (focus-independent, non-grabbing).
 //! - **Unknown**: No display server detected, uses stub implementations.
 //!
 //! # Runtime Platform Detection
@@ -20,12 +20,12 @@
 //!
 //! # Emitter Limitation
 //!
-//! **Important**: The emitter is currently a no-op stub on all Linux platforms. This means
-//! radio integration (which requires emitting key presses to other applications) does not
-//! work on Linux. This is a fundamental limitation of Wayland's security model, and there's
-//! no standard cross-desktop solution for X11 either.
+//! **Important**: The emitter is only functional on X11 (via the XTest extension). On
+//! Wayland it remains a no-op stub — there is no standard API for global input injection
+//! (security model) — so radio integration via emitted key presses does not work there.
 
 mod wayland;
+mod x11;
 pub use wayland::{PortalShortcutId, is_portal_shortcut_bound};
 
 use crate::keybinds::runtime::{KeybindEmitter, KeybindListener, stub};
@@ -37,7 +37,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 pub enum LinuxKeybindListener {
     Wayland(wayland::WaylandKeybindListener),
-    X11(stub::NoopKeybindListener),
+    X11(x11::X11KeybindListener),
     Stub(stub::NoopKeybindListener),
 }
 
@@ -62,7 +62,7 @@ impl KeybindListener for LinuxKeybindListener {
                 wayland::WaylandKeybindListener::start(key_event_tx).await?,
             )),
             Platform::LinuxX11 => Ok(Self::X11(
-                stub::NoopKeybindListener::start(key_event_tx).await?,
+                x11::X11KeybindListener::start(key_event_tx).await?,
             )),
             Platform::LinuxUnknown => Ok(Self::Stub(
                 stub::NoopKeybindListener::start(key_event_tx).await?,

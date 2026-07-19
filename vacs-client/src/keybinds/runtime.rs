@@ -17,7 +17,7 @@
 //! | Windows        | ✅       | ✅      | Full support via Win32 API               |
 //! | macOS          | ✅       | ✅      | Full support via Accessibility API       |
 //! | Linux Wayland  | ✅       | ❌      | Listener via XDG portal, no emitter API  |
-//! | Linux X11      | ⏳       | ⏳      | Stub implementations (to be implemented) |
+//! | Linux X11      | ✅       | ⏳      | Listener via XInput2 raw events          |
 //!
 //! On Wayland, we can listen to global shortcuts via the XDG Desktop Portal, but there's
 //! no standard API for injecting input events (security model). This means radio integration
