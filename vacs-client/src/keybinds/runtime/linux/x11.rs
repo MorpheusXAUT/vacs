@@ -10,8 +10,10 @@
 //! Exotic keys missing from the table are logged and ignored by the listener and
 //! rejected by the emitter.
 
+mod emitter;
 mod listener;
 
+pub use emitter::*;
 pub use listener::*;
 
 use crate::keybinds::KeybindsError;
@@ -165,6 +167,15 @@ pub(super) fn x_keycode_to_code(keycode: u32) -> Result<Code, KeybindsError> {
         .ok_or_else(|| KeybindsError::UnrecognizedCode(format!("X11 keycode {keycode}")))
 }
 
+/// Translate a W3C [`Code`] into an X11 keycode.
+pub(super) fn code_to_x_keycode(code: Code) -> Result<u8, KeybindsError> {
+    EVDEV_CODE_MAP
+        .iter()
+        .find(|(_, mapped)| *mapped == code)
+        .map(|(key, _)| (*key + EVDEV_KEYCODE_OFFSET) as u8)
+        .ok_or_else(|| KeybindsError::UnrecognizedCode(format!("no X11 keycode for {code}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +196,55 @@ mod tests {
         assert_eq!(x_keycode_to_code(65).unwrap(), Code::Space);
         assert!(x_keycode_to_code(5).is_err()); // below the evdev offset
         assert!(x_keycode_to_code(9999).is_err());
+    }
+
+    #[test]
+    fn keycode_roundtrip() {
+        for (key, code) in EVDEV_CODE_MAP {
+            let x_keycode = code_to_x_keycode(*code).unwrap();
+            assert_eq!(u32::from(x_keycode), key + EVDEV_KEYCODE_OFFSET);
+            assert_eq!(x_keycode_to_code(u32::from(x_keycode)).unwrap(), *code);
+        }
+    }
+
+    /// End-to-end roundtrip against a real X server: the XTest emitter injects a
+    /// key press/release, which the XInput2 raw-event listener must receive.
+    ///
+    /// Run explicitly (e.g. against a dedicated server such as `Xwayland :99`):
+    /// `DISPLAY=:99 cargo test -p vacs-client x11 -- --ignored`
+    #[test]
+    #[ignore = "requires an X server on $DISPLAY and injects global key events"]
+    fn emitter_listener_roundtrip() {
+        use crate::keybinds::runtime::{KeybindEmitter, KeybindListener};
+        use crate::keybinds::{InputCode, Trigger};
+        use keyboard_types::KeyState;
+        use std::time::Duration;
+
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let listener = X11KeybindListener::start(tx).await.unwrap();
+            let emitter = X11KeybindEmitter::start().unwrap();
+
+            emitter.emit(Code::F13, KeyState::Down).unwrap();
+            emitter.emit(Code::F13, KeyState::Up).unwrap();
+
+            let mut states = Vec::new();
+            for _ in 0..2 {
+                let event = tokio::time::timeout(Duration::from_secs(3), rx.recv())
+                    .await
+                    .expect("timed out waiting for emitted key event")
+                    .expect("listener channel closed");
+                assert_eq!(event.trigger, Trigger::Input(InputCode::Key(Code::F13)));
+                states.push(event.state);
+            }
+            assert_eq!(states, vec![KeyState::Down, KeyState::Up]);
+
+            drop(listener);
+        });
     }
 }

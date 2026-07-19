@@ -59,7 +59,11 @@ impl Capabilities {
         Self {
             always_on_top: !matches!(platform, Platform::LinuxWayland),
             keybind_listener,
-            keybind_emitter: matches!(platform, Platform::Windows | Platform::MacOs),
+            // X11 emits via the XTest extension; Wayland has no injection API
+            keybind_emitter: matches!(
+                platform,
+                Platform::Windows | Platform::MacOs | Platform::LinuxX11
+            ),
             // SDL's joystick subsystem needs no display server or special
             // permissions on any supported platform; runtime failures surface
             // (and are logged) when the joystick service is first used.

@@ -84,7 +84,8 @@ impl KeybindListener for LinuxKeybindListener {
 
 pub enum LinuxKeybindEmitter {
     Wayland(stub::NoopKeybindEmitter),
-    X11(stub::NoopKeybindEmitter),
+    // Boxed: the X connection makes this variant much larger than the stubs
+    X11(Box<x11::X11KeybindEmitter>),
     Stub(stub::NoopKeybindEmitter),
 }
 
@@ -105,13 +106,12 @@ impl KeybindEmitter for LinuxKeybindEmitter {
     {
         // Runtime platform detection to select the appropriate emitter implementation.
         //
-        // NOTE: All variants currently use the stub implementation because:
+        // NOTE: Wayland and Unknown use the stub implementation:
         // - Wayland: No standard API for global input injection (security model)
-        // - X11: Not yet implemented (would use XTest extension)
         // - Unknown: No display server available
         match Platform::get() {
             Platform::LinuxWayland => Ok(Self::Wayland(stub::NoopKeybindEmitter::start()?)),
-            Platform::LinuxX11 => Ok(Self::X11(stub::NoopKeybindEmitter::start()?)),
+            Platform::LinuxX11 => Ok(Self::X11(Box::new(x11::X11KeybindEmitter::start()?))),
             Platform::LinuxUnknown => Ok(Self::Stub(stub::NoopKeybindEmitter::start()?)),
             platform => Err(KeybindsError::Emitter(format!(
                 "Unsupported platform {platform} for LinuxKeybindEmitter",
