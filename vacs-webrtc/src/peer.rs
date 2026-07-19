@@ -3,7 +3,9 @@ use crate::config::{
 };
 use crate::error::WebrtcError;
 use anyhow::Context;
+use std::net::IpAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{broadcast, mpsc};
 use tracing::instrument;
 use vacs_audio::{EncodedAudioFrame, TARGET_SAMPLE_RATE};
@@ -81,23 +83,53 @@ impl Peer {
 
         {
             let events_tx = events_tx.clone();
+            let dtls_transport = peer_connection.sctp().transport();
             peer_connection.on_peer_connection_state_change(Box::new(
                 move |state: RTCPeerConnectionState| {
                     tracing::trace!(?state, "Peer connection state changed");
                     if let Err(err) = events_tx.send(PeerEvent::ConnectionState(state)) {
                         tracing::warn!(?err, "Failed to send peer connection state event");
                     }
-                    Box::pin(async {})
+
+                    let dtls_transport = Arc::clone(&dtls_transport);
+                    Box::pin(async move {
+                        if state == RTCPeerConnectionState::Connected {
+                            match dtls_transport
+                                .ice_transport()
+                                .get_selected_candidate_pair()
+                                .await
+                            {
+                                Some(pair) => {
+                                    tracing::info!(%pair, "Selected ICE candidate pair");
+                                }
+                                None => tracing::warn!(
+                                    "Connected but no selected ICE candidate pair available"
+                                ),
+                            }
+                        }
+                    })
                 },
             ));
         }
 
         {
             let events_tx = events_tx.clone();
+            let cgnat_warned = AtomicBool::new(false);
             peer_connection.on_ice_candidate(Box::new(
                 move |candidate: Option<RTCIceCandidate>| {
                     tracing::trace!(?candidate, "ICE candidate received");
                     if let Some(candidate) = candidate {
+                        if is_cgnat_address(&candidate.address)
+                            && !cgnat_warned.swap(true, Ordering::Relaxed)
+                        {
+                            tracing::warn!(
+                                address = %candidate.address,
+                                "Local ICE candidate in CGNAT range (100.64.0.0/10), likely a VPN \
+                                 interface (e.g. Cloudflare WARP, Tailscale). Calls may suffer \
+                                 one-way audio; forcing relayed calls can help"
+                            );
+                        }
+
                         match candidate.to_json() {
                             Ok(init) => match serde_json::to_string(&init) {
                                 Ok(init) => {
@@ -298,6 +330,18 @@ impl Peer {
     }
 }
 
+/// Checks whether an address is within the CGNAT range 100.64.0.0/10 (RFC 6598), which is
+/// commonly used by VPNs such as Cloudflare WARP or Tailscale for their virtual interfaces.
+fn is_cgnat_address(address: &str) -> bool {
+    match address.parse::<IpAddr>() {
+        Ok(IpAddr::V4(ip)) => {
+            let octets = ip.octets();
+            octets[0] == 100 && (64..128).contains(&octets[1])
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,5 +430,17 @@ mod tests {
 
         assert!(peer.sender.is_none(), "stop must drop the sender");
         assert!(peer.receiver.is_none(), "stop must drop the receiver");
+    }
+
+    #[test]
+    fn detects_cgnat_addresses() {
+        assert!(is_cgnat_address("100.64.0.1"));
+        assert!(is_cgnat_address("100.96.12.34"));
+        assert!(is_cgnat_address("100.127.255.255"));
+        assert!(!is_cgnat_address("100.63.255.255"));
+        assert!(!is_cgnat_address("100.128.0.0"));
+        assert!(!is_cgnat_address("192.168.1.1"));
+        assert!(!is_cgnat_address("not-an-ip"));
+        assert!(!is_cgnat_address("2001:db8::1"));
     }
 }
