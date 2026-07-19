@@ -128,6 +128,7 @@ vacs-webrtc = { path = "vacs-webrtc" }
 vergen-git2 = { version = "10.0.0", features = ["build", "cargo", "rustc"] }
 wasapi = "0.23.0"
 webrtc = "0.17.1"
+x11rb = { version = "0.14.0", features = ["xinput", "xtest"] }
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",

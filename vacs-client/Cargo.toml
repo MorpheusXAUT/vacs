@@ -83,6 +83,7 @@ ashpd = { workspace = true }
 futures-util = { workspace = true }
 pipewire = { workspace = true }
 tauri-plugin-prevent-default = { workspace = true }
+x11rb = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
