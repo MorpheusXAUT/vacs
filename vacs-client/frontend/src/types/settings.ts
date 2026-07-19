@@ -4,6 +4,7 @@ export type CallConfig = {
     enableCallStartSound: boolean;
     enableCallEndSound: boolean;
     useDefaultCallSources: boolean;
+    forceRelay: boolean;
 };
 
 export type RemoteConfig = {

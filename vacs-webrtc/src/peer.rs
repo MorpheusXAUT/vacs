@@ -1,5 +1,6 @@
 use crate::config::{
-    IntoRtc, PEER_EVENTS_CAPACITY, WEBRTC_CHANNELS, WEBRTC_TRACK_ID, WEBRTC_TRACK_STREAM_ID,
+    PEER_EVENTS_CAPACITY, WEBRTC_CHANNELS, WEBRTC_TRACK_ID, WEBRTC_TRACK_STREAM_ID,
+    rtc_configuration,
 };
 use crate::error::WebrtcError;
 use anyhow::Context;
@@ -43,6 +44,7 @@ impl Peer {
     #[instrument(level = "debug", err)]
     pub async fn new(
         config: IceConfig,
+        force_relay: bool,
     ) -> Result<(Self, broadcast::Receiver<PeerEvent>), WebrtcError> {
         let mut media_engine = MediaEngine::default();
         media_engine
@@ -58,8 +60,12 @@ impl Peer {
             .with_interceptor_registry(registry)
             .build();
 
+        if force_relay {
+            tracing::info!("Forcing relayed (TURN) connection for peer");
+        }
+
         let peer_connection = api
-            .new_peer_connection(config.into_rtc())
+            .new_peer_connection(rtc_configuration(config, force_relay))
             .await
             .context("Failed to create peer connection")?;
 
@@ -351,10 +357,13 @@ mod tests {
     /// Building a peer without ICE servers keeps these tests offline: nothing
     /// is gathered until a local description is set.
     async fn test_peer() -> Peer {
-        let (peer, _events) = Peer::new(IceConfig {
-            ice_servers: Vec::new(),
-            expires_at: None,
-        })
+        let (peer, _events) = Peer::new(
+            IceConfig {
+                ice_servers: Vec::new(),
+                expires_at: None,
+            },
+            false,
+        )
         .await
         .expect("failed to create peer");
         peer

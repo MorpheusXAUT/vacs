@@ -1,6 +1,7 @@
 use vacs_protocol::http::webrtc::{IceConfig, IceServer};
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 
 pub(crate) const WEBRTC_TRACK_ID: &str = "audio";
 pub(crate) const WEBRTC_TRACK_STREAM_ID: &str = "main";
@@ -61,6 +62,14 @@ impl IntoRtc<RTCConfiguration> for IceConfig {
             ..Default::default()
         }
     }
+}
+
+pub(crate) fn rtc_configuration(config: IceConfig, force_relay: bool) -> RTCConfiguration {
+    let mut rtc_config = config.into_rtc();
+    if force_relay {
+        rtc_config.ice_transport_policy = RTCIceTransportPolicy::Relay;
+    }
+    rtc_config
 }
 
 #[cfg(test)]
@@ -159,5 +168,17 @@ mod tests {
     #[test]
     fn keeps_turn_url_without_transport_param() {
         assert!(is_supported_ice_url("turn:turn.vacs.network:3478"));
+    }
+
+    #[test]
+    fn force_relay_sets_transport_policy() {
+        let config = rtc_configuration(IceConfig::default(), true);
+        assert_eq!(config.ice_transport_policy, RTCIceTransportPolicy::Relay);
+
+        let config = rtc_configuration(IceConfig::default(), false);
+        assert_eq!(
+            config.ice_transport_policy,
+            RTCIceTransportPolicy::Unspecified
+        );
     }
 }

@@ -48,6 +48,7 @@ export const useSettingsStore = create<SettingsState>()(set => ({
         enableCallStartSound: true,
         enableCallEndSound: true,
         useDefaultCallSources: true,
+        forceRelay: false,
     },
     selectedClientPageConfig: {...emptyClientPageConfig, name: "None"},
     clientPageConfigs: {},

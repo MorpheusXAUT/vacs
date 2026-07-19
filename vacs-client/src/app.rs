@@ -410,6 +410,11 @@ pub struct CallConfig {
     /// Enables default call source selection based on the dataset position
     #[serde(default = "default_true")]
     pub use_default_call_sources: bool,
+    /// Forces call audio to always be relayed via a TURN server instead of attempting a direct
+    /// peer-to-peer connection. Helps with one-way audio issues caused by VPNs (e.g. Cloudflare
+    /// WARP) at the cost of slightly higher latency.
+    #[serde(default)]
+    pub force_relay: bool,
 }
 
 fn default_true() -> bool {
@@ -424,6 +429,7 @@ impl Default for CallConfig {
             enable_call_start_sound: true,
             enable_call_end_sound: true,
             use_default_call_sources: true,
+            force_relay: false,
         }
     }
 }
