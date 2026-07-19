@@ -99,6 +99,12 @@ jobs:
       - name: Tests
         run: cargo test --locked --workspace --all-targets --all-features
 
+      # The joystick service roundtrip drives SDL's event loop with a virtual
+      # device and is #[ignore]d to keep regular test runs hermetic; execute it
+      # explicitly (no hardware or display required).
+      - name: Joystick service end-to-end tests
+        run: cargo test --locked -p vacs-client --all-features virtual_joystick -- --include-ignored
+
       - name: Summary
         run: echo "### ✅ Tests - all workspace tests passed" >> $GITHUB_STEP_SUMMARY
 
