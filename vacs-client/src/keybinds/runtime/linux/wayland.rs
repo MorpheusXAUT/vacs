@@ -176,13 +176,24 @@ pub async fn is_portal_shortcut_bound(shortcut_id: PortalShortcutId) -> bool {
 
     let shortcuts = Arc::new(RwLock::new(HashMap::new()));
 
-    match check_existing_shortcuts(&proxy, &session, &mut None, &shortcuts).await {
-        Ok(needs_bind) => needs_bind,
+    let bound = match check_existing_shortcuts(&proxy, &session, &mut None, &shortcuts).await {
+        Ok(_) => shortcuts.read().contains_key(&shortcut_id),
         Err(err) => {
             log::error!("Failed to check existing Wayland Global Shortcuts: {err}");
-            return false;
+            false
         }
     };
 
-    shortcuts.read().contains_key(&shortcut_id)
+    // This session only exists for the duration of the query. It must be closed
+    // explicitly: the portal keeps leaked sessions alive and re-emits every
+    // shortcut signal once per session, so each leak would deliver an extra
+    // duplicate of all future Activated/Deactivated/ShortcutsChanged signals to
+    // the real listener.
+    match tokio::time::timeout(std::time::Duration::from_secs(2), session.close()).await {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => log::warn!("Failed to close global shortcuts query session: {err}"),
+        Err(_) => log::warn!("Timed out closing global shortcuts query session"),
+    }
+
+    bound
 }
