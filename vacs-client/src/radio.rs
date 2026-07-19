@@ -3,7 +3,7 @@ pub mod push_to_talk;
 pub mod track_audio;
 
 use crate::error::Error;
-use crate::keybinds::{KeybindsError, TransmitConfig};
+use crate::keybinds::{InputCode, KeybindsError, TransmitConfig, Trigger};
 use crate::platform::Capabilities;
 use crate::radio::push_to_talk::PushToTalkRadio;
 use crate::radio::track_audio::TrackAudioRadio;
@@ -244,8 +244,10 @@ impl RadioConfig {
     pub async fn validate(&self, transmit_config: &TransmitConfig) -> Result<(), Error> {
         if self.integration == Some(RadioIntegration::AudioForVatsim)
             && let Some(afv_code) = self.audio_for_vatsim.as_ref().and_then(|c| c.emit)
-            && let Some(radio_code) = transmit_config.active_radio_code(true).await
-            && afv_code == radio_code
+            && transmit_config
+                .active_radio_triggers(true)
+                .await
+                .contains(&Trigger::Input(InputCode::Key(afv_code)))
         {
             return Err(KeybindsError::Other(
                 "AFV emit key must be distinct from your radio integration push-to-talk key"

@@ -34,11 +34,7 @@ impl KeyEventConverter {
                 let keycode =
                     CGEvent::integer_value_field(Some(event), CGEventField::KeyboardEventKeycode);
                 let code = cg_keycode_to_code(keycode)?;
-                Ok(KeyEvent {
-                    code,
-                    label: code.to_string(),
-                    state,
-                })
+                Ok(KeyEvent::key(code, code.to_string(), state))
             }
             CGEventType::FlagsChanged => {
                 let keycode =
@@ -70,11 +66,7 @@ impl KeyEventConverter {
                     self.prev_flags.remove(flag_bit);
                 }
 
-                Ok(KeyEvent {
-                    code,
-                    label: "".to_string(),
-                    state,
-                })
+                Ok(KeyEvent::key(code, "".to_string(), state))
             }
             _ => Err(KeybindsError::Other("Unexpected event type".to_string())),
         }

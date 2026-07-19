@@ -1,6 +1,8 @@
 use crate::error::Error as VacsError;
 use keyboard_types::{Code, KeyState};
+use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt;
 use thiserror::Error;
 use vacs_macros::Frontend;
 
@@ -9,6 +11,7 @@ use crate::platform::Platform;
 
 pub mod commands;
 pub mod engine;
+pub mod joystick;
 pub mod runtime;
 
 #[derive(Debug, Clone, Error)]
@@ -25,12 +28,164 @@ pub enum KeybindsError {
     Other(String),
 }
 
+/// A physical input that can be bound to a keybind action.
+///
+/// This is the *persisted* identity of a binding: keyboard keys serialize as their
+/// bare [`Code`] string (e.g. `"KeyA"`), byte-identical to the pre-gamepad on-disk
+/// format, while joystick buttons serialize as a `{ device, button, name }` table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputCode {
+    Key(Code),
+    Button(JoystickButton),
+}
+
+impl fmt::Display for InputCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InputCode::Key(code) => write!(f, "{code}"),
+            InputCode::Button(button) => write!(f, "{button}"),
+        }
+    }
+}
+
+impl Serialize for InputCode {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            InputCode::Key(code) => serializer.serialize_str(&code.to_string()),
+            InputCode::Button(button) => button.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for InputCode {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct InputCodeVisitor;
+
+        impl<'de> Visitor<'de> for InputCodeVisitor {
+            type Value = InputCode;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a key code string or a joystick button table")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, s: &str) -> Result<InputCode, E> {
+                s.parse::<Code>()
+                    .map(InputCode::Key)
+                    .map_err(|_| E::custom(format!("Unrecognized key code: {s}")))
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<InputCode, A::Error> {
+                JoystickButton::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+                    .map(InputCode::Button)
+            }
+        }
+
+        // A manual visitor instead of #[serde(untagged)]: the `config` crate
+        // re-deserializes through `config::Value`, where untagged buffering is
+        // fragile, and untagged error messages are useless to users.
+        deserializer.deserialize_any(InputCodeVisitor)
+    }
+}
+
+/// A joystick/gamepad button, addressed by stable device identity.
+///
+/// Devices are identified by their SDL joystick GUID (derived from bus/VID/PID),
+/// which is stable across reconnects and USB ports - unlike SDL instance ids,
+/// which change on every reconnect and thus cannot be persisted. Two physically
+/// identical devices share a GUID, so a binding matches either of them; distinct
+/// products (yoke, throttle, pedals) always have distinct GUIDs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JoystickButton {
+    /// SDL joystick GUID as a hex string.
+    pub device: String,
+    /// Raw button index on the device (SDL joystick button numbering).
+    pub button: u32,
+    /// Last-seen human-readable device name; display-only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+impl PartialEq for JoystickButton {
+    fn eq(&self, other: &Self) -> bool {
+        // `name` is display metadata and must not affect binding identity
+        self.device == other.device && self.button == other.button
+    }
+}
+
+impl Eq for JoystickButton {}
+
+impl fmt::Display for JoystickButton {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.name {
+            Some(name) => write!(f, "{name} B{}", self.button),
+            None => write!(f, "Joystick B{}", self.button),
+        }
+    }
+}
+
+/// Runtime identity of a fired keybind source.
+///
+/// Never serialized - configs only ever store [`InputCode`]. The `Portal` variant
+/// carries semantic XDG portal shortcut activations on Wayland, where keyboard
+/// capture happens at the OS level and no physical key identity exists.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Trigger {
+    Input(InputCode),
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    Portal(PortalAction),
+}
+
+/// Platform-neutral identifier of the Wayland portal shortcuts.
+///
+/// Mirrors the Linux-only `PortalShortcutId` so the keybind engine can compare
+/// triggers without pulling `cfg(target_os = "linux")` types into its core logic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub enum PortalAction {
+    PushToTalk,
+    PushToMute,
+    RadioPushToTalk,
+    CallControl,
+    ToggleRadioPrio,
+}
+
 #[derive(Debug, Clone)]
 pub struct KeyEvent {
-    code: Code,
+    trigger: Trigger,
     #[allow(dead_code)]
     label: String,
     state: KeyState,
+}
+
+impl KeyEvent {
+    /// Keyboard key event.
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    pub(crate) fn key(code: Code, label: String, state: KeyState) -> Self {
+        Self {
+            trigger: Trigger::Input(InputCode::Key(code)),
+            label,
+            state,
+        }
+    }
+
+    /// Joystick button event.
+    pub(crate) fn button(button: JoystickButton, label: String, state: KeyState) -> Self {
+        Self {
+            trigger: Trigger::Input(InputCode::Button(button)),
+            label,
+            state,
+        }
+    }
+
+    /// Wayland portal shortcut activation.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn portal(action: PortalAction, label: String, state: KeyState) -> Self {
+        Self {
+            trigger: Trigger::Portal(action),
+            label,
+            state,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -57,6 +212,26 @@ pub(crate) fn parse_key_code(code: Option<String>) -> Result<Option<Code>, VacsE
     .transpose()
 }
 
+/// Compose the active trigger list for a keybind action on Wayland: the portal
+/// activation (if the action has an OS-level shortcut) plus a configured joystick
+/// button. Configured keyboard codes are ignored - keyboard capture is handled
+/// entirely by the portal - while joystick buttons bypass the portal and stay
+/// active in parallel.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) fn compose_wayland_triggers(
+    portal: Option<PortalAction>,
+    configured: &Option<InputCode>,
+) -> Vec<Trigger> {
+    let mut triggers = Vec::with_capacity(2);
+    if let Some(action) = portal {
+        triggers.push(Trigger::Portal(action));
+    }
+    if let Some(button @ InputCode::Button(_)) = configured {
+        triggers.push(Trigger::Input(button.clone()));
+    }
+    triggers
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
 pub enum CallMicMode {
     #[default]
@@ -70,107 +245,110 @@ pub enum CallMicMode {
 pub struct TransmitConfig {
     /// The transmit mode to use.
     pub call_mic_mode: CallMicMode,
-    /// Key code for Push-to-Talk mode.
+    /// Input binding for Push-to-Talk mode.
     /// Required if mode is `PushToTalk`.
-    #[frontend(key)]
-    pub push_to_talk: Option<Code>,
-    /// Key code for Push-to-Mute mode.
+    pub push_to_talk: Option<InputCode>,
+    /// Input binding for Push-to-Mute mode.
     /// Required if mode is `PushToMute`.
-    #[frontend(key)]
-    pub push_to_mute: Option<Code>,
-    /// Key code for Radio PTT.
-    #[frontend(key)]
-    pub radio_push_to_talk: Option<Code>,
+    pub push_to_mute: Option<InputCode>,
+    /// Input binding for Radio PTT.
+    pub radio_push_to_talk: Option<InputCode>,
     #[serde(skip)]
     #[frontend(skip)]
     pub was_radio_integration: Option<bool>,
 }
 
 impl TransmitConfig {
-    #[inline]
-    pub fn active_call_code(&self) -> Option<Code> {
-        #[cfg(target_os = "linux")]
-        if matches!(Platform::get(), Platform::LinuxWayland) {
-            // Wayland Code Mapping Strategy:
-            //
-            // On Wayland, shortcuts are configured at the OS level via the XDG Global Shortcuts
-            // portal. The portal allows complex key combinations (e.g., Ctrl+Alt+Shift+P) that
-            // cannot be represented as a single keyboard_types::Code.
-            //
-            // To work around this, we map each transmit mode to a unique, unlikely-to-be-pressed
-            // function key (F33-F35). These keys don't exist on most keyboards, so there's no
-            // conflict with user input. When the portal activates a shortcut, we emit the
-            // corresponding F-key code, and the rest of the keybind engine works unchanged.
-            //
-            // This effectively overrides the user-configured codes in the config file on Wayland,
-            // since the actual key binding is managed by the desktop environment.
-            let code = match self.call_mic_mode {
-                CallMicMode::VoiceActivation => None,
-                CallMicMode::PushToTalk => Some(Code::F33),
-                CallMicMode::PushToMute => Some(Code::F34),
-            };
-            log::trace!(
-                "Using portal shortcut code {code:?} for call mic mode {:?}",
-                self.call_mic_mode
-            );
-            return code;
-        }
-
+    /// The configured input that should drive the call MIC action, disregarding
+    /// the Wayland portal (which replaces keyboard bindings at the OS level).
+    fn configured_call_input(&self) -> &Option<InputCode> {
         match self.call_mic_mode {
-            CallMicMode::VoiceActivation => None,
-            CallMicMode::PushToTalk => self.push_to_talk,
-            CallMicMode::PushToMute => self.push_to_mute,
+            CallMicMode::VoiceActivation => &None,
+            CallMicMode::PushToTalk => &self.push_to_talk,
+            CallMicMode::PushToMute => &self.push_to_mute,
         }
     }
 
-    #[inline]
-    pub async fn active_radio_code(&self, enabled: bool) -> Option<Code> {
+    /// All triggers that drive the call MIC action.
+    pub fn active_call_triggers(&self) -> Vec<Trigger> {
+        #[cfg(target_os = "linux")]
+        if matches!(Platform::get(), Platform::LinuxWayland) {
+            // On Wayland, keyboard shortcuts are configured at the OS level via the
+            // XDG Global Shortcuts portal and arrive as semantic portal activations,
+            // so configured keyboard codes are ignored here.
+            let portal = match self.call_mic_mode {
+                CallMicMode::VoiceActivation => None,
+                CallMicMode::PushToTalk => Some(PortalAction::PushToTalk),
+                CallMicMode::PushToMute => Some(PortalAction::PushToMute),
+            };
+            let triggers = compose_wayland_triggers(portal, self.configured_call_input());
+            log::trace!(
+                "Using triggers {triggers:?} for call mic mode {:?}",
+                self.call_mic_mode
+            );
+            return triggers;
+        }
+
+        self.configured_call_input()
+            .clone()
+            .map(Trigger::Input)
+            .into_iter()
+            .collect()
+    }
+
+    /// The configured input that should drive radio TX, disregarding the Wayland
+    /// portal. In `PushToTalk` mode without a dedicated radio binding, radio TX
+    /// follows the call PTT binding; in `PushToMute` mode it follows the PTM
+    /// binding.
+    fn configured_radio_input(&self) -> Option<InputCode> {
+        match self.call_mic_mode {
+            CallMicMode::VoiceActivation => self.radio_push_to_talk.clone(),
+            CallMicMode::PushToTalk => self
+                .radio_push_to_talk
+                .clone()
+                .or_else(|| self.push_to_talk.clone()),
+            CallMicMode::PushToMute => self.push_to_mute.clone(),
+        }
+    }
+
+    /// All triggers that drive radio TX.
+    pub async fn active_radio_triggers(&self, enabled: bool) -> Vec<Trigger> {
         if !enabled {
-            return None;
+            return Vec::new();
         }
 
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
             use crate::keybinds::runtime;
 
-            // Wayland Code Mapping Strategy:
-            //
-            // On Wayland, shortcuts are configured at the OS level via the XDG Global Shortcuts
-            // portal. The portal allows complex key combinations (e.g., Ctrl+Alt+Shift+P) that
-            // cannot be represented as a single keyboard_types::Code.
-            //
-            // To work around this, we map each transmit mode to a unique, unlikely-to-be-pressed
-            // function key (F33-F35). These keys don't exist on most keyboards, so there's no
-            // conflict with user input. When the portal activates a shortcut, we emit the
-            // corresponding F-key code, and the rest of the keybind engine works unchanged.
-            //
-            // This effectively overrides the user-configured codes in the config file on Wayland,
-            // since the actual key binding is managed by the desktop environment.
-            let code = match self.call_mic_mode {
-                CallMicMode::VoiceActivation => Some(Code::F35),
+            // See active_call_triggers: portal activations replace keyboard codes.
+            let portal = match self.call_mic_mode {
+                CallMicMode::VoiceActivation => Some(PortalAction::RadioPushToTalk),
                 CallMicMode::PushToTalk => {
                     if runtime::is_portal_shortcut_bound(runtime::PortalShortcutId::RadioPushToTalk)
                         .await
                     {
-                        Some(Code::F35)
+                        Some(PortalAction::RadioPushToTalk)
                     } else {
-                        Some(Code::F33)
+                        // No dedicated radio shortcut bound at the OS level: radio TX
+                        // follows the call PTT shortcut instead.
+                        Some(PortalAction::PushToTalk)
                     }
                 }
-                CallMicMode::PushToMute => Some(Code::F34),
+                CallMicMode::PushToMute => Some(PortalAction::PushToMute),
             };
+            let triggers = compose_wayland_triggers(portal, &self.configured_radio_input());
             log::trace!(
-                "Using portal shortcut code {code:?} for call mic mode {:?}",
+                "Using triggers {triggers:?} for radio in call mic mode {:?}",
                 self.call_mic_mode
             );
-            return code;
+            return triggers;
         }
 
-        match self.call_mic_mode {
-            CallMicMode::VoiceActivation => self.radio_push_to_talk,
-            CallMicMode::PushToTalk => self.radio_push_to_talk.or_else(|| self.active_call_code()),
-            CallMicMode::PushToMute => self.push_to_mute,
-        }
+        self.configured_radio_input()
+            .map(Trigger::Input)
+            .into_iter()
+            .collect()
     }
 }
 
@@ -189,9 +367,9 @@ impl<'de> Deserialize<'de> for TransmitConfig {
         struct TransmitConfigRaw {
             call_mic_mode: Option<CallMicMode>,
             mode: Option<TransmitMode>,
-            push_to_talk: Option<Code>,
-            push_to_mute: Option<Code>,
-            radio_push_to_talk: Option<Code>,
+            push_to_talk: Option<InputCode>,
+            push_to_mute: Option<InputCode>,
+            radio_push_to_talk: Option<InputCode>,
         }
 
         let raw = TransmitConfigRaw::deserialize(deserializer)?;
@@ -209,7 +387,7 @@ impl<'de> Deserialize<'de> for TransmitConfig {
             let is_radio_integration = matches!(mode, TransmitMode::RadioIntegration);
 
             let push_to_talk = if is_radio_integration {
-                raw.radio_push_to_talk
+                raw.radio_push_to_talk.clone()
             } else {
                 raw.push_to_talk
             };
@@ -243,13 +421,177 @@ impl<'de> Deserialize<'de> for TransmitConfig {
 /// to use the UI and can be used independently of the transmit mode.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, Frontend)]
 pub struct KeybindsConfig {
-    /// Key code to accept an incoming call.
-    #[frontend(key)]
-    pub accept_call: Option<Code>,
-    /// Key code to end an active call.
-    #[frontend(key)]
-    pub end_call: Option<Code>,
-    /// Key code to toggle radio prio during an active call.
-    #[frontend(key)]
-    pub toggle_radio_prio: Option<Code>,
+    /// Input binding to accept an incoming call.
+    pub accept_call: Option<InputCode>,
+    /// Input binding to end an active call.
+    pub end_call: Option<InputCode>,
+    /// Input binding to toggle radio prio during an active call.
+    pub toggle_radio_prio: Option<InputCode>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn button(device: &str, button: u32, name: Option<&str>) -> InputCode {
+        InputCode::Button(JoystickButton {
+            device: device.to_string(),
+            button,
+            name: name.map(str::to_string),
+        })
+    }
+
+    #[test]
+    fn key_binding_serializes_as_bare_string() {
+        let config = TransmitConfig {
+            call_mic_mode: CallMicMode::PushToTalk,
+            push_to_talk: Some(InputCode::Key(Code::F13)),
+            ..Default::default()
+        };
+
+        let toml = toml::to_string(&config).unwrap();
+        assert!(
+            toml.contains(r#"push_to_talk = "F13""#),
+            "expected bare string serialization, got:\n{toml}"
+        );
+    }
+
+    #[test]
+    fn pre_gamepad_config_deserializes_unchanged() {
+        let toml = r#"
+            call_mic_mode = "PushToTalk"
+            push_to_talk = "KeyA"
+            radio_push_to_talk = "F24"
+        "#;
+
+        let config: TransmitConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.push_to_talk, Some(InputCode::Key(Code::KeyA)));
+        assert_eq!(config.radio_push_to_talk, Some(InputCode::Key(Code::F24)));
+        assert_eq!(config.push_to_mute, None);
+    }
+
+    #[test]
+    fn button_binding_roundtrips_through_toml() {
+        let config = TransmitConfig {
+            call_mic_mode: CallMicMode::PushToTalk,
+            push_to_talk: Some(button(
+                "030003f05e0400008e02000010010000",
+                2,
+                Some("VPC Throttle"),
+            )),
+            ..Default::default()
+        };
+
+        let toml = toml::to_string(&config).unwrap();
+        let parsed: TransmitConfig = toml::from_str(&toml).unwrap();
+        assert_eq!(parsed.push_to_talk, config.push_to_talk);
+    }
+
+    #[test]
+    fn mixed_bindings_roundtrip_through_config_crate() {
+        // The runtime config is loaded through the `config` crate (re-deserialized
+        // via config::Value), which is why InputCode uses a manual visitor instead
+        // of #[serde(untagged)]. Guard that path explicitly.
+        let toml = r#"
+            call_mic_mode = "PushToTalk"
+            push_to_mute = "F22"
+
+            [push_to_talk]
+            device = "030003f05e0400008e02000010010000"
+            button = 5
+            name = "Peiker Handset"
+        "#;
+
+        let config: TransmitConfig = config::Config::builder()
+            .add_source(config::File::from_str(toml, config::FileFormat::Toml))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap();
+
+        assert_eq!(
+            config.push_to_talk,
+            Some(button(
+                "030003f05e0400008e02000010010000",
+                5,
+                Some("Peiker Handset")
+            ))
+        );
+        assert_eq!(config.push_to_mute, Some(InputCode::Key(Code::F22)));
+    }
+
+    #[test]
+    fn unrecognized_key_code_errors() {
+        let toml = r#"push_to_talk = "NotAKey""#;
+        let err = toml::from_str::<TransmitConfig>(toml).unwrap_err();
+        assert!(err.to_string().contains("Unrecognized key code"));
+    }
+
+    #[test]
+    fn joystick_button_equality_ignores_name() {
+        assert_eq!(button("guid", 1, Some("Name A")), button("guid", 1, None));
+        assert_ne!(button("guid", 1, None), button("guid", 2, None));
+        assert_ne!(button("guid-a", 1, None), button("guid-b", 1, None));
+    }
+
+    #[test]
+    fn old_transmit_mode_migration_still_works() {
+        let toml = r#"
+            mode = "RadioIntegration"
+            radio_push_to_talk = "F24"
+        "#;
+
+        let config: TransmitConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.call_mic_mode, CallMicMode::PushToTalk);
+        assert_eq!(config.push_to_talk, Some(InputCode::Key(Code::F24)));
+        assert_eq!(config.was_radio_integration, Some(true));
+    }
+
+    #[test]
+    fn compose_wayland_triggers_portal_plus_button() {
+        let configured = Some(button("guid", 3, None));
+        let triggers = compose_wayland_triggers(Some(PortalAction::PushToTalk), &configured);
+        assert_eq!(
+            triggers,
+            vec![
+                Trigger::Portal(PortalAction::PushToTalk),
+                Trigger::Input(button("guid", 3, None)),
+            ]
+        );
+    }
+
+    #[test]
+    fn compose_wayland_triggers_ignores_keyboard_binding() {
+        let configured = Some(InputCode::Key(Code::KeyA));
+        let triggers = compose_wayland_triggers(Some(PortalAction::PushToTalk), &configured);
+        assert_eq!(triggers, vec![Trigger::Portal(PortalAction::PushToTalk)]);
+
+        assert!(compose_wayland_triggers(None, &Some(InputCode::Key(Code::KeyA))).is_empty());
+    }
+
+    #[test]
+    fn active_triggers_use_configured_bindings() {
+        // Only run the non-Wayland branch deterministically; the Wayland
+        // composition itself is covered by the compose_wayland_triggers tests.
+        if cfg!(target_os = "linux") && matches!(Platform::get(), Platform::LinuxWayland) {
+            return;
+        }
+
+        let config = TransmitConfig {
+            call_mic_mode: CallMicMode::PushToTalk,
+            push_to_talk: Some(button("guid", 0, None)),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            config.active_call_triggers(),
+            vec![Trigger::Input(button("guid", 0, None))]
+        );
+
+        // No dedicated radio binding: radio TX follows the call PTT binding
+        let radio = tauri::async_runtime::block_on(config.active_radio_triggers(true));
+        assert_eq!(radio, vec![Trigger::Input(button("guid", 0, None))]);
+
+        assert!(tauri::async_runtime::block_on(config.active_radio_triggers(false)).is_empty());
+    }
 }
