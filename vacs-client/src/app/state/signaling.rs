@@ -590,10 +590,19 @@ impl AppStateInner {
                 let state = app.state::<AppState>();
                 let mut state = state.lock().await;
 
-                let res = match state
-                    .init_call(app.clone(), call_id, from_client_id.clone(), Some(sdp))
-                    .await
-                {
+                // A new offer for the already active call means the peer detected a broken
+                // media path and reconnects with a fresh peer connection (usually relayed).
+                let res = if state.is_active_call_peer(&call_id, &from_client_id) {
+                    state
+                        .reaccept_call_offer(app.clone(), call_id, from_client_id.clone(), sdp)
+                        .await
+                } else {
+                    state
+                        .init_call(app.clone(), call_id, from_client_id.clone(), Some(sdp))
+                        .await
+                };
+
+                let res = match res {
                     Ok(sdp) => {
                         state
                             .send_signaling_message(shared::WebrtcAnswer {

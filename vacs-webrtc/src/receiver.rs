@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tracing::instrument;
@@ -14,6 +16,7 @@ impl Receiver {
     pub fn new(
         peer_connection: &RTCPeerConnection,
         output_tx: mpsc::Sender<EncodedAudioFrame>,
+        received_packets: Arc<AtomicU64>,
     ) -> Self {
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let (output_selection_tx, output_selection_rx) = watch::channel(Some(output_tx));
@@ -21,6 +24,7 @@ impl Receiver {
         peer_connection.on_track(Box::new(move |track, _, _| {
             let mut shutdown_rx = shutdown_rx.clone();
             let mut output_selection_rx = output_selection_rx.clone();
+            let received_packets = Arc::clone(&received_packets);
 
             Box::pin(async move {
                 let mut output_tx = output_selection_rx.borrow().clone();
@@ -38,6 +42,7 @@ impl Receiver {
                         rtp = track.read_rtp() => {
                             match rtp {
                                 Ok((packet, _)) => {
+                                    received_packets.fetch_add(1, Ordering::Relaxed);
                                     if let Some(output_tx) = output_tx.as_ref() &&
                                         output_tx.send(packet.payload).await.is_err() {
                                             tracing::warn!("Failed to send received RTP packet to output");

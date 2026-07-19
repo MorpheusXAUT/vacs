@@ -6,8 +6,10 @@ use crate::error::WebrtcError;
 use anyhow::Context;
 use std::net::IpAddr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc};
+use tokio::task::JoinHandle;
 use tracing::instrument;
 use vacs_audio::{EncodedAudioFrame, TARGET_SAMPLE_RATE};
 use vacs_protocol::http::webrtc::IceConfig;
@@ -25,10 +27,20 @@ use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSampl
 
 pub type PeerConnectionState = RTCPeerConnectionState;
 
+/// How long a started peer may go without any inbound RTP or RTCP before
+/// [`PeerEvent::NoInboundMedia`] is emitted. RTCP receiver reports keep flowing even when the
+/// remote sends no audio, so a stall of both counters means the inbound path is actually dead.
+const NO_INBOUND_MEDIA_TIMEOUT: Duration = Duration::from_secs(5);
+const MEDIA_STATS_LOG_INTERVAL_TICKS: u64 = 10;
+
 #[derive(Debug, Clone)]
 pub enum PeerEvent {
     ConnectionState(PeerConnectionState),
     IceCandidate(String),
+    /// The connection is established but no RTP or RTCP has arrived for
+    /// [`NO_INBOUND_MEDIA_TIMEOUT`]; the reverse media path is most likely broken (e.g. by a VPN
+    /// mangling UDP flows). Emitted at most once per peer.
+    NoInboundMedia,
     Error(String),
 }
 
@@ -38,6 +50,11 @@ pub struct Peer {
     sender: Option<crate::Sender>,
     receiver: Option<crate::Receiver>,
     events_tx: broadcast::Sender<PeerEvent>,
+    received_rtp: Arc<AtomicU64>,
+    received_rtcp: Arc<AtomicU64>,
+    sent_frames: Arc<AtomicU64>,
+    rtcp_reader: JoinHandle<()>,
+    watchdog: Option<JoinHandle<()>>,
 }
 
 impl Peer {
@@ -80,10 +97,26 @@ impl Peer {
             WEBRTC_TRACK_STREAM_ID.to_owned(),
         ));
 
-        peer_connection
+        let rtp_sender = peer_connection
             .add_track(Arc::clone(&track) as Arc<dyn TrackLocal + Send + Sync>)
             .await
             .context("Failed to add track to peer connection")?;
+
+        let received_rtp = Arc::new(AtomicU64::new(0));
+        let received_rtcp = Arc::new(AtomicU64::new(0));
+        let sent_frames = Arc::new(AtomicU64::new(0));
+
+        let rtcp_reader = {
+            let received_rtcp = Arc::clone(&received_rtcp);
+            tokio::spawn(async move {
+                // Draining RTCP also drives the default interceptors; the counter feeds the
+                // no-inbound-media watchdog.
+                while rtp_sender.read_rtcp().await.is_ok() {
+                    received_rtcp.fetch_add(1, Ordering::Relaxed);
+                }
+                tracing::trace!("RTCP reader task finished");
+            })
+        };
 
         let (events_tx, events_rx) = broadcast::channel(PEER_EVENTS_CAPACITY);
 
@@ -165,6 +198,11 @@ impl Peer {
                 sender: None,
                 receiver: None,
                 events_tx,
+                received_rtp,
+                received_rtcp,
+                sent_frames,
+                rtcp_reader,
+                watchdog: None,
             },
             events_rx,
         ))
@@ -187,18 +225,87 @@ impl Peer {
             receiver.resume(output_tx);
         } else {
             tracing::trace!("Starting receiver");
-            self.receiver = Some(crate::Receiver::new(&self.peer_connection, output_tx));
+            self.receiver = Some(crate::Receiver::new(
+                &self.peer_connection,
+                output_tx,
+                Arc::clone(&self.received_rtp),
+            ));
         }
 
-        self.sender = Some(crate::Sender::new(Arc::clone(&self.track), input_rx));
+        self.sender = Some(crate::Sender::new(
+            Arc::clone(&self.track),
+            input_rx,
+            Arc::clone(&self.sent_frames),
+        ));
+
+        self.watchdog = Some(self.spawn_media_watchdog());
 
         tracing::trace!("Successfully started peer");
         Ok(())
     }
 
+    /// Periodically logs media counters and emits [`PeerEvent::NoInboundMedia`] once if both
+    /// inbound counters stall for [`NO_INBOUND_MEDIA_TIMEOUT`] while the peer is started.
+    fn spawn_media_watchdog(&self) -> JoinHandle<()> {
+        let received_rtp = Arc::clone(&self.received_rtp);
+        let received_rtcp = Arc::clone(&self.received_rtcp);
+        let sent_frames = Arc::clone(&self.sent_frames);
+        let events_tx = self.events_tx.clone();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+            let mut last_inbound = (
+                received_rtp.load(Ordering::Relaxed),
+                received_rtcp.load(Ordering::Relaxed),
+            );
+            let mut last_inbound_change = Instant::now();
+            let mut fired = false;
+            let mut ticks: u64 = 0;
+
+            loop {
+                interval.tick().await;
+                ticks += 1;
+
+                let inbound = (
+                    received_rtp.load(Ordering::Relaxed),
+                    received_rtcp.load(Ordering::Relaxed),
+                );
+                if inbound != last_inbound {
+                    last_inbound = inbound;
+                    last_inbound_change = Instant::now();
+                } else if !fired && last_inbound_change.elapsed() >= NO_INBOUND_MEDIA_TIMEOUT {
+                    fired = true;
+                    tracing::warn!(
+                        stalled_for = ?last_inbound_change.elapsed(),
+                        inbound_rtp = inbound.0,
+                        inbound_rtcp = inbound.1,
+                        "No inbound media received, signalling"
+                    );
+                    if let Err(err) = events_tx.send(PeerEvent::NoInboundMedia) {
+                        tracing::warn!(?err, "Failed to send no inbound media event");
+                    }
+                }
+
+                if ticks.is_multiple_of(MEDIA_STATS_LOG_INTERVAL_TICKS) {
+                    tracing::debug!(
+                        inbound_rtp = inbound.0,
+                        inbound_rtcp = inbound.1,
+                        outbound_frames = sent_frames.load(Ordering::Relaxed),
+                        "Call media stats"
+                    );
+                }
+            }
+        })
+    }
+
     #[instrument(level = "debug", skip_all)]
     pub fn pause(&mut self) {
         tracing::debug!("Pausing peer");
+        if let Some(watchdog) = self.watchdog.take() {
+            watchdog.abort();
+        }
         if let Some(sender) = self.sender.take() {
             sender.shutdown();
         }
@@ -210,6 +317,9 @@ impl Peer {
     #[instrument(level = "debug", skip(self), err)]
     pub async fn stop(&mut self) -> Result<(), WebrtcError> {
         tracing::debug!("Stopping peer");
+        if let Some(watchdog) = self.watchdog.take() {
+            watchdog.abort();
+        }
         if let Some(sender) = self.sender.take() {
             tracing::trace!("Shutting down sender");
             sender.stop().await?;
@@ -233,6 +343,8 @@ impl Peer {
             .close()
             .await
             .context("Failed to close peer connection")?;
+
+        self.rtcp_reader.abort();
 
         tracing::trace!("Successfully closed peer connection");
         Ok(())
@@ -333,6 +445,15 @@ impl Peer {
 
         tracing::trace!("Added remote ICE candidate");
         Ok(())
+    }
+}
+
+impl Drop for Peer {
+    fn drop(&mut self) {
+        if let Some(watchdog) = self.watchdog.take() {
+            watchdog.abort();
+        }
+        self.rtcp_reader.abort();
     }
 }
 

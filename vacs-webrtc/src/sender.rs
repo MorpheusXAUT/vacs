@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
@@ -18,6 +19,7 @@ impl Sender {
     pub fn new(
         track: Arc<TrackLocalStaticSample>,
         mut input_rx: mpsc::Receiver<EncodedAudioFrame>,
+        sent_frames: Arc<AtomicU64>,
     ) -> Self {
         let (shutdown_tx, mut shutdown_rx) = watch::channel(());
 
@@ -40,6 +42,8 @@ impl Sender {
 
                                 if let Err(err) = track.write_sample(&sample).await {
                                     tracing::warn!(?err, "Failed to write sample to track");
+                                } else {
+                                    sent_frames.fetch_add(1, Ordering::Relaxed);
                                 }
                             }
                             None => {
@@ -94,7 +98,8 @@ mod tests {
     #[test(tokio::test)]
     async fn drains_input_frames() {
         let (input_tx, input_rx) = mpsc::channel(1);
-        let sender = Sender::new(test_track(), input_rx);
+        let sent_frames = Arc::new(AtomicU64::new(0));
+        let sender = Sender::new(test_track(), input_rx, Arc::clone(&sent_frames));
 
         // A capacity of one only accepts this many frames if the task keeps
         // pulling them off the channel.
@@ -109,12 +114,17 @@ mod tests {
         }
 
         sender.stop().await.expect("failed to stop sender");
+
+        assert!(
+            sent_frames.load(Ordering::Relaxed) > 0,
+            "drained frames must be counted for the media stats watchdog"
+        );
     }
 
     #[test(tokio::test)]
     async fn stop_joins_task_while_input_stays_open() {
         let (_input_tx, input_rx) = mpsc::channel(1);
-        let sender = Sender::new(test_track(), input_rx);
+        let sender = Sender::new(test_track(), input_rx, Arc::new(AtomicU64::new(0)));
 
         tokio::time::timeout(Duration::from_secs(5), sender.stop())
             .await
@@ -127,7 +137,7 @@ mod tests {
     #[test(tokio::test)]
     async fn closed_input_ends_task() {
         let (input_tx, input_rx) = mpsc::channel::<EncodedAudioFrame>(1);
-        let sender = Sender::new(test_track(), input_rx);
+        let sender = Sender::new(test_track(), input_rx, Arc::new(AtomicU64::new(0)));
 
         drop(input_tx);
 
