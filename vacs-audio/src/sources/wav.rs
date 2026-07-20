@@ -162,3 +162,105 @@ fn resample(samples: &[f32], in_rate: usize, out_rate: usize) -> anyhow::Result<
 
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::resample;
+
+    /// Generate a mono sine of `freq` Hz at `rate` for `secs` seconds.
+    fn sine(freq: f32, rate: usize, secs: f32) -> Vec<f32> {
+        let frames = (rate as f32 * secs) as usize;
+        (0..frames)
+            .map(|n| (std::f32::consts::TAU * freq * n as f32 / rate as f32).sin())
+            .collect()
+    }
+
+    /// Estimate the dominant frequency of a clean sine via zero crossings,
+    /// ignoring the head and tail where the resampler's filter ramps up/down.
+    fn dominant_freq(samples: &[f32], rate: usize) -> f32 {
+        let skip = samples.len() / 10;
+        let body = &samples[skip..samples.len() - skip];
+        let crossings = body
+            .windows(2)
+            .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
+            .count();
+        crossings as f32 * rate as f32 / body.len() as f32
+    }
+
+    fn peak(samples: &[f32]) -> f32 {
+        let skip = samples.len() / 10;
+        samples[skip..samples.len() - skip]
+            .iter()
+            .fold(0.0f32, |acc, s| acc.max(s.abs()))
+    }
+
+    #[test]
+    fn resample_produces_expected_length_with_silent_tail() {
+        // `process_all_needed_output_len` returns an upper bound that includes the
+        // filter delay and block granularity, so the buffer runs slightly long. The
+        // overshoot must stay bounded and must be the filter's decaying tail, not garbage.
+        for (in_rate, out_rate) in [(44_100, 48_000), (48_000, 44_100)] {
+            let input = sine(1_000.0, in_rate, 1.0);
+            let out = resample(&input, in_rate, out_rate).unwrap();
+
+            let expected = (input.len() as f64 * out_rate as f64 / in_rate as f64) as usize;
+            assert!(
+                out.len() >= expected,
+                "{in_rate}->{out_rate} truncated: got {} frames, expected at least {expected}",
+                out.len()
+            );
+
+            let extra = out.len() - expected;
+            assert!(
+                extra < 2_048,
+                "{in_rate}->{out_rate} overshot by {extra} frames"
+            );
+
+            let tail_peak = out[expected..].iter().fold(0.0f32, |a, s| a.max(s.abs()));
+            assert!(
+                tail_peak < 0.01,
+                "{in_rate}->{out_rate} tail is not silence (peak {tail_peak})"
+            );
+        }
+    }
+
+    #[test]
+    fn resample_preserves_tone_and_amplitude() {
+        // Sweep the device rates we realistically see, in both directions.
+        for (in_rate, out_rate) in [
+            (44_100, 48_000),
+            (48_000, 44_100),
+            (96_000, 48_000),
+            (48_000, 96_000),
+            (32_000, 48_000),
+            (22_050, 48_000),
+        ] {
+            let input = sine(1_000.0, in_rate, 1.0);
+            let out = resample(&input, in_rate, out_rate).unwrap();
+
+            assert!(
+                out.iter().all(|s| s.is_finite()),
+                "{in_rate}->{out_rate} produced non-finite samples"
+            );
+
+            let freq = dominant_freq(&out, out_rate);
+            assert!(
+                (freq - 1_000.0).abs() < 20.0,
+                "{in_rate}->{out_rate} shifted the tone to {freq} Hz"
+            );
+
+            let amp = peak(&out);
+            assert!(
+                (amp - 1.0).abs() < 0.05,
+                "{in_rate}->{out_rate} changed amplitude to {amp}"
+            );
+        }
+    }
+
+    #[test]
+    fn resample_handles_short_and_empty_input() {
+        // Shorter than one chunk, and empty — neither should panic.
+        assert!(resample(&sine(1_000.0, 44_100, 0.005), 44_100, 48_000).is_ok());
+        assert!(resample(&[], 44_100, 48_000).is_ok());
+    }
+}
