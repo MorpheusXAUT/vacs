@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.5.0](https://github.com/vacs-project/vacs/compare/vacs-client-v2.4.0...vacs-client-v2.5.0) (2026-07-20)
+
+
+### Features
+
+* **vacs-audio:** enable native pipewire support on Linux ([1ad6051](https://github.com/vacs-project/vacs/commit/1ad6051eb69be3e5bd292b54894f73471f09dbd5))
+* **vacs-client:** decouple radio integration from call mic mode ([#997](https://github.com/vacs-project/vacs/issues/997)) ([cbd4d02](https://github.com/vacs-project/vacs/commit/cbd4d0296f02ff71ac7ae91ec8a2a7a04c40152a))
+* **vacs-client:** implement AudioForVatsim playback recorder ([#1000](https://github.com/vacs-project/vacs/issues/1000)) ([26a11fd](https://github.com/vacs-project/vacs/commit/26a11fd880a617795a591a5975056e611b886a6e))
+
+
+### Bug Fixes
+
+* **vacs-client:** fix incorrect radio prio state when PTT is held across calls ([cbd4d02](https://github.com/vacs-project/vacs/commit/cbd4d0296f02ff71ac7ae91ec8a2a7a04c40152a))
+* **vacs-client:** prevent remote store sync from clobbering desktop state on client connect ([2cc8cf7](https://github.com/vacs-project/vacs/commit/2cc8cf7bd89edc6bc4b28da20fb639359a585836))
+
 ## [2.4.0](https://github.com/vacs-project/vacs/compare/vacs-client-v2.3.0...vacs-client-v2.4.0) (2026-06-16)
 
 
