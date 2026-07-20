@@ -2,7 +2,7 @@ use crate::dsp::downmix_interleaved_to_mono;
 use crate::sources::AudioSource;
 use anyhow::{Context, Result};
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
-use rubato::{Fft, FixedSync, Resampler};
+use rubato::{Fft, FixedSync, Resampler, WindowFunction};
 use std::path::Path;
 use std::time::Duration;
 
@@ -136,8 +136,16 @@ impl AudioSource for WavSource {
 }
 
 fn resample(samples: &[f32], in_rate: usize, out_rate: usize) -> anyhow::Result<Vec<f32>> {
-    let mut resampler = Fft::<f32>::new(in_rate, out_rate, 1024, 2, 1, FixedSync::Input)
-        .context("Failed to construct WAV resampler")?;
+    let mut resampler = Fft::<f32>::new_custom(
+        in_rate,
+        out_rate,
+        1024,
+        2,
+        1,
+        WindowFunction::BlackmanHarris2,
+        FixedSync::Input,
+    )
+    .context("Failed to construct WAV resampler")?;
 
     let input_frames = samples.len();
     let output_frames = resampler.process_all_needed_output_len(input_frames);
