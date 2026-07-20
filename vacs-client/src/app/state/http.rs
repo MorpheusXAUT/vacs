@@ -113,7 +113,7 @@ impl HttpState {
         log::trace!("Performing HTTP POST request: {}", request_url.as_str());
         let mut request = self.http_client.post(request_url.clone());
         if let Some(payload) = payload {
-            request = request.json(&payload)
+            request = request.json(&payload);
         };
         if let Some(timeout) = endpoint.timeout()
             && timeout.as_millis() > self.config.backend.timeout_ms.into()

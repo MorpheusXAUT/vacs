@@ -143,7 +143,7 @@ pub async fn playback_start(
                     if progress >= 1.0 {
                         let recorder = app.state::<PlaybackRecorderHandle>();
                         if let Some(r) = recorder.write().as_mut() {
-                            r.set_playing_source_id(None)
+                            r.set_playing_source_id(None);
                         }
                     }
                 })),
@@ -169,7 +169,7 @@ pub async fn playback_start(
     }
 
     if let Some(r) = recorder.write().as_mut() {
-        r.set_playing_source_id(Some((source_id, actual_device_type)))
+        r.set_playing_source_id(Some((source_id, actual_device_type)));
     }
 
     Ok(())

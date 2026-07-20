@@ -1,14 +1,11 @@
 use crate::FacilityType;
 use crate::coverage::flight_information_region::FlightInformationRegionId;
 use crate::coverage::{CoverageError, ReferenceValidator, ValidationError, Validator};
-use regex::Regex;
+use regex::regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::sync::LazyLock;
 use vacs_protocol::profile::ProfileId;
 use vacs_protocol::vatsim::{PositionId, StationId};
-
-static FREQUENCY_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{3}\.\d{3}$").unwrap());
 
 #[derive(Clone)]
 pub struct Position {
@@ -118,7 +115,7 @@ impl Validator for PositionRaw {
                 field: "frequency".to_string(),
             }
             .into());
-        } else if !FREQUENCY_REGEX.is_match(&self.frequency) {
+        } else if !regex!(r"^\d{3}\.\d{3}$").is_match(&self.frequency) {
             return Err(ValidationError::InvalidFormat {
                 field: "frequency".to_string(),
                 value: self.frequency.clone(),

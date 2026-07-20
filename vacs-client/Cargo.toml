@@ -79,3 +79,6 @@ tauri-plugin-prevent-default = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[lints]
+workspace = true
