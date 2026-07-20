@@ -148,7 +148,7 @@ fn check_pipewire() -> bool {
                 if connected {
                     log::debug!("PipeWire is available");
                 } else {
-                    log::warn!("PipeWire daemon probe failed")
+                    log::warn!("PipeWire daemon probe failed");
                 }
                 connected
             }

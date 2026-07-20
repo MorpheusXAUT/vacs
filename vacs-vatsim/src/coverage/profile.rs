@@ -1,9 +1,8 @@
 use crate::coverage::{CoverageError, IoError, ReferenceValidator, ValidationError, Validator};
-use regex::Regex;
+use regex::regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::LazyLock;
 use vacs_protocol::profile::client_page::ClientPageConfig;
 use vacs_protocol::profile::geo::{
     GeoNode, GeoPageButton, GeoPageContainer, GeoPageDivider, JustifyContent,
@@ -14,9 +13,6 @@ use vacs_protocol::profile::{
     Profile as ProtocolProfile, ProfileId, ProfileType,
 };
 use vacs_protocol::vatsim::StationId;
-
-static GEO_PAGE_CONTAINER_SIZE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\d+(\.\d{1,5})?(%|rem)$").unwrap());
 
 #[derive(Clone)]
 pub struct Profile {
@@ -558,8 +554,10 @@ impl Validator for ProfileTypeRaw {
 
 impl Validator for GeoPageContainerRaw {
     fn validate(&self) -> Result<(), CoverageError> {
+        let size = regex!(r"^\d+(\.\d{1,5})?(%|rem)$");
+
         if let Some(height) = &self.height
-            && !GEO_PAGE_CONTAINER_SIZE_REGEX.is_match(height)
+            && !size.is_match(height)
         {
             return Err(ValidationError::InvalidFormat {
                 field: "height".to_string(),
@@ -569,7 +567,7 @@ impl Validator for GeoPageContainerRaw {
             .into());
         }
         if let Some(width) = &self.width
-            && !GEO_PAGE_CONTAINER_SIZE_REGEX.is_match(width)
+            && !size.is_match(width)
         {
             return Err(ValidationError::InvalidFormat {
                 field: "width".to_string(),
