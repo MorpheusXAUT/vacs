@@ -148,6 +148,8 @@ fn resample(samples: &[f32], in_rate: usize, out_rate: usize) -> anyhow::Result<
     .context("Failed to construct WAV resampler")?;
 
     let input_frames = samples.len();
+    // `process_all_needed_output_len` returns an upper bound that includes the
+    // anti-aliasing filter's ringout, so the buffer has to be allocated at that size.
     let output_frames = resampler.process_all_needed_output_len(input_frames);
     let mut out = vec![0.0f32; output_frames];
 
@@ -159,6 +161,13 @@ fn resample(samples: &[f32], in_rate: usize, out_rate: usize) -> anyhow::Result<
     resampler
         .process_all_into_buffer(&input_adapter, &mut output_adapter, input_frames, None)
         .context("Failed to resample WAV audio")?;
+
+    // Trim the ringout back to the clip's actual duration. The resampler already
+    // compensates its own delay, so the audio starts at frame 0 and only the tail is
+    // excess. Leaving it in would append silence to every resampled clip and inflate
+    // the denominator behind `AudioSource` progress reporting and seeking.
+    let duration_frames = (input_frames as u64 * out_rate as u64).div_ceil(in_rate as u64) as usize;
+    out.truncate(duration_frames);
 
     Ok(out)
 }
@@ -195,33 +204,62 @@ mod tests {
     }
 
     #[test]
-    fn resample_produces_expected_length_with_silent_tail() {
-        // `process_all_needed_output_len` returns an upper bound that includes the
-        // filter delay and block granularity, so the buffer runs slightly long. The
-        // overshoot must stay bounded and must be the filter's decaying tail, not garbage.
-        for (in_rate, out_rate) in [(44_100, 48_000), (48_000, 44_100)] {
+    fn resample_output_length_matches_clip_duration() {
+        // The resampler compensates its own delay, so output length must correspond
+        // exactly to the clip's duration. Any excess is filter ringout that would show
+        // up as appended silence and skew progress reporting.
+        for (in_rate, out_rate) in [
+            (44_100, 48_000),
+            (48_000, 44_100),
+            (96_000, 48_000),
+            (22_050, 48_000),
+        ] {
             let input = sine(1_000.0, in_rate, 1.0);
+            let expected = (input.len() as u64 * out_rate as u64).div_ceil(in_rate as u64) as usize;
             let out = resample(&input, in_rate, out_rate).unwrap();
 
-            let expected = (input.len() as f64 * out_rate as f64 / in_rate as f64) as usize;
-            assert!(
-                out.len() >= expected,
-                "{in_rate}->{out_rate} truncated: got {} frames, expected at least {expected}",
+            assert_eq!(
+                out.len(),
+                expected,
+                "{in_rate}->{out_rate} produced {} frames, expected {expected}",
                 out.len()
             );
-
-            let extra = out.len() - expected;
-            assert!(
-                extra < 2_048,
-                "{in_rate}->{out_rate} overshot by {extra} frames"
-            );
-
-            let tail_peak = out[expected..].iter().fold(0.0f32, |a, s| a.max(s.abs()));
-            assert!(
-                tail_peak < 0.01,
-                "{in_rate}->{out_rate} tail is not silence (peak {tail_peak})"
-            );
         }
+    }
+
+    #[test]
+    fn resample_does_not_append_silence() {
+        // Guards the trim: a clip that is loud right up to its final frame must stay
+        // loud right up to its final frame after resampling.
+        let input = sine(1_000.0, 44_100, 1.0);
+        let out = resample(&input, 44_100, 48_000).unwrap();
+
+        let tail_peak = out[out.len() - 480..]
+            .iter()
+            .fold(0.0f32, |a, s| a.max(s.abs()));
+        assert!(
+            tail_peak > 0.9,
+            "last 10 ms of the clip decayed to {tail_peak}, ringout was not trimmed"
+        );
+    }
+
+    #[test]
+    fn resample_is_time_aligned() {
+        // The resampler must compensate its own delay: a burst starting 1000 frames in
+        // must land at the corresponding output frame, not later.
+        let (in_rate, out_rate) = (44_100usize, 48_000usize);
+        let mut input = vec![0.0f32; 1_000];
+        input.extend(sine(1_000.0, in_rate, 0.05));
+        input.extend(vec![0.0f32; 1_000]);
+
+        let out = resample(&input, in_rate, out_rate).unwrap();
+
+        let expected_start = 1_000 * out_rate / in_rate;
+        let actual_start = out.iter().position(|s| s.abs() > 0.01).unwrap();
+        assert!(
+            actual_start.abs_diff(expected_start) < 32,
+            "burst landed at frame {actual_start}, expected ~{expected_start}"
+        );
     }
 
     #[test]
