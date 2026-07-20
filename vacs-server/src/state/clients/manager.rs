@@ -4491,6 +4491,10 @@ controlled_by = ["LOWW_DEL"]
             /// (containing FIR sub-directories with positions/stations/profiles).
             #[serde(default)]
             pub dataset: Option<String>,
+            /// Whether datafeed syncs require clients to have an active VATSIM
+            /// connection (production default). Defaults to false.
+            #[serde(default)]
+            pub require_active_connection: bool,
             pub steps: Vec<Step>,
         }
 
@@ -4875,16 +4879,34 @@ controlled_by = ["LOWW_DEL"]
                     }
                     Step::Datafeed(s) => {
                         let controllers = controllers_from_vec(&s.controllers);
-                        ctx.manager
-                            .sync_vatsim_state(&controllers, &mut ctx.pending_disconnect, false)
+                        let disconnected = ctx
+                            .manager
+                            .sync_vatsim_state(
+                                &controllers,
+                                &mut ctx.pending_disconnect,
+                                scenario.require_active_connection,
+                            )
                             .await;
+                        // Mirrors update_vatsim_controllers, which unregisters
+                        // clients returned by the sync.
+                        for (cid, reason) in disconnected {
+                            ctx.manager.remove_client(cid, Some(reason)).await;
+                        }
                     }
                     Step::DatafeedFile(relative_path) => {
                         let feed = load_datafeed_file(scenario_dir, relative_path);
                         let controllers = controllers_from_vec(&feed);
-                        ctx.manager
-                            .sync_vatsim_state(&controllers, &mut ctx.pending_disconnect, false)
+                        let disconnected = ctx
+                            .manager
+                            .sync_vatsim_state(
+                                &controllers,
+                                &mut ctx.pending_disconnect,
+                                scenario.require_active_connection,
+                            )
                             .await;
+                        for (cid, reason) in disconnected {
+                            ctx.manager.remove_client(cid, Some(reason)).await;
+                        }
                     }
                     Step::DrainMessages(s) => {
                         let rx = ctx.receivers.get_mut(&s.client_id).unwrap_or_else(|| {
