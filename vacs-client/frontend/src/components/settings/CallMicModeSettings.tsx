@@ -7,11 +7,10 @@ import {
     TransmitConfigWithLabels,
     inputEquals,
     isCallMicMode,
-    isJoystickButton,
     withTransmitLabels,
 } from "../../types/transmit.ts";
 import Select from "../ui/Select.tsx";
-import ExternalKeybindField from "./ExternalKeybindField.tsx";
+import CombinedKeybindField from "./CombinedKeybindField.tsx";
 import KeyCapture from "./KeyCapture.tsx";
 
 type CallMicModeSettingsProps = {
@@ -21,7 +20,6 @@ type CallMicModeSettingsProps = {
 
 function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSettingsProps) {
     const capPlatform = useCapabilitiesStore(state => state.platform);
-    const capJoystick = useCapabilitiesStore(state => state.joystick);
 
     const handleOnTransmitCapture = async (input: InputBinding) => {
         if (transmitConfig.callMicMode === "VoiceActivation") return;
@@ -108,21 +106,14 @@ function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSet
                 onChange={handleOnTransmitModeChange}
             />
             {capPlatform === "LinuxWayland" ? (
-                // The keyboard shortcut is managed by the desktop environment,
-                // while a joystick button can be bound in parallel (joystick
-                // input bypasses the portal).
-                <>
-                    <ExternalKeybindField type={callMicModeToKeybind(transmitConfig.callMicMode)} />
-                    {capJoystick && (
-                        <KeyCapture
-                            label={isJoystickButton(activeCallBinding) ? activeCallLabel : null}
-                            keyboardEnabled={false}
-                            disabled={transmitConfig.callMicMode === "VoiceActivation"}
-                            onCapture={handleOnTransmitCapture}
-                            onRemove={handleOnTransmitRemoveClick}
-                        />
-                    )}
-                </>
+                <CombinedKeybindField
+                    type={callMicModeToKeybind(transmitConfig.callMicMode)}
+                    binding={activeCallBinding}
+                    bindingLabel={activeCallLabel}
+                    disabled={transmitConfig.callMicMode === "VoiceActivation"}
+                    onCapture={handleOnTransmitCapture}
+                    onRemove={handleOnTransmitRemoveClick}
+                />
             ) : (
                 <KeyCapture
                     label={activeCallLabel}

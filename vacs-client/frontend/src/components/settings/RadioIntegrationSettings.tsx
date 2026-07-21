@@ -16,7 +16,6 @@ import {
     TransmitConfig,
     TransmitConfigWithLabels,
     inputEquals,
-    isJoystickButton,
     isRadioIntegration,
     withRadioLabels,
     withTransmitLabels,
@@ -24,7 +23,7 @@ import {
 import RadioPrioBadge from "../ui/RadioPrioBadge.tsx";
 import Select from "../ui/Select.tsx";
 import StatusIndicator, {Status} from "../ui/StatusIndicator.tsx";
-import ExternalKeybindField from "./ExternalKeybindField.tsx";
+import CombinedKeybindField from "./CombinedKeybindField.tsx";
 import KeyCapture from "./KeyCapture.tsx";
 
 type RadioIntegrationSettingsProps = {
@@ -42,7 +41,6 @@ function RadioIntegrationSettings({
 }: RadioIntegrationSettingsProps) {
     const capPlatform = useCapabilitiesStore(state => state.platform);
     const capKeybindEmitter = useCapabilitiesStore(state => state.keybindEmitter);
-    const capJoystick = useCapabilitiesStore(state => state.joystick);
     const [trackAudioEndpoint, setTrackAudioEndpoint] = useState<string>(
         radioConfig.trackAudio?.endpoint ?? "",
     );
@@ -203,38 +201,36 @@ function RadioIntegrationSettings({
                     onChange={handleOnRadioIntegrationChange}
                 />
                 {capPlatform === "LinuxWayland" ? (
-                    // The keyboard shortcut is managed by the desktop environment,
-                    // while a joystick button can be bound in parallel (joystick
-                    // input bypasses the portal).
-                    <>
-                        <ExternalKeybindField
-                            className={clsx(
-                                callMicModeToKeybind(transmitConfig.callMicMode) ===
-                                    waylandRadioKeybindType && "text-gray-500",
-                            )}
-                            type={waylandRadioKeybindType}
-                            disabled={
-                                radioConfig.integration === null ||
-                                transmitConfig.callMicMode === "PushToMute"
-                            }
-                        />
-                        {capJoystick && (
-                            <KeyCapture
-                                label={
-                                    isJoystickButton(transmitConfig.radioPushToTalk)
-                                        ? transmitConfig.radioPushToTalkLabel
-                                        : null
-                                }
-                                keyboardEnabled={false}
-                                disabled={
-                                    radioConfig.integration === null ||
-                                    transmitConfig.callMicMode === "PushToMute"
-                                }
-                                onCapture={handleOnRadioPushToTalkCapture}
-                                onRemove={handleOnRadioPushToTalkRemoveClick}
-                            />
+                    <CombinedKeybindField
+                        type={waylandRadioKeybindType}
+                        binding={
+                            transmitConfig.callMicMode === "PushToTalk"
+                                ? (transmitConfig.radioPushToTalk ?? transmitConfig.pushToTalk)
+                                : transmitConfig.callMicMode === "VoiceActivation"
+                                  ? transmitConfig.radioPushToTalk
+                                  : transmitConfig.pushToMute
+                        }
+                        bindingLabel={
+                            transmitConfig.callMicMode === "PushToTalk"
+                                ? (transmitConfig.radioPushToTalkLabel ??
+                                  transmitConfig.pushToTalkLabel)
+                                : transmitConfig.callMicMode === "VoiceActivation"
+                                  ? transmitConfig.radioPushToTalkLabel
+                                  : transmitConfig.pushToMuteLabel
+                        }
+                        className={clsx(
+                            callMicModeToKeybind(transmitConfig.callMicMode) ===
+                                waylandRadioKeybindType &&
+                                transmitConfig.radioPushToTalk === null &&
+                                "text-gray-500",
                         )}
-                    </>
+                        disabled={
+                            radioConfig.integration === null ||
+                            transmitConfig.callMicMode === "PushToMute"
+                        }
+                        onCapture={handleOnRadioPushToTalkCapture}
+                        onRemove={handleOnRadioPushToTalkRemoveClick}
+                    />
                 ) : (
                     <KeyCapture
                         label={

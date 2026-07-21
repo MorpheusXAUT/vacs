@@ -1,6 +1,5 @@
 import {describe, expect, it} from "vitest";
 import {
-    InputBinding,
     JoystickButton,
     inputEquals,
     inputToLabel,
@@ -66,7 +65,7 @@ describe("inputToLabel", () => {
         expect(await inputToLabel(YOKE_B2)).toBe("Yoke B2");
         // jsdom has no navigator.keyboard, so this exercises the
         // prettyFormatKeyCode fallback
-        expect(await inputToLabel("KeyA" as InputBinding)).toBe("A");
-        expect(await inputToLabel("F13" as InputBinding)).toBe("F13");
+        expect(await inputToLabel("KeyA")).toBe("A");
+        expect(await inputToLabel("F13")).toBe("F13");
     });
 });

@@ -10,6 +10,9 @@ type KeyCaptureProps = {
     onCapture: (input: InputBinding) => Promise<void>;
     onRemove: () => Promise<void>;
     disabled?: boolean;
+    /// Disable the remove button even when a label is shown (e.g. when the
+    /// label displays an externally managed binding that cannot be removed).
+    removeDisabled?: boolean;
     /// Capture keyboard keys. Defaults to the keybindListener capability, so
     /// platforms without global keyboard capture (X11) get joystick-only fields.
     keyboardEnabled?: boolean;
@@ -37,7 +40,7 @@ function KeyCapture(props: KeyCaptureProps) {
     const keyboardEnabled = props.keyboardEnabled ?? capKeybindListener;
     const joystickEnabled = (props.joystickEnabled ?? true) && capJoystick;
 
-    const isRemoveDisabled = props.disabled || props.label === null;
+    const isRemoveDisabled = props.disabled || props.removeDisabled || props.label === null;
 
     const commitCapture = useCallback(
         async (input: InputBinding) => {

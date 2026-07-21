@@ -1,11 +1,11 @@
 import KeyCapture from "./KeyCapture.tsx";
-import {InputBinding, inputToLabel, isJoystickButton} from "../../types/transmit.ts";
+import {InputBinding, inputToLabel} from "../../types/transmit.ts";
 import {useEffect, useState} from "preact/hooks";
 import {KeybindsConfig, KeybindType} from "../../types/keybinds.ts";
 import {invokeStrict} from "../../error.ts";
 import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
 import SettingsSubPage from "./SettingsSubPage.tsx";
-import ExternalKeybindField from "./ExternalKeybindField.tsx";
+import CombinedKeybindField from "./CombinedKeybindField.tsx";
 
 type Keybind = {
     input: InputBinding | null;
@@ -69,7 +69,6 @@ type KeybindFieldProps = {
 
 function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
     const hasExternal = useCapabilitiesStore(state => state.platform === "LinuxWayland");
-    const capJoystick = useCapabilitiesStore(state => state.joystick);
 
     const handleOnCapture = async (input: InputBinding | null) => {
         try {
@@ -82,24 +81,13 @@ function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
         <>
             <p>{label}</p>
             {hasExternal ? (
-                // On Wayland the keyboard shortcut is managed by the desktop
-                // environment, while a joystick button can be bound in parallel
-                // (joystick input bypasses the portal).
-                <div className="flex flex-row items-center gap-2 min-w-0">
-                    <ExternalKeybindField type={type} />
-                    {capJoystick && (
-                        <KeyCapture
-                            label={
-                                keybind !== undefined && isJoystickButton(keybind.input)
-                                    ? keybind.label
-                                    : null
-                            }
-                            keyboardEnabled={false}
-                            onCapture={handleOnCapture}
-                            onRemove={() => handleOnCapture(null)}
-                        />
-                    )}
-                </div>
+                <CombinedKeybindField
+                    type={type}
+                    binding={keybind?.input ?? null}
+                    bindingLabel={keybind?.label ?? null}
+                    onCapture={handleOnCapture}
+                    onRemove={() => handleOnCapture(null)}
+                />
             ) : keybind !== undefined ? (
                 <KeyCapture
                     label={keybind.label}
