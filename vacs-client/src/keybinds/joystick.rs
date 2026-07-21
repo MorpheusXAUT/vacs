@@ -45,9 +45,18 @@ const EVENT_WAIT_TIMEOUT: Duration = Duration::from_millis(250);
 
 pub type JoystickServiceHandle = Arc<JoystickService>;
 
-/// Senders the poller forwards button events to. Consumers register the channel
-/// they already read from (the keybind engine shares one channel across all its
-/// input sources); closed senders are pruned on the next event.
+/// Senders the poller fans button events out to; closed senders are pruned on
+/// the next event.
+///
+/// A list is needed here (unlike the keyboard listeners, which write into a
+/// plain mpsc sender because their single consumer - the engine - also owns
+/// their lifetime): this long-lived service serves several consumers with
+/// independent lifetimes at once. The engine's channel gets a new identity on
+/// every settings change, and binding captures need their own ephemeral
+/// channels even while the engine is stopped. A `tokio::broadcast` bus would
+/// remove the list but has bounded buffers that drop events for lagging
+/// receivers - and a dropped PTT release means a stuck transmission. Unbounded
+/// senders make this a lossless broadcast instead.
 type SenderRegistry = Arc<parking_lot::Mutex<Vec<UnboundedSender<KeyEvent>>>>;
 
 /// Currently connected devices, keyed by SDL instance id and maintained by the
