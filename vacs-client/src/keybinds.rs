@@ -212,24 +212,21 @@ pub(crate) fn parse_key_code(code: Option<String>) -> Result<Option<Code>, VacsE
     .transpose()
 }
 
-/// Compose the active trigger list for a keybind action on Wayland: the portal
-/// activation (if the action has an OS-level shortcut) plus a configured joystick
-/// button. Configured keyboard codes are ignored - keyboard capture is handled
-/// entirely by the portal - while joystick buttons bypass the portal and stay
-/// active in parallel.
+/// Compose the active trigger for a keybind action on Wayland.
+///
+/// A configured joystick button takes precedence and replaces the OS-level
+/// portal shortcut for the action; without one, the portal activation (if any)
+/// drives the action. Configured keyboard codes are ignored - keyboard capture
+/// is handled entirely by the portal.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) fn compose_wayland_triggers(
     portal: Option<PortalAction>,
     configured: &Option<InputCode>,
 ) -> Vec<Trigger> {
-    let mut triggers = Vec::with_capacity(2);
-    if let Some(action) = portal {
-        triggers.push(Trigger::Portal(action));
-    }
     if let Some(button @ InputCode::Button(_)) = configured {
-        triggers.push(Trigger::Input(button.clone()));
+        return vec![Trigger::Input(button.clone())];
     }
-    triggers
+    portal.map(Trigger::Portal).into_iter().collect()
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
@@ -548,15 +545,14 @@ mod tests {
     }
 
     #[test]
-    fn compose_wayland_triggers_portal_plus_button() {
+    fn compose_wayland_triggers_button_replaces_portal() {
         let configured = Some(button("guid", 3, None));
         let triggers = compose_wayland_triggers(Some(PortalAction::PushToTalk), &configured);
+        assert_eq!(triggers, vec![Trigger::Input(button("guid", 3, None))]);
+
         assert_eq!(
-            triggers,
-            vec![
-                Trigger::Portal(PortalAction::PushToTalk),
-                Trigger::Input(button("guid", 3, None)),
-            ]
+            compose_wayland_triggers(Some(PortalAction::PushToTalk), &None),
+            vec![Trigger::Portal(PortalAction::PushToTalk)]
         );
     }
 
@@ -615,6 +611,7 @@ mod tests {
         );
     }
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn active_triggers_use_configured_bindings() {
         // Only run the non-Wayland branch deterministically; the Wayland
