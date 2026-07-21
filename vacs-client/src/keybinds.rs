@@ -123,6 +123,32 @@ impl fmt::Display for JoystickButton {
     }
 }
 
+/// A joystick/gamepad device, addressed by its stable SDL GUID.
+///
+/// Used for the capture ignore list: devices with latched switches or
+/// position-simulated buttons (common on flight sim throttles) would instantly
+/// "capture" during binding, so users can exclude them. The GUID keeps the
+/// entry valid across unplugs; `name` is retained for display while the device
+/// is disconnected. Physically identical devices share a GUID and are ignored
+/// together.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JoystickDevice {
+    /// SDL joystick GUID as a hex string.
+    pub device: String,
+    /// Last-seen human-readable device name; display-only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+impl PartialEq for JoystickDevice {
+    fn eq(&self, other: &Self) -> bool {
+        // `name` is display metadata and must not affect device identity
+        self.device == other.device
+    }
+}
+
+impl Eq for JoystickDevice {}
+
 /// Runtime identity of a fired keybind source.
 ///
 /// Never serialized - configs only ever store [`InputCode`]. The `Portal` variant
@@ -424,6 +450,10 @@ pub struct KeybindsConfig {
     pub end_call: Option<InputCode>,
     /// Input binding to toggle radio prio during an active call.
     pub toggle_radio_prio: Option<InputCode>,
+    /// Joystick devices excluded from binding capture. Existing bindings on
+    /// these devices keep working; they just can no longer win a capture.
+    #[serde(default)]
+    pub ignored_joysticks: Vec<JoystickDevice>,
 }
 
 #[cfg(test)]
@@ -522,6 +552,43 @@ mod tests {
         let toml = r#"push_to_talk = "NotAKey""#;
         let err = toml::from_str::<TransmitConfig>(toml).unwrap_err();
         assert!(err.to_string().contains("Unrecognized key code"));
+    }
+
+    #[test]
+    fn keybinds_config_without_ignored_joysticks_deserializes() {
+        // Configs written before the ignore list existed must keep loading.
+        let config: KeybindsConfig = toml::from_str(r#"accept_call = "F15""#).unwrap();
+        assert_eq!(config.accept_call, Some(InputCode::Key(Code::F15)));
+        assert!(config.ignored_joysticks.is_empty());
+    }
+
+    #[test]
+    fn ignored_joysticks_roundtrip_through_toml() {
+        let config = KeybindsConfig {
+            ignored_joysticks: vec![JoystickDevice {
+                device: "030003f05e0400008e02000010010000".to_string(),
+                name: Some("VPC Throttle".to_string()),
+            }],
+            ..Default::default()
+        };
+
+        let toml = toml::to_string(&config).unwrap();
+        let parsed: KeybindsConfig = toml::from_str(&toml).unwrap();
+        assert_eq!(parsed.ignored_joysticks, config.ignored_joysticks);
+        assert_eq!(
+            parsed.ignored_joysticks[0].name.as_deref(),
+            Some("VPC Throttle")
+        );
+    }
+
+    #[test]
+    fn joystick_device_equality_ignores_name() {
+        let device = |guid: &str, name: Option<&str>| JoystickDevice {
+            device: guid.to_string(),
+            name: name.map(str::to_string),
+        };
+        assert_eq!(device("guid", Some("Name A")), device("guid", None));
+        assert_ne!(device("guid-a", None), device("guid-b", None));
     }
 
     #[test]
