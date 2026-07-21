@@ -245,14 +245,14 @@ pub(crate) fn parse_key_code(code: Option<String>) -> Result<Option<Code>, VacsE
 /// drives the action. Configured keyboard codes are ignored - keyboard capture
 /// is handled entirely by the portal.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-pub(crate) fn compose_wayland_triggers(
+pub(crate) fn compose_wayland_trigger(
     portal: Option<PortalAction>,
     configured: &Option<InputCode>,
-) -> Vec<Trigger> {
+) -> Option<Trigger> {
     if let Some(button @ InputCode::Button(_)) = configured {
-        return vec![Trigger::Input(button.clone())];
+        return Some(Trigger::Input(button.clone()));
     }
-    portal.map(Trigger::Portal).into_iter().collect()
+    portal.map(Trigger::Portal)
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
@@ -292,8 +292,8 @@ impl TransmitConfig {
         }
     }
 
-    /// All triggers that drive the call MIC action.
-    pub fn active_call_triggers(&self) -> Vec<Trigger> {
+    /// The trigger that drives the call MIC action, if any.
+    pub fn active_call_trigger(&self) -> Option<Trigger> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
             // On Wayland, keyboard shortcuts are configured at the OS level via the
@@ -304,19 +304,15 @@ impl TransmitConfig {
                 CallMicMode::PushToTalk => Some(PortalAction::PushToTalk),
                 CallMicMode::PushToMute => Some(PortalAction::PushToMute),
             };
-            let triggers = compose_wayland_triggers(portal, self.configured_call_input());
+            let trigger = compose_wayland_trigger(portal, self.configured_call_input());
             log::trace!(
-                "Using triggers {triggers:?} for call mic mode {:?}",
+                "Using trigger {trigger:?} for call mic mode {:?}",
                 self.call_mic_mode
             );
-            return triggers;
+            return trigger;
         }
 
-        self.configured_call_input()
-            .clone()
-            .map(Trigger::Input)
-            .into_iter()
-            .collect()
+        self.configured_call_input().clone().map(Trigger::Input)
     }
 
     /// The configured input that should drive radio TX, disregarding the Wayland
@@ -334,17 +330,17 @@ impl TransmitConfig {
         }
     }
 
-    /// All triggers that drive radio TX.
-    pub async fn active_radio_triggers(&self, enabled: bool) -> Vec<Trigger> {
+    /// The trigger that drives radio TX, if any.
+    pub async fn active_radio_trigger(&self, enabled: bool) -> Option<Trigger> {
         if !enabled {
-            return Vec::new();
+            return None;
         }
 
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
             use crate::keybinds::runtime;
 
-            // See active_call_triggers: portal activations replace keyboard codes.
+            // See active_call_trigger: portal activations replace keyboard codes.
             let portal = match self.call_mic_mode {
                 CallMicMode::VoiceActivation => Some(PortalAction::RadioPushToTalk),
                 CallMicMode::PushToTalk => {
@@ -360,18 +356,15 @@ impl TransmitConfig {
                 }
                 CallMicMode::PushToMute => Some(PortalAction::PushToMute),
             };
-            let triggers = compose_wayland_triggers(portal, &self.configured_radio_input());
+            let trigger = compose_wayland_trigger(portal, &self.configured_radio_input());
             log::trace!(
-                "Using triggers {triggers:?} for radio in call mic mode {:?}",
+                "Using trigger {trigger:?} for radio in call mic mode {:?}",
                 self.call_mic_mode
             );
-            return triggers;
+            return trigger;
         }
 
-        self.configured_radio_input()
-            .map(Trigger::Input)
-            .into_iter()
-            .collect()
+        self.configured_radio_input().map(Trigger::Input)
     }
 }
 
@@ -612,30 +605,33 @@ mod tests {
     }
 
     #[test]
-    fn compose_wayland_triggers_button_replaces_portal() {
+    fn compose_wayland_trigger_button_replaces_portal() {
         let configured = Some(button("guid", 3, None));
-        let triggers = compose_wayland_triggers(Some(PortalAction::PushToTalk), &configured);
-        assert_eq!(triggers, vec![Trigger::Input(button("guid", 3, None))]);
+        let trigger = compose_wayland_trigger(Some(PortalAction::PushToTalk), &configured);
+        assert_eq!(trigger, Some(Trigger::Input(button("guid", 3, None))));
 
         assert_eq!(
-            compose_wayland_triggers(Some(PortalAction::PushToTalk), &None),
-            vec![Trigger::Portal(PortalAction::PushToTalk)]
+            compose_wayland_trigger(Some(PortalAction::PushToTalk), &None),
+            Some(Trigger::Portal(PortalAction::PushToTalk))
         );
     }
 
     #[test]
-    fn compose_wayland_triggers_ignores_keyboard_binding() {
+    fn compose_wayland_trigger_ignores_keyboard_binding() {
         let configured = Some(InputCode::Key(Code::KeyA));
-        let triggers = compose_wayland_triggers(Some(PortalAction::PushToTalk), &configured);
-        assert_eq!(triggers, vec![Trigger::Portal(PortalAction::PushToTalk)]);
+        let trigger = compose_wayland_trigger(Some(PortalAction::PushToTalk), &configured);
+        assert_eq!(trigger, Some(Trigger::Portal(PortalAction::PushToTalk)));
 
-        assert!(compose_wayland_triggers(None, &Some(InputCode::Key(Code::KeyA))).is_empty());
+        assert_eq!(
+            compose_wayland_trigger(None, &Some(InputCode::Key(Code::KeyA))),
+            None
+        );
     }
 
     #[test]
     fn active_triggers_in_push_to_mute_mode_follow_ptm_binding() {
         // Only run the non-Wayland branch deterministically; the Wayland
-        // composition itself is covered by the compose_wayland_triggers tests.
+        // composition itself is covered by the compose_wayland_trigger tests.
         if cfg!(target_os = "linux") && matches!(Platform::get(), Platform::LinuxWayland) {
             return;
         }
@@ -649,10 +645,10 @@ mod tests {
             ..Default::default()
         };
 
-        let expected = vec![Trigger::Input(button("guid", 1, None))];
-        assert_eq!(config.active_call_triggers(), expected);
+        let expected = Some(Trigger::Input(button("guid", 1, None)));
+        assert_eq!(config.active_call_trigger(), expected);
         assert_eq!(
-            tauri::async_runtime::block_on(config.active_radio_triggers(true)),
+            tauri::async_runtime::block_on(config.active_radio_trigger(true)),
             expected
         );
     }
@@ -671,10 +667,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(config.active_call_triggers().is_empty());
+        assert_eq!(config.active_call_trigger(), None);
         assert_eq!(
-            tauri::async_runtime::block_on(config.active_radio_triggers(true)),
-            vec![Trigger::Input(button("guid", 2, None))]
+            tauri::async_runtime::block_on(config.active_radio_trigger(true)),
+            Some(Trigger::Input(button("guid", 2, None)))
         );
     }
 
@@ -682,7 +678,7 @@ mod tests {
     #[test]
     fn active_triggers_use_configured_bindings() {
         // Only run the non-Wayland branch deterministically; the Wayland
-        // composition itself is covered by the compose_wayland_triggers tests.
+        // composition itself is covered by the compose_wayland_trigger tests.
         if cfg!(target_os = "linux") && matches!(Platform::get(), Platform::LinuxWayland) {
             return;
         }
@@ -694,14 +690,17 @@ mod tests {
         };
 
         assert_eq!(
-            config.active_call_triggers(),
-            vec![Trigger::Input(button("guid", 0, None))]
+            config.active_call_trigger(),
+            Some(Trigger::Input(button("guid", 0, None)))
         );
 
         // No dedicated radio binding: radio TX follows the call PTT binding
-        let radio = tauri::async_runtime::block_on(config.active_radio_triggers(true));
-        assert_eq!(radio, vec![Trigger::Input(button("guid", 0, None))]);
+        let radio = tauri::async_runtime::block_on(config.active_radio_trigger(true));
+        assert_eq!(radio, Some(Trigger::Input(button("guid", 0, None))));
 
-        assert!(tauri::async_runtime::block_on(config.active_radio_triggers(false)).is_empty());
+        assert_eq!(
+            tauri::async_runtime::block_on(config.active_radio_trigger(false)),
+            None
+        );
     }
 }
