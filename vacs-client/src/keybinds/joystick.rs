@@ -37,16 +37,18 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::{broadcast, oneshot};
-
-/// Capacity of the broadcast channel between the SDL poller thread and its
-/// subscribers (engine + capture). Subscribers that lag behind log and continue.
-const EVENT_CHANNEL_CAPACITY: usize = 64;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::oneshot;
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
 const EVENT_WAIT_TIMEOUT: Duration = Duration::from_millis(250);
 
 pub type JoystickServiceHandle = Arc<JoystickService>;
+
+/// Senders the poller forwards button events to. Consumers register the channel
+/// they already read from (the keybind engine shares one channel across all its
+/// input sources); closed senders are pruned on the next event.
+type SenderRegistry = Arc<parking_lot::Mutex<Vec<UnboundedSender<KeyEvent>>>>;
 
 #[derive(Debug, Default)]
 pub struct JoystickService {
@@ -55,7 +57,7 @@ pub struct JoystickService {
 
 #[derive(Debug)]
 struct RunningPoller {
-    tx: broadcast::Sender<KeyEvent>,
+    senders: SenderRegistry,
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -65,27 +67,35 @@ impl JoystickService {
         Arc::new(Self::default())
     }
 
-    /// Subscribe to joystick button events, lazily starting the SDL poller
-    /// thread on first use.
-    pub async fn subscribe(&self) -> Result<broadcast::Receiver<KeyEvent>, KeybindsError> {
+    /// Register a channel to receive joystick button events, lazily starting
+    /// the SDL poller thread on first use.
+    ///
+    /// The sender stays registered until its receiver is dropped, after which
+    /// it is pruned on the next joystick event.
+    pub async fn register(&self, tx: UnboundedSender<KeyEvent>) -> Result<(), KeybindsError> {
         let mut poller = self.poller.lock().await;
 
         if let Some(running) = poller.as_ref() {
-            return Ok(running.tx.subscribe());
+            let mut senders = running.senders.lock();
+            // Eagerly drop senders whose receivers are gone (e.g. from a
+            // stopped engine) instead of waiting for the next event.
+            senders.retain(|sender| !sender.is_closed());
+            senders.push(tx);
+            return Ok(());
         }
 
         log::debug!("Starting SDL joystick poller");
 
-        let (tx, rx) = broadcast::channel(EVENT_CHANNEL_CAPACITY);
+        let senders: SenderRegistry = Arc::new(parking_lot::Mutex::new(vec![tx]));
         let (startup_tx, startup_rx) = oneshot::channel();
         let stop = Arc::new(AtomicBool::new(false));
 
         let thread = {
-            let tx = tx.clone();
+            let senders = senders.clone();
             let stop = stop.clone();
             std::thread::Builder::new()
                 .name("VACS_SDL_Joystick".to_string())
-                .spawn(move || run_poller(tx, stop, startup_tx))
+                .spawn(move || run_poller(senders, stop, startup_tx))
                 .map_err(|err| {
                     KeybindsError::Listener(format!("Failed to spawn joystick thread: {err}"))
                 })?
@@ -95,11 +105,11 @@ impl JoystickService {
             Ok(Ok(Ok(()))) => {
                 log::debug!("SDL joystick poller started successfully");
                 *poller = Some(RunningPoller {
-                    tx,
+                    senders,
                     stop,
                     thread: Some(thread),
                 });
-                Ok(rx)
+                Ok(())
             }
             Ok(Ok(Err(err))) => {
                 log::error!("SDL joystick poller startup failed: {err}");
@@ -120,6 +130,14 @@ impl JoystickService {
                 ))
             }
         }
+    }
+
+    /// Register a dedicated channel and return its receiver, for consumers
+    /// without an existing channel (e.g. the binding-capture command).
+    pub async fn subscribe(&self) -> Result<UnboundedReceiver<KeyEvent>, KeybindsError> {
+        let (tx, rx) = unbounded_channel();
+        self.register(tx).await?;
+        Ok(rx)
     }
 
     /// Stop the poller thread (if running) and wait for it to exit.
@@ -151,10 +169,16 @@ struct OpenDevice {
 }
 
 fn run_poller(
-    tx: broadcast::Sender<KeyEvent>,
+    senders: SenderRegistry,
     stop: Arc<AtomicBool>,
     startup_tx: oneshot::Sender<Result<(), KeybindsError>>,
 ) {
+    let send = |event: KeyEvent| {
+        senders
+            .lock()
+            .retain(|sender| sender.send(event.clone()).is_ok());
+    };
+
     // Must be set before SDL_Init for the Windows backends to deliver events
     // while another window (e.g. a radar client) has focus.
     sdl3::hint::set("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1");
@@ -222,7 +246,7 @@ fn run_poller(
                     // Synthesize releases for held buttons so a PTT bound to this
                     // device cannot get stuck transmitting after an unplug.
                     for button in device.held {
-                        let _ = tx.send(button_event(
+                        send(button_event(
                             &device.guid,
                             &device.name,
                             button,
@@ -237,7 +261,7 @@ fn run_poller(
                 if let Some(device) = open.get_mut(&which) {
                     let button = u32::from(button_idx);
                     device.held.insert(button);
-                    let _ = tx.send(button_event(
+                    send(button_event(
                         &device.guid,
                         &device.name,
                         button,
@@ -251,7 +275,7 @@ fn run_poller(
                 if let Some(device) = open.get_mut(&which) {
                     let button = u32::from(button_idx);
                     device.held.remove(&button);
-                    let _ = tx.send(button_event(
+                    send(button_event(
                         &device.guid,
                         &device.name,
                         button,
@@ -335,7 +359,7 @@ mod tests {
     /// skipping chatter from real joysticks attached to the machine running
     /// the tests.
     async fn next_virtual_event(
-        rx: &mut broadcast::Receiver<KeyEvent>,
+        rx: &mut UnboundedReceiver<KeyEvent>,
     ) -> (JoystickButton, KeyState) {
         loop {
             let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
@@ -352,8 +376,8 @@ mod tests {
 
     /// End-to-end roundtrip through the SDL poller using a process-local
     /// virtual joystick (no hardware or display required): button transitions
-    /// arrive as broadcast events on all subscriptions, and detaching the
-    /// device while a button is held synthesizes its release (stuck-PTT guard).
+    /// arrive on all registered channels, and detaching the device while a
+    /// button is held synthesizes its release (stuck-PTT guard).
     #[test]
     #[ignore = "initializes SDL and drives its event loop"]
     fn virtual_joystick_roundtrip() {

@@ -50,7 +50,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::async_runtime::JoinHandle;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
@@ -65,13 +65,12 @@ pub struct WaylandKeybindListener {
 }
 
 impl KeybindListener for WaylandKeybindListener {
-    async fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
+    async fn start(key_event_tx: UnboundedSender<KeyEvent>) -> Result<Self, KeybindsError>
     where
         Self: Sized,
     {
         log::debug!("Starting Wayland keybind listener");
 
-        let (key_event_tx, key_event_rx) = unbounded_channel::<KeyEvent>();
         let (startup_tx, startup_rx) = oneshot::channel::<Result<(), KeybindsError>>();
 
         let cancellation_token = CancellationToken::new();
@@ -103,15 +102,12 @@ impl KeybindListener for WaylandKeybindListener {
             Ok(Ok(Ok(()))) => {
                 log::debug!("Wayland keybind listener started successfully");
 
-                Ok((
-                    Self {
-                        cancellation_token,
-                        cleanup_token,
-                        task_handle: Some(task_handle),
-                        shortcuts,
-                    },
-                    key_event_rx,
-                ))
+                Ok(Self {
+                    cancellation_token,
+                    cleanup_token,
+                    task_handle: Some(task_handle),
+                    shortcuts,
+                })
             }
             Ok(Ok(Err(err))) => {
                 log::error!("Wayland keybind listener startup failed: {err}");

@@ -12,7 +12,6 @@ use crate::platform::Capabilities;
 use keyboard_types::KeyState;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
-use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
 /// Default timeout for a "press a joystick button to bind" capture.
@@ -199,19 +198,14 @@ pub async fn keybinds_capture_joystick_button(
     let timeout = timeout_ms.map_or(DEFAULT_CAPTURE_TIMEOUT, Duration::from_millis);
 
     let next_button = async {
-        loop {
-            match rx.recv().await {
-                Ok(event) => {
-                    if event.state == KeyState::Down
-                        && let Trigger::Input(InputCode::Button(button)) = event.trigger
-                    {
-                        break Some(button);
-                    }
-                }
-                Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(broadcast::error::RecvError::Closed) => break None,
+        while let Some(event) = rx.recv().await {
+            if event.state == KeyState::Down
+                && let Trigger::Input(InputCode::Button(button)) = event.trigger
+            {
+                return Some(button);
             }
         }
+        None
     };
 
     let captured = tokio::select! {

@@ -16,7 +16,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::RwLock as TokioRwLock;
-use tokio::sync::broadcast;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio_util::sync::CancellationToken;
 
@@ -127,39 +126,43 @@ impl KeybindEngine {
 
         let any_button = self.any_button_trigger();
 
+        // All input sources write into this one channel; the engine loop below
+        // reads the merged stream directly.
+        let (key_event_tx, key_event_rx) = unbounded_channel();
+
         // A keyboard listener failure (e.g. portal unavailable on Wayland) must
         // not disable joystick bindings, and vice versa: start whichever sources
         // are available and only fail if none are.
-        let keyboard_rx = match PlatformListener::start().await {
-            Ok((listener, rx)) => {
+        let keyboard_ok = match PlatformListener::start(key_event_tx.clone()).await {
+            Ok(listener) => {
                 *self.listener.write() = Some(Arc::new(listener));
-                Some(rx)
+                true
             }
             Err(err) if any_button => {
                 log::error!(
                     "Keybind listener failed to start, continuing with joystick bindings only: {err}"
                 );
-                None
+                false
             }
             Err(err) => return Err(err.into()),
         };
 
-        let joystick_rx = if any_button {
-            match self.app.state::<JoystickServiceHandle>().subscribe().await {
-                Ok(rx) => Some(rx),
-                Err(err) if keyboard_rx.is_some() => {
-                    log::error!(
-                        "Joystick service failed to start, continuing with keyboard bindings only: {err}"
-                    );
-                    None
-                }
-                Err(err) => return Err(err.into()),
+        if any_button
+            && let Err(err) = self
+                .app
+                .state::<JoystickServiceHandle>()
+                .register(key_event_tx)
+                .await
+        {
+            if !keyboard_ok {
+                return Err(err.into());
             }
-        } else {
-            None
-        };
+            log::error!(
+                "Joystick service failed to start, continuing with keyboard bindings only: {err}"
+            );
+        }
 
-        self.spawn_rx_loop(keyboard_rx, joystick_rx);
+        self.spawn_rx_loop(key_event_rx);
 
         Ok(())
     }
@@ -416,11 +419,7 @@ impl KeybindEngine {
         }
     }
 
-    fn spawn_rx_loop(
-        &mut self,
-        keyboard_rx: Option<UnboundedReceiver<KeyEvent>>,
-        joystick_rx: Option<broadcast::Receiver<KeyEvent>>,
-    ) {
+    fn spawn_rx_loop(&mut self, mut rx: UnboundedReceiver<KeyEvent>) {
         let app = self.app.clone();
         let call_triggers = self.call_triggers.clone();
         let radio_triggers = self.radio_triggers.clone();
@@ -449,10 +448,6 @@ impl KeybindEngine {
         let radio_prio_arc = self.radio_prio.clone();
         let implicit_radio_prio = self.implicit_radio_prio.clone();
         let radio_transmitting = self.radio_transmitting.clone();
-
-        // Merge the keyboard listener channel and the joystick broadcast into a
-        // single stream so the engine loop below stays source-agnostic.
-        let mut rx = Self::merge_event_sources(keyboard_rx, joystick_rx, &stop_token);
 
         let handle = tauri::async_runtime::spawn(async move {
             log::debug!(
@@ -534,70 +529,13 @@ impl KeybindEngine {
         self.rx_task = Some(handle);
     }
 
-    /// Forward all available event sources into a single channel.
-    fn merge_event_sources(
-        keyboard_rx: Option<UnboundedReceiver<KeyEvent>>,
-        joystick_rx: Option<broadcast::Receiver<KeyEvent>>,
-        stop_token: &CancellationToken,
-    ) -> UnboundedReceiver<KeyEvent> {
-        let (tx, rx) = unbounded_channel();
-
-        if let Some(mut keyboard_rx) = keyboard_rx {
-            let tx = tx.clone();
-            let stop_token = stop_token.clone();
-            tauri::async_runtime::spawn(async move {
-                loop {
-                    tokio::select! {
-                        biased;
-                        _ = stop_token.cancelled() => break,
-                        event = keyboard_rx.recv() => {
-                            let Some(event) = event else { break };
-                            if tx.send(event).is_err() {
-                                break;
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        if let Some(mut joystick_rx) = joystick_rx {
-            let tx = tx.clone();
-            let stop_token = stop_token.clone();
-            tauri::async_runtime::spawn(async move {
-                loop {
-                    tokio::select! {
-                        biased;
-                        _ = stop_token.cancelled() => break,
-                        event = joystick_rx.recv() => match event {
-                            Ok(event) => {
-                                if tx.send(event).is_err() {
-                                    break;
-                                }
-                            }
-                            Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                                // Worst case a missed edge; press state self-corrects
-                                // on the next button transition.
-                                log::warn!("Joystick event stream lagged, skipped {skipped} events");
-                            }
-                            Err(broadcast::error::RecvError::Closed) => break,
-                        }
-                    }
-                }
-            });
-        }
-
-        rx
-    }
-
     #[inline]
     fn select_accept_call_triggers(config: &KeybindsConfig) -> Vec<Trigger> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
             // The portal exposes a single shared call-control shortcut (end
             // active / accept next), so both accept and end carry the same
-            // portal action; a configured joystick button stays active in
-            // parallel.
+            // portal action; a configured joystick button replaces it.
             return compose_wayland_triggers(Some(PortalAction::CallControl), &config.accept_call);
         }
 

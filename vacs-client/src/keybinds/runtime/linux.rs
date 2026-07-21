@@ -33,7 +33,7 @@ use crate::keybinds::{KeyEvent, Keybind, KeybindsError};
 use crate::platform::Platform;
 use keyboard_types::{Code, KeyState};
 use std::fmt::{Debug, Formatter};
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::UnboundedSender;
 
 pub enum LinuxKeybindListener {
     Wayland(wayland::WaylandKeybindListener),
@@ -52,24 +52,21 @@ impl Debug for LinuxKeybindListener {
 }
 
 impl KeybindListener for LinuxKeybindListener {
-    async fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
+    async fn start(key_event_tx: UnboundedSender<KeyEvent>) -> Result<Self, KeybindsError>
     where
         Self: Sized,
     {
         // Runtime platform detection to select the appropriate listener implementation
         match Platform::get() {
-            Platform::LinuxWayland => {
-                let (listener, rx) = wayland::WaylandKeybindListener::start().await?;
-                Ok((Self::Wayland(listener), rx))
-            }
-            Platform::LinuxX11 => {
-                let (listener, rx) = stub::NoopKeybindListener::start().await?;
-                Ok((Self::X11(listener), rx))
-            }
-            Platform::LinuxUnknown => {
-                let (listener, rx) = stub::NoopKeybindListener::start().await?;
-                Ok((Self::Stub(listener), rx))
-            }
+            Platform::LinuxWayland => Ok(Self::Wayland(
+                wayland::WaylandKeybindListener::start(key_event_tx).await?,
+            )),
+            Platform::LinuxX11 => Ok(Self::X11(
+                stub::NoopKeybindListener::start(key_event_tx).await?,
+            )),
+            Platform::LinuxUnknown => Ok(Self::Stub(
+                stub::NoopKeybindListener::start(key_event_tx).await?,
+            )),
             platform => Err(KeybindsError::Listener(format!(
                 "Unsupported platform {platform} for LinuxKeybindListener",
             ))),

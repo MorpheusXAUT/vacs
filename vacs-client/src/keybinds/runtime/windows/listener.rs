@@ -5,7 +5,7 @@ use keyboard_types::{Code, KeyState};
 use std::mem::zeroed;
 use std::time::Duration;
 use std::{ptr, thread};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 use windows::Win32::Foundation::{GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -30,12 +30,11 @@ pub struct WindowsKeybindListener {
 }
 
 impl KeybindListener for WindowsKeybindListener {
-    async fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
+    async fn start(key_event_tx: UnboundedSender<KeyEvent>) -> Result<Self, KeybindsError>
     where
         Self: Sized,
     {
         log::debug!("Starting windows keybind listener");
-        let (key_event_tx, key_event_rx) = unbounded_channel::<KeyEvent>();
         let (startup_res_tx, start_res_rx) = oneshot::channel::<Result<u32, KeybindsError>>();
 
         let thread_handle = thread::Builder::new().name("VACS_RawInput_MessageLoop".to_string())
@@ -56,13 +55,10 @@ impl KeybindListener for WindowsKeybindListener {
             }).map_err(|err| KeybindsError::Listener(format!("Failed to spawn thread: {err}")))?;
 
         match tokio::time::timeout(Duration::from_secs(1), start_res_rx).await {
-            Ok(Ok(Ok(thread_id))) => Ok((
-                Self {
-                    thread_handle: Some(thread_handle),
-                    thread_id,
-                },
-                key_event_rx,
-            )),
+            Ok(Ok(Ok(thread_id))) => Ok(Self {
+                thread_handle: Some(thread_handle),
+                thread_id,
+            }),
             Ok(Ok(Err(err))) => Err(err),
             Ok(Err(_)) => Err(KeybindsError::Listener(
                 "WindowsKeybindListener startup channel closed".to_string(),
