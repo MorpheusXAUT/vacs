@@ -148,3 +148,11 @@ redis-protocol = { git = "https://github.com/aembke/redis-protocol.rs", rev = "c
 
 [workspace.lints.clippy]
 semicolon-if-nothing-returned = "warn"
+
+# Build the vendored SDL3 with release settings even in dev builds. The cmake
+# crate maps opt-level 0 to CMAKE_BUILD_TYPE=Debug, which on MSVC compiles SDL
+# against the debug CRT (/MDd) and conflicts with the release CRT rustc always
+# links (LNK4098). SDL is a C dependency we never step through anyway.
+[profile.dev.package.sdl3-sys]
+opt-level = 2
+debug = false
