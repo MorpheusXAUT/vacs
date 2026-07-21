@@ -609,16 +609,33 @@ async fn dispatch_command(
         }
         KeybindsCaptureJoystickButton => {
             let capture_id = args!(args, "captureId");
+            let app_state = app.state::<AppState>();
             let capture_state = app.state::<crate::keybinds::commands::JoystickCaptureState>();
             let joystick = app.state::<crate::keybinds::joystick::JoystickServiceHandle>();
             dispatch(
-                keybinds_capture_joystick_button(capture_state, joystick, capture_id, None).await,
+                keybinds_capture_joystick_button(
+                    app_state,
+                    capture_state,
+                    joystick,
+                    capture_id,
+                    None,
+                )
+                .await,
             )
         }
         KeybindsCancelJoystickCapture => {
             let capture_id = args!(args, "captureId");
             let capture_state = app.state::<crate::keybinds::commands::JoystickCaptureState>();
             dispatch(keybinds_cancel_joystick_capture(capture_state, capture_id).await)
+        }
+        KeybindsListJoystickDevices => {
+            let joystick = app.state::<crate::keybinds::joystick::JoystickServiceHandle>();
+            dispatch(keybinds_list_joystick_devices(joystick).await)
+        }
+        KeybindsSetIgnoredJoysticks => {
+            let devices = args!(args, "devices");
+            let app_state = app.state::<AppState>();
+            dispatch(keybinds_set_ignored_joysticks(app.clone(), app_state, devices).await)
         }
         KeybindsGetExternalBinding => {
             let keybind = args!(args, "keybind");

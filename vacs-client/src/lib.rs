@@ -198,6 +198,8 @@ pub fn run() {
             keybinds::commands::keybinds_capture_joystick_button,
             keybinds::commands::keybinds_get_external_binding,
             keybinds::commands::keybinds_get_keybinds_config,
+            keybinds::commands::keybinds_list_joystick_devices,
+            keybinds::commands::keybinds_set_ignored_joysticks,
             keybinds::commands::keybinds_get_transmit_config,
             keybinds::commands::keybinds_is_portal_shortcut_bound,
             keybinds::commands::keybinds_open_system_shortcuts_settings,

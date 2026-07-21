@@ -29,7 +29,7 @@
 //! with `uaccess`, so logind grants the active seat user an ACL on the evdev nodes. This works
 //! identically under Wayland and X11.
 
-use crate::keybinds::{JoystickButton, KeyEvent, KeybindsError};
+use crate::keybinds::{JoystickButton, JoystickDevice, KeyEvent, KeybindsError};
 use keyboard_types::KeyState;
 use sdl3::event::Event;
 use sdl3::sys::joystick::SDL_JoystickID;
@@ -50,6 +50,10 @@ pub type JoystickServiceHandle = Arc<JoystickService>;
 /// input sources); closed senders are pruned on the next event.
 type SenderRegistry = Arc<parking_lot::Mutex<Vec<UnboundedSender<KeyEvent>>>>;
 
+/// Currently connected devices, keyed by SDL instance id and maintained by the
+/// poller thread. Shared so the device list can be queried for the settings UI.
+type DeviceRegistry = Arc<parking_lot::Mutex<HashMap<u32, JoystickDevice>>>;
+
 #[derive(Debug, Default)]
 pub struct JoystickService {
     poller: tokio::sync::Mutex<Option<RunningPoller>>,
@@ -58,6 +62,7 @@ pub struct JoystickService {
 #[derive(Debug)]
 struct RunningPoller {
     senders: SenderRegistry,
+    devices: DeviceRegistry,
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -74,62 +79,14 @@ impl JoystickService {
     /// it is pruned on the next joystick event.
     pub async fn register(&self, tx: UnboundedSender<KeyEvent>) -> Result<(), KeybindsError> {
         let mut poller = self.poller.lock().await;
+        let running = Self::ensure_started(&mut poller).await?;
 
-        if let Some(running) = poller.as_ref() {
-            let mut senders = running.senders.lock();
-            // Eagerly drop senders whose receivers are gone (e.g. from a
-            // stopped engine) instead of waiting for the next event.
-            senders.retain(|sender| !sender.is_closed());
-            senders.push(tx);
-            return Ok(());
-        }
-
-        log::debug!("Starting SDL joystick poller");
-
-        let senders: SenderRegistry = Arc::new(parking_lot::Mutex::new(vec![tx]));
-        let (startup_tx, startup_rx) = oneshot::channel();
-        let stop = Arc::new(AtomicBool::new(false));
-
-        let thread = {
-            let senders = senders.clone();
-            let stop = stop.clone();
-            std::thread::Builder::new()
-                .name("VACS_SDL_Joystick".to_string())
-                .spawn(move || run_poller(senders, stop, startup_tx))
-                .map_err(|err| {
-                    KeybindsError::Listener(format!("Failed to spawn joystick thread: {err}"))
-                })?
-        };
-
-        match tokio::time::timeout(STARTUP_TIMEOUT, startup_rx).await {
-            Ok(Ok(Ok(()))) => {
-                log::debug!("SDL joystick poller started successfully");
-                *poller = Some(RunningPoller {
-                    senders,
-                    stop,
-                    thread: Some(thread),
-                });
-                Ok(())
-            }
-            Ok(Ok(Err(err))) => {
-                log::error!("SDL joystick poller startup failed: {err}");
-                Err(err)
-            }
-            Ok(Err(_)) => {
-                log::error!("SDL joystick poller startup channel closed unexpectedly");
-                stop.store(true, Ordering::Relaxed);
-                Err(KeybindsError::Listener(
-                    "Joystick poller startup channel closed".to_string(),
-                ))
-            }
-            Err(_) => {
-                log::error!("SDL joystick poller startup timed out");
-                stop.store(true, Ordering::Relaxed);
-                Err(KeybindsError::Listener(
-                    "Joystick poller startup timed out".to_string(),
-                ))
-            }
-        }
+        let mut senders = running.senders.lock();
+        // Eagerly drop senders whose receivers are gone (e.g. from a
+        // stopped engine) instead of waiting for the next event.
+        senders.retain(|sender| !sender.is_closed());
+        senders.push(tx);
+        Ok(())
     }
 
     /// Register a dedicated channel and return its receiver, for consumers
@@ -138,6 +95,80 @@ impl JoystickService {
         let (tx, rx) = unbounded_channel();
         self.register(tx).await?;
         Ok(rx)
+    }
+
+    /// The joystick devices currently connected, deduplicated by GUID
+    /// (physically identical devices share one). Lazily starts the SDL poller
+    /// thread on first use.
+    pub async fn connected_devices(&self) -> Result<Vec<JoystickDevice>, KeybindsError> {
+        let mut poller = self.poller.lock().await;
+        let running = Self::ensure_started(&mut poller).await?;
+
+        let devices = running.devices.lock();
+        let mut seen = HashSet::new();
+        Ok(devices
+            .values()
+            .filter(|device| seen.insert(device.device.clone()))
+            .cloned()
+            .collect())
+    }
+
+    /// Start the SDL poller thread if it is not already running.
+    async fn ensure_started(
+        poller: &mut Option<RunningPoller>,
+    ) -> Result<&RunningPoller, KeybindsError> {
+        if poller.is_none() {
+            log::debug!("Starting SDL joystick poller");
+
+            let senders: SenderRegistry = Arc::default();
+            let devices: DeviceRegistry = Arc::default();
+            let (startup_tx, startup_rx) = oneshot::channel();
+            let stop = Arc::new(AtomicBool::new(false));
+
+            let thread = {
+                let senders = senders.clone();
+                let devices = devices.clone();
+                let stop = stop.clone();
+                std::thread::Builder::new()
+                    .name("VACS_SDL_Joystick".to_string())
+                    .spawn(move || run_poller(senders, devices, stop, startup_tx))
+                    .map_err(|err| {
+                        KeybindsError::Listener(format!("Failed to spawn joystick thread: {err}"))
+                    })?
+            };
+
+            match tokio::time::timeout(STARTUP_TIMEOUT, startup_rx).await {
+                Ok(Ok(Ok(()))) => {
+                    log::debug!("SDL joystick poller started successfully");
+                    *poller = Some(RunningPoller {
+                        senders,
+                        devices,
+                        stop,
+                        thread: Some(thread),
+                    });
+                }
+                Ok(Ok(Err(err))) => {
+                    log::error!("SDL joystick poller startup failed: {err}");
+                    return Err(err);
+                }
+                Ok(Err(_)) => {
+                    log::error!("SDL joystick poller startup channel closed unexpectedly");
+                    stop.store(true, Ordering::Relaxed);
+                    return Err(KeybindsError::Listener(
+                        "Joystick poller startup channel closed".to_string(),
+                    ));
+                }
+                Err(_) => {
+                    log::error!("SDL joystick poller startup timed out");
+                    stop.store(true, Ordering::Relaxed);
+                    return Err(KeybindsError::Listener(
+                        "Joystick poller startup timed out".to_string(),
+                    ));
+                }
+            }
+        }
+
+        Ok(poller.as_ref().expect("poller started above"))
     }
 
     /// Stop the poller thread (if running) and wait for it to exit.
@@ -170,6 +201,7 @@ struct OpenDevice {
 
 fn run_poller(
     senders: SenderRegistry,
+    devices: DeviceRegistry,
     stop: Arc<AtomicBool>,
     startup_tx: oneshot::Sender<Result<(), KeybindsError>>,
 ) {
@@ -207,74 +239,70 @@ fn run_poller(
         }
     };
 
-    let _ = startup_tx.send(Ok(()));
-
-    // Keyed by SDL joystick instance id. Devices present at init produce
-    // synthetic JoyDeviceAdded events, so no separate initial scan is needed.
+    // Keyed by SDL joystick instance id. Devices already connected produce
+    // synthetic JoyDeviceAdded events during SDL init; drain them before
+    // signaling readiness so an immediate device-list query sees them.
     let mut open: HashMap<u32, OpenDevice> = HashMap::new();
+    while let Some(event) = pump.poll_event() {
+        handle_event(&joystick, &devices, &mut open, &send, event);
+    }
+
+    let _ = startup_tx.send(Ok(()));
 
     while !stop.load(Ordering::Relaxed) {
         let Some(event) = pump.wait_event_timeout(EVENT_WAIT_TIMEOUT) else {
             continue;
         };
 
-        match event {
-            Event::JoyDeviceAdded { which, .. } => match joystick.open(SDL_JoystickID(which)) {
-                Ok(device) => {
-                    let guid = device.guid().to_string();
-                    let name = device.name();
-                    log::info!("Joystick connected: {name} (guid {guid}, instance {which})");
-                    open.insert(
-                        which,
-                        OpenDevice {
-                            _joystick: device,
-                            guid,
-                            name,
-                            held: HashSet::new(),
-                        },
-                    );
-                }
-                Err(err) => log::warn!("Failed to open joystick (instance {which}): {err}"),
-            },
-            Event::JoyDeviceRemoved { which, .. } => {
-                if let Some(device) = open.remove(&which) {
-                    log::info!(
-                        "Joystick disconnected: {} (guid {})",
-                        device.name,
-                        device.guid
-                    );
-                    // Synthesize releases for held buttons so a PTT bound to this
-                    // device cannot get stuck transmitting after an unplug.
-                    for button in device.held {
-                        send(button_event(
-                            &device.guid,
-                            &device.name,
-                            button,
-                            KeyState::Up,
-                        ));
-                    }
-                }
+        handle_event(&joystick, &devices, &mut open, &send, event);
+    }
+
+    log::trace!("SDL joystick poller finished");
+}
+
+fn handle_event(
+    joystick: &sdl3::JoystickSubsystem,
+    devices: &DeviceRegistry,
+    open: &mut HashMap<u32, OpenDevice>,
+    send: &impl Fn(KeyEvent),
+    event: Event,
+) {
+    match event {
+        Event::JoyDeviceAdded { which, .. } => match joystick.open(SDL_JoystickID(which)) {
+            Ok(device) => {
+                let guid = device.guid().to_string();
+                let name = device.name();
+                log::info!("Joystick connected: {name} (guid {guid}, instance {which})");
+                devices.lock().insert(
+                    which,
+                    JoystickDevice {
+                        device: guid.clone(),
+                        name: Some(name.clone()),
+                    },
+                );
+                open.insert(
+                    which,
+                    OpenDevice {
+                        _joystick: device,
+                        guid,
+                        name,
+                        held: HashSet::new(),
+                    },
+                );
             }
-            Event::JoyButtonDown {
-                which, button_idx, ..
-            } => {
-                if let Some(device) = open.get_mut(&which) {
-                    let button = u32::from(button_idx);
-                    device.held.insert(button);
-                    send(button_event(
-                        &device.guid,
-                        &device.name,
-                        button,
-                        KeyState::Down,
-                    ));
-                }
-            }
-            Event::JoyButtonUp {
-                which, button_idx, ..
-            } => {
-                if let Some(device) = open.get_mut(&which) {
-                    let button = u32::from(button_idx);
-                    device.held.remove(&button);
+            Err(err) => log::warn!("Failed to open joystick (instance {which}): {err}"),
+        },
+        Event::JoyDeviceRemoved { which, .. } => {
+            devices.lock().remove(&which);
+            if let Some(device) = open.remove(&which) {
+                log::info!(
+                    "Joystick disconnected: {} (guid {})",
+                    device.name,
+                    device.guid
+                );
+                // Synthesize releases for held buttons so a PTT bound to this
+                // device cannot get stuck transmitting after an unplug.
+                for button in device.held {
                     send(button_event(
                         &device.guid,
                         &device.name,
@@ -283,11 +311,37 @@ fn run_poller(
                     ));
                 }
             }
-            _ => {}
         }
+        Event::JoyButtonDown {
+            which, button_idx, ..
+        } => {
+            if let Some(device) = open.get_mut(&which) {
+                let button = u32::from(button_idx);
+                device.held.insert(button);
+                send(button_event(
+                    &device.guid,
+                    &device.name,
+                    button,
+                    KeyState::Down,
+                ));
+            }
+        }
+        Event::JoyButtonUp {
+            which, button_idx, ..
+        } => {
+            if let Some(device) = open.get_mut(&which) {
+                let button = u32::from(button_idx);
+                device.held.remove(&button);
+                send(button_event(
+                    &device.guid,
+                    &device.name,
+                    button,
+                    KeyState::Up,
+                ));
+            }
+        }
+        _ => {}
     }
-
-    log::trace!("SDL joystick poller finished");
 }
 
 fn button_event(guid: &str, name: &str, button: u32, state: KeyState) -> KeyEvent {
@@ -407,6 +461,15 @@ mod tests {
             assert_eq!(button.button, 0);
             let guid = button.device.clone();
 
+            // the attached device shows up in the connected-device list
+            // (used by the capture ignore-list settings UI)
+            let connected = service.connected_devices().await.unwrap();
+            let listed = connected
+                .iter()
+                .find(|listed| listed.device == guid)
+                .expect("virtual device missing from connected devices");
+            assert_eq!(listed.name.as_deref(), Some(VIRTUAL_NAME));
+
             // both subscriptions observe the same event (engine and binding
             // capture consume the broadcast concurrently in production)
             let (second_button, second_state) = next_virtual_event(&mut rx_second).await;
@@ -428,6 +491,10 @@ mod tests {
             assert_eq!(state, KeyState::Up);
             assert_eq!(button.button, 1);
             assert_eq!(button.device, guid);
+
+            // and it disappears from the connected-device list again
+            let connected = service.connected_devices().await.unwrap();
+            assert!(connected.iter().all(|listed| listed.device != guid));
 
             service.shutdown().await;
         });

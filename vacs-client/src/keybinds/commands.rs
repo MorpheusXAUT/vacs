@@ -5,8 +5,8 @@ use crate::error::Error;
 use crate::keybinds::engine::KeybindEngineHandle;
 use crate::keybinds::joystick::JoystickServiceHandle;
 use crate::keybinds::{
-    FrontendKeybindsConfig, FrontendTransmitConfig, InputCode, JoystickButton, Keybind,
-    KeybindsConfig, TransmitConfig, Trigger,
+    FrontendKeybindsConfig, FrontendTransmitConfig, InputCode, JoystickButton, JoystickDevice,
+    Keybind, KeybindsConfig, TransmitConfig, Trigger,
 };
 use crate::platform::Capabilities;
 use keyboard_types::KeyState;
@@ -175,6 +175,7 @@ pub struct JoystickCaptureState {
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn keybinds_capture_joystick_button(
+    app_state: State<'_, AppState>,
     capture_state: State<'_, JoystickCaptureState>,
     joystick: State<'_, JoystickServiceHandle>,
     capture_id: String,
@@ -194,14 +195,23 @@ pub async fn keybinds_capture_joystick_button(
         previous.cancel();
     }
 
+    let ignored: std::collections::HashSet<String> = app_state
+        .lock()
+        .await
+        .config
+        .client
+        .keybinds
+        .ignored_joysticks
+        .iter()
+        .map(|device| device.device.clone())
+        .collect();
+
     let mut rx = joystick.subscribe().await?;
     let timeout = timeout_ms.map_or(DEFAULT_CAPTURE_TIMEOUT, Duration::from_millis);
 
     let next_button = async {
         while let Some(event) = rx.recv().await {
-            if event.state == KeyState::Down
-                && let Trigger::Input(InputCode::Button(button)) = event.trigger
-            {
+            if let Some(button) = capturable_button(event, &ignored) {
                 return Some(button);
             }
         }
@@ -216,6 +226,69 @@ pub async fn keybinds_capture_joystick_button(
     };
 
     Ok(captured)
+}
+
+/// The next capturable button press from an event, skipping releases and
+/// presses originating from ignored devices (e.g. flight sim hardware with
+/// latched switches that would instantly win every capture).
+fn capturable_button(
+    event: crate::keybinds::KeyEvent,
+    ignored_devices: &std::collections::HashSet<String>,
+) -> Option<JoystickButton> {
+    if event.state != KeyState::Down {
+        return None;
+    }
+    let Trigger::Input(InputCode::Button(button)) = event.trigger else {
+        return None;
+    };
+    (!ignored_devices.contains(&button.device)).then_some(button)
+}
+
+/// List the joystick devices currently connected, for the capture ignore-list
+/// settings UI. The persisted ignore list itself is part of the keybinds
+/// config.
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn keybinds_list_joystick_devices(
+    joystick: State<'_, JoystickServiceHandle>,
+) -> Result<Vec<JoystickDevice>, Error> {
+    let capabilities = Capabilities::default();
+    if !capabilities.joystick {
+        return Err(Error::CapabilityNotAvailable("Joystick".to_string()));
+    }
+
+    Ok(joystick.connected_devices().await?)
+}
+
+/// Replace the list of joystick devices excluded from binding capture.
+///
+/// Entries persist by device GUID, so they survive unplugging; existing
+/// bindings on ignored devices keep working.
+#[tauri::command]
+#[vacs_macros::log_err]
+pub async fn keybinds_set_ignored_joysticks(
+    app: AppHandle,
+    app_state: State<'_, AppState>,
+    devices: Vec<JoystickDevice>,
+) -> Result<(), Error> {
+    let capabilities = Capabilities::default();
+    if !capabilities.joystick {
+        return Err(Error::CapabilityNotAvailable("Joystick".to_string()));
+    }
+
+    let persisted_client_config: PersistedClientConfig = {
+        let mut state = app_state.lock().await;
+        state.config.client.keybinds.ignored_joysticks = devices;
+        state.config.client.clone().into()
+    };
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .expect("Cannot get config directory");
+    persisted_client_config.persist(&config_dir, CLIENT_SETTINGS_FILE_NAME)?;
+
+    Ok(())
 }
 
 /// Cancel the joystick button capture with the given id, if it is still the
@@ -283,5 +356,52 @@ pub async fn keybinds_is_portal_shortcut_bound(
         return Err(Error::Other(Box::new(anyhow::anyhow!(
             "Checking portal shortcut bindings is only supported on Linux"
         ))));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keybinds::KeyEvent;
+    use std::collections::HashSet;
+
+    fn button_event(device: &str, state: KeyState) -> KeyEvent {
+        KeyEvent::button(
+            JoystickButton {
+                device: device.to_string(),
+                button: 0,
+                name: None,
+            },
+            "test".to_string(),
+            state,
+        )
+    }
+
+    #[test]
+    fn capturable_button_skips_ignored_devices() {
+        let ignored: HashSet<String> = ["latched-throttle".to_string()].into();
+
+        assert!(
+            capturable_button(button_event("latched-throttle", KeyState::Down), &ignored).is_none()
+        );
+        assert_eq!(
+            capturable_button(button_event("yoke", KeyState::Down), &ignored)
+                .map(|button| button.device),
+            Some("yoke".to_string())
+        );
+    }
+
+    #[test]
+    fn capturable_button_skips_releases_and_keys() {
+        let ignored = HashSet::new();
+
+        assert!(capturable_button(button_event("yoke", KeyState::Up), &ignored).is_none());
+        assert!(
+            capturable_button(
+                KeyEvent::key(keyboard_types::Code::KeyA, "A".to_string(), KeyState::Down),
+                &ignored
+            )
+            .is_none()
+        );
     }
 }

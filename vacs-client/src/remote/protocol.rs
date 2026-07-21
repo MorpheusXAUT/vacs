@@ -207,6 +207,8 @@ pub enum RemoteCommand {
     KeybindsSetBinding,
     KeybindsCaptureJoystickButton,
     KeybindsCancelJoystickCapture,
+    KeybindsListJoystickDevices,
+    KeybindsSetIgnoredJoysticks,
     KeybindsGetExternalBinding,
     KeybindsOpenSystemShortcutsSettings,
     KeybindsIsPortalShortcutBound,
