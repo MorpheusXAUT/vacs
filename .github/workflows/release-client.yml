@@ -459,7 +459,7 @@ jobs:
       - name: Extract checksums for macOS DMG files
         id: hashes
         env:
-          VERSION: ${{ steps.vars.outputs.version }}
+          VERSION: ${{ needs.prep.outputs.version }}
         run: |
           AARCH64=$(grep "vacs_${VERSION}_aarch64.dmg$" SHA256SUMS.txt | awk '{print $1}')
           X64=$(grep  "vacs_${VERSION}_x64.dmg$"  SHA256SUMS.txt | awk '{print $1}')
@@ -494,7 +494,7 @@ jobs:
 
       - name: Update cask version and hashes
         env:
-          VERSION: ${{ steps.vars.outputs.version }}
+          VERSION: ${{ needs.prep.outputs.version }}
           AARCH64: ${{ steps.hashes.outputs.aarch64 }}
           X64: ${{ steps.hashes.outputs.x64 }}
         run: |
@@ -507,7 +507,7 @@ jobs:
       - name: Commit updated cask
         uses: planetscale/ghcommit-action@a6b150b81dca5dd027baa898604418eec9e11465 # v0.2.22
         with:
-          commit_message: "chore: update vacs cask to version ${{ steps.vars.outputs.version }}"
+          commit_message: "chore: update vacs cask to version ${{ needs.prep.outputs.version }}"
           repo: "vacs-project/homebrew-tap"
           branch: "main"
         env:
