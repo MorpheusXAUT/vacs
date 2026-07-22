@@ -629,8 +629,9 @@ async fn dispatch_command(
             dispatch(keybinds_cancel_joystick_capture(capture_state, capture_id).await)
         }
         KeybindsListJoystickDevices => {
+            let app_state = app.state::<AppState>();
             let joystick = app.state::<crate::keybinds::joystick::JoystickServiceHandle>();
-            dispatch(keybinds_list_joystick_devices(joystick).await)
+            dispatch(keybinds_list_joystick_devices(app_state, joystick).await)
         }
         KeybindsSetIgnoredJoysticks => {
             let devices = args!(args, "devices");

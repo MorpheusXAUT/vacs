@@ -244,20 +244,65 @@ fn capturable_button(
     (!ignored_devices.contains(&button.device)).then_some(button)
 }
 
-/// List the joystick devices currently connected, for the capture ignore-list
-/// settings UI. The persisted ignore list itself is part of the keybinds
-/// config.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct JoystickDeviceEntry {
+    #[serde(flatten)]
+    pub device: JoystickDevice,
+    pub connected: bool,
+    pub ignored: bool,
+}
+
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn keybinds_list_joystick_devices(
+    app_state: State<'_, AppState>,
     joystick: State<'_, JoystickServiceHandle>,
-) -> Result<Vec<JoystickDevice>, Error> {
+) -> Result<Vec<JoystickDeviceEntry>, Error> {
     let capabilities = Capabilities::default();
     if !capabilities.joystick {
         return Err(Error::CapabilityNotAvailable("Joystick".to_string()));
     }
 
-    Ok(joystick.connected_devices().await?)
+    let connected = joystick.connected_devices().await?;
+    let ignored = app_state
+        .lock()
+        .await
+        .config
+        .client
+        .ignored_joysticks
+        .clone();
+    Ok(merge_device_entries(connected, &ignored))
+}
+
+fn merge_device_entries(
+    connected: Vec<JoystickDevice>,
+    ignored: &std::collections::HashSet<JoystickDevice>,
+) -> Vec<JoystickDeviceEntry> {
+    let mut entries: Vec<JoystickDeviceEntry> = connected
+        .into_iter()
+        .map(|device| JoystickDeviceEntry {
+            ignored: ignored.contains(&device),
+            connected: true,
+            device,
+        })
+        .collect();
+
+    let disconnected: Vec<JoystickDeviceEntry> = ignored
+        .iter()
+        .filter(|device| !entries.iter().any(|entry| entry.device == **device))
+        .map(|device| JoystickDeviceEntry {
+            device: device.clone(),
+            connected: false,
+            ignored: true,
+        })
+        .collect();
+    entries.extend(disconnected);
+
+    entries.sort_by(|a, b| {
+        (a.device.name.as_deref(), &a.device.device)
+            .cmp(&(b.device.name.as_deref(), &b.device.device))
+    });
+    entries
 }
 
 /// Replace the list of joystick devices excluded from binding capture.
@@ -375,6 +420,41 @@ mod tests {
             "test".to_string(),
             state,
         )
+    }
+
+    #[test]
+    fn merge_device_entries_combines_connected_and_ignored() {
+        let device = |guid: &str, name: Option<&str>| JoystickDevice {
+            device: guid.to_string(),
+            name: name.map(str::to_string),
+        };
+
+        let connected = vec![
+            device("yoke", Some("Yoke")),
+            device("throttle", Some("Throttle")),
+        ];
+        let ignored = std::collections::HashSet::from([
+            // connected under a fresher name than the persisted one
+            device("throttle", Some("Old Throttle Name")),
+            // not connected right now, must still be listed
+            device("pedals", Some("Pedals")),
+        ]);
+
+        let entries = merge_device_entries(connected, &ignored);
+        assert_eq!(entries.len(), 3);
+
+        let by_guid = |guid: &str| entries.iter().find(|e| e.device.device == guid).unwrap();
+        assert_eq!(
+            (by_guid("yoke").connected, by_guid("yoke").ignored),
+            (true, false)
+        );
+        let throttle = by_guid("throttle");
+        assert_eq!((throttle.connected, throttle.ignored), (true, true));
+        assert_eq!(throttle.device.name.as_deref(), Some("Throttle"));
+        assert_eq!(
+            (by_guid("pedals").connected, by_guid("pedals").ignored),
+            (false, true)
+        );
     }
 
     #[test]

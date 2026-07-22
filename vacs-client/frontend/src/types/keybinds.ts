@@ -10,12 +10,18 @@ export type JoystickDevice = {
     name?: string | null;
 };
 
+/// A joystick device with its presence and capture-ignore state, as returned
+/// by keybinds_list_joystick_devices: all connected devices plus ignored ones
+/// that are currently unplugged.
+export type JoystickDeviceEntry = JoystickDevice & {
+    connected: boolean;
+    ignored: boolean;
+};
+
 export type KeybindsConfig = {
     acceptCall: InputBinding | null;
     endCall: InputBinding | null;
     toggleRadioPrio: InputBinding | null;
-    /// Devices excluded from binding capture, persisted across unplugs.
-    ignoredJoysticks: JoystickDevice[];
 };
 
 export function callMicModeToKeybind(mode: CallMicMode): KeybindType | null {
