@@ -106,20 +106,17 @@ impl JoystickService {
         Ok(rx)
     }
 
-    /// The joystick devices currently connected, deduplicated by GUID
-    /// (physically identical devices share one). Lazily starts the SDL poller
+    /// The joystick devices currently connected. Lazily starts the SDL poller
     /// thread on first use.
-    pub async fn connected_devices(&self) -> Result<Vec<JoystickDevice>, KeybindsError> {
+    ///
+    /// Devices hash by GUID, so physically identical devices collapse into a
+    /// single entry.
+    pub async fn connected_devices(&self) -> Result<HashSet<JoystickDevice>, KeybindsError> {
         let mut poller = self.poller.lock().await;
         let running = Self::ensure_started(&mut poller).await?;
 
         let devices = running.devices.lock();
-        let mut seen = HashSet::new();
-        Ok(devices
-            .values()
-            .filter(|device| seen.insert(device.device.clone()))
-            .cloned()
-            .collect())
+        Ok(devices.values().cloned().collect())
     }
 
     /// Start the SDL poller thread if it is not already running.

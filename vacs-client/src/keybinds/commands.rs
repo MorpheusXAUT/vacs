@@ -196,7 +196,7 @@ pub async fn keybinds_capture_joystick_button(
         previous.cancel();
     }
 
-    let ignored: std::collections::HashSet<String> = app_state
+    let ignored: HashSet<String> = app_state
         .lock()
         .await
         .config
@@ -233,7 +233,7 @@ pub async fn keybinds_capture_joystick_button(
 /// latched switches that would instantly win every capture).
 fn capturable_button(
     event: crate::keybinds::KeyEvent,
-    ignored_devices: &std::collections::HashSet<String>,
+    ignored_devices: &HashSet<String>,
 ) -> Option<JoystickButton> {
     if event.state != KeyState::Down {
         return None;
@@ -271,12 +271,12 @@ pub async fn keybinds_list_joystick_devices(
         .client
         .ignored_joysticks
         .clone();
-    Ok(merge_device_entries(connected, &ignored))
+    Ok(merge_device_entries(connected, ignored))
 }
 
 fn merge_device_entries(
-    connected: Vec<JoystickDevice>,
-    ignored: &std::collections::HashSet<JoystickDevice>,
+    connected: HashSet<JoystickDevice>,
+    ignored: HashSet<JoystickDevice>,
 ) -> Vec<JoystickDeviceEntry> {
     let mut entries: Vec<JoystickDeviceEntry> = connected
         .into_iter()
@@ -288,10 +288,10 @@ fn merge_device_entries(
         .collect();
 
     let disconnected: Vec<JoystickDeviceEntry> = ignored
-        .iter()
-        .filter(|device| !entries.iter().any(|entry| entry.device == **device))
+        .into_iter()
+        .filter(|device| !entries.iter().any(|entry| entry.device == *device))
         .map(|device| JoystickDeviceEntry {
-            device: device.clone(),
+            device,
             connected: false,
             ignored: true,
         })
@@ -408,7 +408,6 @@ pub async fn keybinds_is_portal_shortcut_bound(
 mod tests {
     use super::*;
     use crate::keybinds::KeyEvent;
-    use std::collections::HashSet;
 
     fn button_event(device: &str, state: KeyState) -> KeyEvent {
         KeyEvent::button(
@@ -429,18 +428,18 @@ mod tests {
             name: name.map(str::to_string),
         };
 
-        let connected = vec![
+        let connected = HashSet::from([
             device("yoke", Some("Yoke")),
             device("throttle", Some("Throttle")),
-        ];
-        let ignored = std::collections::HashSet::from([
+        ]);
+        let ignored = HashSet::from([
             // connected under a fresher name than the persisted one
             device("throttle", Some("Old Throttle Name")),
             // not connected right now, must still be listed
             device("pedals", Some("Pedals")),
         ]);
 
-        let entries = merge_device_entries(connected, &ignored);
+        let entries = merge_device_entries(connected, ignored);
         assert_eq!(entries.len(), 3);
 
         let by_guid = |guid: &str| entries.iter().find(|e| e.device.device == guid).unwrap();
