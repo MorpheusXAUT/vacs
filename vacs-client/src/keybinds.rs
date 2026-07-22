@@ -464,6 +464,20 @@ mod tests {
         })
     }
 
+    fn running_on_wayland() -> bool {
+        #[cfg(target_os = "linux")]
+        {
+            matches!(
+                crate::platform::Platform::get(),
+                crate::platform::Platform::LinuxWayland
+            )
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            false
+        }
+    }
+
     #[test]
     fn key_binding_serializes_as_bare_string() {
         let config = TransmitConfig {
@@ -608,7 +622,7 @@ mod tests {
     fn active_triggers_in_push_to_mute_mode_follow_ptm_binding() {
         // Only run the non-Wayland branch deterministically; the Wayland
         // composition itself is covered by the compose_wayland_trigger tests.
-        if cfg!(target_os = "linux") && matches!(Platform::get(), Platform::LinuxWayland) {
+        if running_on_wayland() {
             return;
         }
 
@@ -631,7 +645,9 @@ mod tests {
 
     #[test]
     fn active_triggers_in_voice_activation_mode() {
-        if cfg!(target_os = "linux") && matches!(Platform::get(), Platform::LinuxWayland) {
+        // Only run the non-Wayland branch deterministically; the Wayland
+        // composition itself is covered by the compose_wayland_trigger tests.
+        if running_on_wayland() {
             return;
         }
 
@@ -650,12 +666,11 @@ mod tests {
         );
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
     fn active_triggers_use_configured_bindings() {
         // Only run the non-Wayland branch deterministically; the Wayland
         // composition itself is covered by the compose_wayland_trigger tests.
-        if cfg!(target_os = "linux") && matches!(Platform::get(), Platform::LinuxWayland) {
+        if running_on_wayland() {
             return;
         }
 
