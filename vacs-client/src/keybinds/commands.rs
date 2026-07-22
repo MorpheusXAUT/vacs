@@ -244,7 +244,10 @@ fn capturable_button(
     (!ignored_devices.contains(&button.device)).then_some(button)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+/// A joystick device together with its presence and capture-ignore state, as
+/// shown in the ignore-list settings UI. Identity follows the device GUID,
+/// matching [`JoystickDevice`].
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct JoystickDeviceEntry {
     #[serde(flatten)]
     pub device: JoystickDevice,
@@ -252,12 +255,26 @@ pub struct JoystickDeviceEntry {
     pub ignored: bool,
 }
 
+impl PartialEq for JoystickDeviceEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.device == other.device
+    }
+}
+
+impl Eq for JoystickDeviceEntry {}
+
+impl std::hash::Hash for JoystickDeviceEntry {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.device.hash(state);
+    }
+}
+
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn keybinds_list_joystick_devices(
     app_state: State<'_, AppState>,
     joystick: State<'_, JoystickServiceHandle>,
-) -> Result<Vec<JoystickDeviceEntry>, Error> {
+) -> Result<HashSet<JoystickDeviceEntry>, Error> {
     let capabilities = Capabilities::default();
     if !capabilities.joystick {
         return Err(Error::CapabilityNotAvailable("Joystick".to_string()));
@@ -277,8 +294,8 @@ pub async fn keybinds_list_joystick_devices(
 fn merge_device_entries(
     connected: HashSet<JoystickDevice>,
     ignored: HashSet<JoystickDevice>,
-) -> Vec<JoystickDeviceEntry> {
-    let mut entries: Vec<JoystickDeviceEntry> = connected
+) -> HashSet<JoystickDeviceEntry> {
+    let mut entries: HashSet<JoystickDeviceEntry> = connected
         .into_iter()
         .map(|device| JoystickDeviceEntry {
             ignored: ignored.contains(&device),
@@ -287,21 +304,15 @@ fn merge_device_entries(
         })
         .collect();
 
-    let disconnected: Vec<JoystickDeviceEntry> = ignored
-        .into_iter()
-        .filter(|device| !entries.iter().any(|entry| entry.device == *device))
-        .map(|device| JoystickDeviceEntry {
+    for device in ignored {
+        // No-op for GUIDs that already have a connected entry
+        entries.insert(JoystickDeviceEntry {
             device,
             connected: false,
             ignored: true,
-        })
-        .collect();
-    entries.extend(disconnected);
+        });
+    }
 
-    entries.sort_by(|a, b| {
-        (a.device.name.as_deref(), &a.device.device)
-            .cmp(&(b.device.name.as_deref(), &b.device.device))
-    });
     entries
 }
 
