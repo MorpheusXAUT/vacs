@@ -10,6 +10,7 @@ use crate::keybinds::{
 };
 use crate::platform::Capabilities;
 use keyboard_types::KeyState;
+use std::collections::HashSet;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 use tokio_util::sync::CancellationToken;
@@ -200,7 +201,6 @@ pub async fn keybinds_capture_joystick_button(
         .await
         .config
         .client
-        .keybinds
         .ignored_joysticks
         .iter()
         .map(|device| device.device.clone())
@@ -269,7 +269,7 @@ pub async fn keybinds_list_joystick_devices(
 pub async fn keybinds_set_ignored_joysticks(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    devices: Vec<JoystickDevice>,
+    devices: HashSet<JoystickDevice>,
 ) -> Result<(), Error> {
     let capabilities = Capabilities::default();
     if !capabilities.joystick {
@@ -278,7 +278,7 @@ pub async fn keybinds_set_ignored_joysticks(
 
     let persisted_client_config: PersistedClientConfig = {
         let mut state = app_state.lock().await;
-        state.config.client.keybinds.ignored_joysticks = devices;
+        state.config.client.ignored_joysticks = devices;
         state.config.client.clone().into()
     };
 

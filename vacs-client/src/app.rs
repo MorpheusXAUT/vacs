@@ -4,6 +4,7 @@ use crate::auth;
 use crate::config::AppConfig;
 use crate::config::BackendEndpoint;
 use crate::error::{Error, FrontendError};
+use crate::keybinds::JoystickDevice;
 use crate::keybinds::{KeybindsConfig, TransmitConfig};
 use crate::playback::PlaybackConfig;
 use crate::radio::RadioConfig;
@@ -190,6 +191,10 @@ pub struct ClientConfig {
     pub clock_mode: ClockMode,
     #[serde(default)]
     pub cpl_mode: CplMode,
+    /// Joystick devices excluded from binding capture. Existing bindings on
+    /// these devices keep working; they just can no longer win a capture.
+    #[serde(default)]
+    pub ignored_joysticks: HashSet<JoystickDevice>,
 }
 
 fn default_zoom_level() -> f64 {
@@ -219,6 +224,7 @@ impl Default for ClientConfig {
             zoom_level: 1.0f64,
             clock_mode: ClockMode::default(),
             cpl_mode: CplMode::default(),
+            ignored_joysticks: Default::default(),
         }
     }
 }

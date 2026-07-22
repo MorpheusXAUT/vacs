@@ -3,6 +3,7 @@ use keyboard_types::{Code, KeyState};
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
+use std::hash::Hash;
 use thiserror::Error;
 use vacs_macros::Frontend;
 
@@ -148,6 +149,12 @@ impl PartialEq for JoystickDevice {
 }
 
 impl Eq for JoystickDevice {}
+
+impl Hash for JoystickDevice {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.device.hash(state);
+    }
+}
 
 /// Runtime identity of a fired keybind source.
 ///
@@ -443,10 +450,6 @@ pub struct KeybindsConfig {
     pub end_call: Option<InputCode>,
     /// Input binding to toggle radio prio during an active call.
     pub toggle_radio_prio: Option<InputCode>,
-    /// Joystick devices excluded from binding capture. Existing bindings on
-    /// these devices keep working; they just can no longer win a capture.
-    #[serde(default)]
-    pub ignored_joysticks: Vec<JoystickDevice>,
 }
 
 #[cfg(test)]
@@ -545,33 +548,6 @@ mod tests {
         let toml = r#"push_to_talk = "NotAKey""#;
         let err = toml::from_str::<TransmitConfig>(toml).unwrap_err();
         assert!(err.to_string().contains("Unrecognized key code"));
-    }
-
-    #[test]
-    fn keybinds_config_without_ignored_joysticks_deserializes() {
-        // Configs written before the ignore list existed must keep loading.
-        let config: KeybindsConfig = toml::from_str(r#"accept_call = "F15""#).unwrap();
-        assert_eq!(config.accept_call, Some(InputCode::Key(Code::F15)));
-        assert!(config.ignored_joysticks.is_empty());
-    }
-
-    #[test]
-    fn ignored_joysticks_roundtrip_through_toml() {
-        let config = KeybindsConfig {
-            ignored_joysticks: vec![JoystickDevice {
-                device: "030003f05e0400008e02000010010000".to_string(),
-                name: Some("VPC Throttle".to_string()),
-            }],
-            ..Default::default()
-        };
-
-        let toml = toml::to_string(&config).unwrap();
-        let parsed: KeybindsConfig = toml::from_str(&toml).unwrap();
-        assert_eq!(parsed.ignored_joysticks, config.ignored_joysticks);
-        assert_eq!(
-            parsed.ignored_joysticks[0].name.as_deref(),
-            Some("VPC Throttle")
-        );
     }
 
     #[test]
