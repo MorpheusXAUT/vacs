@@ -18,10 +18,12 @@ import {
     Menu,
     openMenu,
     openSettingsSubmenu,
+    Submenu,
     useNavigationStore,
 } from "../stores/navigation-store.ts";
 import {useUpdateStore} from "../stores/update-store.ts";
 import {isTauri} from "../transport";
+import JoystickDevicesConfigPage from "../components/settings/JoystickDevicesConfigPage.tsx";
 
 function SettingsPage() {
     const submenu = useNavigationStore(state => state.submenu);
@@ -119,6 +121,8 @@ function SettingsPage() {
                 <CallConfigPage />
             ) : submenu === "settings-advanced" ? (
                 <AdvancedPage />
+            ) : submenu === "settings-joystick-devices" ? (
+                <JoystickDevicesConfigPage />
             ) : (
                 <></>
             )}
@@ -326,13 +330,27 @@ function WindowStateButtons() {
     );
 }
 
-export function CloseButton({targetMenu, className}: {targetMenu?: Menu; className?: string}) {
+export function CloseButton({
+    targetMenu,
+    targetSubmenu,
+    className,
+}: {
+    targetMenu?: Menu;
+    targetSubmenu?: Submenu;
+    className?: string;
+}) {
+    const handleOnClick = () => {
+        if (targetMenu === undefined && targetSubmenu === undefined) {
+            closeMenu();
+        } else if (targetMenu !== undefined) {
+            openMenu(targetMenu);
+        } else if (targetSubmenu !== undefined) {
+            openSettingsSubmenu(targetSubmenu);
+        }
+    };
+
     return (
-        <Button
-            color="gray"
-            className={clsx(className, "w-18!")}
-            onClick={() => (targetMenu !== undefined ? openMenu(targetMenu) : closeMenu())}
-        >
+        <Button color="gray" className={clsx(className, "w-18!")} onClick={handleOnClick}>
             <svg
                 width="26"
                 height="26"

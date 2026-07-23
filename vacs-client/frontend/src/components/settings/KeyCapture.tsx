@@ -194,7 +194,7 @@ function KeyCapture(props: KeyCaptureProps) {
                     props.className,
                 )}
             >
-                <p className="truncate max-w-full">
+                <p className="truncate max-w-full" title={props.label ?? undefined}>
                     {capturing ? capturePrompt : (props.label ?? "Not bound")}
                 </p>
             </div>

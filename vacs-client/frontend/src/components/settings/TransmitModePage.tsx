@@ -3,6 +3,7 @@ import {useSettingsStore} from "../../stores/settings-store.ts";
 import HelpIcon from "../ui/HelpIcon.tsx";
 import RadioPrioBadge from "../ui/RadioPrioBadge.tsx";
 import CallMicModeSettings from "./CallMicModeSettings.tsx";
+import KeybindPageActions from "./KeybindPageActions.tsx";
 import RadioIntegrationSettings from "./RadioIntegrationSettings.tsx";
 import SettingsSubPage from "./SettingsSubPage.tsx";
 
@@ -22,6 +23,7 @@ function TransmitModePage() {
         <SettingsSubPage
             title="Transmit Config"
             width="w-[69%]"
+            actions={<KeybindPageActions />}
             className="flex flex-col overflow-y-auto"
         >
             <div className="h-full flex flex-col">

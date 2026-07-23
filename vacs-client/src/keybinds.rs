@@ -118,8 +118,8 @@ impl Eq for JoystickButton {}
 impl fmt::Display for JoystickButton {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.name {
-            Some(name) => write!(f, "{name} B{}", self.button),
-            None => write!(f, "Joystick B{}", self.button),
+            Some(name) => write!(f, "Button {} ({name})", self.button),
+            None => write!(f, "Button {} (Joystick)", self.button),
         }
     }
 }

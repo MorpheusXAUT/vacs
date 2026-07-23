@@ -6,6 +6,7 @@ import {invokeStrict} from "../../error.ts";
 import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
 import SettingsSubPage from "./SettingsSubPage.tsx";
 import CombinedKeybindField from "./CombinedKeybindField.tsx";
+import KeybindPageActions from "./KeybindPageActions.tsx";
 
 type Keybind = {
     input: InputBinding | null;
@@ -35,7 +36,12 @@ function HotkeysConfigPage() {
     }, []);
 
     return (
-        <SettingsSubPage title="Hotkeys Config" width="w-1/2" className="py-3 px-4">
+        <SettingsSubPage
+            title="Hotkeys Config"
+            width="w-1/2"
+            actions={<KeybindPageActions />}
+            className="py-3 px-4"
+        >
             <div className="grid grid-cols-[auto_1fr] gap-4 items-center">
                 <KeybindField
                     type="AcceptCall"

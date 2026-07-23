@@ -4,13 +4,18 @@ type Page = "phone" | "radio";
 export type Menu = "settings" | "mission" | "telephone" | "playback";
 
 type SettingsSubmenu =
-    "settings-transmit" | "settings-hotkeys" | "settings-call" | "settings-advanced";
-type Submenu = SettingsSubmenu;
+    | "settings-transmit"
+    | "settings-hotkeys"
+    | "settings-call"
+    | "settings-advanced"
+    | "settings-joystick-devices";
+export type Submenu = SettingsSubmenu;
 
 type NavigationState = {
     page: Page;
     menu: Menu | undefined;
     submenu: Submenu | undefined;
+    previous: Pick<NavigationState, "page" | "menu" | "submenu">;
     setPage: (page: Page) => void;
     goToPage: (page: Page) => void;
     openMenu: (menu: Menu) => void;
@@ -22,14 +27,22 @@ export const useNavigationStore = create<NavigationState>()(set => ({
     page: "phone",
     menu: undefined,
     submenu: undefined,
-    setPage: page => set({page}),
+    previous: {page: "phone", menu: undefined, submenu: undefined},
+    setPage: page => set(prev => ({page, previous: previous(prev)})),
     goToPage: page => {
-        set({page, menu: undefined, submenu: undefined});
+        set(prev => ({page, menu: undefined, submenu: undefined, previous: previous(prev)}));
     },
-    openMenu: menu => set({menu, submenu: undefined}),
-    closeMenu: () => set({menu: undefined, submenu: undefined}),
-    openSettingsSubmenu: (submenu: SettingsSubmenu) => set({menu: "settings", submenu}),
+    openMenu: menu => set(prev => ({menu, submenu: undefined, previous: previous(prev)})),
+    closeMenu: () => set(prev => ({menu: undefined, submenu: undefined, previous: previous(prev)})),
+    openSettingsSubmenu: (submenu: SettingsSubmenu) =>
+        set(prev => ({menu: "settings", submenu, previous: previous(prev)})),
 }));
+
+const previous = (prev: NavigationState): Pick<NavigationState, "page" | "menu" | "submenu"> => ({
+    page: prev.page,
+    menu: prev.menu,
+    submenu: prev.submenu,
+});
 
 export const setPage = (page: Page) => useNavigationStore.getState().setPage(page);
 

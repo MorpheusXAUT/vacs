@@ -7,7 +7,7 @@ export type KeybindType =
 /// last-seen device name, kept for display while the device is unplugged.
 export type JoystickDevice = {
     device: string;
-    name?: string | null;
+    name?: string;
 };
 
 /// A joystick device with its presence and capture-ignore state, as returned

@@ -95,7 +95,7 @@ function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSet
     return (
         <>
             <Select
-                className="w-[21ch]! h-full"
+                className="w-[21ch]! h-full shrink-0"
                 name="keybind-mode"
                 options={[
                     {value: "VoiceActivation", text: "Voice activation"},

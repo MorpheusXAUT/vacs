@@ -37,7 +37,7 @@ export function inputEquals(a: InputBinding | null, b: InputBinding | null): boo
 }
 
 export function joystickButtonLabel(button: JoystickButton): string {
-    return `${button.name ?? "Joystick"} B${button.button}`;
+    return `Button ${button.button} (${button.name ?? "Joystick"})`;
 }
 
 export async function inputToLabel(binding: InputBinding): Promise<string> {
