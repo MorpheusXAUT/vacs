@@ -1,4 +1,4 @@
-//! X11 keybind listener implementation.
+//! X11 keybind listener and emitter implementations.
 //!
 //! # Keycode Mapping
 //!
@@ -233,14 +233,17 @@ mod tests {
             emitter.emit(Code::F13, KeyState::Down).unwrap();
             emitter.emit(Code::F13, KeyState::Up).unwrap();
 
+            // Only assert the injected F13 transitions; when running against a
+            // live session's X server, real keystrokes may interleave.
             let mut states = Vec::new();
-            for _ in 0..2 {
+            while states.len() < 2 {
                 let event = tokio::time::timeout(Duration::from_secs(3), rx.recv())
                     .await
                     .expect("timed out waiting for emitted key event")
                     .expect("listener channel closed");
-                assert_eq!(event.trigger, Trigger::Input(InputCode::Key(Code::F13)));
-                states.push(event.state);
+                if event.trigger == Trigger::Input(InputCode::Key(Code::F13)) {
+                    states.push(event.state);
+                }
             }
             assert_eq!(states, vec![KeyState::Down, KeyState::Up]);
 
