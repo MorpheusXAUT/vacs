@@ -144,6 +144,10 @@ jobs:
           brew update
           brew install opus
 
+      - name: Install build dependencies (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: ./.github/actions/install-windows-deps
+
       - name: Rust toolchain
         run: |
           rustup toolchain install stable --profile minimal --no-self-update --component clippy

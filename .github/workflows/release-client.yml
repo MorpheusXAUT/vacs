@@ -229,6 +229,10 @@ jobs:
           echo "PKG_CONFIG_PATH=/usr/local/opt/opus/lib/pkgconfig" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
 
+      - name: Install build dependencies (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: ./.github/actions/install-windows-deps
+
       - name: Setup Node (LTS)
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
