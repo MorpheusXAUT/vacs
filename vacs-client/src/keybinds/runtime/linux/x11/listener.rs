@@ -16,8 +16,8 @@
 //!
 //! Key repeats are filtered at the source via the `KEY_REPEAT` raw event flag.
 
-use crate::keybinds::runtime::KeybindListener;
 use crate::keybinds::runtime::linux::x11::x_keycode_to_code;
+use crate::keybinds::runtime::{self, KeybindListener};
 use crate::keybinds::{KeyEvent, KeybindsError};
 use keyboard_types::KeyState;
 use std::sync::Arc;
@@ -58,31 +58,15 @@ impl KeybindListener for X11KeybindListener {
                 })?
         };
 
-        match tokio::time::timeout(STARTUP_TIMEOUT, startup_rx).await {
-            Ok(Ok(Ok(()))) => {
-                log::debug!("X11 keybind listener started successfully");
-                Ok(Self {
-                    stop,
-                    thread: Some(thread),
-                })
-            }
-            Ok(Ok(Err(err))) => {
-                log::error!("X11 keybind listener startup failed: {err}");
+        match runtime::await_startup(startup_rx, STARTUP_TIMEOUT, "X11 keybind listener").await {
+            Ok(()) => Ok(Self {
+                stop,
+                thread: Some(thread),
+            }),
+            Err(err) => {
+                // Harmless if the thread already exited on a startup failure
+                stop.store(true, Ordering::Relaxed);
                 Err(err)
-            }
-            Ok(Err(_)) => {
-                log::error!("X11 keybind listener startup channel closed unexpectedly");
-                stop.store(true, Ordering::Relaxed);
-                Err(KeybindsError::Listener(
-                    "X11KeybindListener startup channel closed".to_string(),
-                ))
-            }
-            Err(_) => {
-                log::error!("X11 keybind listener startup timed out");
-                stop.store(true, Ordering::Relaxed);
-                Err(KeybindsError::Listener(
-                    "X11KeybindListener startup timed out".to_string(),
-                ))
             }
         }
     }

@@ -1,5 +1,5 @@
-use crate::keybinds::runtime::KeybindListener;
 use crate::keybinds::runtime::macos::KeyEventConverter;
+use crate::keybinds::runtime::{self, KeybindListener};
 use crate::keybinds::{KeyEvent, KeybindsError};
 use objc2_core_foundation::{
     CFMachPort, CFRetained, CFRunLoop, CFRunLoopSource, CFRunLoopSourceContext,
@@ -61,19 +61,17 @@ impl KeybindListener for MacOsKeybindListener {
             })
             .map_err(|err| KeybindsError::Listener(format!("Failed to spawn thread: {err}")))?;
 
-        match tokio::time::timeout(Duration::from_secs(1), start_res_rx).await {
-            Ok(Ok(Ok(shutdown_source))) => Ok(Self {
-                shutdown_source,
-                thread_handle: Some(thread_handle),
-            }),
-            Ok(Ok(Err(err))) => Err(err),
-            Ok(Err(_)) => Err(KeybindsError::Listener(
-                "MacOsKeybindListener startup channel closed".to_string(),
-            )),
-            Err(_) => Err(KeybindsError::Listener(
-                "MacOsKeybindListener startup timed out".to_string(),
-            )),
-        }
+        let shutdown_source = runtime::await_startup(
+            start_res_rx,
+            Duration::from_secs(1),
+            "macOS keybind listener",
+        )
+        .await?;
+
+        Ok(Self {
+            shutdown_source,
+            thread_handle: Some(thread_handle),
+        })
     }
 }
 
