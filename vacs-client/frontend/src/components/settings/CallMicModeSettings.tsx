@@ -10,7 +10,7 @@ import {
     withTransmitLabels,
 } from "../../types/transmit.ts";
 import Select from "../ui/Select.tsx";
-import CombinedKeybindField from "./CombinedKeybindField.tsx";
+import ExternalKeybindField from "./ExternalKeybindField.tsx";
 import KeyCapture from "./KeyCapture.tsx";
 
 type CallMicModeSettingsProps = {
@@ -106,7 +106,7 @@ function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSet
                 onChange={handleOnTransmitModeChange}
             />
             {capPlatform === "LinuxWayland" ? (
-                <CombinedKeybindField
+                <ExternalKeybindField
                     type={callMicModeToKeybind(transmitConfig.callMicMode)}
                     binding={activeCallBinding}
                     bindingLabel={activeCallLabel}

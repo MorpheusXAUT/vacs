@@ -51,18 +51,20 @@ describe("inputEquals", () => {
 
 describe("joystickButtonLabel", () => {
     it("uses the device name when known", () => {
-        expect(joystickButtonLabel(YOKE_B2)).toBe("Yoke B2");
+        expect(joystickButtonLabel(YOKE_B2)).toBe("Button 2 (Yoke)");
     });
 
     it("falls back to a generic label", () => {
-        expect(joystickButtonLabel({device: "guid", button: 5})).toBe("Joystick B5");
-        expect(joystickButtonLabel({device: "guid", button: 5, name: null})).toBe("Joystick B5");
+        expect(joystickButtonLabel({device: "guid", button: 5})).toBe("Button 5 (Joystick)");
+        expect(joystickButtonLabel({device: "guid", button: 5, name: null})).toBe(
+            "Button 5 (Joystick)",
+        );
     });
 });
 
 describe("inputToLabel", () => {
     it("labels buttons and key codes", async () => {
-        expect(await inputToLabel(YOKE_B2)).toBe("Yoke B2");
+        expect(await inputToLabel(YOKE_B2)).toBe("Button 2 (Yoke)");
         // jsdom has no navigator.keyboard, so this exercises the
         // prettyFormatKeyCode fallback
         expect(await inputToLabel("KeyA")).toBe("A");

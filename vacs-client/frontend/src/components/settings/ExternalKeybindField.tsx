@@ -6,7 +6,7 @@ import {KeybindType} from "../../types/keybinds.ts";
 import {InputBinding, isJoystickButton} from "../../types/transmit.ts";
 import KeyCapture from "./KeyCapture.tsx";
 
-type CombinedKeybindFieldProps = {
+type ExternalKeybindFieldProps = {
     type: KeybindType | null;
     binding: InputBinding | null;
     bindingLabel: string | null;
@@ -21,7 +21,7 @@ type CombinedKeybindFieldProps = {
 // buttons are captured in-app. A bound joystick button replaces the portal
 // shortcut for the action, so the field always shows the active trigger;
 // removing the button falls back to the portal shortcut.
-function CombinedKeybindField({
+function ExternalKeybindField({
     type,
     binding,
     bindingLabel,
@@ -29,7 +29,7 @@ function CombinedKeybindField({
     disabled = false,
     onCapture,
     onRemove,
-}: CombinedKeybindFieldProps) {
+}: ExternalKeybindFieldProps) {
     const capJoystick = useCapabilitiesStore(state => state.joystick);
     const [externalBinding, setExternalBinding] = useState<string | null>(null);
     const hasJoystickBinding = isJoystickButton(binding);
@@ -65,4 +65,4 @@ function CombinedKeybindField({
     );
 }
 
-export default CombinedKeybindField;
+export default ExternalKeybindField;

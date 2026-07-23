@@ -5,7 +5,7 @@ import {KeybindsConfig, KeybindType} from "../../types/keybinds.ts";
 import {invokeStrict} from "../../error.ts";
 import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
 import SettingsSubPage from "./SettingsSubPage.tsx";
-import CombinedKeybindField from "./CombinedKeybindField.tsx";
+import ExternalKeybindField from "./ExternalKeybindField.tsx";
 import KeybindPageActions from "./KeybindPageActions.tsx";
 
 type Keybind = {
@@ -87,7 +87,7 @@ function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
         <>
             <p>{label}</p>
             {hasExternal ? (
-                <CombinedKeybindField
+                <ExternalKeybindField
                     type={type}
                     binding={keybind?.input ?? null}
                     bindingLabel={keybind?.label ?? null}

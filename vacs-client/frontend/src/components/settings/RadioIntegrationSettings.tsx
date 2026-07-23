@@ -23,7 +23,7 @@ import {
 import RadioPrioBadge from "../ui/RadioPrioBadge.tsx";
 import Select from "../ui/Select.tsx";
 import StatusIndicator, {Status} from "../ui/StatusIndicator.tsx";
-import CombinedKeybindField from "./CombinedKeybindField.tsx";
+import ExternalKeybindField from "./ExternalKeybindField.tsx";
 import KeyCapture from "./KeyCapture.tsx";
 
 type RadioIntegrationSettingsProps = {
@@ -201,7 +201,7 @@ function RadioIntegrationSettings({
                     onChange={handleOnRadioIntegrationChange}
                 />
                 {capPlatform === "LinuxWayland" ? (
-                    <CombinedKeybindField
+                    <ExternalKeybindField
                         type={waylandRadioKeybindType}
                         binding={
                             transmitConfig.callMicMode === "PushToTalk"
