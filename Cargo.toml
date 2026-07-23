@@ -128,6 +128,10 @@ wiremock = "0.6.5"
 # pipewire past 0.8.0. This branch is currently unreleased and relaxes the pin to "^0.3.2";
 # drop once upstream (aembke/redis-protocol.rs) publishes 6.1.0.
 redis-protocol = { git = "https://github.com/aembke/redis-protocol.rs", rev = "cdd4535155437d08171a68c9965963fc1092eeb6" }
+# cpal 0.18.1 rejects WASAPI output formats that IsFormatSupported only reports as
+# convertible (S_FALSE), breaking startup on multi-channel devices like SteelSeries Sonar.
+# Fixed upstream by https://github.com/RustAudio/cpal/pull/1275; drop once 0.18.2 is released.
+cpal = { git = "https://github.com/RustAudio/cpal", rev = "c9f5e733176eeab03345f63e152f7d2489914b36" }
 
 [workspace.lints.clippy]
 semicolon-if-nothing-returned = "warn"

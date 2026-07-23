@@ -1,4 +1,4 @@
-# Changelog
+# Changelog 
 
 ## [2.5.0](https://github.com/vacs-project/vacs/compare/vacs-client-v2.4.0...vacs-client-v2.5.0) (2026-07-20)
 
