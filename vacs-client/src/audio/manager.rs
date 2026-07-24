@@ -298,19 +298,13 @@ impl AudioManager {
                 return;
             }
 
+            // A successful recovery needs no user-facing notification: cpal
+            // also reports transient backend hiccups on live streams (e.g.
+            // ALSA EIO during plugin spin-up), and a restart onto a fallback
+            // device already emits its own toast via the is_fallback path.
             log::info!(
                 "Successfully restarted input level meter after failure, continuing capture"
             );
-
-            // A rebuild after a device change is expected behavior; only
-            // surface actual stream failures to the user.
-            if !device_changed {
-                app.emit::<FrontendError>(
-                    "error",
-                    FrontendError::from(Error::from(err)).non_critical(),
-                )
-                .ok();
-            }
         });
 
         self.input = Some(CaptureStream::start_level_meter(
@@ -693,15 +687,9 @@ async fn handle_playback_stream_error(
         return;
     }
 
+    // A successful recovery needs no user-facing notification: cpal also
+    // reports transient backend hiccups on live streams (e.g. ALSA EIO during
+    // plugin spin-up), and a restart onto a fallback device already emits its
+    // own toast via the is_fallback path.
     log::info!("Successfully restarted {device_type} device after failure, continuing playback");
-
-    // A rebuild after a device change is expected behavior; only surface
-    // actual stream failures to the user.
-    if !device_changed {
-        app.emit::<FrontendError>(
-            "error",
-            FrontendError::from(Error::from(err)).non_critical(),
-        )
-        .ok();
-    }
 }
