@@ -645,7 +645,11 @@ async fn handle_playback_stream_error(
     let state = app.state::<AppState>();
     let mut state = state.lock().await;
 
-    if let Some(call_id) = state.active_call_id().cloned() {
+    // Calls attach their audio to the output stream only, so no speaker
+    // failure can affect call audio and none must end the call.
+    if device_type == PlaybackDeviceType::Output
+        && let Some(call_id) = state.active_call_id().cloned()
+    {
         log::debug!("Ending active call {call_id} due to playback stream error");
 
         state.cleanup_call(&call_id).await;
