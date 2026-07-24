@@ -20,6 +20,10 @@ impl From<cpal::Error> for AudioError {
             DeviceNotAvailable | StreamInvalidated => AudioError::DeviceNotAvailable,
             UnsupportedConfig | InvalidInput => AudioError::UnsupportedConfig,
             DeviceBusy | PermissionDenied => AudioError::DeviceBusyOrDenied,
+            // Transient dropped-samples events; the stream error callbacks
+            // filter these out before they reach recovery logic. Handle explicitly
+            // to avoid duplicate logging below.
+            Xrun => AudioError::Other(e.into()),
             _ => {
                 tracing::warn!(err = ?e, "Received unmapped cpal error");
                 AudioError::Other(e.into())

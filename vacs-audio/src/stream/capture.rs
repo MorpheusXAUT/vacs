@@ -97,6 +97,12 @@ impl CaptureStream {
                 }
             },
             move |err| {
+                // Xruns are transient (samples dropped on a live stream);
+                // restarting the stream for them would only drop more audio.
+                if matches!(err.kind(), cpal::ErrorKind::Xrun) {
+                    tracing::debug!("Capture stream xrun, samples dropped");
+                    return;
+                }
                 tracing::error!(?err, "CPAL capture stream error");
                 if let Err(err) = error_tx.try_send(err.into()) {
                     tracing::warn!(?err, "Failed to send capture stream error");
@@ -267,6 +273,12 @@ impl CaptureStream {
                 }
             },
             move |err| {
+                // Xruns are transient (samples dropped on a live stream);
+                // restarting the stream for them would only drop more audio.
+                if matches!(err.kind(), cpal::ErrorKind::Xrun) {
+                    tracing::debug!("Level meter capture stream xrun, samples dropped");
+                    return;
+                }
                 tracing::error!(?err, "CPAL capture stream level meter error");
                 if let Err(err) = error_tx.try_send(err.into()) {
                     tracing::warn!(?err, "Failed to send capture stream level meter error");

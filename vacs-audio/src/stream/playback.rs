@@ -54,6 +54,12 @@ impl PlaybackStream {
                 mixer.mix(output);
             },
             move |err| {
+                // Xruns are transient (samples dropped on a live stream);
+                // restarting the stream for them would only drop more audio.
+                if matches!(err.kind(), cpal::ErrorKind::Xrun) {
+                    tracing::debug!("Playback stream xrun, samples dropped");
+                    return;
+                }
                 tracing::error!(?err, "CPAL playback stream error");
                 if let Err(err) = error_tx.try_send(err.into()) {
                     tracing::warn!(?err, "Failed to send playback stream error");
