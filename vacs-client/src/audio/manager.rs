@@ -235,65 +235,82 @@ impl AudioManager {
         let audio_config_clone = audio_config.clone();
         let emit_clone = emit.clone();
         tauri::async_runtime::spawn(async move {
-            while let Some(err) = error_rx.recv().await {
-                let in_restart_cooldown =
-                    restarted_at.is_some_and(|t| t.elapsed() < RESTART_COOLDOWN);
+            // Handle only the first error event: every recovery path either
+            // replaces this stream (making any further events from it stale)
+            // or gives up for good.
+            let Some(err) = error_rx.recv().await else {
+                log::debug!("Input level meter error receiver closed");
+                return;
+            };
 
-                if in_restart_cooldown {
+            let device_changed = matches!(err, AudioError::StreamInvalidated);
+            let in_restart_cooldown = restarted_at.is_some_and(|t| t.elapsed() < RESTART_COOLDOWN);
+
+            let give_up = |app: &AppHandle| {
+                app.state::<AudioManagerHandle>()
+                    .write()
+                    .detach_input_device();
+                app.emit("audio:stop-input-level-meter", Value::Null).ok();
+
+                app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
+                    anyhow::anyhow!("Audio input level meter failed to start irrecoverably, check your audio settings and reopen the settings page.")
+                ))).into()).ok();
+            };
+
+            if in_restart_cooldown {
+                if !device_changed {
                     log::error!(
                         "Restarting input level meter after failure errored again within {RESTART_COOLDOWN:?}, cannot recover: {:?}",
                         err
                     );
+                    give_up(&app);
+                    return;
+                }
 
-                    app.state::<AudioManagerHandle>()
-                        .write()
-                        .detach_input_device();
-                    app.emit("audio:stop-input-level-meter", Value::Null).ok();
-
-                    app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
-                        anyhow::anyhow!("Audio input level meter failed to start irrecoverably, check your audio settings and reopen the settings page.")
-                    ))).into()).ok();
-                } else {
-                    let res = app
-                        .state::<AudioManagerHandle>()
-                        .write()
-                        .attach_input_level_meter(
-                            app.clone(),
-                            &audio_config_clone,
-                            emit_clone.clone(),
-                            Some(Instant::now()),
-                        );
-
-                    if let Err(err) = res {
-                        log::error!(
-                            "Failed to switch input level meter after failure: {:?}",
-                            err
-                        );
-
-                        app.state::<AudioManagerHandle>()
-                            .write()
-                            .detach_input_device();
-                        app.emit("audio:stop-input-level-meter", Value::Null).ok();
-
-                        app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
-                            anyhow::anyhow!("Audio input level meter failed to start irrecoverably, check your audio settings and reopen the settings page.")
-                        ))).into()).ok();
-
-                        return;
-                    } else {
-                        log::info!(
-                            "Successfully restarted input level meter after failure, continuing capture"
-                        );
-                    }
-
-                    app.emit::<FrontendError>(
-                        "error",
-                        FrontendError::from(Error::from(err)).non_critical(),
-                    )
-                    .ok();
+                // The default device changed again right after a restart.
+                // Rebuilding is the only recovery whatever the cause; a
+                // genuinely broken device still fails the rebuild below and
+                // hard-errors there. Rate-limit the rebuild instead of
+                // giving up.
+                if let Some(remaining) =
+                    restarted_at.and_then(|t| RESTART_COOLDOWN.checked_sub(t.elapsed()))
+                {
+                    tokio::time::sleep(remaining).await;
                 }
             }
-            log::debug!("Playback capture error receiver closed");
+
+            let res = app
+                .state::<AudioManagerHandle>()
+                .write()
+                .attach_input_level_meter(
+                    app.clone(),
+                    &audio_config_clone,
+                    emit_clone.clone(),
+                    Some(Instant::now()),
+                );
+
+            if let Err(err) = res {
+                log::error!(
+                    "Failed to switch input level meter after failure: {:?}",
+                    err
+                );
+                give_up(&app);
+                return;
+            }
+
+            log::info!(
+                "Successfully restarted input level meter after failure, continuing capture"
+            );
+
+            // A rebuild after a device change is expected behavior; only
+            // surface actual stream failures to the user.
+            if !device_changed {
+                app.emit::<FrontendError>(
+                    "error",
+                    FrontendError::from(Error::from(err)).non_critical(),
+                )
+                .ok();
+            }
         });
 
         self.input = Some(CaptureStream::start_level_meter(
@@ -457,7 +474,11 @@ impl AudioManager {
 
         let audio_config_clone = audio_config.clone();
         tauri::async_runtime::spawn(async move {
-            while let Some(err) = error_rx.recv().await {
+            // Handle only the first error event: every recovery path either
+            // replaces this stream (making any further events from it stale,
+            // e.g. queued duplicates from Windows default-role changes) or
+            // gives up for good.
+            if let Some(err) = error_rx.recv().await {
                 handle_playback_stream_error(
                     err,
                     restarted_at,
@@ -590,71 +611,89 @@ async fn handle_playback_stream_error(
     device_type: PlaybackDeviceType,
     app: AppHandle,
 ) {
+    let device_changed = matches!(err, AudioError::StreamInvalidated);
     let in_restart_cooldown = restarted_at.is_some_and(|t| t.elapsed() < RESTART_COOLDOWN);
 
-    if in_restart_cooldown {
-        log::error!(
-            "Restarting {device_type} device after failure errored again within {RESTART_COOLDOWN:?}, cannot recover: {:?}",
-            err
-        );
+    let give_up = |app: &AppHandle| {
         app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
             anyhow::anyhow!("Audio {device_type} device failed to start irrecoverably, check your audio settings and restart the application.")
         ))).into()).ok();
-    } else {
-        let state = app.state::<AppState>();
-        let mut state = state.lock().await;
+    };
 
-        if let Some(call_id) = state.active_call_id().cloned() {
-            log::debug!("Ending active call {call_id} due to playback stream error");
-
-            state.cleanup_call(&call_id).await;
-            if let Err(err) = state
-                .send_signaling_message(shared::CallError {
-                    call_id,
-                    reason: CallErrorReason::AudioFailure,
-                    message: None,
-                })
-                .await
-            {
-                log::warn!("Failed to send call end signaling message: {:?}", err);
-            };
-            state.set_outgoing_call(None);
-            app.state::<AudioManagerHandle>()
-                .read()
-                .stop(SourceType::Ringback);
-
-            app.emit("signaling:call-end", &call_id).ok();
-        }
-
-        let res = {
-            let audio_manager = app.state::<AudioManagerHandle>();
-            let mut audio_manager = audio_manager.write();
-
-            audio_manager.switch_playback_device(
-                app.clone(),
-                audio_config,
-                device_type,
-                Some(Instant::now()),
-            )
-        };
-
-        if let Err(err) = res {
+    if in_restart_cooldown {
+        if !device_changed {
             log::error!(
-                "Failed to switch {device_type} device after failure: {:?}",
+                "Restarting {device_type} device after failure errored again within {RESTART_COOLDOWN:?}, cannot recover: {:?}",
                 err
             );
-
-            app.emit::<FrontendError>("error", Error::AudioDevice(Box::from(AudioError::Other(
-                anyhow::anyhow!("Audio {device_type} device failed to start irrecoverably, check your audio settings and restart the application.")
-            ))).into()).ok();
-
+            give_up(&app);
             return;
-        } else {
-            log::info!(
-                "Successfully restarted {device_type} device after failure, continuing playback"
-            );
         }
 
+        // The default device changed again right after a restart. The event
+        // does not tell us why (user switching quickly, a flapping device,
+        // Windows role-change bursts) - rebuilding is the only recovery either
+        // way, and a genuinely broken device still fails the rebuild below and
+        // hard-errors there. Rate-limit the rebuild instead of giving up.
+        if let Some(remaining) =
+            restarted_at.and_then(|t| RESTART_COOLDOWN.checked_sub(t.elapsed()))
+        {
+            tokio::time::sleep(remaining).await;
+        }
+    }
+
+    let state = app.state::<AppState>();
+    let mut state = state.lock().await;
+
+    if let Some(call_id) = state.active_call_id().cloned() {
+        log::debug!("Ending active call {call_id} due to playback stream error");
+
+        state.cleanup_call(&call_id).await;
+        if let Err(err) = state
+            .send_signaling_message(shared::CallError {
+                call_id,
+                reason: CallErrorReason::AudioFailure,
+                message: None,
+            })
+            .await
+        {
+            log::warn!("Failed to send call end signaling message: {:?}", err);
+        };
+        state.set_outgoing_call(None);
+        app.state::<AudioManagerHandle>()
+            .read()
+            .stop(SourceType::Ringback);
+
+        app.emit("signaling:call-end", &call_id).ok();
+    }
+
+    let res = {
+        let audio_manager = app.state::<AudioManagerHandle>();
+        let mut audio_manager = audio_manager.write();
+
+        audio_manager.switch_playback_device(
+            app.clone(),
+            audio_config,
+            device_type,
+            Some(Instant::now()),
+        )
+    };
+
+    if let Err(err) = res {
+        log::error!(
+            "Failed to switch {device_type} device after failure: {:?}",
+            err
+        );
+
+        give_up(&app);
+        return;
+    }
+
+    log::info!("Successfully restarted {device_type} device after failure, continuing playback");
+
+    // A rebuild after a device change is expected behavior; only surface
+    // actual stream failures to the user.
+    if !device_changed {
         app.emit::<FrontendError>(
             "error",
             FrontendError::from(Error::from(err)).non_critical(),

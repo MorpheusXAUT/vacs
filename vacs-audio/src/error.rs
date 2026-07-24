@@ -8,6 +8,8 @@ pub enum AudioError {
     UnsupportedConfig,
     #[error("Audio device is busy or access was denied")]
     DeviceBusyOrDenied,
+    #[error("Audio stream stopped because the audio device changed")]
+    StreamInvalidated,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
@@ -17,7 +19,10 @@ impl From<cpal::Error> for AudioError {
         use cpal::ErrorKind::*;
 
         match e.kind() {
-            DeviceNotAvailable | StreamInvalidated => AudioError::DeviceNotAvailable,
+            DeviceNotAvailable => AudioError::DeviceNotAvailable,
+            // Reported on default-following streams when the system default
+            // device changes; the stream is dead and must be rebuilt.
+            StreamInvalidated => AudioError::StreamInvalidated,
             UnsupportedConfig | InvalidInput => AudioError::UnsupportedConfig,
             DeviceBusy | PermissionDenied => AudioError::DeviceBusyOrDenied,
             // Transient dropped-samples events; the stream error callbacks
