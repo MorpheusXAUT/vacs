@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.5.1](https://github.com/vacs-project/vacs/compare/vacs-client-v2.5.0...vacs-client-v2.5.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **vacs-audio:** handle transient cpal Xrun errors gracefully ([57a6535](https://github.com/vacs-project/vacs/commit/57a65356d18c0b89fd89f24e2d5dc9a776c1a722))
+* **vacs-client:** fix startup failure on multi-channel devices under Windows ([c49e666](https://github.com/vacs-project/vacs/commit/c49e666049463a0724375981deeedc7f288201b6))
+* **vacs-client:** handle Windows default audio device switches gracefully ([7faa355](https://github.com/vacs-project/vacs/commit/7faa355ce103b6ac6283936861b3b0f73f522c2d))
+* **vacs-client:** only end calls if output audio device fails ([72284aa](https://github.com/vacs-project/vacs/commit/72284aaf6f17253b54ca4e2ab2e57ce0878c3a74))
+
 ## [2.5.0](https://github.com/vacs-project/vacs/compare/vacs-client-v2.4.0...vacs-client-v2.5.0) (2026-07-20)
 
 
