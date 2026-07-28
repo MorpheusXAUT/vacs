@@ -1,5 +1,77 @@
 # Changelog
 
+## [3.0.0](https://github.com/vacs-project/vacs/compare/vacs-client-v2.5.1...vacs-client-v3.0.0) (2026-07-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* implement station coverage calculations and calling ([#452](https://github.com/vacs-project/vacs/issues/452))
+* overhaul UI with geo/tabbed layout and station-based calling ([#531](https://github.com/vacs-project/vacs/issues/531))
+
+### Features
+
+* add custom button colors ([#707](https://github.com/vacs-project/vacs/issues/707)) ([b8b91ca](https://github.com/vacs-project/vacs/commit/b8b91ca6648c905e0f0385fa057c627151952952))
+* add priority calls ([#504](https://github.com/vacs-project/vacs/issues/504)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* add snow and azure custom button color ([#711](https://github.com/vacs-project/vacs/issues/711)) ([0f85d53](https://github.com/vacs-project/vacs/commit/0f85d53fe61a53addf894fef16382c486e746a38))
+* allow assignment of station ID to geo page button ([#641](https://github.com/vacs-project/vacs/issues/641)) ([8331800](https://github.com/vacs-project/vacs/commit/8331800cca0becdec44312c7a0e5aa29594e0dc1))
+* automatically set default call source for position ([#650](https://github.com/vacs-project/vacs/issues/650)) ([3e3f2e5](https://github.com/vacs-project/vacs/commit/3e3f2e51fe459aa97714071e1f3edc617f5b64b5))
+* implement station coverage calculations and calling ([#452](https://github.com/vacs-project/vacs/issues/452)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* overhaul UI with geo/tabbed layout and station-based calling ([#531](https://github.com/vacs-project/vacs/issues/531)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* update to latest cpal version with device ID handling ([#696](https://github.com/vacs-project/vacs/issues/696)) ([01ff105](https://github.com/vacs-project/vacs/commit/01ff105d50c40ccfaf7ae2c212f318e67df15360))
+* **vacs-audio:** enable native pipewire support on Linux ([1ad6051](https://github.com/vacs-project/vacs/commit/1ad6051eb69be3e5bd292b54894f73471f09dbd5))
+* **vacs-client:** add call start and end sounds ([#505](https://github.com/vacs-project/vacs/issues/505)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** add close button to settings and telephone page ([#736](https://github.com/vacs-project/vacs/issues/736)) ([a81082d](https://github.com/vacs-project/vacs/commit/a81082d4db3c6def6151540695ad740f2e9eaf42))
+* **vacs-client:** add fast couple functionality ([#925](https://github.com/vacs-project/vacs/issues/925)) ([a88d7e0](https://github.com/vacs-project/vacs/commit/a88d7e073a9d3dfca36f4053cfd63007e936f403))
+* **vacs-client:** add joystick support ([#1024](https://github.com/vacs-project/vacs/issues/1024)) ([3a8f911](https://github.com/vacs-project/vacs/commit/3a8f911862f0a1b91d3c4ebbebacae3c9a7edf3f))
+* **vacs-client:** add keybind for toggling radio prio ([#500](https://github.com/vacs-project/vacs/issues/500)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** add nsis uninstaller icon and header ([98a0461](https://github.com/vacs-project/vacs/commit/98a046109130d6c1582cd164e43d0ac7cbbafbc6))
+* **vacs-client:** add optional speaker device for chime and ui sounds ([#712](https://github.com/vacs-project/vacs/issues/712)) ([6041c88](https://github.com/vacs-project/vacs/commit/6041c8802b7cc9175e2270d8901b9917aaf3473f))
+* **vacs-client:** add playback of TrackAudio radio transmissions ([#900](https://github.com/vacs-project/vacs/issues/900)) ([8b8faeb](https://github.com/vacs-project/vacs/commit/8b8faeb8b406967350b38502f1980608ca2cad4f))
+* **vacs-client:** add remote control ([#614](https://github.com/vacs-project/vacs/issues/614)) ([149a245](https://github.com/vacs-project/vacs/commit/149a2458b01a19c1115120d8d0e800e714954fe4))
+* **vacs-client:** add trackaudio radio page ([#755](https://github.com/vacs-project/vacs/issues/755)) ([9e00ab8](https://github.com/vacs-project/vacs/commit/9e00ab8fbbb421824990d13a0f5440a812422fd1))
+* **vacs-client:** add window zoom hotkeys ([#522](https://github.com/vacs-project/vacs/issues/522)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** add zen modes to clock ([#678](https://github.com/vacs-project/vacs/issues/678)) ([f2e67cf](https://github.com/vacs-project/vacs/commit/f2e67cfbb10e404d8d11363bf9e1d8ecc4c3561b))
+* **vacs-client:** decouple radio integration from call mic mode ([#997](https://github.com/vacs-project/vacs/issues/997)) ([cbd4d02](https://github.com/vacs-project/vacs/commit/cbd4d0296f02ff71ac7ae91ec8a2a7a04c40152a))
+* **vacs-client:** implement AudioForVatsim playback recorder ([#1000](https://github.com/vacs-project/vacs/issues/1000)) ([26a11fd](https://github.com/vacs-project/vacs/commit/26a11fd880a617795a591a5975056e611b886a6e))
+* **vacs-client:** implement telephone directory ([#490](https://github.com/vacs-project/vacs/issues/490)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** improve list scroll ([#714](https://github.com/vacs-project/vacs/issues/714)) ([98886ea](https://github.com/vacs-project/vacs/commit/98886ea45a5298ce59d73e7aaa1fb1c1b3c46442))
+* **vacs-client:** sort telephone directory by position ID ([#656](https://github.com/vacs-project/vacs/issues/656)) ([d0844a2](https://github.com/vacs-project/vacs/commit/d0844a2faacc3373b06324e8feabead6d5084bd4))
+* **vacs-client:** track call status in call history list ([#776](https://github.com/vacs-project/vacs/issues/776)) ([4b4221d](https://github.com/vacs-project/vacs/commit/4b4221dca93f5732f476c586bdb89c5b0f2ce57a))
+* **vacs-server:** extend metrics to include call routing and coverage ([#624](https://github.com/vacs-project/vacs/issues/624)) ([e60a0a3](https://github.com/vacs-project/vacs/commit/e60a0a3a3cb5f029dfb6e2a0daf68e28ba28e424))
+
+
+### Bug Fixes
+
+* display seconds instead of current day in clock ([#605](https://github.com/vacs-project/vacs/issues/605)) ([3823760](https://github.com/vacs-project/vacs/commit/382376012c432cc8d028c34daf1ba93090c68548))
+* move third party licenses bundling to release config ([#602](https://github.com/vacs-project/vacs/issues/602)) ([b2627da](https://github.com/vacs-project/vacs/commit/b2627daed01f5aad466b19b179b09ec0b77869a6))
+* terminate session before reconnecting on connection loss ([#640](https://github.com/vacs-project/vacs/issues/640)) ([4e3f03e](https://github.com/vacs-project/vacs/commit/4e3f03ef0d77ff76b8d800ff429b9f981d60bb5c))
+* **vacs-client:** add cpl button to tabbed layout ([#800](https://github.com/vacs-project/vacs/issues/800)) ([69c309a](https://github.com/vacs-project/vacs/commit/69c309ad0c587fdd3800dd7b9fa1a8c7b49713e3))
+* **vacs-client:** fix client page config rendering ([#557](https://github.com/vacs-project/vacs/issues/557)) ([a32b781](https://github.com/vacs-project/vacs/commit/a32b781faa715b535ef89671cfdd04138e48bc00))
+* **vacs-client:** fix device switch mismatch in playback error handling ([#779](https://github.com/vacs-project/vacs/issues/779)) ([9a1ec97](https://github.com/vacs-project/vacs/commit/9a1ec9737e6dd72cf82b3185d535d07357274bed))
+* **vacs-client:** fix duplicate clients after VATSIM sync ([#625](https://github.com/vacs-project/vacs/issues/625)) ([24562be](https://github.com/vacs-project/vacs/commit/24562bed438517d3182addbd9900aa656d7a6968))
+* **vacs-client:** fix error while switching to exclusive audio device ([#498](https://github.com/vacs-project/vacs/issues/498)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** fix incorrect radio prio state when PTT is held across calls ([cbd4d02](https://github.com/vacs-project/vacs/commit/cbd4d0296f02ff71ac7ae91ec8a2a7a04c40152a))
+* **vacs-client:** fix initial position default source ([#757](https://github.com/vacs-project/vacs/issues/757)) ([005ab1d](https://github.com/vacs-project/vacs/commit/005ab1de71cbfbdd7a98f91b6c9873c4b60f0177))
+* **vacs-client:** fix random UI freezes under Wayland ([#747](https://github.com/vacs-project/vacs/issues/747)) ([0cf8f81](https://github.com/vacs-project/vacs/commit/0cf8f819809dd140a60e00f577e23b2d96ae6839))
+* **vacs-client:** fix remote call display sync after error ([#777](https://github.com/vacs-project/vacs/issues/777)) ([814e37c](https://github.com/vacs-project/vacs/commit/814e37c6e977941fce2294c2e980a17395109591))
+* **vacs-client:** fix subpage button color ([#771](https://github.com/vacs-project/vacs/issues/771)) ([be4050b](https://github.com/vacs-project/vacs/commit/be4050b1ada7449f1094ab67ea91d6bcf7a956c7))
+* **vacs-client:** fix sync logic and optimize settings store ([#911](https://github.com/vacs-project/vacs/issues/911)) ([9d3f9b6](https://github.com/vacs-project/vacs/commit/9d3f9b6a008603ef330cfa55b4d5ef7e91ad30b6))
+* **vacs-client:** fix volume preview playing on the wrong device ([#867](https://github.com/vacs-project/vacs/issues/867)) ([9828d52](https://github.com/vacs-project/vacs/commit/9828d5295bb04f9efbbdfaa21cc320fe71508ff3))
+* **vacs-client:** play call end sound when WebRTC peer disconnects ([#778](https://github.com/vacs-project/vacs/issues/778)) ([99d4821](https://github.com/vacs-project/vacs/commit/99d48212e3583571247e5e5b28ac0f193e8d1367))
+* **vacs-client:** prevent call queue from shrinking ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+* **vacs-client:** prevent page navigation when opening/closing menus ([#878](https://github.com/vacs-project/vacs/issues/878)) ([f1ad337](https://github.com/vacs-project/vacs/commit/f1ad337d3d70df5481510d93dfd009a85aff70c7))
+* **vacs-client:** prevent remote store sync from clobbering desktop state on client connect ([2cc8cf7](https://github.com/vacs-project/vacs/commit/2cc8cf7bd89edc6bc4b28da20fb639359a585836))
+* **vacs-client:** prioritize outgoing over incoming call state for phone button ([#631](https://github.com/vacs-project/vacs/issues/631)) ([d355383](https://github.com/vacs-project/vacs/commit/d355383f0f4756e4a141768828d77c80127e6458))
+* **vacs-client:** remove vitest globals and cleanup test setup ([195155a](https://github.com/vacs-project/vacs/commit/195155a2086f52eaffe22202ec3223b20c63080a))
+* **vacs-client:** terminate session before reconnecting on connection loss ([4e3f03e](https://github.com/vacs-project/vacs/commit/4e3f03ef0d77ff76b8d800ff429b9f981d60bb5c))
+* **vacs-client:** update button border colors for better contrast ([#850](https://github.com/vacs-project/vacs/issues/850)) ([8bc077c](https://github.com/vacs-project/vacs/commit/8bc077c3247e334f1724fb171f20d7de675b3e40))
+* **vacs-client:** update callsign regex to allow ATIS suffix while adding radio stations ([#903](https://github.com/vacs-project/vacs/issues/903)) ([c58169d](https://github.com/vacs-project/vacs/commit/c58169dd42f7ca6652950979edb7fd48a92e3797))
+* **vacs-client:** use correct directory of local app data on Windows ([#922](https://github.com/vacs-project/vacs/issues/922)) ([02a9f71](https://github.com/vacs-project/vacs/commit/02a9f713f5ec5c70600ed0faa1146cc885d7e5bf))
+* **vacs-client:** use position default source if stations refresh and no default source set ([005ab1d](https://github.com/vacs-project/vacs/commit/005ab1de71cbfbdd7a98f91b6c9873c4b60f0177))
+* **vacs-server:** correct station handoff handling in coverage state sync ([#630](https://github.com/vacs-project/vacs/issues/630)) ([5ed1aae](https://github.com/vacs-project/vacs/commit/5ed1aae0782454f001e2374c29a3c8de92442f99))
+* **vacs-server:** fix coverage calculations for VATSIM-only positions ([#550](https://github.com/vacs-project/vacs/issues/550)) ([5276570](https://github.com/vacs-project/vacs/commit/52765707c9a82b373affc5371dda7ef4ab2f7977))
+* **vacs-server:** ignore datafeed SUP connection ([#480](https://github.com/vacs-project/vacs/issues/480)) ([384131b](https://github.com/vacs-project/vacs/commit/384131bf18dbe8240602d6f4e0b226fb04effdf3))
+
 ## [2.5.1](https://github.com/vacs-project/vacs/compare/vacs-client-v2.5.0...vacs-client-v2.5.1) (2026-07-28)
 
 
