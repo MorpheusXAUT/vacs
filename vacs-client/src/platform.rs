@@ -16,6 +16,7 @@ pub struct Capabilities {
     pub always_on_top: bool,
     pub keybind_listener: bool,
     pub keybind_emitter: bool,
+    pub joystick: bool,
     pub playback: bool,
 
     pub platform: Platform,
@@ -58,6 +59,10 @@ impl Capabilities {
             always_on_top: !matches!(platform, Platform::LinuxWayland),
             keybind_listener,
             keybind_emitter: matches!(platform, Platform::Windows | Platform::MacOs),
+            // SDL's joystick subsystem needs no display server or special
+            // permissions on any supported platform; runtime failures surface
+            // (and are logged) when the joystick service is first used.
+            joystick: !matches!(platform, Platform::Unknown),
             playback,
             platform,
         }

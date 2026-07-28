@@ -1,19 +1,20 @@
 import KeyCapture from "./KeyCapture.tsx";
-import {codeToLabel} from "../../types/transmit.ts";
+import {InputBinding, inputToLabel} from "../../types/transmit.ts";
 import {useEffect, useState} from "preact/hooks";
 import {KeybindsConfig, KeybindType} from "../../types/keybinds.ts";
 import {invokeStrict} from "../../error.ts";
 import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
 import SettingsSubPage from "./SettingsSubPage.tsx";
 import ExternalKeybindField from "./ExternalKeybindField.tsx";
+import KeybindPageActions from "./KeybindPageActions.tsx";
 
 type Keybind = {
-    code: string | null;
+    input: InputBinding | null;
     label: string | null;
 };
 
-async function codeToKeybind(code: string | null): Promise<Keybind> {
-    return {code, label: code && (await codeToLabel(code))};
+async function inputToKeybind(input: InputBinding | null): Promise<Keybind> {
+    return {input, label: input && (await inputToLabel(input))};
 }
 
 function HotkeysConfigPage() {
@@ -25,9 +26,9 @@ function HotkeysConfigPage() {
         const fetchConfig = async () => {
             try {
                 const config = await invokeStrict<KeybindsConfig>("keybinds_get_keybinds_config");
-                setAcceptCall(await codeToKeybind(config.acceptCall));
-                setEndCall(await codeToKeybind(config.endCall));
-                setToggleRadioPrio(await codeToKeybind(config.toggleRadioPrio));
+                setAcceptCall(await inputToKeybind(config.acceptCall));
+                setEndCall(await inputToKeybind(config.endCall));
+                setToggleRadioPrio(await inputToKeybind(config.toggleRadioPrio));
             } catch {}
         };
 
@@ -35,7 +36,12 @@ function HotkeysConfigPage() {
     }, []);
 
     return (
-        <SettingsSubPage title="Hotkeys Config" width="w-1/2" className="py-3 px-4">
+        <SettingsSubPage
+            title="Hotkeys Config"
+            width="w-1/2"
+            actions={<KeybindPageActions />}
+            className="py-3 px-4"
+        >
             <div className="grid grid-cols-[auto_1fr] gap-4 items-center">
                 <KeybindField
                     type="AcceptCall"
@@ -70,10 +76,10 @@ type KeybindFieldProps = {
 function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
     const hasExternal = useCapabilitiesStore(state => state.platform === "LinuxWayland");
 
-    const handleOnCapture = async (code: string | null) => {
+    const handleOnCapture = async (input: InputBinding | null) => {
         try {
-            await invokeStrict("keybinds_set_binding", {keybind: type, code});
-            setKeybind(await codeToKeybind(code));
+            await invokeStrict("keybinds_set_binding", {keybind: type, input});
+            setKeybind(await inputToKeybind(input));
         } catch {}
     };
 
@@ -81,7 +87,13 @@ function KeybindField({type, label, keybind, setKeybind}: KeybindFieldProps) {
         <>
             <p>{label}</p>
             {hasExternal ? (
-                <ExternalKeybindField type={type} />
+                <ExternalKeybindField
+                    type={type}
+                    binding={keybind?.input ?? null}
+                    bindingLabel={keybind?.label ?? null}
+                    onCapture={handleOnCapture}
+                    onRemove={() => handleOnCapture(null)}
+                />
             ) : keybind !== undefined ? (
                 <KeyCapture
                     label={keybind.label}

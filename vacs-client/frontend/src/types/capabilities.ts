@@ -5,6 +5,7 @@ export type Capabilities = {
     alwaysOnTop: boolean;
     keybindListener: boolean;
     keybindEmitter: boolean;
+    joystick: boolean;
     playback: boolean;
     platform: Platform;
 };

@@ -54,7 +54,7 @@ pub async fn radio_set_config(
     radio_handle.write().take();
 
     // The recorder outlives the radio it was gating on: left running, it would keep capturing
-    // with the dead radio's stale event stream — forever, if the new integration is one
+    // with the dead radio's stale event stream - forever, if the new integration is one
     // `make_source` doesn't support and thus never re-creates it. `shutdown` cancels the
     // recorder's background task and awaits its exit, including the underlying source's
     // capture teardown.

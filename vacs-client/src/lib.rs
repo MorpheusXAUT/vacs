@@ -26,6 +26,7 @@ use crate::build::VersionInfo;
 use crate::config::{CLIENT_SETTINGS_FILE_NAME, Persistable};
 use crate::error::{StartupError, StartupErrorExt};
 use crate::keybinds::engine::KeybindEngineHandle;
+use crate::keybinds::joystick::{JoystickService, JoystickServiceHandle};
 use crate::platform::Capabilities;
 use crate::playback::recorder::PlaybackRecorderHandle;
 use crate::radio::RadioHandle;
@@ -115,7 +116,15 @@ pub fn run() {
 
                 app.manage::<RadioHandle>(radio);
 
-                if capabilities.keybind_listener || capabilities.keybind_emitter {
+                // Managed before the engine is configured: KeybindEngine::start
+                // subscribes to the joystick service when a button binding exists.
+                app.manage::<JoystickServiceHandle>(JoystickService::new());
+                app.manage::<keybinds::commands::JoystickCaptureState>(Default::default());
+
+                if capabilities.keybind_listener
+                    || capabilities.keybind_emitter
+                    || capabilities.joystick
+                {
                     keybind_engine
                         .write()
                         .await
@@ -185,8 +194,12 @@ pub fn run() {
             auth::commands::auth_check_session,
             auth::commands::auth_logout,
             auth::commands::auth_open_oauth_url,
+            keybinds::commands::keybinds_cancel_joystick_capture,
+            keybinds::commands::keybinds_capture_joystick_button,
             keybinds::commands::keybinds_get_external_binding,
             keybinds::commands::keybinds_get_keybinds_config,
+            keybinds::commands::keybinds_list_joystick_devices,
+            keybinds::commands::keybinds_set_ignored_joysticks,
             keybinds::commands::keybinds_get_transmit_config,
             keybinds::commands::keybinds_is_portal_shortcut_bound,
             keybinds::commands::keybinds_open_system_shortcuts_settings,
@@ -253,6 +266,7 @@ pub fn run() {
                     }
 
                     app_handle.state::<KeybindEngineHandle>().write().await.shutdown();
+                    app_handle.state::<JoystickServiceHandle>().shutdown().await;
                     app_handle.state::<RadioHandle>().write().take();
 
                     app_handle

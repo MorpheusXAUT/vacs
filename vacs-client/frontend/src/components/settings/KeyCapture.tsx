@@ -1,13 +1,23 @@
 import {clsx} from "clsx";
 import {useCallback, useEffect, useRef, useState} from "preact/hooks";
-import {invokeSafe} from "../../error.ts";
+import {invokeSafe, invokeStrict} from "../../error.ts";
+import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
+import {InputBinding, JoystickButton} from "../../types/transmit.ts";
 
 type KeyCaptureProps = {
     label: string | null;
     className?: string;
-    onCapture: (code: string) => Promise<void>;
+    onCapture: (input: InputBinding) => Promise<void>;
     onRemove: () => Promise<void>;
     disabled?: boolean;
+    /// Disable the remove button even when a label is shown (e.g. when the
+    /// label displays an externally managed binding that cannot be removed).
+    removeDisabled?: boolean;
+    /// Capture keyboard keys. Defaults to the keybindListener capability, so
+    /// platforms without global keyboard capture (X11) get joystick-only fields.
+    keyboardEnabled?: boolean;
+    /// Capture joystick buttons (additionally requires the joystick capability).
+    joystickEnabled?: boolean;
 };
 
 // On Windows, pressing the physical AltGr/right-Alt key makes the browser fire a synthetic
@@ -18,17 +28,26 @@ const CONTROL_LEFT_DEBOUNCE_MS = 50;
 
 function KeyCapture(props: KeyCaptureProps) {
     const {onCapture} = props;
+    const capKeybindListener = useCapabilitiesStore(state => state.keybindListener);
+    const capJoystick = useCapabilitiesStore(state => state.joystick);
     const [capturing, setCapturing] = useState<boolean>(false);
     const keySelectRef = useRef<HTMLDivElement | null>(null);
-    const captureTimerRef = useRef<number | undefined>(undefined);
+    const captureDebounceTimerRef = useRef<number | undefined>(undefined);
+    // Incremented on every capture start/stop so a joystick capture resolving
+    // after the capture UI closed (or a newer capture started) is ignored.
+    const captureGenerationRef = useRef<number>(0);
 
-    const isRemoveDisabled = props.disabled || props.label === null;
+    const keyboardEnabled = props.keyboardEnabled ?? capKeybindListener;
+    const joystickEnabled = (props.joystickEnabled ?? true) && capJoystick;
+
+    const isRemoveDisabled = props.disabled || props.removeDisabled || props.label === null;
 
     const commitCapture = useCallback(
-        async (code: string) => {
-            captureTimerRef.current = undefined;
+        async (input: InputBinding) => {
+            captureDebounceTimerRef.current = undefined;
+            captureGenerationRef.current++;
             try {
-                await onCapture(code);
+                await onCapture(input);
             } finally {
                 setCapturing(false);
             }
@@ -54,10 +73,10 @@ function KeyCapture(props: KeyCaptureProps) {
                 code = event.key;
             }
 
-            window.clearTimeout(captureTimerRef.current);
+            window.clearTimeout(captureDebounceTimerRef.current);
 
             if (code === "ControlLeft") {
-                captureTimerRef.current = window.setTimeout(() => {
+                captureDebounceTimerRef.current = window.setTimeout(() => {
                     void commitCapture(code);
                 }, CONTROL_LEFT_DEBOUNCE_MS);
                 return;
@@ -98,20 +117,74 @@ function KeyCapture(props: KeyCaptureProps) {
     useEffect(() => {
         if (!capturing) return;
 
-        document.addEventListener("keydown", handleKeyDownEvent);
-        document.addEventListener("keyup", preventKeyUpEvent);
+        const generation = ++captureGenerationRef.current;
+        const captureId = crypto.randomUUID();
+        // Cleared by the cleanup so a joystick capture resolving after this
+        // session ended is dropped; the generation guards the same within an
+        // active session, where a keyboard key may commit first.
+        let active = true;
+
+        if (keyboardEnabled) {
+            document.addEventListener("keydown", handleKeyDownEvent);
+            document.addEventListener("keyup", preventKeyUpEvent);
+        }
         document.addEventListener("click", handleClickOutside);
+
+        if (joystickEnabled) {
+            // The webview cannot observe joystick input (and would not receive it
+            // while unfocused anyway), so the backend captures the next pressed
+            // button for us. Resolves with null on timeout or cancellation; on
+            // timeout we re-arm as long as this capture session is still active.
+            const captureLoop = async () => {
+                try {
+                    const button = await invokeStrict<JoystickButton | null>(
+                        "keybinds_capture_joystick_button",
+                        {captureId},
+                    );
+
+                    if (!active || captureGenerationRef.current !== generation) return;
+
+                    if (button === null) {
+                        void captureLoop();
+                        return;
+                    }
+
+                    void commitCapture(button);
+                } catch {}
+            };
+            void captureLoop();
+        }
 
         return () => {
             if (capturing) {
-                document.removeEventListener("keydown", handleKeyDownEvent);
-                document.removeEventListener("keyup", preventKeyUpEvent);
+                active = false;
+                if (keyboardEnabled) {
+                    document.removeEventListener("keydown", handleKeyDownEvent);
+                    document.removeEventListener("keyup", preventKeyUpEvent);
+                }
                 document.removeEventListener("click", handleClickOutside);
-                window.clearTimeout(captureTimerRef.current);
-                captureTimerRef.current = undefined;
+                window.clearTimeout(captureDebounceTimerRef.current);
+                captureDebounceTimerRef.current = undefined;
+                if (joystickEnabled) {
+                    void invokeSafe("keybinds_cancel_joystick_capture", {captureId});
+                }
             }
         };
-    }, [capturing, handleKeyDownEvent, handleClickOutside]);
+    }, [
+        capturing,
+        keyboardEnabled,
+        joystickEnabled,
+        handleKeyDownEvent,
+        handleClickOutside,
+        commitCapture,
+    ]);
+
+    const capturePrompt =
+        keyboardEnabled && joystickEnabled
+            ? "Press key or button"
+            : joystickEnabled
+              ? "Press a button"
+              : "Press your key";
 
     return (
         <div className="grow h-full min-w-0 flex flex-row items-center justify-center">
@@ -128,8 +201,8 @@ function KeyCapture(props: KeyCaptureProps) {
                     props.className,
                 )}
             >
-                <p className="truncate max-w-full">
-                    {capturing ? "Press your key" : (props.label ?? "Not bound")}
+                <p className="truncate max-w-full" title={props.label ?? undefined}>
+                    {capturing ? capturePrompt : (props.label ?? "Not bound")}
                 </p>
             </div>
             <svg

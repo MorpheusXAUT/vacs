@@ -1,24 +1,21 @@
 use crate::keybinds::runtime::{KeybindEmitter, KeybindListener};
 use crate::keybinds::{KeyEvent, KeybindsError};
 use keyboard_types::{Code, KeyState};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug)]
 #[allow(dead_code)]
-pub struct NoopKeybindListener {
-    _tx: UnboundedSender<KeyEvent>,
-}
+pub struct NoopKeybindListener;
 
 impl KeybindListener for NoopKeybindListener {
-    async fn start() -> Result<(Self, UnboundedReceiver<KeyEvent>), KeybindsError>
+    async fn start(_key_event_tx: UnboundedSender<KeyEvent>) -> Result<Self, KeybindsError>
     where
         Self: Sized,
     {
         log::warn!(
-            "No keybind listener available, using stub noop implementation. Your selected keybinds will not work!"
+            "No global keyboard listener available on this platform, using stub noop implementation. Keyboard keybinds will not work; joystick bindings are unaffected."
         );
-        let (tx, rx) = unbounded_channel();
-        Ok((Self { _tx: tx }, rx))
+        Ok(Self)
     }
 }
 
@@ -32,7 +29,7 @@ impl KeybindEmitter for NoopKeybindEmitter {
         Self: Sized,
     {
         log::warn!(
-            "No keybind emitter available, using stub noop implementation. Your selected keybinds will not work!"
+            "No keybind emitter available on this platform, using stub noop implementation. Emitting keys to external applications (AudioForVatsim radio integration) will not work."
         );
         Ok(Self)
     }

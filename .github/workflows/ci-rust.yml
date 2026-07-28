@@ -21,7 +21,7 @@ jobs:
     continue-on-error: ${{ matrix.checks == 'advisories' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -42,7 +42,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -59,7 +59,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -80,7 +80,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -98,6 +98,12 @@ jobs:
 
       - name: Tests
         run: cargo test --locked --workspace --all-targets --all-features
+
+      # The joystick service roundtrip drives SDL's event loop with a virtual
+      # device and is #[ignore]d to keep regular test runs hermetic; execute it
+      # explicitly (no hardware or display required).
+      - name: Joystick service end-to-end tests
+        run: cargo test --locked -p vacs-client --all-features virtual_joystick -- --include-ignored
 
       - name: Summary
         run: echo "### ✅ Tests - all workspace tests passed" >> $GITHUB_STEP_SUMMARY
@@ -124,7 +130,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -137,6 +143,10 @@ jobs:
         run: |
           brew update
           brew install opus
+
+      - name: Install build dependencies (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: ./.github/actions/install-windows-deps
 
       - name: Rust toolchain
         run: |

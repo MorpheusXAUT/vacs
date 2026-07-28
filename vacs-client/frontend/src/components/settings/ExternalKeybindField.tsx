@@ -1,29 +1,51 @@
-import {KeybindType} from "../../types/keybinds.ts";
-import {useEffect, useState} from "preact/hooks";
-import {useAsyncDebounce} from "../../hooks/debounce-hook.ts";
-import {invokeSafe, invokeStrict} from "../../error.ts";
 import {clsx} from "clsx";
+import {useEffect, useState} from "preact/hooks";
+import {invokeStrict} from "../../error.ts";
+import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
+import {KeybindType} from "../../types/keybinds.ts";
+import {InputBinding, isJoystickButton} from "../../types/transmit.ts";
+import KeyCapture from "./KeyCapture.tsx";
 
-type ExternalKeybindFieldProps = {type: KeybindType | null; className?: string; disabled?: boolean};
+type ExternalKeybindFieldProps = {
+    type: KeybindType | null;
+    binding: InputBinding | null;
+    bindingLabel: string | null;
+    className?: string;
+    disabled?: boolean;
+    onCapture: (input: InputBinding) => Promise<void>;
+    onRemove: () => Promise<void>;
+};
 
-function ExternalKeybindField({type, className, disabled = false}: ExternalKeybindFieldProps) {
-    const [binding, setBinding] = useState<string | null | undefined>(undefined);
-
-    const handleOpenSystemShortcutsOnClick = useAsyncDebounce(async () => {
-        if (type === null || disabled) return;
-
-        await invokeSafe("keybinds_open_system_shortcuts_settings");
-    });
+// Wayland keybind field: keyboard shortcuts are managed by the desktop
+// environment (XDG portal) and can only be inspected here, while joystick
+// buttons are captured in-app. A bound joystick button replaces the portal
+// shortcut for the action, so the field always shows the active trigger;
+// removing the button falls back to the portal shortcut.
+function ExternalKeybindField({
+    type,
+    binding,
+    bindingLabel,
+    className,
+    disabled = false,
+    onCapture,
+    onRemove,
+}: ExternalKeybindFieldProps) {
+    const capJoystick = useCapabilitiesStore(state => state.joystick);
+    const [externalBinding, setExternalBinding] = useState<string | null>(null);
+    const hasJoystickBinding = isJoystickButton(binding);
 
     useEffect(() => {
         const fetchExternalBinding = async () => {
-            if (type === null) return;
+            if (type === null) {
+                setExternalBinding(null);
+                return;
+            }
 
             try {
                 const binding = await invokeStrict<string | null>("keybinds_get_external_binding", {
                     keybind: type,
                 });
-                setBinding(binding);
+                setExternalBinding(binding);
             } catch {}
         };
 
@@ -31,23 +53,15 @@ function ExternalKeybindField({type, className, disabled = false}: ExternalKeybi
     }, [type]);
 
     return (
-        <div
-            onClick={handleOpenSystemShortcutsOnClick}
-            title={
-                type === null || disabled
-                    ? ""
-                    : "On Wayland, shortcuts are managed by the system. Please configure the shortcut in your desktop environment settings. Click this field to try opening the appropriate system settings."
-            }
-            className={clsx(
-                "w-full h-full min-w-10 min-h-8 grow text-sm py-1 px-2 rounded text-center flex items-center justify-center",
-                "bg-gray-300 border-2 border-t-gray-100 border-l-gray-100 border-r-gray-700 border-b-gray-700",
-                "brightness-90",
-                type === null || disabled ? "cursor-not-allowed" : "cursor-help",
-                className,
-            )}
-        >
-            <p className="truncate max-w-full">{type === null ? "" : binding || "Not bound"}</p>
-        </div>
+        <KeyCapture
+            label={hasJoystickBinding ? bindingLabel : (externalBinding ?? null)}
+            className={clsx(!hasJoystickBinding && "text-gray-500", className)}
+            keyboardEnabled={false}
+            disabled={disabled || !capJoystick}
+            removeDisabled={!hasJoystickBinding}
+            onCapture={onCapture}
+            onRemove={onRemove}
+        />
     );
 }
 

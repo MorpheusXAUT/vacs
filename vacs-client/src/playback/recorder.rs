@@ -179,7 +179,7 @@ impl PlaybackRecorder {
 }
 
 /// Best-effort fallback for recorders dropped without an explicit [`PlaybackRecorder::shutdown`]
-/// call. `drop` can't await the background task's exit, so this only requests cancellation —
+/// call. `drop` can't await the background task's exit, so this only requests cancellation -
 /// callers that need the underlying [`PlaybackSource`] to have released its resources by the
 /// time they continue must call `shutdown` instead.
 impl Drop for PlaybackRecorder {

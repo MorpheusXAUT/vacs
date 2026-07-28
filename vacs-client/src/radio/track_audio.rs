@@ -96,7 +96,7 @@ impl TrackAudioRadio {
 
     /// Independent, cloneable handle to this radio's event stream. Safe for long-lived
     /// consumers (e.g. the playback recorder) to hold onto without keeping the radio itself
-    /// alive — subscribing via the returned `Sender` doesn't require the radio to still exist.
+    /// alive - subscribing via the returned `Sender` doesn't require the radio to still exist.
     #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
     pub fn events(&self) -> broadcast::Sender<trackaudio::Event> {
         self.events_tx.clone()

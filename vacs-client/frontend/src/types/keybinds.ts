@@ -1,12 +1,27 @@
-import {CallMicMode} from "./transmit.ts";
+import {CallMicMode, InputBinding} from "./transmit.ts";
 
 export type KeybindType =
     "PushToTalk" | "PushToMute" | "RadioPushToTalk" | "AcceptCall" | "EndCall" | "ToggleRadioPrio";
 
+/// A joystick device identified by its stable SDL GUID. `name` is the
+/// last-seen device name, kept for display while the device is unplugged.
+export type JoystickDevice = {
+    device: string;
+    name?: string;
+};
+
+/// A joystick device with its presence and capture-ignore state, as returned
+/// by keybinds_list_joystick_devices: all connected devices plus ignored ones
+/// that are currently unplugged.
+export type JoystickDeviceEntry = JoystickDevice & {
+    connected: boolean;
+    ignored: boolean;
+};
+
 export type KeybindsConfig = {
-    acceptCall: string | null;
-    endCall: string | null;
-    toggleRadioPrio: string | null;
+    acceptCall: InputBinding | null;
+    endCall: InputBinding | null;
+    toggleRadioPrio: InputBinding | null;
 };
 
 export function callMicModeToKeybind(mode: CallMicMode): KeybindType | null {

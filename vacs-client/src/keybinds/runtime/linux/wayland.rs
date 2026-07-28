@@ -18,21 +18,13 @@
 //! - GNOME (via `xdg-desktop-portal-gnome`)
 //! - Hyprland (via `xdg-desktop-portal-hyprland`)
 //!
-//! ## Code Mapping Strategy
+//! ## Semantic Events
 //!
 //! The portal allows complex key combinations (e.g., `Ctrl+Alt+Shift+P`) that cannot be
-//! represented as a single `keyboard_types::Code`. To work around this, we map each
-//! transmit mode to a unique function key:
-//!
-//! - `ToggleRadioPrio` → `Code::F31`
-//! - `CallControl` → `Code::F32`
-//! - `PushToTalk` → `Code::F33`
-//! - `PushToMute` → `Code::F34`
-//! - `RadioPushToTalk` → `Code::F35`
-//!
-//! These keys don't exist on most keyboards, avoiding conflicts with user input. When the
-//! portal activates a shortcut, we emit the corresponding F-key code, and the rest of the
-//! keybind engine works unchanged.
+//! represented as a single `keyboard_types::Code`. Portal activations are therefore
+//! forwarded as semantic [`Trigger::Portal`](crate::keybinds::Trigger) events carrying
+//! the activated [`PortalAction`], which the keybind engine matches directly against
+//! the active trigger set - no physical key identity is involved.
 //!
 //! ## User Experience
 //!
@@ -46,9 +38,8 @@ mod listener;
 pub use listener::*;
 use std::collections::HashMap;
 
-use crate::keybinds::Keybind;
+use crate::keybinds::{Keybind, PortalAction};
 use ashpd::desktop::global_shortcuts::NewShortcut;
-use keyboard_types::Code;
 use parking_lot::RwLock;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -149,28 +140,14 @@ impl From<PortalShortcutId> for NewShortcut {
     }
 }
 
-impl From<PortalShortcutId> for Code {
+impl From<PortalShortcutId> for PortalAction {
     fn from(value: PortalShortcutId) -> Self {
         match value {
-            PortalShortcutId::ToggleRadioPrio => Code::F31,
-            PortalShortcutId::CallControl => Code::F32,
-            PortalShortcutId::PushToTalk => Code::F33,
-            PortalShortcutId::PushToMute => Code::F34,
-            PortalShortcutId::RadioPushToTalk => Code::F35,
-        }
-    }
-}
-
-impl TryFrom<Code> for PortalShortcutId {
-    type Error = String;
-    fn try_from(value: Code) -> Result<Self, Self::Error> {
-        match value {
-            Code::F31 => Ok(PortalShortcutId::ToggleRadioPrio),
-            Code::F32 => Ok(PortalShortcutId::CallControl),
-            Code::F33 => Ok(PortalShortcutId::PushToTalk),
-            Code::F34 => Ok(PortalShortcutId::PushToMute),
-            Code::F35 => Ok(PortalShortcutId::RadioPushToTalk),
-            _ => Err(format!("unknown portal shortcut code {value}")),
+            PortalShortcutId::PushToTalk => PortalAction::PushToTalk,
+            PortalShortcutId::PushToMute => PortalAction::PushToMute,
+            PortalShortcutId::RadioPushToTalk => PortalAction::RadioPushToTalk,
+            PortalShortcutId::CallControl => PortalAction::CallControl,
+            PortalShortcutId::ToggleRadioPrio => PortalAction::ToggleRadioPrio,
         }
     }
 }
@@ -199,13 +176,24 @@ pub async fn is_portal_shortcut_bound(shortcut_id: PortalShortcutId) -> bool {
 
     let shortcuts = Arc::new(RwLock::new(HashMap::new()));
 
-    match check_existing_shortcuts(&proxy, &session, &mut None, &shortcuts).await {
-        Ok(needs_bind) => needs_bind,
+    let bound = match check_existing_shortcuts(&proxy, &session, &mut None, &shortcuts).await {
+        Ok(_) => shortcuts.read().contains_key(&shortcut_id),
         Err(err) => {
             log::error!("Failed to check existing Wayland Global Shortcuts: {err}");
-            return false;
+            false
         }
     };
 
-    shortcuts.read().contains_key(&shortcut_id)
+    // This session only exists for the duration of the query. It must be closed
+    // explicitly: the portal keeps leaked sessions alive and re-emits every
+    // shortcut signal once per session, so each leak would deliver an extra
+    // duplicate of all future Activated/Deactivated/ShortcutsChanged signals to
+    // the real listener.
+    match tokio::time::timeout(std::time::Duration::from_secs(2), session.close()).await {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => log::warn!("Failed to close global shortcuts query session: {err}"),
+        Err(_) => log::warn!("Timed out closing global shortcuts query session"),
+    }
+
+    bound
 }

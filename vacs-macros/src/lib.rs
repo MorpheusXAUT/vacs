@@ -8,13 +8,24 @@ use syn::{
 #[proc_macro_attribute]
 pub fn log_err(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as ItemFn);
+    match expand_log_err(input_fn) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
 
+fn expand_log_err(input_fn: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
     let ItemFn {
         attrs,
         vis,
         sig,
         block,
+        modifiers,
     } = input_fn;
+
+    // `FnModifiers` is non-exhaustive and has no `ToTokens`, so anything it captures (today only
+    // `default fn`) would be dropped silently when we re-emit the function. Reject it instead.
+    modifiers.require_empty()?;
 
     let fn_name = &sig.ident;
     let is_async = sig.asyncness.is_some();
@@ -47,12 +58,10 @@ pub fn log_err(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let output = quote! {
+    Ok(quote! {
         #(#attrs)*
         #vis #sig #wrapped_body
-    };
-
-    output.into()
+    })
 }
 
 /// How a field is mapped from a persisted config struct to its camelCase `Frontend*` mirror.
@@ -214,4 +223,140 @@ fn option_inner_ident(ty: &Type) -> syn::Result<Ident> {
         ty,
         "#[frontend(nested)] requires a field of type `Option<Inner>`",
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::ToTokens;
+    use syn::parse_quote;
+
+    /// The generated `Frontend*` struct, pulled back out of the expansion.
+    fn frontend_struct(input: DeriveInput) -> syn::ItemStruct {
+        let expanded = expand_frontend(input).expect("expansion succeeds");
+        let file: syn::File = syn::parse2(expanded).expect("expansion parses as Rust");
+        file.items
+            .into_iter()
+            .find_map(|item| match item {
+                syn::Item::Struct(item) => Some(item),
+                _ => None,
+            })
+            .expect("expansion contains a struct")
+    }
+
+    fn field_types(item: &syn::ItemStruct) -> Vec<(String, String)> {
+        item.fields
+            .iter()
+            .map(|field| {
+                (
+                    field.ident.as_ref().expect("named field").to_string(),
+                    field.ty.to_token_stream().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn log_err_wraps_a_sync_function() {
+        let expanded = expand_log_err(parse_quote! {
+            pub fn connect(&self) -> Result<(), Error> { inner() }
+        })
+        .expect("expansion succeeds");
+
+        let parsed: ItemFn = syn::parse2(expanded.clone()).expect("output is still a function");
+        assert_eq!(parsed.sig.ident, "connect");
+        assert!(parsed.sig.asyncness.is_none());
+
+        let tokens = expanded.to_string();
+        assert!(tokens.contains("log :: error !"), "{tokens}");
+        assert!(!tokens.contains("await"), "{tokens}");
+    }
+
+    #[test]
+    fn log_err_awaits_an_async_function() {
+        let expanded = expand_log_err(parse_quote! {
+            async fn connect(&self) -> Result<(), Error> { inner().await }
+        })
+        .expect("expansion succeeds");
+
+        let parsed: ItemFn = syn::parse2(expanded.clone()).expect("output is still a function");
+        assert!(parsed.sig.asyncness.is_some());
+        assert!(expanded.to_string().contains(". await"));
+    }
+
+    #[test]
+    fn log_err_rejects_modifiers_it_cannot_reemit() {
+        // syn 3 parks `default fn` in `FnModifiers`, which we cannot re-emit; the macro must say
+        // so rather than silently drop the keyword.
+        let mut input: ItemFn = parse_quote! {
+            fn connect(&self) -> Result<(), Error> { inner() }
+        };
+        input.modifiers.defaultness = Some(Default::default());
+
+        let err = expand_log_err(input).expect_err("modifiers are rejected");
+        assert!(err.to_string().contains("modifier"), "{err}");
+    }
+
+    #[test]
+    fn frontend_mirrors_named_fields() {
+        let item = frontend_struct(parse_quote! {
+            pub struct AudioConfig {
+                pub volume: f32,
+                #[frontend(key)]
+                pub push_to_talk: Option<Code>,
+                #[frontend(nested)]
+                pub radio: Option<RadioConfig>,
+                #[frontend(skip)]
+                pub device_id: usize,
+            }
+        });
+
+        assert_eq!(item.ident, "FrontendAudioConfig");
+
+        let fields = field_types(&item);
+        let names: Vec<&str> = fields.iter().map(|(name, _)| name.as_str()).collect();
+        // `device_id` is skipped, so it must not reach the frontend mirror.
+        assert_eq!(names, ["volume", "push_to_talk", "radio"]);
+
+        assert_eq!(fields[0].1, "f32");
+        assert!(fields[1].1.contains("String"), "{}", fields[1].1);
+        assert!(
+            fields[2].1.contains("FrontendRadioConfig"),
+            "{}",
+            fields[2].1
+        );
+    }
+
+    #[test]
+    fn frontend_rejects_non_structs() {
+        let err = expand_frontend(parse_quote! {
+            enum Config { A }
+        })
+        .expect_err("enums are rejected");
+        assert!(err.to_string().contains("structs"), "{err}");
+    }
+
+    #[test]
+    fn frontend_nested_requires_an_option() {
+        let err = expand_frontend(parse_quote! {
+            struct Config {
+                #[frontend(nested)]
+                radio: RadioConfig,
+            }
+        })
+        .expect_err("a bare inner type is rejected");
+        assert!(err.to_string().contains("Option<Inner>"), "{err}");
+    }
+
+    #[test]
+    fn frontend_rejects_unknown_attribute_arguments() {
+        let err = expand_frontend(parse_quote! {
+            struct Config {
+                #[frontend(bogus)]
+                volume: f32,
+            }
+        })
+        .expect_err("unknown arguments are rejected");
+        assert!(err.to_string().contains("expected one of"), "{err}");
+    }
 }

@@ -68,13 +68,30 @@ regex = "1.12.3"
 reqwest = { version = "0.13.4", features = ["cookies", "json", "query", "rustls"] }
 rfd = { version = "0.17.2", features = ["common-controls-v6"] }
 ringbuf = "0.5.0"
-rubato = "3.0.0"
+rubato = "4.0.0"
 rustls = { version = "0.23.40", features = ["aws-lc-rs"] }
+sdl3 = { version = "0.18.4", features = ["build-from-source-static"] }
+# Slim the vendored SDL3 static build down to the joystick subsystem (we use SDL solely
+# for global joystick button capture); notably no-sdl-video avoids X11/Wayland build deps.
+sdl3-sys = { version = "0.6.7", features = [
+    # Required for a video-less build on Linux; no effect on Windows/macOS.
+    "sdl-unix-console-build",
+    "no-sdl-video",
+    "no-sdl-audio",
+    "no-sdl-gpu",
+    "no-sdl-render",
+    "no-sdl-camera",
+    "no-sdl-haptic",
+    "no-sdl-power",
+    "no-sdl-sensor",
+    "no-sdl-dialog",
+    "no-sdl-tray",
+] }
 semver = { version = "1.0.28", features = ["serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.150"
 sha1 = "0.11.0"
-syn = { version = "2.0.117", features = ["full"] }
+syn = { version = "3.0.2", features = ["full"] }
 sysinfo = "0.39.3"
 tar = "0.4.46"
 tauri = "2.11.2"
@@ -137,3 +154,11 @@ cpal = { git = "https://github.com/RustAudio/cpal", rev = "23ec3f74d0a05166e896f
 
 [workspace.lints.clippy]
 semicolon-if-nothing-returned = "warn"
+
+# Build the vendored SDL3 with release settings even in dev builds. The cmake
+# crate maps opt-level 0 to CMAKE_BUILD_TYPE=Debug, which on MSVC compiles SDL
+# against the debug CRT (/MDd) and conflicts with the release CRT rustc always
+# links (LNK4098). SDL is a C dependency we never step through anyway.
+[profile.dev.package.sdl3-sys]
+opt-level = 2
+debug = false

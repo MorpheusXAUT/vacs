@@ -2,8 +2,10 @@ import {invokeStrict} from "../../error.ts";
 import {useCapabilitiesStore} from "../../stores/capabilities-store.ts";
 import {callMicModeToKeybind} from "../../types/keybinds.ts";
 import {
+    InputBinding,
     TransmitConfig,
     TransmitConfigWithLabels,
+    inputEquals,
     isCallMicMode,
     withTransmitLabels,
 } from "../../types/transmit.ts";
@@ -19,20 +21,20 @@ type CallMicModeSettingsProps = {
 function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSettingsProps) {
     const capPlatform = useCapabilitiesStore(state => state.platform);
 
-    const handleOnTransmitCapture = async (code: string) => {
+    const handleOnTransmitCapture = async (input: InputBinding) => {
         if (transmitConfig.callMicMode === "VoiceActivation") return;
 
         let newConfig: TransmitConfig;
         switch (transmitConfig.callMicMode) {
             case "PushToTalk":
-                newConfig = {...transmitConfig, pushToTalk: code};
+                newConfig = {...transmitConfig, pushToTalk: input};
                 break;
             case "PushToMute":
-                newConfig = {...transmitConfig, pushToMute: code};
+                newConfig = {...transmitConfig, pushToMute: input};
                 break;
         }
 
-        if (code === transmitConfig.radioPushToTalk) {
+        if (inputEquals(input, transmitConfig.radioPushToTalk)) {
             newConfig.radioPushToTalk = null;
         }
 
@@ -76,10 +78,24 @@ function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSet
         } catch {}
     };
 
+    const activeCallBinding =
+        transmitConfig.callMicMode === "PushToTalk"
+            ? transmitConfig.pushToTalk
+            : transmitConfig.callMicMode === "PushToMute"
+              ? transmitConfig.pushToMute
+              : null;
+
+    const activeCallLabel =
+        transmitConfig.callMicMode === "PushToTalk"
+            ? transmitConfig.pushToTalkLabel
+            : transmitConfig.callMicMode === "PushToMute"
+              ? transmitConfig.pushToMuteLabel
+              : "";
+
     return (
         <>
             <Select
-                className="w-[21ch]! h-full"
+                className="w-[21ch]! h-full shrink-0"
                 name="keybind-mode"
                 options={[
                     {value: "VoiceActivation", text: "Voice activation"},
@@ -90,16 +106,17 @@ function CallMicModeSettings({transmitConfig, setTransmitConfig}: CallMicModeSet
                 onChange={handleOnTransmitModeChange}
             />
             {capPlatform === "LinuxWayland" ? (
-                <ExternalKeybindField type={callMicModeToKeybind(transmitConfig.callMicMode)} />
+                <ExternalKeybindField
+                    type={callMicModeToKeybind(transmitConfig.callMicMode)}
+                    binding={activeCallBinding}
+                    bindingLabel={activeCallLabel}
+                    disabled={transmitConfig.callMicMode === "VoiceActivation"}
+                    onCapture={handleOnTransmitCapture}
+                    onRemove={handleOnTransmitRemoveClick}
+                />
             ) : (
                 <KeyCapture
-                    label={
-                        transmitConfig.callMicMode === "PushToTalk"
-                            ? transmitConfig.pushToTalkLabel
-                            : transmitConfig.callMicMode === "PushToMute"
-                              ? transmitConfig.pushToMuteLabel
-                              : ""
-                    }
+                    label={activeCallLabel}
                     onCapture={handleOnTransmitCapture}
                     onRemove={handleOnTransmitRemoveClick}
                     disabled={transmitConfig.callMicMode === "VoiceActivation"}

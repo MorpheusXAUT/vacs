@@ -27,7 +27,7 @@ const EVENT_CHANNEL_CAPACITY: usize = 1024;
 ///   or [`TapId::Speaker`].
 ///
 /// Holds only an independent event-stream handle and a cached-state `Arc`, not the radio
-/// itself — the radio's lifetime is owned solely by `RadioHandle`, so this source doesn't
+/// itself - the radio's lifetime is owned solely by `RadioHandle`, so this source doesn't
 /// artificially keep a superseded radio alive after `radio_set_config` swaps it out.
 pub struct TrackAudioLoopbackSource {
     events_tx: broadcast::Sender<trackaudio::Event>,

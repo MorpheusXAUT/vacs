@@ -19,11 +19,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@preact/signals": "^2.9.3",
-    "@tailwindcss/vite": "^4.3.2",
+    "@preact/signals": "^2.9.4",
+    "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-deep-link": "^2.4.8",
-    "@tauri-apps/plugin-log": "^2.8.0",
+    "@tauri-apps/plugin-log": "^2.9.0",
     "@tauri-apps/plugin-opener": "^2",
     "clsx": "^2.1.1",
     "preact": "^10.29.7",
@@ -33,14 +33,14 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@preact/preset-vite": "^2.10.5",
+    "@preact/preset-vite": "^2.10.6",
     "@testing-library/preact": "^3.2.4",
     "@vitest/coverage-v8": "^4.1.10",
     "jsdom": "^29.1.1",
-    "oxlint": "^1.73.0",
-    "oxlint-tsgolint": "^0.24.0",
+    "oxlint": "^1.74.0",
+    "oxlint-tsgolint": "^0.25.0",
     "typescript": "~6.0.3",
-    "vite": "^8.1.4",
+    "vite": "^8.1.5",
     "vitest": "^4.1.8"
   }
 }

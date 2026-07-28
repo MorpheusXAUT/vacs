@@ -12,11 +12,43 @@ export function isRadioIntegration(value: string): value is RadioIntegration {
     return ALL_RADIO_INTEGRATIONS.includes(value as RadioIntegration);
 }
 
+/// A joystick/gamepad button binding: stable device GUID + raw button index.
+/// `name` is the last-seen device name, used for display only.
+export type JoystickButton = {
+    device: string;
+    button: number;
+    name?: string | null;
+};
+
+/// An input binding: either a keyboard key code string (e.g. "KeyA") or a
+/// joystick button. Mirrors the backend's InputCode serialization.
+export type InputBinding = string | JoystickButton;
+
+export function isJoystickButton(binding: InputBinding | null): binding is JoystickButton {
+    return binding !== null && typeof binding !== "string";
+}
+
+export function inputEquals(a: InputBinding | null, b: InputBinding | null): boolean {
+    if (a === null || b === null || typeof a === "string" || typeof b === "string") {
+        return a === b;
+    }
+    // name is display metadata and does not affect binding identity
+    return a.device === b.device && a.button === b.button;
+}
+
+export function joystickButtonLabel(button: JoystickButton): string {
+    return `Button ${button.button} (${button.name ?? "Joystick"})`;
+}
+
+export async function inputToLabel(binding: InputBinding): Promise<string> {
+    return typeof binding === "string" ? codeToLabel(binding) : joystickButtonLabel(binding);
+}
+
 export type TransmitConfig = {
     callMicMode: CallMicMode;
-    pushToTalk: string | null;
-    pushToMute: string | null;
-    radioPushToTalk: string | null;
+    pushToTalk: InputBinding | null;
+    pushToMute: InputBinding | null;
+    radioPushToTalk: InputBinding | null;
 };
 
 export type TransmitConfigWithLabels = TransmitConfig & {
@@ -52,9 +84,10 @@ export async function withTransmitLabels(
 ): Promise<TransmitConfigWithLabels> {
     return {
         ...config,
-        pushToTalkLabel: config.pushToTalk && (await codeToLabel(config.pushToTalk)),
-        pushToMuteLabel: config.pushToMute && (await codeToLabel(config.pushToMute)),
-        radioPushToTalkLabel: config.radioPushToTalk && (await codeToLabel(config.radioPushToTalk)),
+        pushToTalkLabel: config.pushToTalk && (await inputToLabel(config.pushToTalk)),
+        pushToMuteLabel: config.pushToMute && (await inputToLabel(config.pushToMute)),
+        radioPushToTalkLabel:
+            config.radioPushToTalk && (await inputToLabel(config.radioPushToTalk)),
     };
 }
 

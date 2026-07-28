@@ -1,0 +1,23 @@
+name: Set up Windows build dependencies
+description: Imports the Visual Studio developer environment (vcvars) so cmake-based build scripts (e.g. the vendored SDL3) can locate the MSVC toolchain
+
+runs:
+  using: composite
+  steps:
+    - name: Import Visual Studio developer environment
+      shell: pwsh
+      run: |
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+
+        if (-not $vsPath) { throw "No Visual Studio installation with C++ tools found" }
+
+        Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+
+        Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+        
+        # Export the resulting environment (PATH, INCLUDE, LIB, VisualStudioVersion, ...)
+        # to all subsequent steps; skip multi-line values, which would corrupt GITHUB_ENV.
+        Get-ChildItem env: | Where-Object { $_.Value -notmatch "`n" } | ForEach-Object {
+          Add-Content -Path $env:GITHUB_ENV -Value "$($_.Name)=$($_.Value)"
+        }

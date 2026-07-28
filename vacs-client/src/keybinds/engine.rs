@@ -3,30 +3,35 @@ use crate::app::state::signaling::AppStateSignalingExt;
 use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::AudioManagerHandle;
 use crate::error::Error;
+use crate::keybinds::joystick::JoystickServiceHandle;
 use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
-use crate::keybinds::{CallMicMode, KeyEvent, Keybind, KeybindsConfig, TransmitConfig};
+use crate::keybinds::{
+    CallMicMode, InputCode, KeyEvent, Keybind, KeybindsConfig, TransmitConfig, Trigger,
+};
 use crate::radio::{RadioHandle, TransmissionState};
-use keyboard_types::{Code, KeyState};
+use keyboard_types::KeyState;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::RwLock as TokioRwLock;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio_util::sync::CancellationToken;
 
+#[cfg(target_os = "linux")]
+use crate::keybinds::{PortalAction, compose_wayland_trigger};
 #[cfg(target_os = "linux")]
 use crate::platform::Platform;
 
 #[derive(Debug)]
 pub struct KeybindEngine {
     call_mic_mode: CallMicMode,
-    call_code: Option<Code>,
-    radio_code: Option<Code>,
-    accept_call_code: Option<Code>,
-    end_call_code: Option<Code>,
-    toggle_radio_prio_code: Option<Code>,
+    call_trigger: Option<Trigger>,
+    radio_trigger: Option<Trigger>,
+    accept_call_trigger: Option<Trigger>,
+    end_call_trigger: Option<Trigger>,
+    toggle_radio_prio_trigger: Option<Trigger>,
     app: AppHandle,
     listener: RwLock<Option<DynKeybindListener>>,
     rx_task: Option<JoinHandle<()>>,
@@ -52,13 +57,13 @@ impl KeybindEngine {
     ) -> Self {
         Self {
             call_mic_mode: transmit_config.call_mic_mode,
-            call_code: transmit_config.active_call_code(),
-            radio_code: transmit_config
-                .active_radio_code(radio_integration_enabled)
+            call_trigger: transmit_config.active_call_trigger(),
+            radio_trigger: transmit_config
+                .active_radio_trigger(radio_integration_enabled)
                 .await,
-            accept_call_code: Self::select_accept_call_code(call_control_config),
-            end_call_code: Self::select_end_call_code(call_control_config),
-            toggle_radio_prio_code: Self::select_toggle_radio_prio_code(call_control_config),
+            accept_call_trigger: Self::select_accept_call_trigger(call_control_config),
+            end_call_trigger: Self::select_end_call_trigger(call_control_config),
+            toggle_radio_prio_trigger: Self::select_toggle_radio_prio_trigger(call_control_config),
             app,
             listener: RwLock::new(None),
             rx_task: None,
@@ -73,16 +78,31 @@ impl KeybindEngine {
         }
     }
 
+    /// Whether any active trigger is a joystick button (requiring the shared
+    /// joystick service to be running).
+    fn any_button_trigger(&self) -> bool {
+        [
+            &self.call_trigger,
+            &self.radio_trigger,
+            &self.accept_call_trigger,
+            &self.end_call_trigger,
+            &self.toggle_radio_prio_trigger,
+        ]
+        .into_iter()
+        .flatten()
+        .any(|trigger| matches!(trigger, Trigger::Input(InputCode::Button(_))))
+    }
+
     pub async fn start(&mut self) -> Result<(), Error> {
         if self.rx_task.is_some() {
             return Ok(());
         }
-        let has_call_controls = self.accept_call_code.is_some()
-            || self.end_call_code.is_some()
-            || self.toggle_radio_prio_code.is_some();
+        let has_call_controls = self.accept_call_trigger.is_some()
+            || self.end_call_trigger.is_some()
+            || self.toggle_radio_prio_trigger.is_some();
 
         if self.call_mic_mode == CallMicMode::VoiceActivation
-            && self.radio_code.is_none()
+            && self.radio_trigger.is_none()
             && !has_call_controls
         {
             log::trace!(
@@ -90,8 +110,8 @@ impl KeybindEngine {
             );
             return Ok(());
         } else if self.call_mic_mode != CallMicMode::VoiceActivation
-            && self.call_code.is_none()
-            && self.radio_code.is_none()
+            && self.call_trigger.is_none()
+            && self.radio_trigger.is_none()
         {
             log::trace!(
                 "No keybind set for TransmitMode {:?}, keybind engine not starting",
@@ -102,21 +122,56 @@ impl KeybindEngine {
 
         self.stop_token = Some(self.shutdown_token.child_token());
 
-        let (listener, rx) = PlatformListener::start().await?;
-        *self.listener.write() = Some(Arc::new(listener));
+        let any_button = self.any_button_trigger();
 
-        self.spawn_rx_loop(rx);
+        // All input sources write into this one channel; the engine loop below
+        // reads the merged stream directly.
+        let (key_event_tx, key_event_rx) = unbounded_channel();
+
+        // A keyboard listener failure (e.g. portal unavailable on Wayland) must
+        // not disable joystick bindings, and vice versa: start whichever sources
+        // are available and only fail if none are.
+        let keyboard_ok = match PlatformListener::start(key_event_tx.clone()).await {
+            Ok(listener) => {
+                *self.listener.write() = Some(Arc::new(listener));
+                true
+            }
+            Err(err) if any_button => {
+                log::error!(
+                    "Keybind listener failed to start, continuing with joystick bindings only: {err}"
+                );
+                false
+            }
+            Err(err) => return Err(err.into()),
+        };
+
+        if any_button
+            && let Err(err) = self
+                .app
+                .state::<JoystickServiceHandle>()
+                .register(key_event_tx)
+                .await
+        {
+            if !keyboard_ok {
+                return Err(err.into());
+            }
+            log::error!(
+                "Joystick service failed to start, continuing with keyboard bindings only: {err}"
+            );
+        }
+
+        self.spawn_rx_loop(key_event_rx);
 
         Ok(())
     }
 
     pub fn stop(&mut self) {
-        {
-            let mut listener = self.listener.write();
-            if listener.take().is_some() {
-                self.reset_input_state();
-            }
-        }
+        // The engine may run without a platform listener (joystick-only mode
+        // when the keyboard listener failed to start), so the running state is
+        // tracked by the rx task, not the listener.
+        let was_running = self.rx_task.is_some();
+
+        self.listener.write().take();
 
         if let Some(stop_token) = self.stop_token.take() {
             stop_token.cancel();
@@ -124,6 +179,10 @@ impl KeybindEngine {
 
         if let Some(rx_task) = self.rx_task.take() {
             rx_task.abort();
+        }
+
+        if was_running {
+            self.reset_input_state();
         }
     }
 
@@ -141,14 +200,14 @@ impl KeybindEngine {
         self.stop();
 
         self.call_mic_mode = transmit_config.call_mic_mode;
-        self.call_code = transmit_config.active_call_code();
-        self.radio_code = transmit_config
-            .active_radio_code(radio_integration_enabled)
+        self.call_trigger = transmit_config.active_call_trigger();
+        self.radio_trigger = transmit_config
+            .active_radio_trigger(radio_integration_enabled)
             .await;
 
-        self.accept_call_code = Self::select_accept_call_code(keybinds_config);
-        self.end_call_code = Self::select_end_call_code(keybinds_config);
-        self.toggle_radio_prio_code = Self::select_toggle_radio_prio_code(keybinds_config);
+        self.accept_call_trigger = Self::select_accept_call_trigger(keybinds_config);
+        self.end_call_trigger = Self::select_end_call_trigger(keybinds_config);
+        self.toggle_radio_prio_trigger = Self::select_toggle_radio_prio_trigger(keybinds_config);
 
         self.reset_input_state();
 
@@ -161,8 +220,8 @@ impl KeybindEngine {
         self.call_active.store(active, Ordering::Relaxed);
 
         if active {
-            if self.radio_code.is_some()
-                && self.radio_code == self.call_code
+            if self.radio_trigger.is_some()
+                && self.radio_trigger == self.call_trigger
                 && self.radio_pressed.load(Ordering::Relaxed)
                 && self.radio_transmitting.load(Ordering::Relaxed)
                 && !self.radio_prio.load(Ordering::Relaxed)
@@ -224,7 +283,7 @@ impl KeybindEngine {
         let call_pressed = self.call_pressed.load(Ordering::Relaxed);
         let radio_pressed = self.radio_pressed.load(Ordering::Relaxed);
         let radio_prio = self.radio_prio.load(Ordering::Relaxed);
-        let separate_keys = self.radio_code.is_some() && self.radio_code != self.call_code;
+        let separate_keys = self.radio_trigger.is_some() && self.radio_trigger != self.call_trigger;
         match self.call_mic_mode {
             CallMicMode::VoiceActivation => false,
             CallMicMode::PushToTalk => {
@@ -290,16 +349,18 @@ impl KeybindEngine {
 
     async fn handle_call_control_event(
         app: &AppHandle,
-        code: &Code,
-        accept_call: &Option<Code>,
-        end_call: &Option<Code>,
-        toggle_radio_prio: &Option<Code>,
+        trigger: &Trigger,
+        accept_call: Option<&Trigger>,
+        end_call: Option<&Trigger>,
+        toggle_radio_prio: Option<&Trigger>,
     ) {
-        let shared_call_controls = accept_call == end_call;
+        let is_accept = accept_call == Some(trigger);
+        let is_end = end_call == Some(trigger);
 
-        if shared_call_controls
-            && (accept_call.is_some_and(|c| c == *code) || end_call.is_some_and(|c| c == *code))
-        {
+        // A trigger bound to both accept and end (the same key configured for
+        // both, or the shared Wayland portal call-control shortcut) toggles:
+        // end the active/outgoing call if there is one, otherwise accept.
+        if is_accept && is_end {
             log::trace!("Shared call control key pressed");
 
             let state = app.state::<AppState>();
@@ -318,7 +379,7 @@ impl KeybindEngine {
                     _ => {}
                 }
             }
-        } else if accept_call.is_some_and(|c| c == *code) {
+        } else if is_accept {
             log::trace!("Accept call key pressed");
 
             let state = app.state::<AppState>();
@@ -329,7 +390,7 @@ impl KeybindEngine {
                 Err(err) => log::warn!("Failed to accept incoming call via keybind: {err}"),
                 _ => {}
             }
-        } else if end_call.is_some_and(|c| c == *code) {
+        } else if is_end {
             log::trace!("End call key pressed");
 
             let state = app.state::<AppState>();
@@ -340,7 +401,7 @@ impl KeybindEngine {
                 Err(err) => log::warn!("Failed to end active call via keybind: {err}"),
                 _ => {}
             }
-        } else if toggle_radio_prio.is_some_and(|c| c == *code) {
+        } else if toggle_radio_prio == Some(trigger) {
             log::trace!("Toggle radio prio key pressed");
 
             let keybind_engine = app.state::<KeybindEngineHandle>();
@@ -357,17 +418,17 @@ impl KeybindEngine {
 
     fn spawn_rx_loop(&mut self, mut rx: UnboundedReceiver<KeyEvent>) {
         let app = self.app.clone();
-        let call_code = self.call_code;
-        let radio_code = self.radio_code;
-        let accept_call = self.accept_call_code;
-        let end_call = self.end_call_code;
-        let toggle_radio_prio = self.toggle_radio_prio_code;
+        let call_trigger = self.call_trigger.clone();
+        let radio_trigger = self.radio_trigger.clone();
+        let accept_call = self.accept_call_trigger.clone();
+        let end_call = self.end_call_trigger.clone();
+        let toggle_radio_prio = self.toggle_radio_prio_trigger.clone();
 
-        if call_code.is_none()
+        if call_trigger.is_none()
             && accept_call.is_none()
             && end_call.is_none()
             && toggle_radio_prio.is_none()
-            && radio_code.is_none()
+            && radio_trigger.is_none()
         {
             return;
         }
@@ -387,7 +448,7 @@ impl KeybindEngine {
 
         let handle = tauri::async_runtime::spawn(async move {
             log::debug!(
-                "Keybind engine starting: mode={mode:?}, transmit={call_code:?}, accept_call={accept_call:?}, end_call={end_call:?}",
+                "Keybind engine starting: mode={mode:?}, transmit={call_trigger:?}, radio={radio_trigger:?}, accept_call={accept_call:?}, end_call={end_call:?}",
             );
 
             loop {
@@ -398,11 +459,11 @@ impl KeybindEngine {
                         let Some(event) = res else { break; };
 
                         if event.state == KeyState::Down {
-                            Self::handle_call_control_event(&app, &event.code, &accept_call, &end_call, &toggle_radio_prio).await;
+                            Self::handle_call_control_event(&app, &event.trigger, accept_call.as_ref(), end_call.as_ref(), toggle_radio_prio.as_ref()).await;
                         }
 
-                        let is_call_key = Some(event.code) == call_code;
-                        let is_radio_key = Some(event.code) == radio_code;
+                        let is_call_key = call_trigger.as_ref() == Some(&event.trigger);
+                        let is_radio_key = radio_trigger.as_ref() == Some(&event.trigger);
 
                         if !is_call_key && !is_radio_key { continue; }
 
@@ -466,43 +527,40 @@ impl KeybindEngine {
     }
 
     #[inline]
-    fn select_accept_call_code(config: &KeybindsConfig) -> Option<Code> {
+    fn select_accept_call_trigger(config: &KeybindsConfig) -> Option<Trigger> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
-            // Wayland Code Mapping Strategy:
-            // Same as with the transmit code, we define our global shortcuts on OS level.
-            // As we cannot bind the same key to multiple actions, we'll always use F32
-            // as both accept and end call key.
-            return Some(Code::F32);
+            // The portal exposes a single shared call-control shortcut (end
+            // active / accept next), so both accept and end carry the same
+            // portal action; a configured joystick button replaces it.
+            return compose_wayland_trigger(Some(PortalAction::CallControl), &config.accept_call);
         }
 
-        config.accept_call
+        config.accept_call.clone().map(Trigger::Input)
     }
 
     #[inline]
-    fn select_end_call_code(config: &KeybindsConfig) -> Option<Code> {
+    fn select_end_call_trigger(config: &KeybindsConfig) -> Option<Trigger> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
-            // Wayland Code Mapping Strategy:
-            // Same as with the transmit code, we define our global shortcuts on OS level.
-            // As we cannot bind the same key to multiple actions, we'll always use F32
-            // as both accept and end call key.
-            return Some(Code::F32);
+            // See select_accept_call_trigger: shared portal call-control shortcut.
+            return compose_wayland_trigger(Some(PortalAction::CallControl), &config.end_call);
         }
 
-        config.end_call
+        config.end_call.clone().map(Trigger::Input)
     }
 
     #[inline]
-    fn select_toggle_radio_prio_code(config: &KeybindsConfig) -> Option<Code> {
+    fn select_toggle_radio_prio_trigger(config: &KeybindsConfig) -> Option<Trigger> {
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
-            // Wayland Code Mapping Strategy:
-            // Same as with the transmit code, we define our global shortcuts on OS level.
-            return Some(Code::F31);
+            return compose_wayland_trigger(
+                Some(PortalAction::ToggleRadioPrio),
+                &config.toggle_radio_prio,
+            );
         }
 
-        config.toggle_radio_prio
+        config.toggle_radio_prio.clone().map(Trigger::Input)
     }
 
     #[inline]
