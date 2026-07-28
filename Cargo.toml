@@ -130,8 +130,10 @@ wiremock = "0.6.5"
 redis-protocol = { git = "https://github.com/aembke/redis-protocol.rs", rev = "cdd4535155437d08171a68c9965963fc1092eeb6" }
 # cpal 0.18.1 rejects WASAPI output formats that IsFormatSupported only reports as
 # convertible (S_FALSE), breaking startup on multi-channel devices like SteelSeries Sonar.
-# Fixed upstream by https://github.com/RustAudio/cpal/pull/1275; drop once 0.18.2 is released.
-cpal = { git = "https://github.com/RustAudio/cpal", rev = "c9f5e733176eeab03345f63e152f7d2489914b36" }
+# Fixed upstream by https://github.com/RustAudio/cpal/pull/1275. This rev also carries
+# https://github.com/RustAudio/cpal/issues/1273, where WASAPI flagged every capture
+# stream's first buffer as an xrun. Drop once 0.18.2 is released.
+cpal = { git = "https://github.com/RustAudio/cpal", rev = "23ec3f74d0a05166e896feb7ad329e6c366a7f02" }
 
 [workspace.lints.clippy]
 semicolon-if-nothing-returned = "warn"
