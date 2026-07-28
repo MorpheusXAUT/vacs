@@ -14,7 +14,14 @@ pub fn log_err(_attr: TokenStream, item: TokenStream) -> TokenStream {
         vis,
         sig,
         block,
+        modifiers,
     } = input_fn;
+
+    // `FnModifiers` is non-exhaustive and has no `ToTokens`, so anything it captures (today only
+    // `default fn`) would be dropped silently when we re-emit the function. Reject it instead.
+    if let Err(err) = modifiers.require_empty() {
+        return err.to_compile_error().into();
+    }
 
     let fn_name = &sig.ident;
     let is_async = sig.asyncness.is_some();
