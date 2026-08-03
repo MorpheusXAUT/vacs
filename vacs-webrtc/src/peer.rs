@@ -297,3 +297,94 @@ impl Peer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_matches;
+    use test_log::test;
+
+    /// Building a peer without ICE servers keeps these tests offline: nothing
+    /// is gathered until a local description is set.
+    async fn test_peer() -> Peer {
+        let (peer, _events) = Peer::new(IceConfig {
+            ice_servers: Vec::new(),
+            expires_at: None,
+        })
+        .await
+        .expect("failed to create peer");
+        peer
+    }
+
+    fn test_channels() -> (
+        mpsc::Sender<EncodedAudioFrame>,
+        mpsc::Receiver<EncodedAudioFrame>,
+        mpsc::Sender<EncodedAudioFrame>,
+        mpsc::Receiver<EncodedAudioFrame>,
+    ) {
+        let (input_tx, input_rx) = mpsc::channel(1);
+        let (output_tx, output_rx) = mpsc::channel(1);
+        (input_tx, input_rx, output_tx, output_rx)
+    }
+
+    #[test(tokio::test)]
+    async fn start_twice_reports_call_active() {
+        let mut peer = test_peer().await;
+
+        let (_input_tx, input_rx, output_tx, _output_rx) = test_channels();
+        peer.start(input_rx, output_tx)
+            .expect("failed to start peer");
+
+        let (_input_tx, input_rx, output_tx, _output_rx) = test_channels();
+        assert_matches!(
+            peer.start(input_rx, output_tx),
+            Err(WebrtcError::CallActive)
+        );
+    }
+
+    /// Holding a call stops sending but must keep the receiver alive, so
+    /// incoming RTP is still drained instead of backing up behind a dead task.
+    #[test(tokio::test)]
+    async fn pause_stops_sending_but_keeps_receiving() {
+        let mut peer = test_peer().await;
+
+        let (_input_tx, input_rx, output_tx, _output_rx) = test_channels();
+        peer.start(input_rx, output_tx)
+            .expect("failed to start peer");
+
+        peer.pause();
+
+        assert!(peer.sender.is_none(), "pause must stop the sender");
+        assert!(peer.receiver.is_some(), "pause must keep the receiver");
+    }
+
+    #[test(tokio::test)]
+    async fn start_after_pause_resumes_the_call() {
+        let mut peer = test_peer().await;
+
+        let (_input_tx, input_rx, output_tx, _output_rx) = test_channels();
+        peer.start(input_rx, output_tx)
+            .expect("failed to start peer");
+        peer.pause();
+
+        let (_input_tx, input_rx, output_tx, _output_rx) = test_channels();
+        peer.start(input_rx, output_tx)
+            .expect("failed to resume peer after pause");
+
+        assert!(peer.sender.is_some(), "resume must restore the sender");
+    }
+
+    #[test(tokio::test)]
+    async fn stop_clears_sender_and_receiver() {
+        let mut peer = test_peer().await;
+
+        let (_input_tx, input_rx, output_tx, _output_rx) = test_channels();
+        peer.start(input_rx, output_tx)
+            .expect("failed to start peer");
+
+        peer.stop().await.expect("failed to stop peer");
+
+        assert!(peer.sender.is_none(), "stop must drop the sender");
+        assert!(peer.receiver.is_none(), "stop must drop the receiver");
+    }
+}

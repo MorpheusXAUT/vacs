@@ -9133,7 +9133,9 @@ name = "vacs-webrtc"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "pretty_assertions",
  "serde_json",
+ "test-log",
  "thiserror 2.0.19",
  "tokio",
  "tracing",
