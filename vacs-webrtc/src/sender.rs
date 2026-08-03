@@ -65,3 +65,78 @@ impl Sender {
         self.task.await.context("Failed to join sender task")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{WEBRTC_CHANNELS, WEBRTC_TRACK_ID, WEBRTC_TRACK_STREAM_ID};
+    use std::time::Duration;
+    use test_log::test;
+    use vacs_audio::TARGET_SAMPLE_RATE;
+    use webrtc::api::media_engine::MIME_TYPE_OPUS;
+    use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+
+    /// An unbound track has no packetizer, so `write_sample` is a no-op. That
+    /// keeps these tests about the pump loop rather than about RTP output.
+    fn test_track() -> Arc<TrackLocalStaticSample> {
+        Arc::new(TrackLocalStaticSample::new(
+            RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                clock_rate: TARGET_SAMPLE_RATE,
+                channels: WEBRTC_CHANNELS,
+                ..Default::default()
+            },
+            WEBRTC_TRACK_ID.to_owned(),
+            WEBRTC_TRACK_STREAM_ID.to_owned(),
+        ))
+    }
+
+    #[test(tokio::test)]
+    async fn drains_input_frames() {
+        let (input_tx, input_rx) = mpsc::channel(1);
+        let sender = Sender::new(test_track(), input_rx);
+
+        // A capacity of one only accepts this many frames if the task keeps
+        // pulling them off the channel.
+        for _ in 0..8 {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                input_tx.send(EncodedAudioFrame::from_static(&[0x01, 0x02, 0x03])),
+            )
+            .await
+            .expect("sender task stopped draining input frames")
+            .expect("input channel closed unexpectedly");
+        }
+
+        sender.stop().await.expect("failed to stop sender");
+    }
+
+    #[test(tokio::test)]
+    async fn stop_joins_task_while_input_stays_open() {
+        let (_input_tx, input_rx) = mpsc::channel(1);
+        let sender = Sender::new(test_track(), input_rx);
+
+        tokio::time::timeout(Duration::from_secs(5), sender.stop())
+            .await
+            .expect("sender task ignored the shutdown signal")
+            .expect("failed to stop sender");
+    }
+
+    /// Without the `None` arm the task would spin on a closed channel for the
+    /// rest of the process lifetime instead of ending with the call.
+    #[test(tokio::test)]
+    async fn closed_input_ends_task() {
+        let (input_tx, input_rx) = mpsc::channel::<EncodedAudioFrame>(1);
+        let sender = Sender::new(test_track(), input_rx);
+
+        drop(input_tx);
+
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !sender.task.is_finished() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("sender task outlived its closed input channel");
+    }
+}
