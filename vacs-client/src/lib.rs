@@ -35,7 +35,6 @@ use tauri::{App, Manager, RunEvent, WindowEvent};
 use tokio::sync::Mutex as TokioMutex;
 
 pub fn run() {
-    #[cfg_attr(feature = "e2e", allow(unused_mut))]
     let mut builder = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -248,6 +247,17 @@ pub fn run() {
                 app::handle_deep_link(app.clone(), url.to_string());
             }
         }));
+    }
+
+    // WebDriver automation for E2E tests. Compiled only with the `e2e`
+    // feature and permitted only by the capability inlined in
+    // tauri.e2e.conf.json; the embedded server binds the port given via
+    // TAURI_WEBDRIVER_PORT.
+    #[cfg(feature = "e2e")]
+    {
+        builder = builder
+            .plugin(tauri_plugin_wdio::init())
+            .plugin(tauri_plugin_wdio_webdriver::init());
     }
 
     builder
