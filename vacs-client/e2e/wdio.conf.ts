@@ -33,9 +33,16 @@ export const config: WebdriverIO.MultiremoteConfig = {
     maxInstances: 1,
     capabilities: {
         // See https://tauri.app/develop/tests/webdriver/example/webdriverio/#config
+        //
+        // enforceWebDriverClassic: WebdriverIO 9 requests WebDriver BiDi by
+        // default (webSocketUrl), which msedgedriver cannot serve for
+        // WebView2 apps - on Windows every session then dies with
+        // "DevToolsActivePort file doesn't exist" even though the app
+        // launches. Classic sessions are all tauri-driver needs anyway.
         clientA: {
             port: TAURI_DRIVER_PORT_A,
             capabilities: {
+                "wdio:enforceWebDriverClassic": true,
                 "tauri:options": {
                     application: APP_BINARY,
                 },
@@ -44,6 +51,7 @@ export const config: WebdriverIO.MultiremoteConfig = {
         clientB: {
             port: TAURI_DRIVER_PORT_B,
             capabilities: {
+                "wdio:enforceWebDriverClassic": true,
                 "tauri:options": {
                     application: APP_BINARY,
                 },
