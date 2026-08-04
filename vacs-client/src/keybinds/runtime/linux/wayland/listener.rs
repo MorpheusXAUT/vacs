@@ -38,8 +38,8 @@
 //! The map is shared between the main struct and the background task to allow querying
 //! the current bindings via `get_external_binding()`.
 
-use crate::keybinds::runtime::KeybindListener;
 use crate::keybinds::runtime::linux::wayland::PortalShortcutId;
+use crate::keybinds::runtime::{self, KeybindListener};
 use crate::keybinds::{KeyEvent, Keybind, KeybindsError};
 use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut, Shortcut};
 use ashpd::zbus::export::futures_core::Stream;
@@ -98,44 +98,23 @@ impl KeybindListener for WaylandKeybindListener {
             })
         };
 
-        match tokio::time::timeout(Duration::from_secs(10), startup_rx).await {
-            Ok(Ok(Ok(()))) => {
-                log::debug!("Wayland keybind listener started successfully");
-
-                Ok(Self {
-                    cancellation_token,
-                    cleanup_token,
-                    task_handle: Some(task_handle),
-                    shortcuts,
-                })
-            }
-            Ok(Ok(Err(err))) => {
-                log::error!("Wayland keybind listener startup failed: {err}");
-
-                cancellation_token.cancel();
-                task_handle.abort();
-
-                Err(err)
-            }
-            Ok(Err(_)) => {
-                log::error!("Wayland keybind listener startup channel closed unexpectedly");
-
-                cancellation_token.cancel();
-                task_handle.abort();
-
-                Err(KeybindsError::Listener(
-                    "WaylandKeybindListener startup channel closed".to_string(),
-                ))
-            }
+        match runtime::await_startup(
+            startup_rx,
+            Duration::from_secs(10),
+            "Wayland keybind listener",
+        )
+        .await
+        {
+            Ok(()) => Ok(Self {
+                cancellation_token,
+                cleanup_token,
+                task_handle: Some(task_handle),
+                shortcuts,
+            }),
             Err(err) => {
-                log::error!("Wayland keybind listener startup timed out: {err}");
-
                 cancellation_token.cancel();
                 task_handle.abort();
-
-                Err(KeybindsError::Listener(
-                    "WaylandKeybindListener startup timed out".to_string(),
-                ))
+                Err(err)
             }
         }
     }

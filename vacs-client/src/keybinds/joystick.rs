@@ -29,6 +29,7 @@
 //! with `uaccess`, so logind grants the active seat user an ACL on the evdev nodes. This works
 //! identically under Wayland and X11.
 
+use crate::keybinds::runtime;
 use crate::keybinds::{JoystickButton, JoystickDevice, KeyEvent, KeybindsError};
 use keyboard_types::KeyState;
 use sdl3::event::Event;
@@ -143,9 +144,8 @@ impl JoystickService {
                     })?
             };
 
-            match tokio::time::timeout(STARTUP_TIMEOUT, startup_rx).await {
-                Ok(Ok(Ok(()))) => {
-                    log::debug!("SDL joystick poller started successfully");
+            match runtime::await_startup(startup_rx, STARTUP_TIMEOUT, "SDL joystick poller").await {
+                Ok(()) => {
                     *poller = Some(RunningPoller {
                         senders,
                         devices,
@@ -153,23 +153,10 @@ impl JoystickService {
                         thread: Some(thread),
                     });
                 }
-                Ok(Ok(Err(err))) => {
-                    log::error!("SDL joystick poller startup failed: {err}");
+                Err(err) => {
+                    // Harmless if the thread already exited on a startup failure
+                    stop.store(true, Ordering::Relaxed);
                     return Err(err);
-                }
-                Ok(Err(_)) => {
-                    log::error!("SDL joystick poller startup channel closed unexpectedly");
-                    stop.store(true, Ordering::Relaxed);
-                    return Err(KeybindsError::Listener(
-                        "Joystick poller startup channel closed".to_string(),
-                    ));
-                }
-                Err(_) => {
-                    log::error!("SDL joystick poller startup timed out");
-                    stop.store(true, Ordering::Relaxed);
-                    return Err(KeybindsError::Listener(
-                        "Joystick poller startup timed out".to_string(),
-                    ));
                 }
             }
         }

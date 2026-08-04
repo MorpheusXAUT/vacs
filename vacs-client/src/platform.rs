@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 /// Different platforms have different capabilities due to OS-level restrictions:
 /// - **Windows/macOS**: Full keybind listener and emitter support
 /// - **Linux Wayland**: Listener support via XDG portal, but no emitter (security model)
-/// - **Linux X11**: Currently stub implementations (to be implemented)
+/// - **Linux X11**: Listener via XInput2 raw events
 /// - **Linux Unknown**: No display server detected, stub implementations
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,10 +34,11 @@ impl Capabilities {
         let platform = *Platform::get();
 
         #[cfg(target_os = "linux")]
-        let keybind_listener = if matches!(platform, Platform::LinuxWayland) {
-            check_wayland_global_shortcuts_portal()
-        } else {
-            false
+        let keybind_listener = match platform {
+            Platform::LinuxWayland => check_wayland_global_shortcuts_portal(),
+            // XInput2 raw events need no permission or portal
+            Platform::LinuxX11 => true,
+            _ => false,
         };
 
         #[cfg(not(target_os = "linux"))]
@@ -58,7 +59,11 @@ impl Capabilities {
         Self {
             always_on_top: !matches!(platform, Platform::LinuxWayland),
             keybind_listener,
-            keybind_emitter: matches!(platform, Platform::Windows | Platform::MacOs),
+            // X11 emits via the XTest extension; Wayland has no injection API
+            keybind_emitter: matches!(
+                platform,
+                Platform::Windows | Platform::MacOs | Platform::LinuxX11
+            ),
             // SDL's joystick subsystem needs no display server or special
             // permissions on any supported platform; runtime failures surface
             // (and are logged) when the joystick service is first used.

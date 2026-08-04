@@ -1,5 +1,5 @@
-use crate::keybinds::runtime::KeybindListener;
 use crate::keybinds::runtime::windows::RawKey;
+use crate::keybinds::runtime::{self, KeybindListener};
 use crate::keybinds::{KeyEvent, KeybindsError};
 use keyboard_types::{Code, KeyState};
 use std::mem::zeroed;
@@ -54,19 +54,17 @@ impl KeybindListener for WindowsKeybindListener {
                 log::debug!("Message thread finished");
             }).map_err(|err| KeybindsError::Listener(format!("Failed to spawn thread: {err}")))?;
 
-        match tokio::time::timeout(Duration::from_secs(1), start_res_rx).await {
-            Ok(Ok(Ok(thread_id))) => Ok(Self {
-                thread_handle: Some(thread_handle),
-                thread_id,
-            }),
-            Ok(Ok(Err(err))) => Err(err),
-            Ok(Err(_)) => Err(KeybindsError::Listener(
-                "WindowsKeybindListener startup channel closed".to_string(),
-            )),
-            Err(_) => Err(KeybindsError::Listener(
-                "WindowsKeybindListener startup timed out".to_string(),
-            )),
-        }
+        let thread_id = runtime::await_startup(
+            start_res_rx,
+            Duration::from_secs(1),
+            "Windows keybind listener",
+        )
+        .await?;
+
+        Ok(Self {
+            thread_handle: Some(thread_handle),
+            thread_id,
+        })
     }
 }
 

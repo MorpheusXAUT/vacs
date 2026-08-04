@@ -206,10 +206,11 @@ impl RadioConfig {
     /// # Platform Limitation
     ///
     /// **Important**: AudioForVatsim Radio integration requires a functional `KeybindEmitter` to
-    /// inject key presses into external applications. This works on Windows and macOS, but NOT
-    /// on Linux where the emitter is a no-op stub due to Wayland's security model.
+    /// inject key presses into external applications. This works on Windows, macOS and Linux
+    /// X11 (via XTest), but NOT on Wayland where the emitter is a no-op stub due to Wayland's
+    /// security model.
     ///
-    /// On Linux, this method will successfully create a radio instance, but it will
+    /// On Wayland, this method will successfully create a radio instance, but it will
     /// silently do nothing when `transmit()` is called.
     ///
     /// The TrackAudio integration is not affected by this platform limitation and is thus the

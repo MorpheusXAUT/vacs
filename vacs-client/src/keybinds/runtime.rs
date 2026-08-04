@@ -17,7 +17,7 @@
 //! | Windows        | ✅       | ✅      | Full support via Win32 API               |
 //! | macOS          | ✅       | ✅      | Full support via Accessibility API       |
 //! | Linux Wayland  | ✅       | ❌      | Listener via XDG portal, no emitter API  |
-//! | Linux X11      | ⏳       | ⏳      | Stub implementations (to be implemented) |
+//! | Linux X11      | ✅       | ✅      | XInput2 raw events / XTest injection     |
 //!
 //! On Wayland, we can listen to global shortcuts via the XDG Desktop Portal, but there's
 //! no standard API for injecting input events (security model). This means radio integration
@@ -41,7 +41,41 @@ use crate::keybinds::{KeyEvent, Keybind, KeybindsError};
 use keyboard_types::{Code, KeyState};
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot;
+
+/// Await the startup confirmation an input-source thread sends through a
+/// oneshot channel, mapping the failure, channel-closed, and timeout cases to
+/// uniform errors. Shared by all platform listeners and the joystick service.
+pub(crate) async fn await_startup<T>(
+    startup_rx: oneshot::Receiver<Result<T, KeybindsError>>,
+    timeout: Duration,
+    component: &str,
+) -> Result<T, KeybindsError> {
+    match tokio::time::timeout(timeout, startup_rx).await {
+        Ok(Ok(Ok(value))) => {
+            log::debug!("{component} started successfully");
+            Ok(value)
+        }
+        Ok(Ok(Err(err))) => {
+            log::error!("{component} startup failed: {err}");
+            Err(err)
+        }
+        Ok(Err(_)) => {
+            log::error!("{component} startup channel closed unexpectedly");
+            Err(KeybindsError::Listener(format!(
+                "{component} startup channel closed"
+            )))
+        }
+        Err(_) => {
+            log::error!("{component} startup timed out");
+            Err(KeybindsError::Listener(format!(
+                "{component} startup timed out"
+            )))
+        }
+    }
+}
 
 /// Trait for platform-specific keybind listeners that capture global keyboard events.
 ///
