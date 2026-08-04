@@ -2,6 +2,7 @@ import Button from "./ui/Button.tsx";
 import {useCallStore} from "../stores/call-store.ts";
 import {invokeStrict} from "../error.ts";
 import unplug from "../assets/unplug.svg";
+import volumeMute from "../assets/volume-mute.svg";
 import {Call} from "../types/call.ts";
 import {useProfileStationKeys} from "../stores/profile-store.ts";
 import {DirectAccessKey} from "../types/profile.ts";
@@ -75,6 +76,13 @@ function CallQueue() {
                             className="absolute top-1 left-1 h-5 w-5"
                             src={unplug}
                             alt="Disconnected"
+                        />
+                    )}
+                    {callDisplay.connectionState === "degraded" && (
+                        <img
+                            className="absolute top-1 left-1 h-5 w-5"
+                            src={volumeMute}
+                            alt="No incoming audio"
                         />
                     )}
                     <Button

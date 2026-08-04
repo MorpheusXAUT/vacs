@@ -1,6 +1,7 @@
 use vacs_protocol::http::webrtc::{IceConfig, IceServer};
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 
 pub(crate) const WEBRTC_TRACK_ID: &str = "audio";
 pub(crate) const WEBRTC_TRACK_STREAM_ID: &str = "main";
@@ -11,10 +12,38 @@ pub trait IntoRtc<T> {
     fn into_rtc(self) -> T;
 }
 
+/// webrtc-rs only implements TURN over UDP: `turns:` (TLS) and `?transport=tcp` URLs are
+/// rejected during relay candidate gathering ("Unable to handle URL in gather_candidates_relay"),
+/// so they are dropped here to avoid useless gathering attempts and log noise.
+fn is_supported_ice_url(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    if lower.starts_with("turns:") {
+        return false;
+    }
+    if lower.starts_with("turn:") {
+        return !lower
+            .split_once('?')
+            .is_some_and(|(_, query)| query.contains("transport=tcp"));
+    }
+    true
+}
+
 impl IntoRtc<RTCIceServer> for IceServer {
     fn into_rtc(self) -> RTCIceServer {
+        let (supported, unsupported): (Vec<String>, Vec<String>) = self
+            .urls
+            .into_iter()
+            .partition(|url| is_supported_ice_url(url));
+
+        if !unsupported.is_empty() {
+            tracing::debug!(
+                ?unsupported,
+                "Skipping ICE server URLs unsupported by webrtc-rs (TURN is only supported over UDP)"
+            );
+        }
+
         RTCIceServer {
-            urls: self.urls,
+            urls: supported,
             username: self.username.unwrap_or_default(),
             credential: self.credential.unwrap_or_default(),
         }
@@ -24,10 +53,23 @@ impl IntoRtc<RTCIceServer> for IceServer {
 impl IntoRtc<RTCConfiguration> for IceConfig {
     fn into_rtc(self) -> RTCConfiguration {
         RTCConfiguration {
-            ice_servers: self.ice_servers.into_iter().map(|s| s.into_rtc()).collect(),
+            ice_servers: self
+                .ice_servers
+                .into_iter()
+                .map(|s| s.into_rtc())
+                .filter(|s| !s.urls.is_empty())
+                .collect(),
             ..Default::default()
         }
     }
+}
+
+pub(crate) fn rtc_configuration(config: IceConfig, force_relay: bool) -> RTCConfiguration {
+    let mut rtc_config = config.into_rtc();
+    if force_relay {
+        rtc_config.ice_transport_policy = RTCIceTransportPolicy::Relay;
+    }
+    rtc_config
 }
 
 #[cfg(test)]
@@ -79,7 +121,7 @@ mod tests {
                 IceServer {
                     urls: vec![
                         "turn:turn.example.org:3478".to_owned(),
-                        "turn:turn.example.org:5349?transport=tcp".to_owned(),
+                        "turn:turn.example.org:5349?transport=udp".to_owned(),
                     ],
                     username: Some("user".to_owned()),
                     credential: Some("secret".to_owned()),
@@ -97,5 +139,46 @@ mod tests {
         );
         assert_eq!(rtc.ice_servers[1].urls.len(), 2);
         assert_eq!(rtc.ice_servers[1].credential, "secret");
+    }
+
+    #[test]
+    fn filters_unsupported_turn_urls() {
+        let server = IceServer {
+            urls: vec![
+                "stun:stun.vacs.network:3478".to_owned(),
+                "turn:turn.vacs.network:3478?transport=udp".to_owned(),
+                "turn:turn.vacs.network:3478?transport=tcp".to_owned(),
+                "turns:turn.vacs.network:5349?transport=tcp".to_owned(),
+            ],
+            username: None,
+            credential: None,
+        };
+
+        let rtc = server.into_rtc();
+
+        assert_eq!(
+            rtc.urls,
+            vec![
+                "stun:stun.vacs.network:3478".to_owned(),
+                "turn:turn.vacs.network:3478?transport=udp".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn keeps_turn_url_without_transport_param() {
+        assert!(is_supported_ice_url("turn:turn.vacs.network:3478"));
+    }
+
+    #[test]
+    fn force_relay_sets_transport_policy() {
+        let config = rtc_configuration(IceConfig::default(), true);
+        assert_eq!(config.ice_transport_policy, RTCIceTransportPolicy::Relay);
+
+        let config = rtc_configuration(IceConfig::default(), false);
+        assert_eq!(
+            config.ice_transport_policy,
+            RTCIceTransportPolicy::Unspecified
+        );
     }
 }

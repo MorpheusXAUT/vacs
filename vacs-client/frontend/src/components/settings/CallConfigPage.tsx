@@ -49,6 +49,13 @@ function CallConfigPage() {
                 callConfig={callConfig}
                 setCallConfig={setCallConfig}
             />
+            <CallConfigEntry
+                label="Always relay calls"
+                name="force-relay"
+                property="forceRelay"
+                callConfig={callConfig}
+                setCallConfig={setCallConfig}
+            />
         </SettingsSubPage>
     );
 }

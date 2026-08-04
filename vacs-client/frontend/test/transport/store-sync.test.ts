@@ -32,6 +32,7 @@ const snapshot: SessionStateSnapshot = {
         enableCallStartSound: false,
         enableCallEndSound: true,
         useDefaultCallSources: true,
+        forceRelay: false,
     },
     clientPageSettings: {selected: undefined, configs: {}},
     capabilities: {

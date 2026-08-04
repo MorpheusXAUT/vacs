@@ -1,10 +1,15 @@
 use crate::config::{
-    IntoRtc, PEER_EVENTS_CAPACITY, WEBRTC_CHANNELS, WEBRTC_TRACK_ID, WEBRTC_TRACK_STREAM_ID,
+    PEER_EVENTS_CAPACITY, WEBRTC_CHANNELS, WEBRTC_TRACK_ID, WEBRTC_TRACK_STREAM_ID,
+    rtc_configuration,
 };
 use crate::error::WebrtcError;
 use anyhow::Context;
+use std::net::IpAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc};
+use tokio::task::JoinHandle;
 use tracing::instrument;
 use vacs_audio::{EncodedAudioFrame, TARGET_SAMPLE_RATE};
 use vacs_protocol::http::webrtc::IceConfig;
@@ -22,10 +27,20 @@ use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSampl
 
 pub type PeerConnectionState = RTCPeerConnectionState;
 
+/// How long a started peer may go without any inbound RTP or RTCP before
+/// [`PeerEvent::NoInboundMedia`] is emitted. RTCP receiver reports keep flowing even when the
+/// remote sends no audio, so a stall of both counters means the inbound path is actually dead.
+const NO_INBOUND_MEDIA_TIMEOUT: Duration = Duration::from_secs(5);
+const MEDIA_STATS_LOG_INTERVAL_TICKS: u64 = 10;
+
 #[derive(Debug, Clone)]
 pub enum PeerEvent {
     ConnectionState(PeerConnectionState),
     IceCandidate(String),
+    /// The connection is established but no RTP or RTCP has arrived for
+    /// [`NO_INBOUND_MEDIA_TIMEOUT`]; the reverse media path is most likely broken (e.g. by a VPN
+    /// mangling UDP flows). Emitted at most once per peer.
+    NoInboundMedia,
     Error(String),
 }
 
@@ -35,12 +50,18 @@ pub struct Peer {
     sender: Option<crate::Sender>,
     receiver: Option<crate::Receiver>,
     events_tx: broadcast::Sender<PeerEvent>,
+    received_rtp: Arc<AtomicU64>,
+    received_rtcp: Arc<AtomicU64>,
+    sent_frames: Arc<AtomicU64>,
+    rtcp_reader: JoinHandle<()>,
+    watchdog: Option<JoinHandle<()>>,
 }
 
 impl Peer {
     #[instrument(level = "debug", err)]
     pub async fn new(
         config: IceConfig,
+        force_relay: bool,
     ) -> Result<(Self, broadcast::Receiver<PeerEvent>), WebrtcError> {
         let mut media_engine = MediaEngine::default();
         media_engine
@@ -56,8 +77,12 @@ impl Peer {
             .with_interceptor_registry(registry)
             .build();
 
+        if force_relay {
+            tracing::info!("Forcing relayed (TURN) connection for peer");
+        }
+
         let peer_connection = api
-            .new_peer_connection(config.into_rtc())
+            .new_peer_connection(rtc_configuration(config, force_relay))
             .await
             .context("Failed to create peer connection")?;
 
@@ -72,32 +97,78 @@ impl Peer {
             WEBRTC_TRACK_STREAM_ID.to_owned(),
         ));
 
-        peer_connection
+        let rtp_sender = peer_connection
             .add_track(Arc::clone(&track) as Arc<dyn TrackLocal + Send + Sync>)
             .await
             .context("Failed to add track to peer connection")?;
+
+        let received_rtp = Arc::new(AtomicU64::new(0));
+        let received_rtcp = Arc::new(AtomicU64::new(0));
+        let sent_frames = Arc::new(AtomicU64::new(0));
+
+        let rtcp_reader = {
+            let received_rtcp = Arc::clone(&received_rtcp);
+            tokio::spawn(async move {
+                // Draining RTCP also drives the default interceptors; the counter feeds the
+                // no-inbound-media watchdog.
+                while rtp_sender.read_rtcp().await.is_ok() {
+                    received_rtcp.fetch_add(1, Ordering::Relaxed);
+                }
+                tracing::trace!("RTCP reader task finished");
+            })
+        };
 
         let (events_tx, events_rx) = broadcast::channel(PEER_EVENTS_CAPACITY);
 
         {
             let events_tx = events_tx.clone();
+            let dtls_transport = peer_connection.sctp().transport();
             peer_connection.on_peer_connection_state_change(Box::new(
                 move |state: RTCPeerConnectionState| {
                     tracing::trace!(?state, "Peer connection state changed");
                     if let Err(err) = events_tx.send(PeerEvent::ConnectionState(state)) {
                         tracing::warn!(?err, "Failed to send peer connection state event");
                     }
-                    Box::pin(async {})
+
+                    let dtls_transport = Arc::clone(&dtls_transport);
+                    Box::pin(async move {
+                        if state == RTCPeerConnectionState::Connected {
+                            match dtls_transport
+                                .ice_transport()
+                                .get_selected_candidate_pair()
+                                .await
+                            {
+                                Some(pair) => {
+                                    tracing::info!(%pair, "Selected ICE candidate pair");
+                                }
+                                None => tracing::warn!(
+                                    "Connected but no selected ICE candidate pair available"
+                                ),
+                            }
+                        }
+                    })
                 },
             ));
         }
 
         {
             let events_tx = events_tx.clone();
+            let cgnat_warned = AtomicBool::new(false);
             peer_connection.on_ice_candidate(Box::new(
                 move |candidate: Option<RTCIceCandidate>| {
                     tracing::trace!(?candidate, "ICE candidate received");
                     if let Some(candidate) = candidate {
+                        if is_cgnat_address(&candidate.address)
+                            && !cgnat_warned.swap(true, Ordering::Relaxed)
+                        {
+                            tracing::warn!(
+                                address = %candidate.address,
+                                "Local ICE candidate in CGNAT range (100.64.0.0/10), likely a VPN \
+                                 interface (e.g. Cloudflare WARP, Tailscale). Calls may suffer \
+                                 one-way audio; forcing relayed calls can help"
+                            );
+                        }
+
                         match candidate.to_json() {
                             Ok(init) => match serde_json::to_string(&init) {
                                 Ok(init) => {
@@ -127,6 +198,11 @@ impl Peer {
                 sender: None,
                 receiver: None,
                 events_tx,
+                received_rtp,
+                received_rtcp,
+                sent_frames,
+                rtcp_reader,
+                watchdog: None,
             },
             events_rx,
         ))
@@ -149,18 +225,87 @@ impl Peer {
             receiver.resume(output_tx);
         } else {
             tracing::trace!("Starting receiver");
-            self.receiver = Some(crate::Receiver::new(&self.peer_connection, output_tx));
+            self.receiver = Some(crate::Receiver::new(
+                &self.peer_connection,
+                output_tx,
+                Arc::clone(&self.received_rtp),
+            ));
         }
 
-        self.sender = Some(crate::Sender::new(Arc::clone(&self.track), input_rx));
+        self.sender = Some(crate::Sender::new(
+            Arc::clone(&self.track),
+            input_rx,
+            Arc::clone(&self.sent_frames),
+        ));
+
+        self.watchdog = Some(self.spawn_media_watchdog());
 
         tracing::trace!("Successfully started peer");
         Ok(())
     }
 
+    /// Periodically logs media counters and emits [`PeerEvent::NoInboundMedia`] once if both
+    /// inbound counters stall for [`NO_INBOUND_MEDIA_TIMEOUT`] while the peer is started.
+    fn spawn_media_watchdog(&self) -> JoinHandle<()> {
+        let received_rtp = Arc::clone(&self.received_rtp);
+        let received_rtcp = Arc::clone(&self.received_rtcp);
+        let sent_frames = Arc::clone(&self.sent_frames);
+        let events_tx = self.events_tx.clone();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+            let mut last_inbound = (
+                received_rtp.load(Ordering::Relaxed),
+                received_rtcp.load(Ordering::Relaxed),
+            );
+            let mut last_inbound_change = Instant::now();
+            let mut fired = false;
+            let mut ticks: u64 = 0;
+
+            loop {
+                interval.tick().await;
+                ticks += 1;
+
+                let inbound = (
+                    received_rtp.load(Ordering::Relaxed),
+                    received_rtcp.load(Ordering::Relaxed),
+                );
+                if inbound != last_inbound {
+                    last_inbound = inbound;
+                    last_inbound_change = Instant::now();
+                } else if !fired && last_inbound_change.elapsed() >= NO_INBOUND_MEDIA_TIMEOUT {
+                    fired = true;
+                    tracing::warn!(
+                        stalled_for = ?last_inbound_change.elapsed(),
+                        inbound_rtp = inbound.0,
+                        inbound_rtcp = inbound.1,
+                        "No inbound media received, signalling"
+                    );
+                    if let Err(err) = events_tx.send(PeerEvent::NoInboundMedia) {
+                        tracing::warn!(?err, "Failed to send no inbound media event");
+                    }
+                }
+
+                if ticks.is_multiple_of(MEDIA_STATS_LOG_INTERVAL_TICKS) {
+                    tracing::debug!(
+                        inbound_rtp = inbound.0,
+                        inbound_rtcp = inbound.1,
+                        outbound_frames = sent_frames.load(Ordering::Relaxed),
+                        "Call media stats"
+                    );
+                }
+            }
+        })
+    }
+
     #[instrument(level = "debug", skip_all)]
     pub fn pause(&mut self) {
         tracing::debug!("Pausing peer");
+        if let Some(watchdog) = self.watchdog.take() {
+            watchdog.abort();
+        }
         if let Some(sender) = self.sender.take() {
             sender.shutdown();
         }
@@ -172,6 +317,9 @@ impl Peer {
     #[instrument(level = "debug", skip(self), err)]
     pub async fn stop(&mut self) -> Result<(), WebrtcError> {
         tracing::debug!("Stopping peer");
+        if let Some(watchdog) = self.watchdog.take() {
+            watchdog.abort();
+        }
         if let Some(sender) = self.sender.take() {
             tracing::trace!("Shutting down sender");
             sender.stop().await?;
@@ -195,6 +343,8 @@ impl Peer {
             .close()
             .await
             .context("Failed to close peer connection")?;
+
+        self.rtcp_reader.abort();
 
         tracing::trace!("Successfully closed peer connection");
         Ok(())
@@ -298,6 +448,27 @@ impl Peer {
     }
 }
 
+impl Drop for Peer {
+    fn drop(&mut self) {
+        if let Some(watchdog) = self.watchdog.take() {
+            watchdog.abort();
+        }
+        self.rtcp_reader.abort();
+    }
+}
+
+/// Checks whether an address is within the CGNAT range 100.64.0.0/10 (RFC 6598), which is
+/// commonly used by VPNs such as Cloudflare WARP or Tailscale for their virtual interfaces.
+fn is_cgnat_address(address: &str) -> bool {
+    match address.parse::<IpAddr>() {
+        Ok(IpAddr::V4(ip)) => {
+            let octets = ip.octets();
+            octets[0] == 100 && (64..128).contains(&octets[1])
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,10 +478,13 @@ mod tests {
     /// Building a peer without ICE servers keeps these tests offline: nothing
     /// is gathered until a local description is set.
     async fn test_peer() -> Peer {
-        let (peer, _events) = Peer::new(IceConfig {
-            ice_servers: Vec::new(),
-            expires_at: None,
-        })
+        let (peer, _events) = Peer::new(
+            IceConfig {
+                ice_servers: Vec::new(),
+                expires_at: None,
+            },
+            false,
+        )
         .await
         .expect("failed to create peer");
         peer
@@ -386,5 +560,17 @@ mod tests {
 
         assert!(peer.sender.is_none(), "stop must drop the sender");
         assert!(peer.receiver.is_none(), "stop must drop the receiver");
+    }
+
+    #[test]
+    fn detects_cgnat_addresses() {
+        assert!(is_cgnat_address("100.64.0.1"));
+        assert!(is_cgnat_address("100.96.12.34"));
+        assert!(is_cgnat_address("100.127.255.255"));
+        assert!(!is_cgnat_address("100.63.255.255"));
+        assert!(!is_cgnat_address("100.128.0.0"));
+        assert!(!is_cgnat_address("192.168.1.1"));
+        assert!(!is_cgnat_address("not-an-ip"));
+        assert!(!is_cgnat_address("2001:db8::1"));
     }
 }

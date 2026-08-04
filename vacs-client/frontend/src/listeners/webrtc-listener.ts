@@ -16,6 +16,12 @@ export function setupWebrtcListeners() {
             listen<CallId>("webrtc:call-disconnected", event => {
                 setConnectionState(event.payload, "disconnected");
             }),
+            listen<CallId>("webrtc:call-degraded", event => {
+                setConnectionState(event.payload, "degraded");
+            }),
+            listen<CallId>("webrtc:call-reconnecting", event => {
+                setConnectionState(event.payload, "connecting");
+            }),
             listen<CallError>("webrtc:call-error", event => {
                 errorCall(event.payload.callId, event.payload.reason);
             }),
