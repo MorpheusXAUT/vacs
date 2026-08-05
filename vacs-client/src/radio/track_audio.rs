@@ -37,7 +37,6 @@ pub struct TrackAudioRadio {
     #[allow(dead_code)]
     app: AppHandle,
     client: TrackAudioClient,
-    active: Arc<AtomicBool>,
     state: Arc<TrackAudioState>,
     #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
     events_tx: broadcast::Sender<trackaudio::Event>,
@@ -73,7 +72,6 @@ impl TrackAudioRadio {
 
         let cancellation_token = CancellationToken::new();
 
-        let active = Arc::new(AtomicBool::new(false));
         let state = Arc::new(TrackAudioState::default());
         let (events_tx, _) = broadcast::channel(EVENT_FANOUT_CAPACITY);
 
@@ -92,7 +90,6 @@ impl TrackAudioRadio {
         let radio = Self {
             app,
             client,
-            active,
             state,
             events_tx,
             cancellation_token,
@@ -306,8 +303,12 @@ impl TrackAudioRadio {
 impl Radio for TrackAudioRadio {
     async fn transmit(&self, state: TransmissionState) -> Result<(), RadioError> {
         let active = match state {
-            TransmissionState::Active if !self.active.swap(true, Ordering::Relaxed) => true,
-            TransmissionState::Inactive if self.active.swap(false, Ordering::Relaxed) => false,
+            TransmissionState::Active if !self.state.ptt_active.swap(true, Ordering::Relaxed) => {
+                true
+            }
+            TransmissionState::Inactive if self.state.ptt_active.swap(false, Ordering::Relaxed) => {
+                false
+            }
             _ => {
                 log::trace!("Ignoring redundant transmission request {state:?}");
                 return Ok(());
@@ -333,6 +334,17 @@ impl Radio for TrackAudioRadio {
                 Ok(())
             }
             Err(err) => {
+                // Only a send-side failure proves the command never reached the client task. On a
+                // timed out ack the command *was* enqueued, so the latch still reflects what
+                // TrackAudio was told - rolling it back there would re-latch a released PTT and
+                // silently no-op the next press.
+                if matches!(
+                    err,
+                    TrackAudioError::Send(_) | TrackAudioError::ClientTaskTerminated
+                ) {
+                    self.state.ptt_active.store(!active, Ordering::Relaxed);
+                }
+
                 self.state.transmit_failures.fetch_add(1, Ordering::Relaxed);
 
                 if matches!(err, TrackAudioError::Timeout) {
@@ -430,7 +442,6 @@ impl Radio for TrackAudioRadio {
 impl Debug for TrackAudioRadio {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TrackAudioRadio")
-            .field("active", &self.active)
             .field("state", &self.state)
             .field("client", &self.client)
             .finish()
@@ -441,7 +452,7 @@ impl Drop for TrackAudioRadio {
     fn drop(&mut self) {
         log::debug!("Dropping TrackAudioRadio");
 
-        if self.active.load(Ordering::Relaxed)
+        if self.state.ptt_active.load(Ordering::Relaxed)
             && let Err(err) =
                 tauri::async_runtime::block_on(self.transmit(TransmissionState::Inactive))
         {
@@ -462,6 +473,13 @@ pub(crate) struct TrackAudioState {
     transmitting: AtomicBool,
     receiving: RwLock<HashSet<Frequency>>,
     stations: RwLock<HashMap<Frequency, RadioStation>>,
+
+    /// Local press/release edge latch, so a held key does not re-send `kPttPressed`.
+    ///
+    /// Lives here rather than on [`TrackAudioRadio`] so that [`TrackAudioState::clear`] resets it
+    /// on every disconnect. A latch stuck at `true` while TrackAudio is not transmitting makes
+    /// every later press a silent no-op, and a fresh socket means TrackAudio's PTT state is fresh.
+    ptt_active: AtomicBool,
 
     /// Consecutive failed transmit attempts, see [`TRANSMIT_FAILURE_THRESHOLD`].
     transmit_failures: AtomicUsize,
@@ -533,6 +551,7 @@ impl Debug for TrackAudioState {
             .field("connected", &self.connected)
             .field("voice_connected", &self.voice_connected)
             .field("transmitting", &self.transmitting)
+            .field("ptt_active", &self.ptt_active)
             .field("transmit_failures", &self.transmit_failures)
             .field("receiving", &self.receiving)
             .field("stations", &self.stations.read().len())
@@ -549,6 +568,7 @@ impl TrackAudioState {
         self.connected.store(false, Ordering::Relaxed);
         self.voice_connected.store(false, Ordering::Relaxed);
         self.transmitting.store(false, Ordering::Relaxed);
+        self.ptt_active.store(false, Ordering::Relaxed);
         self.transmit_failures.store(0, Ordering::Relaxed);
         self.receiving.write().clear();
         self.stations.write().clear();
@@ -712,6 +732,18 @@ mod tests {
         state.connected.store(true, Ordering::Relaxed);
         state.voice_connected.store(true, Ordering::Relaxed);
         state
+    }
+
+    #[test]
+    fn clear_resets_ptt_latch() {
+        let state = TrackAudioState::default();
+        state.ptt_active.store(true, Ordering::Relaxed);
+
+        state.clear();
+
+        // A latch stuck at `true` makes every later press a silent no-op, so a disconnect (which
+        // resets TrackAudio's own PTT state) has to drop it.
+        assert!(!state.ptt_active.load(Ordering::Relaxed));
     }
 
     #[test]
