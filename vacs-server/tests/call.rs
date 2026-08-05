@@ -4,7 +4,7 @@ use vacs_protocol::vatsim::ClientId;
 use vacs_protocol::ws::client::ClientMessage;
 use vacs_protocol::ws::server::ServerMessage;
 use vacs_protocol::ws::shared::{CallId, CallTarget};
-use vacs_server::test_utils::{TestApp, setup_n_test_clients};
+use vacs_server::test_utils::{TestApp, TestClient, setup_n_test_clients};
 
 #[test(tokio::test)]
 async fn call_offer() -> anyhow::Result<()> {
@@ -349,6 +349,88 @@ async fn target_not_found() -> anyhow::Result<()> {
             call_offer_messages
         );
     }
+
+    Ok(())
+}
+
+/// Brings a call between the two clients up to the point where the server considers it active.
+async fn establish_call(
+    caller: &mut TestClient,
+    callee: &mut TestClient,
+) -> anyhow::Result<CallId> {
+    let call_id = CallId::new();
+    caller
+        .send(ClientMessage::CallInvite(
+            vacs_protocol::ws::shared::CallInvite {
+                call_id,
+                source: vacs_protocol::ws::shared::CallSource {
+                    client_id: caller.id().clone(),
+                    position_id: None,
+                    station_id: None,
+                },
+                target: CallTarget::Client(callee.id().clone()),
+                prio: false,
+            },
+        ))
+        .await?;
+
+    let invites = callee
+        .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
+            matches!(m, ServerMessage::CallInvite(_))
+        })
+        .await;
+    assert_eq!(invites.len(), 1, "callee should receive the CallInvite");
+
+    callee
+        .send(ClientMessage::CallAccept(
+            vacs_protocol::ws::shared::CallAccept {
+                call_id,
+                accepting_client_id: callee.id().clone(),
+            },
+        ))
+        .await?;
+
+    let accepts = caller
+        .recv_until_timeout_with_filter(Duration::from_millis(100), |m| {
+            matches!(m, ServerMessage::CallAccept(_))
+        })
+        .await;
+    assert_eq!(accepts.len(), 1, "caller should receive the CallAccept");
+
+    Ok(call_id)
+}
+
+#[test(tokio::test)]
+async fn disconnect_releases_every_active_call_of_the_client() -> anyhow::Result<()> {
+    let test_app = TestApp::new().await;
+    let mut clients = setup_n_test_clients(test_app.addr(), 3).await;
+
+    let mut client1 = clients.remove(0);
+    let mut client2 = clients.remove(0);
+    let mut client3 = clients.remove(0);
+
+    // The client would not do this, but nothing on the wire stops it: only a second *ringing*
+    // outgoing call is rejected, so the server has to survive a client in two calls
+    establish_call(&mut client1, &mut client2).await?;
+    establish_call(&mut client1, &mut client3).await?;
+    assert_eq!(test_app.state().calls.active_call_count(), 2);
+
+    client1.close().await;
+
+    for (name, client) in [("client2", &mut client2), ("client3", &mut client3)] {
+        let ends = client
+            .recv_until_timeout_with_filter(Duration::from_millis(500), |m| {
+                matches!(m, ServerMessage::CallEnd(_))
+            })
+            .await;
+        assert_eq!(ends.len(), 1, "{name} should be told its call ended");
+    }
+
+    assert_eq!(
+        test_app.state().calls.active_call_count(),
+        0,
+        "no call may stay active after both of its clients are gone"
+    );
 
     Ok(())
 }

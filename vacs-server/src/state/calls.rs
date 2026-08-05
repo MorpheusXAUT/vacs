@@ -148,16 +148,6 @@ impl ActiveCallEntry {
         }
     }
 
-    pub fn peer(&self, client_id: &ClientId) -> Option<&ClientId> {
-        if self.caller_id == *client_id {
-            Some(&self.callee_id)
-        } else if self.callee_id == *client_id {
-            Some(&self.caller_id)
-        } else {
-            None
-        }
-    }
-
     pub fn involves(&self, client_id: &ClientId) -> bool {
         self.caller_id == *client_id || self.callee_id == *client_id
     }

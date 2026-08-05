@@ -29,7 +29,6 @@ pub struct CallManager {
     active_calls: RwLock<HashMap<CallId, ActiveCallEntry>>,
     client_incoming_calls: RwLock<HashMap<ClientId, HashSet<CallId>>>,
     client_outgoing_calls: RwLock<HashMap<ClientId, CallId>>,
-    client_active_calls: RwLock<HashMap<ClientId, CallId>>,
 }
 
 impl Default for CallManager {
@@ -54,7 +53,6 @@ impl CallManager {
             active_calls: RwLock::new(HashMap::new()),
             client_incoming_calls: RwLock::new(HashMap::new()),
             client_outgoing_calls: RwLock::new(HashMap::new()),
-            client_active_calls: RwLock::new(HashMap::new()),
         }
     }
 
@@ -75,6 +73,12 @@ impl CallManager {
 
     pub fn active_call(&self, call_id: &CallId) -> Option<ActiveCall> {
         self.active_calls.read().get(call_id).map(Into::into)
+    }
+
+    /// Number of currently active calls. This is the value the `vacs_calls_active` gauge tracks,
+    /// since every entry holds a [`CallGuard`](crate::metrics::guards::CallGuard).
+    pub fn active_call_count(&self) -> usize {
+        self.active_calls.read().len()
     }
 
     pub fn start_call_attempt(
@@ -193,11 +197,6 @@ impl CallManager {
         );
 
         self.active_calls.write().insert(*call_id, active);
-        {
-            let mut client_active_calls = self.client_active_calls.write();
-            client_active_calls.insert(ringing.caller_id.clone(), *call_id);
-            client_active_calls.insert(accepting_client_id.clone(), *call_id);
-        }
 
         Some(ringing.complete(CallAttemptOutcome::Accepted))
     }
@@ -258,12 +257,6 @@ impl CallManager {
             }
         }?;
 
-        {
-            let mut client_active_calls = self.client_active_calls.write();
-            client_active_calls.remove(&active.caller_id);
-            client_active_calls.remove(&active.callee_id);
-        }
-
         Some(ActiveCall::from(active))
     }
 
@@ -272,7 +265,6 @@ impl CallManager {
         tracing::trace!("Cleaning up client calls");
 
         let mut cleaned_ringing_calls: Vec<RingingCall> = Vec::new();
-        let mut cleaned_active_call: Option<ActiveCall> = None;
 
         let outgoing_call_id = { self.client_outgoing_calls.write().remove(client_id) };
         if let Some(outgoing_call_id) = outgoing_call_id {
@@ -326,25 +318,7 @@ impl CallManager {
             }
         }
 
-        let active_call_id = { self.client_active_calls.write().remove(client_id) };
-        if let Some(active_call_id) = active_call_id {
-            let active = { self.active_calls.write().remove(&active_call_id) };
-            if let Some(active) = active
-                && let Some(peer_id) = active.peer(client_id)
-            {
-                {
-                    let mut client_active_calls = self.client_active_calls.write();
-                    if client_active_calls
-                        .get(peer_id)
-                        .is_some_and(|c| *c == active_call_id)
-                    {
-                        client_active_calls.remove(peer_id);
-                    }
-                }
-
-                cleaned_active_call = Some(ActiveCall::from(active));
-            }
-        }
+        let cleaned_active_calls = self.remove_active_calls_of(client_id);
 
         for ringing in cleaned_ringing_calls {
             self.client_outgoing_calls
@@ -381,9 +355,15 @@ impl CallManager {
             }
         }
 
-        if let Some(active) = cleaned_active_call
-            && let Some(peer_id) = active.peer(client_id)
-        {
+        for active in cleaned_active_calls {
+            // Unreachable: the calls collected above all involve this client, so they all have a
+            // peer. Kept as an invariant tripwire rather than an unwrap
+            let Some(peer_id) = active.peer(client_id) else {
+                ErrorMetrics::peer_not_found();
+                tracing::warn!(call_id = ?active.call_id, "No peer found for active call");
+                continue;
+            };
+
             tracing::trace!(?peer_id, "Sending call end to peer");
             if let Err(err) = state
                 .send_message(peer_id, CallEnd::new(active.call_id, peer_id.clone()))
@@ -391,10 +371,31 @@ impl CallManager {
             {
                 tracing::warn!(?err, ?peer_id, "Failed to send call end to peer");
             }
-        } else {
-            ErrorMetrics::peer_not_found();
-            tracing::warn!("No peer found for active call");
         }
+    }
+
+    /// Removes every active call the client takes part in.
+    ///
+    /// A client is meant to be in one call at a time, but the server does not enforce it:
+    /// `start_call_attempt` only rejects a second *ringing* outgoing call, and acceptance is not
+    /// checked against the calls already running. Draining every match keeps the bookkeeping
+    /// honest if a client ends up in two anyway, because a call left behind here can never be
+    /// reached again once its other party is gone too, and its
+    /// [`CallGuard`](crate::metrics::guards::CallGuard) then keeps `vacs_calls_active` above zero
+    /// for the rest of the server's lifetime.
+    fn remove_active_calls_of(&self, client_id: &ClientId) -> Vec<ActiveCall> {
+        let mut active_calls = self.active_calls.write();
+        let call_ids: Vec<CallId> = active_calls
+            .iter()
+            .filter(|(_, active)| active.involves(client_id))
+            .map(|(call_id, _)| *call_id)
+            .collect();
+
+        call_ids
+            .into_iter()
+            .filter_map(|call_id| active_calls.remove(&call_id))
+            .map(ActiveCall::from)
+            .collect()
     }
 
     fn remove_client_incoming_call(&self, call_id: &CallId, client_id: &ClientId) {
@@ -421,5 +422,103 @@ impl CallManager {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ws::test_util::{TestSetup, create_client_info};
+    use pretty_assertions::assert_eq;
+    use test_log::test;
+    use vacs_protocol::ws::server::ServerMessage;
+
+    /// Establishes an active call from `caller` to `callee` and returns its id.
+    fn establish_call(calls: &CallManager, caller: &ClientId, callee: &ClientId) -> CallId {
+        let call_id = CallId::new();
+        calls
+            .start_call_attempt(
+                &call_id,
+                caller,
+                &CallTarget::Client(callee.clone()),
+                &HashSet::from([callee.clone()]),
+            )
+            .expect("Failed to start call attempt");
+        calls
+            .accept_call(&call_id, callee)
+            .expect("Failed to accept call");
+        call_id
+    }
+
+    #[test(tokio::test)]
+    async fn cleanup_client_calls_removes_every_active_call_of_the_client() {
+        let setup = TestSetup::new();
+        let state = setup.app_state.clone();
+        let (client1, _rx1) = setup.register_client(create_client_info(1)).await;
+        let (client2, mut rx2) = setup.register_client(create_client_info(2)).await;
+        let (client3, mut rx3) = setup.register_client(create_client_info(3)).await;
+
+        // The desktop client never gets here, but the server accepts a second call for a client
+        // that already has one, so the cleanup has to cope with it
+        establish_call(&state.calls, client1.id(), client2.id());
+        establish_call(&state.calls, client1.id(), client3.id());
+        assert_eq!(state.calls.active_call_count(), 2);
+
+        state.calls.cleanup_client_calls(&state, client1.id()).await;
+
+        assert_eq!(
+            state.calls.active_call_count(),
+            0,
+            "Disconnecting a client must not leave any of its calls active"
+        );
+        assert!(
+            matches!(rx2.try_recv(), Ok(ServerMessage::CallEnd(_))),
+            "Peer of the first call should be told the call ended"
+        );
+        assert!(
+            matches!(rx3.try_recv(), Ok(ServerMessage::CallEnd(_))),
+            "Peer of the second call should be told the call ended"
+        );
+    }
+
+    #[test(tokio::test)]
+    async fn ending_one_call_keeps_the_clients_other_call_cleanable() {
+        let setup = TestSetup::new();
+        let state = setup.app_state.clone();
+        let (client1, _rx1) = setup.register_client(create_client_info(1)).await;
+        let (client2, _rx2) = setup.register_client(create_client_info(2)).await;
+        let (client3, _rx3) = setup.register_client(create_client_info(3)).await;
+
+        let call_1 = establish_call(&state.calls, client1.id(), client2.id());
+        establish_call(&state.calls, client1.id(), client3.id());
+
+        state
+            .calls
+            .end_active_call(&call_1, client2.id())
+            .expect("Failed to end first call");
+        assert_eq!(state.calls.active_call_count(), 1);
+
+        state.calls.cleanup_client_calls(&state, client1.id()).await;
+
+        assert_eq!(
+            state.calls.active_call_count(),
+            0,
+            "Ending one call must not make the client's other call uncleanable"
+        );
+    }
+
+    #[test(tokio::test)]
+    async fn cleanup_client_calls_is_idempotent() {
+        let setup = TestSetup::new();
+        let state = setup.app_state.clone();
+        let (client1, _rx1) = setup.register_client(create_client_info(1)).await;
+        let (client2, _rx2) = setup.register_client(create_client_info(2)).await;
+
+        establish_call(&state.calls, client1.id(), client2.id());
+
+        state.calls.cleanup_client_calls(&state, client1.id()).await;
+        state.calls.cleanup_client_calls(&state, client2.id()).await;
+
+        assert_eq!(state.calls.active_call_count(), 0);
     }
 }
