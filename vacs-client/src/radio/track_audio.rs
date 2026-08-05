@@ -158,9 +158,11 @@ impl TrackAudioRadio {
 
         match event {
             Event::TxBegin(_) => {
+                log::trace!("TrackAudio TX begin");
                 state.set_transmitting(app, true);
             }
             Event::TxEnd(_) => {
+                log::trace!("TrackAudio TX end");
                 state.set_transmitting(app, false);
             }
             Event::RxBegin(rx_begin) => {
@@ -301,7 +303,10 @@ impl Radio for TrackAudioRadio {
         let active = match state {
             TransmissionState::Active if !self.active.swap(true, Ordering::Relaxed) => true,
             TransmissionState::Inactive if self.active.swap(false, Ordering::Relaxed) => false,
-            _ => return Ok(()),
+            _ => {
+                log::trace!("Ignoring redundant transmission request {state:?}");
+                return Ok(());
+            }
         };
 
         log::trace!("Setting transmission {state:?}, sending active {active}");
