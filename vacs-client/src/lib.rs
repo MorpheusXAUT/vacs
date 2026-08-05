@@ -167,6 +167,8 @@ pub fn run() {
             app::commands::app_load_test_profile,
             app::commands::app_open_folder,
             app::commands::app_platform_capabilities,
+            #[cfg(feature = "e2e")]
+            app::commands::app_process_id,
             app::commands::app_quit,
             app::commands::app_reset_window_size,
             app::commands::app_set_always_on_top,
