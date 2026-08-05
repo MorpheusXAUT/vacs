@@ -138,8 +138,14 @@ impl TrackAudioRadio {
                             }
                             Self::handle_event(event, &state, &app, &client).await;
                         }
-                        Err(err) => {
-                            log::error!("Error receiving TrackAudio event: {err}");
+                        // Recoverable: the receiver stays valid and only missed events. Breaking
+                        // here would permanently stop every radio state update - TX/RX indication,
+                        // station sync and connection handling - until the radio is rebuilt.
+                        Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                            log::warn!("Lagged by {skipped} TrackAudio events");
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            log::error!("TrackAudio event channel closed");
                             state.clear();
                             app.emit("radio:state", RadioState::Error).ok();
                             break;
