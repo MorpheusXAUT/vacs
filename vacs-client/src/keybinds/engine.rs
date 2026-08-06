@@ -366,7 +366,19 @@ impl KeybindEngine {
     fn reset_input_state(&self) {
         self.call_pressed.store(false, Ordering::Relaxed);
         self.radio_pressed.store(false, Ordering::Relaxed);
-        self.radio_transmitting.store(false, Ordering::Relaxed);
+
+        // The rx task is aborted before this runs, so the key release that would
+        // have keyed the radio down will never be processed. Without sending it
+        // here, reconfiguring while the radio key is held leaves the radio
+        // transmitting with no key left to release it.
+        if self.radio_transmitting.swap(false, Ordering::Relaxed) {
+            log::debug!("Radio transmit: false (input state reset)");
+
+            let radio_handle = self.app.state::<RadioHandle>().inner().clone();
+            tauri::async_runtime::spawn(async move {
+                Self::set_radio_transmit(&radio_handle, TransmissionState::Inactive).await;
+            });
+        }
 
         let muted = match &self.call_mic_mode {
             CallMicMode::PushToTalk => true,
