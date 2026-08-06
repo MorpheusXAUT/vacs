@@ -175,24 +175,14 @@ impl KeybindEngine {
         Ok(())
     }
 
-    /// Re-resolves the radio fallback from the listener's current bindings.
-    ///
-    /// Never re-resolves while a key is held: flipping the fallback mid-press
-    /// would classify the release differently from the press and leave the
-    /// radio keyed.
     fn refresh_radio_follows_call(&self) {
-        if self.call_pressed.load(Ordering::Relaxed) || self.radio_pressed.load(Ordering::Relaxed) {
-            return;
-        }
-
-        let follows =
-            self.radio_portal_fallback && !radio_shortcut_bound(self.listener.read().as_ref());
-        if self.radio_follows_call.swap(follows, Ordering::Relaxed) != follows {
-            log::debug!(
-                "Radio TX now follows the {} trigger",
-                if follows { "call" } else { "radio" }
-            );
-        }
+        refresh_radio_follows_call(
+            self.listener.read().as_ref(),
+            self.radio_portal_fallback,
+            &self.radio_follows_call,
+            &self.call_pressed,
+            &self.radio_pressed,
+        );
     }
 
     /// Whether radio TX and the call MIC action share one trigger, either
@@ -510,15 +500,13 @@ impl KeybindEngine {
                             Self::handle_call_control_event(&app, &event.trigger, accept_call.as_ref(), end_call.as_ref(), toggle_radio_prio.as_ref()).await;
                         }
 
-                        // Re-resolve the portal fallback only between press cycles: flipping it
-                        // while a key is held would classify the release differently from the
-                        // press and leave the radio keyed.
-                        if radio_portal_fallback
-                            && !call_pressed.load(Ordering::Relaxed)
-                            && !radio_pressed.load(Ordering::Relaxed)
-                        {
-                            radio_follows_call.store(!radio_shortcut_bound(listener.as_ref()), Ordering::Relaxed);
-                        }
+                        refresh_radio_follows_call(
+                            listener.as_ref(),
+                            radio_portal_fallback,
+                            &radio_follows_call,
+                            &call_pressed,
+                            &radio_pressed,
+                        );
 
                         let is_call_key = call_trigger.as_ref() == Some(&event.trigger);
                         let is_radio_key = radio_trigger.as_ref() == Some(&event.trigger)
@@ -654,4 +642,31 @@ fn radio_shortcut_bound(listener: Option<&DynKeybindListener>) -> bool {
     listener
         .and_then(|l| l.get_external_binding(Keybind::RadioPushToTalk))
         .is_some()
+}
+
+/// Re-resolves whether radio TX follows the call trigger, from the listener's
+/// live view of the OS level bindings.
+///
+/// Never re-resolves while a key is held: flipping the fallback mid-press would
+/// classify the release differently from the press and leave the radio keyed.
+/// Both the engine and its event loop go through here so that invariant, and
+/// the log line reporting a flip, cannot drift apart.
+fn refresh_radio_follows_call(
+    listener: Option<&DynKeybindListener>,
+    fallback: bool,
+    follows_call: &AtomicBool,
+    call_pressed: &AtomicBool,
+    radio_pressed: &AtomicBool,
+) {
+    if call_pressed.load(Ordering::Relaxed) || radio_pressed.load(Ordering::Relaxed) {
+        return;
+    }
+
+    let follows = fallback && !radio_shortcut_bound(listener);
+    if follows_call.swap(follows, Ordering::Relaxed) != follows {
+        log::debug!(
+            "Radio TX now follows the {} trigger",
+            if follows { "call" } else { "radio" }
+        );
+    }
 }
