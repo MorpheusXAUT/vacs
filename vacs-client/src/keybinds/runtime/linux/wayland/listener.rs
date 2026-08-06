@@ -206,7 +206,7 @@ async fn setup_shortcuts_listener(
     res
 }
 
-pub(super) async fn initialize_portal(
+async fn initialize_portal(
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,
 ) -> ashpd::Result<(GlobalShortcuts, ashpd::desktop::Session<GlobalShortcuts>)> {
     let proxy = match tokio::time::timeout(Duration::from_secs(5), GlobalShortcuts::new()).await {
@@ -267,7 +267,7 @@ pub(super) async fn initialize_portal(
 /// on the session: xdg-desktop-portal-kde reports the persisted shortcuts,
 /// xdg-desktop-portal-gnome reports nothing. Treat an empty result as "unknown",
 /// not as "unbound".
-pub(super) async fn check_existing_shortcuts(
+async fn check_existing_shortcuts(
     proxy: &GlobalShortcuts,
     session: &ashpd::desktop::Session<GlobalShortcuts>,
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,

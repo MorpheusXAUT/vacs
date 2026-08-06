@@ -338,28 +338,17 @@ impl TransmitConfig {
     }
 
     /// The trigger that drives radio TX, if any.
-    pub async fn active_radio_trigger(&self, enabled: bool) -> Option<Trigger> {
+    pub fn active_radio_trigger(&self, enabled: bool) -> Option<Trigger> {
         if !enabled {
             return None;
         }
 
         #[cfg(target_os = "linux")]
         if matches!(Platform::get(), Platform::LinuxWayland) {
-            use crate::keybinds::runtime;
-
             // See active_call_trigger: portal activations replace keyboard codes.
             let portal = match self.call_mic_mode {
-                CallMicMode::VoiceActivation => Some(PortalAction::RadioPushToTalk),
-                CallMicMode::PushToTalk => {
-                    if runtime::is_portal_shortcut_bound(runtime::PortalShortcutId::RadioPushToTalk)
-                        .await
-                    {
-                        Some(PortalAction::RadioPushToTalk)
-                    } else {
-                        // No dedicated radio shortcut bound at the OS level: radio TX
-                        // follows the call PTT shortcut instead.
-                        Some(PortalAction::PushToTalk)
-                    }
+                CallMicMode::VoiceActivation | CallMicMode::PushToTalk => {
+                    Some(PortalAction::RadioPushToTalk)
                 }
                 CallMicMode::PushToMute => Some(PortalAction::PushToMute),
             };
@@ -372,6 +361,30 @@ impl TransmitConfig {
         }
 
         self.configured_radio_input().map(Trigger::Input)
+    }
+
+    /// Whether radio TX falls back to the call trigger while no dedicated radio
+    /// shortcut is bound at the OS level.
+    ///
+    /// Only the Wayland portal has this ambiguity: the radio shortcut is
+    /// registered whether or not the user assigned a key to it, so "is there a
+    /// dedicated radio key" cannot be answered from configuration alone. The
+    /// answer also changes while the app runs, whenever the user edits the
+    /// binding in their desktop environment, so the engine resolves it from the
+    /// listener's live view rather than caching it here.
+    #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
+    pub fn radio_falls_back_to_call(&self, enabled: bool) -> bool {
+        #[cfg(target_os = "linux")]
+        if enabled
+            && matches!(Platform::get(), Platform::LinuxWayland)
+            && matches!(self.call_mic_mode, CallMicMode::PushToTalk)
+        {
+            // A configured joystick button replaces the portal shortcut, so
+            // there is nothing to fall back from.
+            return !matches!(self.configured_radio_input(), Some(InputCode::Button(_)));
+        }
+
+        false
     }
 }
 
@@ -619,6 +632,77 @@ mod tests {
     }
 
     #[test]
+    fn radio_never_falls_back_to_call_without_radio_integration() {
+        let config = TransmitConfig {
+            call_mic_mode: CallMicMode::PushToTalk,
+            ..Default::default()
+        };
+
+        assert!(!config.radio_falls_back_to_call(false));
+    }
+
+    #[test]
+    fn radio_only_falls_back_to_call_for_wayland_push_to_talk() {
+        let ptt = TransmitConfig {
+            call_mic_mode: CallMicMode::PushToTalk,
+            ..Default::default()
+        };
+
+        // Off Wayland the radio binding is known from configuration alone, so
+        // the fallback is folded into active_radio_trigger instead.
+        assert_eq!(ptt.radio_falls_back_to_call(true), running_on_wayland());
+
+        for mode in [CallMicMode::PushToMute, CallMicMode::VoiceActivation] {
+            let config = TransmitConfig {
+                call_mic_mode: mode,
+                ..Default::default()
+            };
+            assert!(
+                !config.radio_falls_back_to_call(true),
+                "{mode:?} has an unambiguous radio trigger"
+            );
+        }
+    }
+
+    #[test]
+    fn configured_joystick_button_suppresses_the_radio_fallback() {
+        let config = TransmitConfig {
+            call_mic_mode: CallMicMode::PushToTalk,
+            radio_push_to_talk: Some(button("guid", 4, None)),
+            ..Default::default()
+        };
+
+        // The button replaces the portal shortcut outright, so there is no
+        // unbound portal shortcut left to fall back from.
+        assert!(!config.radio_falls_back_to_call(true));
+        assert_eq!(
+            config.active_radio_trigger(true),
+            Some(Trigger::Input(button("guid", 4, None)))
+        );
+    }
+
+    #[test]
+    fn wayland_radio_trigger_is_always_the_dedicated_portal_action() {
+        if !running_on_wayland() {
+            return;
+        }
+
+        // Unlike the keyboard bindings, which the portal owns, the trigger no
+        // longer depends on whether a key is currently assigned to it: the
+        // engine resolves the fallback from the listener at runtime.
+        let config = TransmitConfig {
+            call_mic_mode: CallMicMode::PushToTalk,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            config.active_radio_trigger(true),
+            Some(Trigger::Portal(PortalAction::RadioPushToTalk))
+        );
+        assert!(config.radio_falls_back_to_call(true));
+    }
+
+    #[test]
     fn active_triggers_in_push_to_mute_mode_follow_ptm_binding() {
         // Only run the non-Wayland branch deterministically; the Wayland
         // composition itself is covered by the compose_wayland_trigger tests.
@@ -637,10 +721,7 @@ mod tests {
 
         let expected = Some(Trigger::Input(button("guid", 1, None)));
         assert_eq!(config.active_call_trigger(), expected);
-        assert_eq!(
-            tauri::async_runtime::block_on(config.active_radio_trigger(true)),
-            expected
-        );
+        assert_eq!(config.active_radio_trigger(true), expected);
     }
 
     #[test]
@@ -661,7 +742,7 @@ mod tests {
 
         assert_eq!(config.active_call_trigger(), None);
         assert_eq!(
-            tauri::async_runtime::block_on(config.active_radio_trigger(true)),
+            config.active_radio_trigger(true),
             Some(Trigger::Input(button("guid", 2, None)))
         );
     }
@@ -686,12 +767,9 @@ mod tests {
         );
 
         // No dedicated radio binding: radio TX follows the call PTT binding
-        let radio = tauri::async_runtime::block_on(config.active_radio_trigger(true));
+        let radio = config.active_radio_trigger(true);
         assert_eq!(radio, Some(Trigger::Input(button("guid", 0, None))));
 
-        assert_eq!(
-            tauri::async_runtime::block_on(config.active_radio_trigger(false)),
-            None
-        );
+        assert_eq!(config.active_radio_trigger(false), None);
     }
 }
