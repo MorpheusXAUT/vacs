@@ -465,11 +465,10 @@ fn update_shortcuts_map(shortcut_map: &ShortcutMap, bound_shortcuts: &[Shortcut]
         }
     }
 
-    if map.is_empty() {
-        log::warn!("No shortcuts bound");
-    } else {
-        log::debug!("Updated {} shortcuts", map.len());
-    }
+    // Not a warning: this runs once per ListShortcuts and once per BindShortcuts,
+    // and an empty map is the normal state before the user has assigned any key.
+    // `bind_shortcuts` raises the single actionable warning after binding.
+    log::debug!("Updated shortcuts map with {} entries", map.len());
 }
 
 type ShortcutMap = Arc<RwLock<HashMap<PortalShortcutId, String>>>;
