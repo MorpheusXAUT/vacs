@@ -291,7 +291,11 @@ async fn check_existing_shortcuts(
         Ok(response) => {
             let shortcuts = response.shortcuts();
             log::trace!("Portal reports {} existing shortcuts", shortcuts.len());
-            update_shortcuts_map(shortcuts_map, shortcuts);
+            // An empty result means "this backend does not report before binding",
+            // not "nothing is bound", so leave the map for `bind_shortcuts` to fill.
+            if !shortcuts.is_empty() {
+                update_shortcuts_map(shortcuts_map, shortcuts);
+            }
         }
         Err(err) => log::warn!("Failed to get list shortcuts response: {err}"),
     }

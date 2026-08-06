@@ -473,10 +473,11 @@ impl KeybindEngine {
         let radio_handle = self.app.state::<RadioHandle>().inner().clone();
         let radio_portal_fallback = self.radio_portal_fallback;
         let radio_follows_call = self.radio_follows_call.clone();
-        // The listener outlives this task: `stop()` aborts the task before it
-        // drops the listener, and `start()` installs a new one before spawning
-        // the replacement.
-        let listener = self.listener.read().clone();
+        // Weak, not owning: `stop()` drops the engine's handle before aborting
+        // this task, and an owning clone here would keep the old listener (and
+        // its portal session) alive until the runtime reclaims the aborted
+        // task, overlapping it with the session `start()` opens next.
+        let listener = self.listener.read().as_ref().map(Arc::downgrade);
         let call_pressed = self.call_pressed.clone();
         let radio_pressed = self.radio_pressed.clone();
         let call_active = self.call_active.clone();
@@ -501,7 +502,7 @@ impl KeybindEngine {
                         }
 
                         refresh_radio_follows_call(
-                            listener.as_ref(),
+                            listener.as_ref().and_then(|l| l.upgrade()).as_ref(),
                             radio_portal_fallback,
                             &radio_follows_call,
                             &call_pressed,
@@ -509,8 +510,16 @@ impl KeybindEngine {
                         );
 
                         let is_call_key = call_trigger.as_ref() == Some(&event.trigger);
-                        let is_radio_key = radio_trigger.as_ref() == Some(&event.trigger)
-                            || (is_call_key && radio_follows_call.load(Ordering::Relaxed));
+                        // Exactly one of the two can be the radio key. While the fallback is
+                        // active the dedicated shortcut is unbound, so also honoring it would
+                        // let a momentarily stale fallback count one press twice against the
+                        // shared `radio_pressed` flag, swallow the matching release and leave
+                        // the transmitter keyed.
+                        let is_radio_key = if radio_follows_call.load(Ordering::Relaxed) {
+                            is_call_key
+                        } else {
+                            radio_trigger.as_ref() == Some(&event.trigger)
+                        };
 
                         if !is_call_key && !is_radio_key { continue; }
 
