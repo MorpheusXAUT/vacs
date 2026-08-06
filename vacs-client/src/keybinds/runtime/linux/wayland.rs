@@ -177,7 +177,7 @@ pub async fn is_portal_shortcut_bound(shortcut_id: PortalShortcutId) -> bool {
     let shortcuts = Arc::new(RwLock::new(HashMap::new()));
 
     let bound = match check_existing_shortcuts(&proxy, &session, &mut None, &shortcuts).await {
-        Ok(_) => shortcuts.read().contains_key(&shortcut_id),
+        Ok(()) => shortcuts.read().contains_key(&shortcut_id),
         Err(err) => {
             log::error!("Failed to check existing Wayland Global Shortcuts: {err}");
             false

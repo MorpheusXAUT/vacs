@@ -170,18 +170,17 @@ async fn setup_shortcuts_listener(
         Err(err) => return Err(err),
     };
 
-    let needs_bind =
-        match check_existing_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await {
-            Ok(needs_bind) => needs_bind,
-            Err(err) => return Err(err),
-        };
+    // Seed the map so `get_external_binding` has data while the bind request is
+    // still in flight (it can block on a user-facing dialog on first run).
+    check_existing_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
 
-    if needs_bind {
-        bind_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
-    } else {
-        log::trace!("Shortcuts already bound, signaling startup completion");
-        let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
-    }
+    // BindShortcuts must run on every session, even when the portal already
+    // reports all shortcuts as configured. It is the only call that registers
+    // the shortcuts with the compositor's shortcut daemon: xdg-desktop-portal-kde
+    // used to register them on session creation too, but stopped doing so in
+    // 6.7.4 (commit 0d743a71), and xdg-desktop-portal-gnome never did - its
+    // ListShortcuts returns nothing until the session is bound.
+    bind_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
 
     let activated = proxy.receive_activated().await?;
     let deactivated = proxy.receive_deactivated().await?;
@@ -262,12 +261,18 @@ pub(super) async fn initialize_portal(
     Ok((proxy, session))
 }
 
+/// Populates `shortcuts_map` from the portal's current view of the session.
+///
+/// Portal backends differ in what this returns before [`bind_shortcuts`] has run
+/// on the session: xdg-desktop-portal-kde reports the persisted shortcuts,
+/// xdg-desktop-portal-gnome reports nothing. Treat an empty result as "unknown",
+/// not as "unbound".
 pub(super) async fn check_existing_shortcuts(
     proxy: &GlobalShortcuts,
     session: &ashpd::desktop::Session<GlobalShortcuts>,
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,
     shortcuts_map: &ShortcutMap,
-) -> ashpd::Result<bool> {
+) -> ashpd::Result<()> {
     log::trace!("Checking for existing shortcuts");
     let request = proxy
         .list_shortcuts(session, Default::default())
@@ -283,36 +288,15 @@ pub(super) async fn check_existing_shortcuts(
         })?;
 
     match request.response() {
-        Ok(response) if !response.shortcuts().is_empty() => {
+        Ok(response) => {
             let shortcuts = response.shortcuts();
-            log::trace!("Found {} existing shortcuts", shortcuts.len());
-
-            let existing_ids = shortcuts.iter().map(|s| s.id()).collect::<Vec<_>>();
-            if PortalShortcutId::all()
-                .iter()
-                .all(|id| existing_ids.contains(&id.as_str()))
-            {
-                log::trace!("All required shortcuts found, skipping binding");
-                update_shortcuts_map(shortcuts_map, shortcuts);
-                Ok(false)
-            } else {
-                log::trace!(
-                    "Missing shortcuts found (have {}/{}), binding",
-                    shortcuts.len(),
-                    PortalShortcutId::all().len()
-                );
-                Ok(true)
-            }
+            log::trace!("Portal reports {} existing shortcuts", shortcuts.len());
+            update_shortcuts_map(shortcuts_map, shortcuts);
         }
-        Ok(_) => {
-            log::trace!("No existing shortcuts found, binding");
-            Ok(true)
-        }
-        Err(err) => {
-            log::warn!("Failed to get list shortcuts response, binding: {err}");
-            Ok(true)
-        }
+        Err(err) => log::warn!("Failed to get list shortcuts response: {err}"),
     }
+
+    Ok(())
 }
 
 async fn bind_shortcuts(
