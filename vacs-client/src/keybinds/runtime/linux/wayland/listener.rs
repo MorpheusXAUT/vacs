@@ -351,24 +351,38 @@ async fn bind_shortcuts(
     // that a failure after this point can only be logged. When every shortcut is
     // already known no dialog is possible and the request completes immediately,
     // so startup waits for the response and a bind failure fails `start()`
-    // instead of leaving a listener that looks alive but delivers nothing.
-    if !all_known {
+    // instead of leaving a listener that looks alive but delivers nothing. That
+    // wait is bounded: keybind startup failure is fatal to app setup, so a
+    // merely slow portal must degrade to the early signal, not block the launch.
+    let request = if all_known {
+        let bind = proxy.bind_shortcuts(session, &shortcuts, None, Default::default());
+        tokio::pin!(bind);
+        match tokio::time::timeout(Duration::from_secs(3), &mut bind).await {
+            Ok(res) => res,
+            Err(_) => {
+                log::warn!(
+                    "BindShortcuts still pending after 3s, signaling startup completion and continuing to wait"
+                );
+                let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
+                bind.await
+            }
+        }
+    } else {
         log::trace!("Signaling startup completion before binding, a dialog may block the request");
         let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
+        proxy
+            .bind_shortcuts(session, &shortcuts, None, Default::default())
+            .await
     }
-
-    let request = proxy
-        .bind_shortcuts(session, &shortcuts, None, Default::default())
-        .await
-        .map_err(|err| {
-            log::error!("Failed to bind shortcuts: {err}");
-            let _ = startup_tx.take().map(|tx| {
-                tx.send(Err(KeybindsError::Listener(
-                    "Failed to bind shortcuts".to_string(),
-                )))
-            });
-            err
-        })?;
+    .map_err(|err| {
+        log::error!("Failed to bind shortcuts: {err}");
+        let _ = startup_tx.take().map(|tx| {
+            tx.send(Err(KeybindsError::Listener(
+                "Failed to bind shortcuts".to_string(),
+            )))
+        });
+        err
+    })?;
 
     let response = request.response().map_err(|err| {
         log::error!("Failed to get bind shortcuts response: {err}");
@@ -495,8 +509,13 @@ async fn run_shortcuts_listener(
 
 fn update_shortcuts_map(shortcut_map: &ShortcutMap, bound_shortcuts: &[Shortcut]) {
     let mut map = shortcut_map.write();
-    map.clear();
 
+    // Merge, do not replace: this runs once with the ListShortcuts seed and once
+    // with the BindShortcuts response, and backends disagree on which of the two
+    // carries the trigger descriptions. Whichever call reported real data wins;
+    // an empty trigger means "this backend does not report here", not "unbound"
+    // (an unbound shortcut is simply never inserted). User-driven removals
+    // arrive through the ShortcutsChanged handler, which tracks them per entry.
     for shortcut in bound_shortcuts {
         if let Ok(id) = PortalShortcutId::try_from(shortcut.id()) {
             let trigger = shortcut.trigger_description();

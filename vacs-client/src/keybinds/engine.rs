@@ -63,6 +63,9 @@ impl KeybindEngine {
         radio_integration_enabled: bool,
         shutdown_token: CancellationToken,
     ) -> Self {
+        let radio_portal_fallback =
+            transmit_config.radio_falls_back_to_call(radio_integration_enabled);
+
         Self {
             call_mic_mode: transmit_config.call_mic_mode,
             call_trigger: transmit_config.active_call_trigger(),
@@ -75,11 +78,8 @@ impl KeybindEngine {
             rx_task: None,
             shutdown_token,
             stop_token: None,
-            radio_portal_fallback: transmit_config
-                .radio_falls_back_to_call(radio_integration_enabled),
-            radio_follows_call: Arc::new(AtomicBool::new(
-                transmit_config.radio_falls_back_to_call(radio_integration_enabled),
-            )),
+            radio_portal_fallback,
+            radio_follows_call: Arc::new(AtomicBool::new(radio_portal_fallback)),
             call_pressed: Arc::new(AtomicBool::new(false)),
             radio_pressed: Arc::new(AtomicBool::new(false)),
             call_active: Arc::new(AtomicBool::new(false)),
