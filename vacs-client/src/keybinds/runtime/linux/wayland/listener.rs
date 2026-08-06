@@ -188,7 +188,8 @@ async fn setup_shortcuts_listener(
     let res = async {
         // Seed the map so `get_external_binding` has data while the bind request is
         // still in flight (it can block on a user-facing dialog on first run).
-        check_existing_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
+        let all_known =
+            check_existing_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
 
         // BindShortcuts must run on every session, even when the portal already
         // reports all shortcuts as configured. It is the only call that registers
@@ -196,7 +197,7 @@ async fn setup_shortcuts_listener(
         // used to register them on session creation too, but stopped doing so in
         // 6.7.4 (commit 0d743a71), and xdg-desktop-portal-gnome never did - its
         // ListShortcuts returns nothing until the session is bound.
-        bind_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
+        bind_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map, all_known).await?;
 
         let activated = proxy.receive_activated().await?;
         let deactivated = proxy.receive_deactivated().await?;
@@ -285,12 +286,15 @@ async fn initialize_portal(
 /// on the session: xdg-desktop-portal-kde reports the persisted shortcuts,
 /// xdg-desktop-portal-gnome reports nothing. Treat an empty result as "unknown",
 /// not as "unbound".
+///
+/// Returns whether every required shortcut was already reported, meaning the
+/// upcoming [`bind_shortcuts`] has nothing new to ask the user about.
 async fn check_existing_shortcuts(
     proxy: &GlobalShortcuts,
     session: &ashpd::desktop::Session<GlobalShortcuts>,
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,
     shortcuts_map: &ShortcutMap,
-) -> ashpd::Result<()> {
+) -> ashpd::Result<bool> {
     log::trace!("Checking for existing shortcuts");
     let request = proxy
         .list_shortcuts(session, Default::default())
@@ -314,11 +318,17 @@ async fn check_existing_shortcuts(
             if !shortcuts.is_empty() {
                 update_shortcuts_map(shortcuts_map, shortcuts);
             }
-        }
-        Err(err) => log::warn!("Failed to get list shortcuts response: {err}"),
-    }
 
-    Ok(())
+            let reported_ids = shortcuts.iter().map(|s| s.id()).collect::<Vec<_>>();
+            Ok(PortalShortcutId::all()
+                .iter()
+                .all(|id| reported_ids.contains(&id.as_str())))
+        }
+        Err(err) => {
+            log::warn!("Failed to get list shortcuts response: {err}");
+            Ok(false)
+        }
+    }
 }
 
 async fn bind_shortcuts(
@@ -326,17 +336,26 @@ async fn bind_shortcuts(
     session: &ashpd::desktop::Session<GlobalShortcuts>,
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,
     shortcuts_map: &ShortcutMap,
+    all_known: bool,
 ) -> ashpd::Result<()> {
     let shortcuts = PortalShortcutId::all()
         .iter()
         .map(NewShortcut::from)
         .collect::<Vec<_>>();
 
-    log::trace!(
-        "Binding {} shortcuts, signaling startup completion to avoid timeout during setup",
-        shortcuts.len()
-    );
-    let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
+    log::trace!("Binding {} shortcuts", shortcuts.len());
+
+    // When the portal may show a configuration dialog (some shortcuts are new to
+    // it), the request blocks until the user closes it, so startup must be
+    // signaled now or the engine's startup timeout fires mid-dialog. The cost is
+    // that a failure after this point can only be logged. When every shortcut is
+    // already known no dialog is possible and the request completes immediately,
+    // so startup waits for the response and a bind failure fails `start()`
+    // instead of leaving a listener that looks alive but delivers nothing.
+    if !all_known {
+        log::trace!("Signaling startup completion before binding, a dialog may block the request");
+        let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
+    }
 
     let request = proxy
         .bind_shortcuts(session, &shortcuts, None, Default::default())
