@@ -170,30 +170,36 @@ async fn setup_shortcuts_listener(
         Err(err) => return Err(err),
     };
 
-    // Seed the map so `get_external_binding` has data while the bind request is
-    // still in flight (it can block on a user-facing dialog on first run).
-    check_existing_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
+    // Every path past session creation funnels through the cleanup below. Bailing
+    // out early would leak the session for the life of the process, and the portal
+    // re-emits every shortcut signal once per live session.
+    let res = async {
+        // Seed the map so `get_external_binding` has data while the bind request is
+        // still in flight (it can block on a user-facing dialog on first run).
+        check_existing_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
 
-    // BindShortcuts must run on every session, even when the portal already
-    // reports all shortcuts as configured. It is the only call that registers
-    // the shortcuts with the compositor's shortcut daemon: xdg-desktop-portal-kde
-    // used to register them on session creation too, but stopped doing so in
-    // 6.7.4 (commit 0d743a71), and xdg-desktop-portal-gnome never did - its
-    // ListShortcuts returns nothing until the session is bound.
-    bind_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
+        // BindShortcuts must run on every session, even when the portal already
+        // reports all shortcuts as configured. It is the only call that registers
+        // the shortcuts with the compositor's shortcut daemon: xdg-desktop-portal-kde
+        // used to register them on session creation too, but stopped doing so in
+        // 6.7.4 (commit 0d743a71), and xdg-desktop-portal-gnome never did - its
+        // ListShortcuts returns nothing until the session is bound.
+        bind_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
 
-    let activated = proxy.receive_activated().await?;
-    let deactivated = proxy.receive_deactivated().await?;
-    let shortcuts_changed = proxy.receive_shortcuts_changed().await?;
+        let activated = proxy.receive_activated().await?;
+        let deactivated = proxy.receive_deactivated().await?;
+        let shortcuts_changed = proxy.receive_shortcuts_changed().await?;
 
-    let res = run_shortcuts_listener(
-        key_event_tx,
-        cancellation_token,
-        &shortcuts_map,
-        activated,
-        deactivated,
-        shortcuts_changed,
-    )
+        run_shortcuts_listener(
+            key_event_tx,
+            cancellation_token,
+            &shortcuts_map,
+            activated,
+            deactivated,
+            shortcuts_changed,
+        )
+        .await
+    }
     .await;
 
     log::trace!("Cleaning up Wayland global shortcuts session");
