@@ -4,7 +4,9 @@ use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::AudioManagerHandle;
 use crate::error::Error;
 use crate::keybinds::joystick::JoystickServiceHandle;
-use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
+use crate::keybinds::runtime::{
+    DynKeybindListener, KeybindListener, PlatformListener, WeakKeybindListener,
+};
 use crate::keybinds::{
     CallMicMode, InputCode, KeyEvent, Keybind, KeybindsConfig, TransmitConfig, Trigger,
 };
@@ -177,7 +179,7 @@ impl KeybindEngine {
 
     fn refresh_radio_follows_call(&self) {
         refresh_radio_follows_call(
-            self.listener.read().as_ref(),
+            self.listener.read().as_ref().map(Arc::downgrade).as_ref(),
             self.radio_portal_fallback,
             &self.radio_follows_call,
             &self.call_pressed,
@@ -502,7 +504,7 @@ impl KeybindEngine {
                         }
 
                         refresh_radio_follows_call(
-                            listener.as_ref().and_then(|l| l.upgrade()).as_ref(),
+                            listener.as_ref(),
                             radio_portal_fallback,
                             &radio_follows_call,
                             &call_pressed,
@@ -647,12 +649,6 @@ impl Drop for KeybindEngine {
 ///
 /// Only ever true on Wayland, where the listener tracks the portal's shortcuts
 /// and updates them as the user edits their desktop environment settings.
-fn radio_shortcut_bound(listener: Option<&DynKeybindListener>) -> bool {
-    listener
-        .and_then(|l| l.get_external_binding(Keybind::RadioPushToTalk))
-        .is_some()
-}
-
 /// Re-resolves whether radio TX follows the call trigger, from the listener's
 /// live view of the OS level bindings.
 ///
@@ -660,18 +656,26 @@ fn radio_shortcut_bound(listener: Option<&DynKeybindListener>) -> bool {
 /// classify the release differently from the press and leave the radio keyed.
 /// Both the engine and its event loop go through here so that invariant, and
 /// the log line reporting a flip, cannot drift apart.
+///
+/// Runs on every key event, so the two cheap guards come first and the listener
+/// is only resolved once they pass.
 fn refresh_radio_follows_call(
-    listener: Option<&DynKeybindListener>,
+    listener: Option<&WeakKeybindListener>,
     fallback: bool,
     follows_call: &AtomicBool,
     call_pressed: &AtomicBool,
     radio_pressed: &AtomicBool,
 ) {
-    if call_pressed.load(Ordering::Relaxed) || radio_pressed.load(Ordering::Relaxed) {
+    // Without the portal fallback there is nothing to resolve: `follows_call` is
+    // false from construction and no binding can change that.
+    if !fallback || call_pressed.load(Ordering::Relaxed) || radio_pressed.load(Ordering::Relaxed) {
         return;
     }
 
-    let follows = fallback && !radio_shortcut_bound(listener);
+    let follows = !listener
+        .and_then(|l| l.upgrade())
+        .is_some_and(|l| l.has_external_binding(Keybind::RadioPushToTalk));
+
     if follows_call.swap(follows, Ordering::Relaxed) != follows {
         log::debug!(
             "Radio TX now follows the {} trigger",

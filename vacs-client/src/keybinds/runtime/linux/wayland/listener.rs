@@ -122,6 +122,12 @@ impl KeybindListener for WaylandKeybindListener {
     fn get_external_binding(&self, keybind: Keybind) -> Option<String> {
         self.get_shortcut_binding(PortalShortcutId::from(keybind))
     }
+
+    fn has_external_binding(&self, keybind: Keybind) -> bool {
+        self.shortcuts
+            .read()
+            .contains_key(&PortalShortcutId::from(keybind))
+    }
 }
 
 impl Drop for WaylandKeybindListener {

@@ -79,6 +79,14 @@ impl KeybindListener for LinuxKeybindListener {
             Self::Stub(_) => None,
         }
     }
+
+    fn has_external_binding(&self, keybind: Keybind) -> bool {
+        match self {
+            Self::Wayland(l) => l.has_external_binding(keybind),
+            Self::X11(_) => false,
+            Self::Stub(_) => false,
+        }
+    }
 }
 
 pub enum LinuxKeybindEmitter {
