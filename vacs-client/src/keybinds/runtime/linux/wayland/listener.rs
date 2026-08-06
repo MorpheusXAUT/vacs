@@ -176,9 +176,15 @@ async fn setup_shortcuts_listener(
         Err(err) => return Err(err),
     };
 
-    // Every path past session creation funnels through the cleanup below. Bailing
-    // out early would leak the session for the life of the process, and the portal
-    // re-emits every shortcut signal once per live session.
+    // Every error return past session creation funnels through the cleanup below.
+    // Bailing out early would leak the session for the life of the process, and the
+    // portal re-emits every shortcut signal once per live session.
+    //
+    // Aborting this task still leaks it: `ashpd::desktop::Session` has no `Drop`,
+    // only an async `close()`. Both abort paths (the `await_startup` timeout and
+    // the `Drop` cleanup timeout) are slow-portal cases, so the window is narrow,
+    // but closing on abort would need the session behind a guard that spawns the
+    // close when the future is dropped.
     let res = async {
         // Seed the map so `get_external_binding` has data while the bind request is
         // still in flight (it can block on a user-facing dialog on first run).

@@ -645,10 +645,6 @@ impl Drop for KeybindEngine {
     }
 }
 
-/// Whether a dedicated radio PTT key is bound at the OS level.
-///
-/// Only ever true on Wayland, where the listener tracks the portal's shortcuts
-/// and updates them as the user edits their desktop environment settings.
 /// Re-resolves whether radio TX follows the call trigger, from the listener's
 /// live view of the OS level bindings.
 ///
