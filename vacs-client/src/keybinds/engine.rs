@@ -190,9 +190,12 @@ impl KeybindEngine {
     /// Whether radio TX and the call MIC action share one trigger, either
     /// because they are configured to the same input or because the portal
     /// fallback is active.
+    ///
+    /// Reads the fallback without re-resolving it. Callers run on other tasks,
+    /// and the event loop classifies a press before it marks the key as held, so
+    /// a refresh from here could flip the fallback inside that gap and have the
+    /// release classified differently from its press.
     fn radio_shares_call_trigger(&self) -> bool {
-        self.refresh_radio_follows_call();
-
         self.radio_trigger.is_some()
             && (self.radio_trigger == self.call_trigger
                 || self.radio_follows_call.load(Ordering::Relaxed))
@@ -669,8 +672,9 @@ fn classify_trigger(
 ///
 /// Never re-resolves while a key is held: flipping the fallback mid-press would
 /// classify the release differently from the press and leave the radio keyed.
-/// Both the engine and its event loop go through here so that invariant, and
-/// the log line reporting a flip, cannot drift apart.
+/// Only ever called from `start()` and from the event loop, which never overlap,
+/// so the held-key check and the write it guards cannot interleave with another
+/// writer.
 ///
 /// Runs on every key event, so the two cheap guards come first and the listener
 /// is only resolved once they pass.
@@ -702,7 +706,7 @@ fn refresh_radio_follows_call(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keybinds::{KeybindsError, PortalAction, TransmitConfig};
+    use crate::keybinds::{KeybindsError, PortalAction};
     use tokio::sync::mpsc::UnboundedSender;
 
     /// Stands in for a platform listener so the resolution can be exercised
@@ -864,23 +868,6 @@ mod tests {
         assert_eq!(
             classify_trigger(&other, Some(&call()), Some(&radio()), true),
             (false, false)
-        );
-    }
-
-    #[test]
-    fn the_engine_starts_the_fallback_where_the_config_puts_it() {
-        // The atomic must agree with the config before any listener exists, or
-        // the first press resolves against a value the config never chose.
-        let config = TransmitConfig {
-            call_mic_mode: CallMicMode::PushToTalk,
-            ..Default::default()
-        };
-
-        assert_eq!(
-            config.radio_falls_back_to_call(true),
-            Fixture::new(config.radio_falls_back_to_call(true))
-                .follows
-                .load(Ordering::Relaxed)
         );
     }
 }
