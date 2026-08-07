@@ -75,7 +75,7 @@ pub async fn keybinds_set_transmit_config(
             &transmit_config.radio_push_to_talk,
         ])?;
 
-        state.config.client.radio.validate(&transmit_config).await?;
+        state.config.client.radio.validate(&transmit_config)?;
 
         keybind_engine
             .write()

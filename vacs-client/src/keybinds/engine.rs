@@ -56,7 +56,7 @@ pub struct KeybindEngine {
 pub type KeybindEngineHandle = Arc<TokioRwLock<KeybindEngine>>;
 
 impl KeybindEngine {
-    pub async fn new(
+    pub fn new(
         app: AppHandle,
         transmit_config: &TransmitConfig,
         call_control_config: &KeybindsConfig,

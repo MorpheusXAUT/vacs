@@ -92,7 +92,7 @@ pub fn run() {
 
                 let capabilities = Capabilities::default();
 
-                let state = AppStateInner::new(app.handle()).await?;
+                let state = AppStateInner::new(app.handle())?;
 
                 let transmit_config = state.config.client.transmit_config.clone();
                 let call_control_config = state.config.client.keybinds.clone();
