@@ -337,7 +337,19 @@ impl TransmitConfig {
         }
     }
 
-    /// The trigger that drives radio TX, if any.
+    /// The dedicated trigger for radio TX, if any.
+    ///
+    /// Off Wayland this is also the effective trigger: `configured_radio_input`
+    /// already folds in the "no dedicated binding, follow the call PTT binding"
+    /// case, so the result equals `active_call_trigger` when that applies.
+    ///
+    /// On Wayland with a keyboard binding it is only the dedicated portal
+    /// action. Whether radio TX is following the call trigger instead is a
+    /// runtime question, because the portal registers the radio shortcut
+    /// whether or not a key is assigned to it. `radio_falls_back_to_call`
+    /// reports whether the configuration allows that, and the engine resolves
+    /// the live answer. Do not read this as "the trigger that keys the radio
+    /// right now".
     pub fn active_radio_trigger(&self, enabled: bool) -> Option<Trigger> {
         if !enabled {
             return None;
