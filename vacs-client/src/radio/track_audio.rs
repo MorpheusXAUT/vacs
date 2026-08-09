@@ -9,7 +9,7 @@ use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast;
@@ -23,6 +23,13 @@ use trackaudio::{
 /// Capacity of the [`TrackAudioRadio`] event fan-out broadcast channel.
 const EVENT_FANOUT_CAPACITY: usize = 256;
 
+/// Consecutive failed transmit attempts before the radio is reported as [`RadioState::Error`].
+///
+/// A single failure is usually just TrackAudio being briefly busy and is not worth flapping the
+/// radio indicator over. A streak means PTT is silently doing nothing, which the user has no other
+/// way of noticing.
+const TRANSMIT_FAILURE_THRESHOLD: usize = 3;
+
 // Deliberately not `Clone`: `Drop` cancels the shared cancellation token (killing the events
 // task), so a dropped by-value clone would tear down the original radio's machinery. The radio
 // is only ever shared via `Arc` (see `RadioConfig::radio`).
@@ -30,7 +37,6 @@ pub struct TrackAudioRadio {
     #[allow(dead_code)]
     app: AppHandle,
     client: TrackAudioClient,
-    active: Arc<AtomicBool>,
     state: Arc<TrackAudioState>,
     #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
     events_tx: broadcast::Sender<trackaudio::Event>,
@@ -66,7 +72,6 @@ impl TrackAudioRadio {
 
         let cancellation_token = CancellationToken::new();
 
-        let active = Arc::new(AtomicBool::new(false));
         let state = Arc::new(TrackAudioState::default());
         let (events_tx, _) = broadcast::channel(EVENT_FANOUT_CAPACITY);
 
@@ -85,7 +90,6 @@ impl TrackAudioRadio {
         let radio = Self {
             app,
             client,
-            active,
             state,
             events_tx,
             cancellation_token,
@@ -134,8 +138,14 @@ impl TrackAudioRadio {
                             }
                             Self::handle_event(event, &state, &app, &client).await;
                         }
-                        Err(err) => {
-                            log::error!("Error receiving TrackAudio event: {err}");
+                        // Recoverable: the receiver stays valid and only missed events. Breaking
+                        // here would permanently stop every radio state update - TX/RX indication,
+                        // station sync and connection handling - until the radio is rebuilt.
+                        Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                            log::warn!("Lagged by {skipped} TrackAudio events");
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            log::error!("TrackAudio event channel closed");
                             state.clear();
                             app.emit("radio:state", RadioState::Error).ok();
                             break;
@@ -158,9 +168,11 @@ impl TrackAudioRadio {
 
         match event {
             Event::TxBegin(_) => {
+                log::trace!("TrackAudio TX begin");
                 state.set_transmitting(app, true);
             }
             Event::TxEnd(_) => {
+                log::trace!("TrackAudio TX end");
                 state.set_transmitting(app, false);
             }
             Event::RxBegin(rx_begin) => {
@@ -267,9 +279,7 @@ impl TrackAudioRadio {
                     .get_voice_connected_state(Some(Self::VOICE_CONNECTED_STATE_TIMEOUT))
                     .await
                     .unwrap_or(false);
-                state
-                    .voice_connected
-                    .store(voice_connected, Ordering::Relaxed);
+                state.apply_voice_connected(voice_connected);
 
                 let station_states = api
                     .get_station_states(Some(Self::STATION_STATES_TIMEOUT))
@@ -299,25 +309,62 @@ impl TrackAudioRadio {
 impl Radio for TrackAudioRadio {
     async fn transmit(&self, state: TransmissionState) -> Result<(), RadioError> {
         let active = match state {
-            TransmissionState::Active if !self.active.swap(true, Ordering::Relaxed) => true,
-            TransmissionState::Inactive if self.active.swap(false, Ordering::Relaxed) => false,
-            _ => return Ok(()),
+            TransmissionState::Active if !self.state.ptt_active.swap(true, Ordering::Relaxed) => {
+                true
+            }
+            TransmissionState::Inactive if self.state.ptt_active.swap(false, Ordering::Relaxed) => {
+                false
+            }
+            _ => {
+                log::trace!("Ignoring redundant transmission request {state:?}");
+                return Ok(());
+            }
         };
 
         log::trace!("Setting transmission {state:?}, sending active {active}");
 
-        self.client
+        let result = self
+            .client
             .api()
             .transmit(active, Some(Self::TRANSMIT_TIMEOUT))
-            .await
-            .map_err(|err| {
-                if !matches!(err, TrackAudioError::Timeout) {
+            .await;
+
+        match result {
+            Ok(()) => {
+                if self.state.transmit_failures.swap(0, Ordering::Relaxed)
+                    >= TRANSMIT_FAILURE_THRESHOLD
+                {
+                    self.state.emit(&self.app);
+                }
+
+                Ok(())
+            }
+            Err(err) => {
+                // Only a send-side failure proves the command never reached the client task. On a
+                // timed out ack the command *was* enqueued, so the latch still reflects what
+                // TrackAudio was told - rolling it back there would re-latch a released PTT and
+                // silently no-op the next press.
+                if matches!(
+                    err,
+                    TrackAudioError::Send(_) | TrackAudioError::ClientTaskTerminated
+                ) {
+                    self.state.ptt_active.store(!active, Ordering::Relaxed);
+                }
+
+                self.state.transmit_failures.fetch_add(1, Ordering::Relaxed);
+
+                if matches!(err, TrackAudioError::Timeout) {
+                    // Reports `Error` only once the failure streak crosses the threshold.
+                    self.state.emit(&self.app);
+                } else {
                     self.app.emit("radio:state", RadioState::Error).ok();
                 }
-                RadioError::Transmit(format!("Failed to transmit via TrackAudio: {err}"))
-            })?;
 
-        Ok(())
+                Err(RadioError::Transmit(format!(
+                    "Failed to transmit via TrackAudio: {err}"
+                )))
+            }
+        }
     }
 
     async fn reconnect(&self) -> Result<(), RadioError> {
@@ -401,7 +448,6 @@ impl Radio for TrackAudioRadio {
 impl Debug for TrackAudioRadio {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TrackAudioRadio")
-            .field("active", &self.active)
             .field("state", &self.state)
             .field("client", &self.client)
             .finish()
@@ -412,7 +458,7 @@ impl Drop for TrackAudioRadio {
     fn drop(&mut self) {
         log::debug!("Dropping TrackAudioRadio");
 
-        if self.active.load(Ordering::Relaxed)
+        if self.state.ptt_active.load(Ordering::Relaxed)
             && let Err(err) =
                 tauri::async_runtime::block_on(self.transmit(TransmissionState::Inactive))
         {
@@ -433,6 +479,16 @@ pub(crate) struct TrackAudioState {
     transmitting: AtomicBool,
     receiving: RwLock<HashSet<Frequency>>,
     stations: RwLock<HashMap<Frequency, RadioStation>>,
+
+    /// Local press/release edge latch, so a held key does not re-send `kPttPressed`.
+    ///
+    /// Lives here rather than on [`TrackAudioRadio`] so that [`TrackAudioState::clear`] resets it
+    /// on every disconnect. A latch stuck at `true` while TrackAudio is not transmitting makes
+    /// every later press a silent no-op, and a fresh socket means TrackAudio's PTT state is fresh.
+    ptt_active: AtomicBool,
+
+    /// Consecutive failed transmit attempts, see [`TRANSMIT_FAILURE_THRESHOLD`].
+    transmit_failures: AtomicUsize,
 }
 
 impl From<&StationState> for RadioStation {
@@ -459,6 +515,14 @@ impl From<&TrackAudioState> for RadioState {
 
         if !value.voice_connected.load(Ordering::Relaxed) {
             return RadioState::Connected;
+        }
+
+        // A run of failed transmits means PTT is doing nothing while the socket still looks
+        // healthy, which is otherwise invisible to the user. Checked below the voice connection so
+        // that transmitting while TrackAudio is off the network stays a plain `Connected`: those
+        // timeouts are expected, and reconnecting the socket would not fix them anyway.
+        if value.transmit_failures.load(Ordering::Relaxed) >= TRANSMIT_FAILURE_THRESHOLD {
+            return RadioState::Error;
         }
 
         // Priority: TX > RX > Idle
@@ -493,6 +557,8 @@ impl Debug for TrackAudioState {
             .field("connected", &self.connected)
             .field("voice_connected", &self.voice_connected)
             .field("transmitting", &self.transmitting)
+            .field("ptt_active", &self.ptt_active)
+            .field("transmit_failures", &self.transmit_failures)
             .field("receiving", &self.receiving)
             .field("stations", &self.stations.read().len())
             .finish()
@@ -508,6 +574,8 @@ impl TrackAudioState {
         self.connected.store(false, Ordering::Relaxed);
         self.voice_connected.store(false, Ordering::Relaxed);
         self.transmitting.store(false, Ordering::Relaxed);
+        self.ptt_active.store(false, Ordering::Relaxed);
+        self.transmit_failures.store(0, Ordering::Relaxed);
         self.receiving.write().clear();
         self.stations.write().clear();
     }
@@ -532,8 +600,16 @@ impl TrackAudioState {
         self.emit(app);
     }
 
-    fn set_voice_connected(&self, app: &AppHandle, connected: bool) {
+    fn apply_voice_connected(&self, connected: bool) {
         self.voice_connected.store(connected, Ordering::Relaxed);
+        // Failures collected under the previous voice state say nothing about the new one. Without
+        // this, pressing PTT while TrackAudio is off the network banks up a streak that surfaces as
+        // an error the instant it connects.
+        self.transmit_failures.store(0, Ordering::Relaxed);
+    }
+
+    fn set_voice_connected(&self, app: &AppHandle, connected: bool) {
+        self.apply_voice_connected(connected);
         self.emit(app);
     }
 
@@ -650,5 +726,104 @@ impl TrackAudioState {
 
     fn stations(&self) -> Vec<RadioStation> {
         self.stations.read().values().cloned().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn voice_connected_state() -> TrackAudioState {
+        let state = TrackAudioState::default();
+        state.connected.store(true, Ordering::Relaxed);
+        state.voice_connected.store(true, Ordering::Relaxed);
+        state
+    }
+
+    #[test]
+    fn clear_resets_ptt_latch() {
+        let state = TrackAudioState::default();
+        state.ptt_active.store(true, Ordering::Relaxed);
+
+        state.clear();
+
+        // A latch stuck at `true` makes every later press a silent no-op, so a disconnect (which
+        // resets TrackAudio's own PTT state) has to drop it.
+        assert!(!state.ptt_active.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn clear_resets_transmit_failure_streak() {
+        let state = voice_connected_state();
+        state
+            .transmit_failures
+            .store(TRANSMIT_FAILURE_THRESHOLD, Ordering::Relaxed);
+
+        state.clear();
+
+        assert_eq!(state.transmit_failures.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn radio_state_reports_error_only_once_failures_reach_threshold() {
+        let state = voice_connected_state();
+        assert_eq!(RadioState::from(&state), RadioState::VoiceConnected);
+
+        state
+            .transmit_failures
+            .store(TRANSMIT_FAILURE_THRESHOLD - 1, Ordering::Relaxed);
+        assert_eq!(RadioState::from(&state), RadioState::VoiceConnected);
+
+        state
+            .transmit_failures
+            .store(TRANSMIT_FAILURE_THRESHOLD, Ordering::Relaxed);
+        assert_eq!(RadioState::from(&state), RadioState::Error);
+    }
+
+    #[test]
+    fn radio_state_recovers_when_failure_streak_is_reset() {
+        let state = voice_connected_state();
+        state
+            .transmit_failures
+            .store(TRANSMIT_FAILURE_THRESHOLD, Ordering::Relaxed);
+        assert_eq!(RadioState::from(&state), RadioState::Error);
+
+        state.transmit_failures.store(0, Ordering::Relaxed);
+        assert_eq!(RadioState::from(&state), RadioState::VoiceConnected);
+    }
+
+    #[test]
+    fn voice_connecting_resets_the_transmit_failure_streak() {
+        let state = voice_connected_state();
+        state.voice_connected.store(false, Ordering::Relaxed);
+        state
+            .transmit_failures
+            .store(TRANSMIT_FAILURE_THRESHOLD * 4, Ordering::Relaxed);
+
+        state.apply_voice_connected(true);
+
+        assert_eq!(state.transmit_failures.load(Ordering::Relaxed), 0);
+        assert_eq!(RadioState::from(&state), RadioState::VoiceConnected);
+    }
+
+    #[test]
+    fn failure_streak_is_ignored_while_voice_is_disconnected() {
+        let state = voice_connected_state();
+        state.voice_connected.store(false, Ordering::Relaxed);
+        state
+            .transmit_failures
+            .store(TRANSMIT_FAILURE_THRESHOLD, Ordering::Relaxed);
+
+        assert_eq!(RadioState::from(&state), RadioState::Connected);
+    }
+
+    #[test]
+    fn disconnected_takes_precedence_over_failure_streak() {
+        let state = TrackAudioState::default();
+        state
+            .transmit_failures
+            .store(TRANSMIT_FAILURE_THRESHOLD, Ordering::Relaxed);
+
+        assert_eq!(RadioState::from(&state), RadioState::Disconnected);
     }
 }
