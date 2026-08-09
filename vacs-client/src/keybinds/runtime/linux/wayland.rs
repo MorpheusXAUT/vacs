@@ -36,13 +36,10 @@
 mod listener;
 
 pub use listener::*;
-use std::collections::HashMap;
 
 use crate::keybinds::{Keybind, PortalAction};
 use ashpd::desktop::global_shortcuts::NewShortcut;
-use parking_lot::RwLock;
 use std::str::FromStr;
-use std::sync::Arc;
 
 /// Identifiers for shortcuts registered with the XDG Global Shortcuts portal.
 ///
@@ -163,37 +160,4 @@ impl From<Keybind> for PortalShortcutId {
             Keybind::ToggleRadioPrio => PortalShortcutId::ToggleRadioPrio,
         }
     }
-}
-
-pub async fn is_portal_shortcut_bound(shortcut_id: PortalShortcutId) -> bool {
-    let (proxy, session) = match initialize_portal(&mut None).await {
-        Ok(res) => res,
-        Err(err) => {
-            log::error!("Failed to initialize Wayland Global Shortcuts portal: {err}");
-            return false;
-        }
-    };
-
-    let shortcuts = Arc::new(RwLock::new(HashMap::new()));
-
-    let bound = match check_existing_shortcuts(&proxy, &session, &mut None, &shortcuts).await {
-        Ok(_) => shortcuts.read().contains_key(&shortcut_id),
-        Err(err) => {
-            log::error!("Failed to check existing Wayland Global Shortcuts: {err}");
-            false
-        }
-    };
-
-    // This session only exists for the duration of the query. It must be closed
-    // explicitly: the portal keeps leaked sessions alive and re-emits every
-    // shortcut signal once per session, so each leak would deliver an extra
-    // duplicate of all future Activated/Deactivated/ShortcutsChanged signals to
-    // the real listener.
-    match tokio::time::timeout(std::time::Duration::from_secs(2), session.close()).await {
-        Ok(Ok(())) => {}
-        Ok(Err(err)) => log::warn!("Failed to close global shortcuts query session: {err}"),
-        Err(_) => log::warn!("Timed out closing global shortcuts query session"),
-    }
-
-    bound
 }

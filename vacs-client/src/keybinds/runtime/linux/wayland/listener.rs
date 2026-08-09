@@ -122,6 +122,12 @@ impl KeybindListener for WaylandKeybindListener {
     fn get_external_binding(&self, keybind: Keybind) -> Option<String> {
         self.get_shortcut_binding(PortalShortcutId::from(keybind))
     }
+
+    fn has_external_binding(&self, keybind: Keybind) -> bool {
+        self.shortcuts
+            .read()
+            .contains_key(&PortalShortcutId::from(keybind))
+    }
 }
 
 impl Drop for WaylandKeybindListener {
@@ -170,31 +176,43 @@ async fn setup_shortcuts_listener(
         Err(err) => return Err(err),
     };
 
-    let needs_bind =
-        match check_existing_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await {
-            Ok(needs_bind) => needs_bind,
-            Err(err) => return Err(err),
-        };
+    // Every error return past session creation funnels through the cleanup below.
+    // Bailing out early would leak the session for the life of the process, and the
+    // portal re-emits every shortcut signal once per live session.
+    //
+    // Aborting this task still leaks it: `ashpd::desktop::Session` has no `Drop`,
+    // only an async `close()`. Both abort paths (the `await_startup` timeout and
+    // the `Drop` cleanup timeout) are slow-portal cases, so the window is narrow,
+    // but closing on abort would need the session behind a guard that spawns the
+    // close when the future is dropped.
+    let res = async {
+        // Seed the map so `get_external_binding` has data while the bind request is
+        // still in flight (it can block on a user-facing dialog on first run).
+        let all_known =
+            check_existing_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
 
-    if needs_bind {
-        bind_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map).await?;
-    } else {
-        log::trace!("Shortcuts already bound, signaling startup completion");
-        let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
+        // BindShortcuts must run on every session, even when the portal already
+        // reports all shortcuts as configured. It is the only call that registers
+        // the shortcuts with the compositor's shortcut daemon: xdg-desktop-portal-kde
+        // used to register them on session creation too, but stopped doing so in
+        // 6.7.4 (commit 0d743a71), and xdg-desktop-portal-gnome never did - its
+        // ListShortcuts returns nothing until the session is bound.
+        bind_shortcuts(&proxy, &session, &mut startup_tx, &shortcuts_map, all_known).await?;
+
+        let activated = proxy.receive_activated().await?;
+        let deactivated = proxy.receive_deactivated().await?;
+        let shortcuts_changed = proxy.receive_shortcuts_changed().await?;
+
+        run_shortcuts_listener(
+            key_event_tx,
+            cancellation_token,
+            &shortcuts_map,
+            activated,
+            deactivated,
+            shortcuts_changed,
+        )
+        .await
     }
-
-    let activated = proxy.receive_activated().await?;
-    let deactivated = proxy.receive_deactivated().await?;
-    let shortcuts_changed = proxy.receive_shortcuts_changed().await?;
-
-    let res = run_shortcuts_listener(
-        key_event_tx,
-        cancellation_token,
-        &shortcuts_map,
-        activated,
-        deactivated,
-        shortcuts_changed,
-    )
     .await;
 
     log::trace!("Cleaning up Wayland global shortcuts session");
@@ -207,7 +225,7 @@ async fn setup_shortcuts_listener(
     res
 }
 
-pub(super) async fn initialize_portal(
+async fn initialize_portal(
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,
 ) -> ashpd::Result<(GlobalShortcuts, ashpd::desktop::Session<GlobalShortcuts>)> {
     let proxy = match tokio::time::timeout(Duration::from_secs(5), GlobalShortcuts::new()).await {
@@ -262,7 +280,16 @@ pub(super) async fn initialize_portal(
     Ok((proxy, session))
 }
 
-pub(super) async fn check_existing_shortcuts(
+/// Populates `shortcuts_map` from the portal's current view of the session.
+///
+/// Portal backends differ in what this returns before [`bind_shortcuts`] has run
+/// on the session: xdg-desktop-portal-kde reports the persisted shortcuts,
+/// xdg-desktop-portal-gnome reports nothing. Treat an empty result as "unknown",
+/// not as "unbound".
+///
+/// Returns whether every required shortcut was already reported, meaning the
+/// upcoming [`bind_shortcuts`] has nothing new to ask the user about.
+async fn check_existing_shortcuts(
     proxy: &GlobalShortcuts,
     session: &ashpd::desktop::Session<GlobalShortcuts>,
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,
@@ -283,34 +310,23 @@ pub(super) async fn check_existing_shortcuts(
         })?;
 
     match request.response() {
-        Ok(response) if !response.shortcuts().is_empty() => {
+        Ok(response) => {
             let shortcuts = response.shortcuts();
-            log::trace!("Found {} existing shortcuts", shortcuts.len());
-
-            let existing_ids = shortcuts.iter().map(|s| s.id()).collect::<Vec<_>>();
-            if PortalShortcutId::all()
-                .iter()
-                .all(|id| existing_ids.contains(&id.as_str()))
-            {
-                log::trace!("All required shortcuts found, skipping binding");
+            log::trace!("Portal reports {} existing shortcuts", shortcuts.len());
+            // An empty result means "this backend does not report before binding",
+            // not "nothing is bound", so leave the map for `bind_shortcuts` to fill.
+            if !shortcuts.is_empty() {
                 update_shortcuts_map(shortcuts_map, shortcuts);
-                Ok(false)
-            } else {
-                log::trace!(
-                    "Missing shortcuts found (have {}/{}), binding",
-                    shortcuts.len(),
-                    PortalShortcutId::all().len()
-                );
-                Ok(true)
             }
-        }
-        Ok(_) => {
-            log::trace!("No existing shortcuts found, binding");
-            Ok(true)
+
+            let reported_ids = shortcuts.iter().map(|s| s.id()).collect::<Vec<_>>();
+            Ok(PortalShortcutId::all()
+                .iter()
+                .all(|id| reported_ids.contains(&id.as_str())))
         }
         Err(err) => {
-            log::warn!("Failed to get list shortcuts response, binding: {err}");
-            Ok(true)
+            log::warn!("Failed to get list shortcuts response: {err}");
+            Ok(false)
         }
     }
 }
@@ -320,30 +336,53 @@ async fn bind_shortcuts(
     session: &ashpd::desktop::Session<GlobalShortcuts>,
     startup_tx: &mut Option<oneshot::Sender<Result<(), KeybindsError>>>,
     shortcuts_map: &ShortcutMap,
+    all_known: bool,
 ) -> ashpd::Result<()> {
     let shortcuts = PortalShortcutId::all()
         .iter()
         .map(NewShortcut::from)
         .collect::<Vec<_>>();
 
-    log::trace!(
-        "Binding {} shortcuts, signaling startup completion to avoid timeout during setup",
-        shortcuts.len()
-    );
-    let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
+    log::trace!("Binding {} shortcuts", shortcuts.len());
 
-    let request = proxy
-        .bind_shortcuts(session, &shortcuts, None, Default::default())
-        .await
-        .map_err(|err| {
-            log::error!("Failed to bind shortcuts: {err}");
-            let _ = startup_tx.take().map(|tx| {
-                tx.send(Err(KeybindsError::Listener(
-                    "Failed to bind shortcuts".to_string(),
-                )))
-            });
-            err
-        })?;
+    // When the portal may show a configuration dialog (some shortcuts are new to
+    // it), the request blocks until the user closes it, so startup must be
+    // signaled now or the engine's startup timeout fires mid-dialog. The cost is
+    // that a failure after this point can only be logged. When every shortcut is
+    // already known no dialog is possible and the request completes immediately,
+    // so startup waits for the response and a bind failure fails `start()`
+    // instead of leaving a listener that looks alive but delivers nothing. That
+    // wait is bounded: keybind startup failure is fatal to app setup, so a
+    // merely slow portal must degrade to the early signal, not block the launch.
+    let request = if all_known {
+        let bind = proxy.bind_shortcuts(session, &shortcuts, None, Default::default());
+        tokio::pin!(bind);
+        match tokio::time::timeout(Duration::from_secs(3), &mut bind).await {
+            Ok(res) => res,
+            Err(_) => {
+                log::warn!(
+                    "BindShortcuts still pending after 3s, signaling startup completion and continuing to wait"
+                );
+                let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
+                bind.await
+            }
+        }
+    } else {
+        log::trace!("Signaling startup completion before binding, a dialog may block the request");
+        let _ = startup_tx.take().map(|tx| tx.send(Ok(())));
+        proxy
+            .bind_shortcuts(session, &shortcuts, None, Default::default())
+            .await
+    }
+    .map_err(|err| {
+        log::error!("Failed to bind shortcuts: {err}");
+        let _ = startup_tx.take().map(|tx| {
+            tx.send(Err(KeybindsError::Listener(
+                "Failed to bind shortcuts".to_string(),
+            )))
+        });
+        err
+    })?;
 
     let response = request.response().map_err(|err| {
         log::error!("Failed to get bind shortcuts response: {err}");
@@ -470,8 +509,13 @@ async fn run_shortcuts_listener(
 
 fn update_shortcuts_map(shortcut_map: &ShortcutMap, bound_shortcuts: &[Shortcut]) {
     let mut map = shortcut_map.write();
-    map.clear();
 
+    // Merge, do not replace: this runs once with the ListShortcuts seed and once
+    // with the BindShortcuts response, and backends disagree on which of the two
+    // carries the trigger descriptions. Whichever call reported real data wins;
+    // an empty trigger means "this backend does not report here", not "unbound"
+    // (an unbound shortcut is simply never inserted). User-driven removals
+    // arrive through the ShortcutsChanged handler, which tracks them per entry.
     for shortcut in bound_shortcuts {
         if let Ok(id) = PortalShortcutId::try_from(shortcut.id()) {
             let trigger = shortcut.trigger_description();
@@ -481,11 +525,10 @@ fn update_shortcuts_map(shortcut_map: &ShortcutMap, bound_shortcuts: &[Shortcut]
         }
     }
 
-    if map.is_empty() {
-        log::warn!("No shortcuts bound");
-    } else {
-        log::debug!("Updated {} shortcuts", map.len());
-    }
+    // Not a warning: this runs once per ListShortcuts and once per BindShortcuts,
+    // and an empty map is the normal state before the user has assigned any key.
+    // `bind_shortcuts` raises the single actionable warning after binding.
+    log::debug!("Updated shortcuts map with {} entries", map.len());
 }
 
 type ShortcutMap = Arc<RwLock<HashMap<PortalShortcutId, String>>>;

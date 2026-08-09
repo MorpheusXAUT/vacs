@@ -100,9 +100,22 @@ pub trait KeybindListener: Send + Sync + Debug + 'static {
     fn get_external_binding(&self, _keybind: Keybind) -> Option<String> {
         None
     }
+
+    /// Whether an OS level binding exists for a keybind.
+    ///
+    /// Separate from [`Self::get_external_binding`] because the keybind engine
+    /// asks this on every key press and has no use for the binding string, which
+    /// that method has to clone out of the listener's map.
+    fn has_external_binding(&self, keybind: Keybind) -> bool {
+        self.get_external_binding(keybind).is_some()
+    }
 }
 
 pub type DynKeybindListener = Arc<dyn KeybindListener>;
+
+/// Non-owning handle to a [`DynKeybindListener`], for holders that must not keep
+/// a replaced listener (and its OS level session) alive.
+pub type WeakKeybindListener = std::sync::Weak<dyn KeybindListener>;
 
 /// Trait for platform-specific keybind emitters that inject keyboard events.
 ///
@@ -134,7 +147,6 @@ cfg_select! {
         mod stub;
         pub use linux::LinuxKeybindEmitter as PlatformEmitter;
         pub use linux::LinuxKeybindListener as PlatformListener;
-        pub use linux::{is_portal_shortcut_bound, PortalShortcutId};
     }
     _ => {
         mod stub;

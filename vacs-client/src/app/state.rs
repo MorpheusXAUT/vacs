@@ -55,7 +55,7 @@ pub struct AppStateInner {
 pub type AppState = TokioMutex<AppStateInner>;
 
 impl AppStateInner {
-    pub async fn new(app: &AppHandle) -> Result<Self, StartupError> {
+    pub fn new(app: &AppHandle) -> Result<Self, StartupError> {
         let config_dir = app
             .path()
             .app_config_dir()
@@ -76,16 +76,13 @@ impl AppStateInner {
                 AudioManager::new(app.clone(), &config.audio)
                     .map_startup_err(StartupError::Audio)?,
             )),
-            keybind_engine: Arc::new(TokioRwLock::new(
-                KeybindEngine::new(
-                    app.clone(),
-                    &config.client.transmit_config,
-                    &config.client.keybinds,
-                    config.client.radio.integration.is_some(),
-                    shutdown_token.child_token(),
-                )
-                .await,
-            )),
+            keybind_engine: Arc::new(TokioRwLock::new(KeybindEngine::new(
+                app.clone(),
+                &config.client.transmit_config,
+                &config.client.keybinds,
+                config.client.radio.integration.is_some(),
+                shutdown_token.child_token(),
+            ))),
             playback_recorder: Arc::new(RwLock::new(None)),
             radio: Arc::new(RwLock::new(None)),
             shutdown_token,

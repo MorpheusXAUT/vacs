@@ -75,7 +75,7 @@ pub async fn keybinds_set_transmit_config(
             &transmit_config.radio_push_to_talk,
         ])?;
 
-        state.config.client.radio.validate(&transmit_config).await?;
+        state.config.client.radio.validate(&transmit_config)?;
 
         keybind_engine
             .write()
@@ -399,12 +399,23 @@ pub fn keybinds_open_system_shortcuts_settings() -> Result<(), Error> {
 #[tauri::command]
 #[vacs_macros::log_err]
 pub async fn keybinds_is_portal_shortcut_bound(
+    #[cfg_attr(not(target_os = "linux"), allow(unused_variables))] keybind_engine: State<
+        '_,
+        KeybindEngineHandle,
+    >,
     #[cfg_attr(not(target_os = "linux"), allow(unused_variables))] keybind: Keybind,
 ) -> Result<bool, Error> {
     #[cfg(target_os = "linux")]
     {
-        use crate::keybinds::runtime;
-        return Ok(runtime::is_portal_shortcut_bound(keybind.into()).await);
+        // Reads the listener's live view of the portal bindings rather than
+        // opening a throwaway portal session per query: the extra sessions are
+        // leak-prone, and on portal backends that only report shortcuts after
+        // BindShortcuts they always came back empty.
+        return Ok(keybind_engine
+            .read()
+            .await
+            .get_external_binding(keybind)
+            .is_some());
     }
 
     #[cfg(not(target_os = "linux"))]

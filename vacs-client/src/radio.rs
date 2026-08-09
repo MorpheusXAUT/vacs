@@ -242,10 +242,10 @@ impl RadioConfig {
         }
     }
 
-    pub async fn validate(&self, transmit_config: &TransmitConfig) -> Result<(), Error> {
+    pub fn validate(&self, transmit_config: &TransmitConfig) -> Result<(), Error> {
         if self.integration == Some(RadioIntegration::AudioForVatsim)
             && let Some(afv_code) = self.audio_for_vatsim.as_ref().and_then(|c| c.emit)
-            && transmit_config.active_radio_trigger(true).await
+            && transmit_config.active_radio_trigger(true)
                 == Some(Trigger::Input(InputCode::Key(afv_code)))
         {
             return Err(KeybindsError::Other(

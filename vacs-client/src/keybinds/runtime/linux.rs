@@ -26,7 +26,6 @@
 
 mod wayland;
 mod x11;
-pub use wayland::{PortalShortcutId, is_portal_shortcut_bound};
 
 use crate::keybinds::runtime::{KeybindEmitter, KeybindListener, stub};
 use crate::keybinds::{KeyEvent, Keybind, KeybindsError};
@@ -78,6 +77,14 @@ impl KeybindListener for LinuxKeybindListener {
             Self::Wayland(l) => l.get_external_binding(keybind),
             Self::X11(_) => None,
             Self::Stub(_) => None,
+        }
+    }
+
+    fn has_external_binding(&self, keybind: Keybind) -> bool {
+        match self {
+            Self::Wayland(l) => l.has_external_binding(keybind),
+            Self::X11(_) => false,
+            Self::Stub(_) => false,
         }
     }
 }

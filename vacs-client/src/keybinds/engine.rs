@@ -4,7 +4,9 @@ use crate::app::state::webrtc::AppStateWebrtcExt;
 use crate::audio::manager::AudioManagerHandle;
 use crate::error::Error;
 use crate::keybinds::joystick::JoystickServiceHandle;
-use crate::keybinds::runtime::{DynKeybindListener, KeybindListener, PlatformListener};
+use crate::keybinds::runtime::{
+    DynKeybindListener, KeybindListener, PlatformListener, WeakKeybindListener,
+};
 use crate::keybinds::{
     CallMicMode, InputCode, KeyEvent, Keybind, KeybindsConfig, TransmitConfig, Trigger,
 };
@@ -37,6 +39,12 @@ pub struct KeybindEngine {
     rx_task: Option<JoinHandle<()>>,
     shutdown_token: CancellationToken,
     stop_token: Option<CancellationToken>,
+    /// Whether this configuration lets radio TX fall back to the call trigger
+    /// when no dedicated radio shortcut is bound at the OS level.
+    radio_portal_fallback: bool,
+    /// Whether that fallback is active right now. Resolved from the listener's
+    /// live bindings, which change while the app runs.
+    radio_follows_call: Arc<AtomicBool>,
     call_pressed: Arc<AtomicBool>,
     radio_pressed: Arc<AtomicBool>,
     call_active: Arc<AtomicBool>,
@@ -48,19 +56,20 @@ pub struct KeybindEngine {
 pub type KeybindEngineHandle = Arc<TokioRwLock<KeybindEngine>>;
 
 impl KeybindEngine {
-    pub async fn new(
+    pub fn new(
         app: AppHandle,
         transmit_config: &TransmitConfig,
         call_control_config: &KeybindsConfig,
         radio_integration_enabled: bool,
         shutdown_token: CancellationToken,
     ) -> Self {
+        let radio_portal_fallback =
+            transmit_config.radio_falls_back_to_call(radio_integration_enabled);
+
         Self {
             call_mic_mode: transmit_config.call_mic_mode,
             call_trigger: transmit_config.active_call_trigger(),
-            radio_trigger: transmit_config
-                .active_radio_trigger(radio_integration_enabled)
-                .await,
+            radio_trigger: transmit_config.active_radio_trigger(radio_integration_enabled),
             accept_call_trigger: Self::select_accept_call_trigger(call_control_config),
             end_call_trigger: Self::select_end_call_trigger(call_control_config),
             toggle_radio_prio_trigger: Self::select_toggle_radio_prio_trigger(call_control_config),
@@ -69,6 +78,8 @@ impl KeybindEngine {
             rx_task: None,
             shutdown_token,
             stop_token: None,
+            radio_portal_fallback,
+            radio_follows_call: Arc::new(AtomicBool::new(radio_portal_fallback)),
             call_pressed: Arc::new(AtomicBool::new(false)),
             radio_pressed: Arc::new(AtomicBool::new(false)),
             call_active: Arc::new(AtomicBool::new(false)),
@@ -160,9 +171,34 @@ impl KeybindEngine {
             );
         }
 
+        self.refresh_radio_follows_call();
         self.spawn_rx_loop(key_event_rx);
 
         Ok(())
+    }
+
+    fn refresh_radio_follows_call(&self) {
+        refresh_radio_follows_call(
+            self.listener.read().as_ref().map(Arc::downgrade).as_ref(),
+            self.radio_portal_fallback,
+            &self.radio_follows_call,
+            &self.call_pressed,
+            &self.radio_pressed,
+        );
+    }
+
+    /// Whether radio TX and the call MIC action share one trigger, either
+    /// because they are configured to the same input or because the portal
+    /// fallback is active.
+    ///
+    /// Reads the fallback without re-resolving it. Callers run on other tasks,
+    /// and the event loop classifies a press before it marks the key as held, so
+    /// a refresh from here could flip the fallback inside that gap and have the
+    /// release classified differently from its press.
+    fn radio_shares_call_trigger(&self) -> bool {
+        self.radio_trigger.is_some()
+            && (self.radio_trigger == self.call_trigger
+                || self.radio_follows_call.load(Ordering::Relaxed))
     }
 
     pub fn stop(&mut self) {
@@ -201,9 +237,11 @@ impl KeybindEngine {
 
         self.call_mic_mode = transmit_config.call_mic_mode;
         self.call_trigger = transmit_config.active_call_trigger();
-        self.radio_trigger = transmit_config
-            .active_radio_trigger(radio_integration_enabled)
-            .await;
+        self.radio_trigger = transmit_config.active_radio_trigger(radio_integration_enabled);
+        self.radio_portal_fallback =
+            transmit_config.radio_falls_back_to_call(radio_integration_enabled);
+        self.radio_follows_call
+            .store(self.radio_portal_fallback, Ordering::Relaxed);
 
         self.accept_call_trigger = Self::select_accept_call_trigger(keybinds_config);
         self.end_call_trigger = Self::select_end_call_trigger(keybinds_config);
@@ -220,8 +258,7 @@ impl KeybindEngine {
         self.call_active.store(active, Ordering::Relaxed);
 
         if active {
-            if self.radio_trigger.is_some()
-                && self.radio_trigger == self.call_trigger
+            if self.radio_shares_call_trigger()
                 && self.radio_pressed.load(Ordering::Relaxed)
                 && self.radio_transmitting.load(Ordering::Relaxed)
                 && !self.radio_prio.load(Ordering::Relaxed)
@@ -283,7 +320,7 @@ impl KeybindEngine {
         let call_pressed = self.call_pressed.load(Ordering::Relaxed);
         let radio_pressed = self.radio_pressed.load(Ordering::Relaxed);
         let radio_prio = self.radio_prio.load(Ordering::Relaxed);
-        let separate_keys = self.radio_trigger.is_some() && self.radio_trigger != self.call_trigger;
+        let separate_keys = self.radio_trigger.is_some() && !self.radio_shares_call_trigger();
         match self.call_mic_mode {
             CallMicMode::VoiceActivation => false,
             CallMicMode::PushToTalk => {
@@ -439,6 +476,13 @@ impl KeybindEngine {
             .clone()
             .unwrap_or(self.shutdown_token.child_token());
         let radio_handle = self.app.state::<RadioHandle>().inner().clone();
+        let radio_portal_fallback = self.radio_portal_fallback;
+        let radio_follows_call = self.radio_follows_call.clone();
+        // Weak, not owning: `stop()` drops the engine's handle before aborting
+        // this task, and an owning clone here would keep the old listener (and
+        // its portal session) alive until the runtime reclaims the aborted
+        // task, overlapping it with the session `start()` opens next.
+        let listener = self.listener.read().as_ref().map(Arc::downgrade);
         let call_pressed = self.call_pressed.clone();
         let radio_pressed = self.radio_pressed.clone();
         let call_active = self.call_active.clone();
@@ -462,8 +506,20 @@ impl KeybindEngine {
                             Self::handle_call_control_event(&app, &event.trigger, accept_call.as_ref(), end_call.as_ref(), toggle_radio_prio.as_ref()).await;
                         }
 
-                        let is_call_key = call_trigger.as_ref() == Some(&event.trigger);
-                        let is_radio_key = radio_trigger.as_ref() == Some(&event.trigger);
+                        refresh_radio_follows_call(
+                            listener.as_ref(),
+                            radio_portal_fallback,
+                            &radio_follows_call,
+                            &call_pressed,
+                            &radio_pressed,
+                        );
+
+                        let (is_call_key, is_radio_key) = classify_trigger(
+                            &event.trigger,
+                            call_trigger.as_ref(),
+                            radio_trigger.as_ref(),
+                            radio_follows_call.load(Ordering::Relaxed),
+                        );
 
                         if !is_call_key && !is_radio_key { continue; }
 
@@ -584,5 +640,234 @@ impl KeybindEngine {
 impl Drop for KeybindEngine {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+/// Classifies an incoming trigger as the call key, the radio key, both or neither.
+///
+/// Exactly one thing can be the radio key. While the fallback is active the
+/// dedicated shortcut is unbound, so also honoring it would let a momentarily
+/// stale fallback count one press twice against the engine's shared
+/// `radio_pressed` flag, swallow the matching release and leave the transmitter
+/// keyed. A single trigger configured for both still classifies as both, which
+/// is how the non-portal platforms express "radio follows the call key".
+fn classify_trigger(
+    trigger: &Trigger,
+    call_trigger: Option<&Trigger>,
+    radio_trigger: Option<&Trigger>,
+    radio_follows_call: bool,
+) -> (bool, bool) {
+    let is_call_key = call_trigger == Some(trigger);
+    let is_radio_key = if radio_follows_call {
+        is_call_key
+    } else {
+        radio_trigger == Some(trigger)
+    };
+
+    (is_call_key, is_radio_key)
+}
+
+/// Re-resolves whether radio TX follows the call trigger, from the listener's
+/// live view of the OS level bindings.
+///
+/// Never re-resolves while a key is held: flipping the fallback mid-press would
+/// classify the release differently from the press and leave the radio keyed.
+/// Only ever called from `start()` and from the event loop, which never overlap,
+/// so the held-key check and the write it guards cannot interleave with another
+/// writer.
+///
+/// Runs on every key event, so the two cheap guards come first and the listener
+/// is only resolved once they pass.
+fn refresh_radio_follows_call(
+    listener: Option<&WeakKeybindListener>,
+    fallback: bool,
+    follows_call: &AtomicBool,
+    call_pressed: &AtomicBool,
+    radio_pressed: &AtomicBool,
+) {
+    // Without the portal fallback there is nothing to resolve: `follows_call` is
+    // false from construction and no binding can change that.
+    if !fallback || call_pressed.load(Ordering::Relaxed) || radio_pressed.load(Ordering::Relaxed) {
+        return;
+    }
+
+    let follows = !listener
+        .and_then(|l| l.upgrade())
+        .is_some_and(|l| l.has_external_binding(Keybind::RadioPushToTalk));
+
+    if follows_call.swap(follows, Ordering::Relaxed) != follows {
+        log::debug!(
+            "Radio TX now follows the {} trigger",
+            if follows { "call" } else { "radio" }
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keybinds::{KeybindsError, PortalAction};
+    use tokio::sync::mpsc::UnboundedSender;
+
+    /// Stands in for a platform listener so the resolution can be exercised
+    /// without a portal, an `AppHandle` or a running event loop.
+    #[derive(Debug)]
+    struct FakeListener {
+        radio_bound: bool,
+    }
+
+    impl KeybindListener for FakeListener {
+        async fn start(_key_event_tx: UnboundedSender<KeyEvent>) -> Result<Self, KeybindsError> {
+            unreachable!("test listeners are constructed directly")
+        }
+
+        fn has_external_binding(&self, keybind: Keybind) -> bool {
+            self.radio_bound && keybind == Keybind::RadioPushToTalk
+        }
+    }
+
+    fn listener(radio_bound: bool) -> DynKeybindListener {
+        Arc::new(FakeListener { radio_bound })
+    }
+
+    struct Fixture {
+        follows: AtomicBool,
+        call_pressed: AtomicBool,
+        radio_pressed: AtomicBool,
+    }
+
+    impl Fixture {
+        fn new(follows: bool) -> Self {
+            Self {
+                follows: AtomicBool::new(follows),
+                call_pressed: AtomicBool::new(false),
+                radio_pressed: AtomicBool::new(false),
+            }
+        }
+
+        fn refresh(&self, listener: Option<&WeakKeybindListener>, fallback: bool) -> bool {
+            refresh_radio_follows_call(
+                listener,
+                fallback,
+                &self.follows,
+                &self.call_pressed,
+                &self.radio_pressed,
+            );
+            self.follows.load(Ordering::Relaxed)
+        }
+    }
+
+    fn call() -> Trigger {
+        Trigger::Portal(PortalAction::PushToTalk)
+    }
+
+    fn radio() -> Trigger {
+        Trigger::Portal(PortalAction::RadioPushToTalk)
+    }
+
+    #[test]
+    fn radio_follows_the_call_key_while_no_dedicated_shortcut_is_bound() {
+        let listener = listener(false);
+        let fixture = Fixture::new(false);
+
+        assert!(fixture.refresh(Some(&Arc::downgrade(&listener)), true));
+    }
+
+    #[test]
+    fn radio_stops_following_the_call_key_once_a_shortcut_is_bound() {
+        let listener = listener(true);
+        let fixture = Fixture::new(true);
+
+        assert!(!fixture.refresh(Some(&Arc::downgrade(&listener)), true));
+    }
+
+    #[test]
+    fn configs_without_the_portal_fallback_never_resolve() {
+        // A bound shortcut must not flip a config that has no fallback rule, so
+        // every non-Wayland platform keeps its configured triggers verbatim.
+        let listener = listener(false);
+        let fixture = Fixture::new(false);
+
+        assert!(!fixture.refresh(Some(&Arc::downgrade(&listener)), false));
+    }
+
+    #[test]
+    fn the_fallback_never_flips_while_a_key_is_held() {
+        // Flipping mid-press would classify the release differently from the
+        // press and leave the radio keyed.
+        let listener = listener(true);
+        let weak = Arc::downgrade(&listener);
+
+        let held_call = Fixture::new(true);
+        held_call.call_pressed.store(true, Ordering::Relaxed);
+        assert!(held_call.refresh(Some(&weak), true), "call key held");
+
+        let held_radio = Fixture::new(true);
+        held_radio.radio_pressed.store(true, Ordering::Relaxed);
+        assert!(held_radio.refresh(Some(&weak), true), "radio key held");
+    }
+
+    #[test]
+    fn a_dropped_listener_reads_as_unbound() {
+        // `stop()` takes the listener while the event loop still holds its weak
+        // handle; resolving through a dangling one must not panic.
+        let weak = Arc::downgrade(&listener(true));
+        let fixture = Fixture::new(false);
+
+        assert!(fixture.refresh(Some(&weak), true));
+        assert!(fixture.refresh(None, true));
+    }
+
+    #[test]
+    fn separate_triggers_classify_independently() {
+        assert_eq!(
+            classify_trigger(&radio(), Some(&call()), Some(&radio()), false),
+            (false, true)
+        );
+        assert_eq!(
+            classify_trigger(&call(), Some(&call()), Some(&radio()), false),
+            (true, false)
+        );
+    }
+
+    #[test]
+    fn the_fallback_makes_the_call_key_the_radio_key() {
+        assert_eq!(
+            classify_trigger(&call(), Some(&call()), Some(&radio()), true),
+            (true, true)
+        );
+    }
+
+    #[test]
+    fn a_stale_fallback_never_double_counts_the_dedicated_trigger() {
+        // Regression: classifying the dedicated shortcut as a radio key while the
+        // fallback was still active let one press take `radio_pressed` twice, so
+        // the release was swallowed and the transmitter stayed keyed.
+        assert_eq!(
+            classify_trigger(&radio(), Some(&call()), Some(&radio()), true),
+            (false, false)
+        );
+    }
+
+    #[test]
+    fn one_trigger_bound_to_both_classifies_as_both() {
+        assert_eq!(
+            classify_trigger(&call(), Some(&call()), Some(&call()), false),
+            (true, true)
+        );
+    }
+
+    #[test]
+    fn an_unrelated_trigger_classifies_as_neither() {
+        let other = Trigger::Portal(PortalAction::CallControl);
+
+        assert_eq!(
+            classify_trigger(&other, Some(&call()), Some(&radio()), false),
+            (false, false)
+        );
+        assert_eq!(
+            classify_trigger(&other, Some(&call()), Some(&radio()), true),
+            (false, false)
+        );
     }
 }

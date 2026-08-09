@@ -645,7 +645,8 @@ async fn dispatch_command(
         }
         KeybindsIsPortalShortcutBound => {
             let keybind = args!(args, "keybind");
-            dispatch(keybinds_is_portal_shortcut_bound(keybind).await)
+            let keybind_engine = app.state::<KeybindEngineHandle>();
+            dispatch(keybinds_is_portal_shortcut_bound(keybind_engine, keybind).await)
         }
 
         PlaybackGetEnabled => {
