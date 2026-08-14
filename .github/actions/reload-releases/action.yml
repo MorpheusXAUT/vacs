@@ -44,6 +44,8 @@ runs:
     - name: Get OIDC token
       id: oidc
       shell: bash
+      env:
+        AUDIENCE: ${{ inputs.oidc-audience }}
       run: |
         if [[ -z "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" || -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ]]; then
           echo "::error::OIDC token request environment variables are not set. Ensure the job has 'id-token: write' permission."
@@ -52,7 +54,8 @@ runs:
 
         RESPONSE=$(curl -sSf \
           -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${{ inputs.oidc-audience }}")
+          --get --data-urlencode "audience=$AUDIENCE" \
+          "$ACTIONS_ID_TOKEN_REQUEST_URL")
 
         TOKEN=$(echo "$RESPONSE" | jq -r '.value')
 
