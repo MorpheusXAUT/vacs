@@ -516,3 +516,15 @@ jobs:
           branch: "main"
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+  # Announce last, so the release has its installers and the cask points at the new
+  # version before anyone is told to go and download it.
+  announce:
+    needs: [prep, release, update-brew-tap]
+    if: |
+      needs.prep.outputs.draft == 'false' &&
+      needs.prep.outputs.prerelease == 'false'
+    uses: ./.github/workflows/announce-release.yml
+    with:
+      version: ${{ needs.prep.outputs.version }}
+    secrets: inherit

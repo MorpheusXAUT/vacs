@@ -1,0 +1,98 @@
+name: Announce • vacs-client
+
+# Posts the Discord release announcement. Called at the end of release-client.yml once
+# the installers are on the release, and dispatchable by hand to announce an older
+# release or to preview the message without posting.
+#
+# Deliberately not triggered by `release: published`: release-please creates the release
+# when the release PR merges, long before anything is built, so that event fires while
+# the release page is still empty.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to announce (X.Y.Z)"
+        required: true
+        type: string
+      blurb:
+        description: "Replaces the lead paragraph taken from the What's New page."
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Render the message into the job summary without posting it."
+        required: false
+        default: false
+        type: boolean
+      publish:
+        description: "Also press Publish, if the target is an Announcement channel."
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to announce (X.Y.Z)"
+        required: true
+        type: string
+      blurb:
+        description: "Replaces the lead paragraph taken from the What's New page."
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Render the message into the job summary without posting it."
+        required: false
+        default: true
+        type: boolean
+      publish:
+        description: "Also press Publish, if the target is an Announcement channel."
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: announce-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Announce
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CHANNEL_ID: ${{ vars.DISCORD_CHANNEL_ID }}
+          DISCORD_RELEASE_ROLE_ID: ${{ vars.DISCORD_RELEASE_ROLE_ID }}
+          VERSION: ${{ inputs.version }}
+          BLURB: ${{ inputs.blurb }}
+          # dry_run only exists on the dispatch path, so the automatic call posts.
+          DRY_RUN: ${{ inputs.dry_run }}
+          PUBLISH: ${{ inputs.publish }}
+        shell: bash
+        run: |
+          ARGS=(--version "$VERSION")
+          if [[ -n "$BLURB" ]]; then
+            ARGS+=(--blurb "$BLURB")
+          fi
+          if [[ "$DRY_RUN" == "true" ]]; then
+            ARGS+=(--dry-run)
+          fi
+          if [[ "$PUBLISH" == "true" ]]; then
+            ARGS+=(--publish)
+          fi
+          python3 scripts/discord-announce.py "${ARGS[@]}"
