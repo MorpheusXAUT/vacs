@@ -20,29 +20,63 @@ The `reload-releases` job calls `POST /admin/releases/reload` on the server, whi
 catalog and prefetches the updater signatures for the newest release of each channel. It runs for
 prereleases too, since the `rc` channel serves those.
 
+It then **verifies the result** rather than trusting the `200`, by asking `GET /version/update` what
+a client on `0.0.1` would be offered, for every platform the build ships:
+
+```
+windows/x86_64/nsis
+linux/x86_64/deb
+linux/x86_64/rpm
+darwin/x86_64/app
+darwin/aarch64/app
+```
+
+Every one of them must come back with the new version. Reload and check are one retry loop, not two
+steps, because the GitHub API can still be reporting the release without its assets when the first
+reload lands, and a release with no assets is dropped from the catalog entirely; only another reload
+fixes that.
+
+> [!NOTE]
+> Keep the `bundles` list in step with what the build actually produces. It is deliberately strict:
+> a platform silently dropping out of the release is the failure this catches. AppImage is absent
+> because Tauri no longer bundles one, and Windows is `nsis`, not `msi`. Before this check existed,
+> asking the live server for `msi` returned **0.3.0**, the last release that shipped one.
+
+### Servers and configuration
+
+Both deployments are reloaded, as a matrix over the `dev` and `production` environments, taking the
+server URL from the environment-scoped `VACS_SERVER_URL` variable:
+
+| Environment | Server | OIDC subject the server must allow |
+| --- | --- | --- |
+| `dev` | `https://dev.vacs.network` | `repo:vacs-project/vacs:environment:dev` |
+| `production` | `https://vacs.network` | `repo:vacs-project/vacs:environment:production` |
+
+The dev leg runs with `continue-on-error`, so a dev server that is down cannot hold up a production
+release or block the announcement.
+
 Authentication is a GitHub Actions OIDC token, the same mechanism the `vacs-data` repository uses
 for `POST /admin/dataset/reload`. The two endpoints deliberately use **separate** allowed subjects,
 so that letting one repository reload the dataset never also lets it reload the release catalog.
 
-Server configuration:
+Each server's `config.toml` allows only its own environment:
 
 ```toml
 [admin]
 oidc_audience = "https://vacs.network"
-oidc_allowed_sub_releases = "repo:vacs-project/vacs:environment:production"
+oidc_allowed_sub_releases = "repo:vacs-project/vacs:environment:production"  # dev uses :environment:dev
 ```
 
 Leave `oidc_allowed_sub_releases` unset and the endpoint answers `404` to everyone, including a
 valid token. The subject comes from the job's GitHub Environment, which is why `reload-releases`
-declares `environment: production`; without one the subject would be the git ref and would change
-with every release.
+declares one; without it the subject would be the git ref and would change with every release.
 
-Repository configuration: variables `VACS_OIDC_AUDIENCE` and `VACS_SERVER_URL`, and a `production`
-environment.
+Repository configuration: `dev` and `production` environments, `VACS_SERVER_URL` scoped to each,
+and `VACS_OIDC_AUDIENCE`.
 
-If the reload fails, the announcement does not go out either, because announcing an update the
-server will not serve for another four hours is worse than announcing late. Fix the cause and
-announce by hand.
+If the production reload fails, the announcement does not go out either, because announcing an
+update the server will not serve for another four hours is worse than announcing late. Fix the cause
+and announce by hand.
 
 ---
 

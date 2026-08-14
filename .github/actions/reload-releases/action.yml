@@ -1,5 +1,5 @@
 name: Reload release catalog
-description: Authenticate via OIDC and refresh the release catalog on the vacs server
+description: Refresh the release catalog on a vacs server and confirm it serves the new version
 
 inputs:
   oidc-audience:
@@ -8,6 +8,35 @@ inputs:
   server-url:
     description: Base URL of the vacs server
     required: true
+  version:
+    description: Version the server is expected to offer once reloaded
+    required: true
+  channel:
+    description: Release channel to verify against (stable, beta or rc)
+    required: false
+    default: stable
+  bundles:
+    description: |
+      Platforms to verify, one `target/arch/bundle_type` per line. Every entry must be
+      offered the new version, so this doubles as a check that the release actually
+      shipped an installer for each platform. Keep it in step with what the build
+      produces: AppImage is absent because Tauri no longer bundles one, and Windows is
+      nsis rather than msi.
+    required: false
+    default: |
+      windows/x86_64/nsis
+      linux/x86_64/deb
+      linux/x86_64/rpm
+      darwin/x86_64/app
+      darwin/aarch64/app
+  attempts:
+    description: How many times to reload and re-check before giving up
+    required: false
+    default: "5"
+  retry-delay:
+    description: Seconds to wait between attempts
+    required: false
+    default: "15"
 
 runs:
   using: composite
@@ -35,15 +64,66 @@ runs:
         echo "::add-mask::$TOKEN"
         echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-    - name: Trigger release catalog reload
+    # Reloading and verifying are one loop rather than two steps: the GitHub API can
+    # still be reporting the release without its assets when the first reload lands,
+    # and a release with no assets is dropped from the catalog entirely. Re-reloading
+    # is what fixes that, so a failed check has to feed back into another reload.
+    - name: Reload and verify release catalog
       shell: bash
+      env:
+        TOKEN: ${{ steps.oidc.outputs.token }}
+        SERVER_URL: ${{ inputs.server-url }}
+        VERSION: ${{ inputs.version }}
+        CHANNEL: ${{ inputs.channel }}
+        BUNDLES: ${{ inputs.bundles }}
+        ATTEMPTS: ${{ inputs.attempts }}
+        RETRY_DELAY: ${{ inputs.retry-delay }}
       run: |
-        if ! response=$(curl -sS --fail-with-body \
-          -X POST \
-          -H "Authorization: Bearer ${{ steps.oidc.outputs.token }}" \
-          "${{ inputs.server-url }}/admin/releases/reload"); then
-          echo "::error::Release catalog reload failed: $response"
-          exit 1
-        fi
+        # A client on 0.0.1 is always offered the newest release on the channel, so
+        # whatever comes back is what the catalog now considers latest.
+        served_version() {
+          curl -sS -G "$SERVER_URL/version/update" \
+            --data-urlencode "version=0.0.1" \
+            --data-urlencode "target=$1" \
+            --data-urlencode "arch=$2" \
+            --data-urlencode "bundle_type=$3" \
+            --data-urlencode "channel=$CHANNEL" \
+            | jq -rs '.[0].version // empty'
+        }
 
-        echo "Release catalog reload triggered successfully"
+        stale=""
+
+        for attempt in $(seq 1 "$ATTEMPTS"); do
+          if ! response=$(curl -sS --fail-with-body \
+            -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            "$SERVER_URL/admin/releases/reload"); then
+            echo "::warning::Reload request failed on attempt $attempt: $response"
+          else
+            stale=""
+            while IFS=/ read -r target arch bundle_type; do
+              [[ -z "$target" ]] && continue
+
+              served=$(served_version "$target" "$arch" "$bundle_type")
+              if [[ "$served" != "$VERSION" ]]; then
+                stale+="  $target/$arch/$bundle_type offers ${served:-nothing}"$'\n'
+              fi
+            done <<< "$BUNDLES"
+
+            if [[ -z "$stale" ]]; then
+              echo "Server offers $VERSION on the $CHANNEL channel for every platform"
+              exit 0
+            fi
+
+            echo "::warning::Not all platforms serve $VERSION yet (attempt $attempt):"
+            printf '%s' "$stale"
+          fi
+
+          if [[ "$attempt" -lt "$ATTEMPTS" ]]; then
+            sleep "$RETRY_DELAY"
+          fi
+        done
+
+        echo "::error::$SERVER_URL does not serve $VERSION on every platform after $ATTEMPTS attempts"
+        printf '%s' "$stale"
+        exit 1

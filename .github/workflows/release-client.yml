@@ -440,16 +440,23 @@ jobs:
           files: |
             dist/**
 
-  # The server caches the GitHub release list for hours, so a new version stays
+  # The servers cache the GitHub release list for hours, so a new version stays
   # invisible to the updater until told otherwise. Prereleases reload too, since the
   # rc channel serves them.
   reload-releases:
     needs: [prep, release]
     if: needs.prep.outputs.draft == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, production]
+    # Dev being unreachable must not hold up a production release, so only the
+    # production leg can fail the workflow and block the announcement.
+    continue-on-error: ${{ matrix.environment == 'dev' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
-      name: production
+      name: ${{ matrix.environment }}
       url: ${{ vars.VACS_SERVER_URL }}
     permissions:
       id-token: write
@@ -467,6 +474,8 @@ jobs:
         with:
           oidc-audience: ${{ vars.VACS_OIDC_AUDIENCE }}
           server-url: ${{ vars.VACS_SERVER_URL }}
+          version: ${{ needs.prep.outputs.version }}
+          channel: ${{ needs.prep.outputs.rc == 'true' && 'rc' || (needs.prep.outputs.prerelease == 'true' && 'beta' || 'stable') }}
 
   update-brew-tap:
     needs: [prep, release]
