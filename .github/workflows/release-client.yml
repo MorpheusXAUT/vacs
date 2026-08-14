@@ -561,6 +561,10 @@ jobs:
     if: |
       needs.prep.outputs.draft == 'false' &&
       needs.prep.outputs.prerelease == 'false'
+    # The called workflow can only downgrade this token, never elevate it, so its
+    # checkout needs the grant to come from here.
+    permissions:
+      contents: read
     uses: ./.github/workflows/announce-release.yml
     with:
       version: ${{ needs.prep.outputs.version }}
