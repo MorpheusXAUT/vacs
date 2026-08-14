@@ -54,6 +54,9 @@ on:
 
 permissions: {}
 
+# Serializes manual dispatches for the same version; it is not a double-post guard,
+# since a queued duplicate still runs afterwards, and workflow-level concurrency does
+# not apply on the workflow_call path at all.
 concurrency:
   group: announce-${{ inputs.version }}
   cancel-in-progress: false
@@ -80,7 +83,11 @@ jobs:
           DISCORD_RELEASE_ROLE_ID: ${{ vars.DISCORD_RELEASE_ROLE_ID }}
           VERSION: ${{ inputs.version }}
           BLURB: ${{ inputs.blurb }}
-          # dry_run only exists on the dispatch path, so the automatic call posts.
+          # Hosted runners share IP pools that exhaust the unauthenticated GitHub API
+          # rate limit, so the release pre-flight check authenticates in CI.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The workflow_call path leaves dry_run at its default false, so the
+          # automatic run posts; the dispatch path defaults it to true.
           DRY_RUN: ${{ inputs.dry_run }}
           PUBLISH: ${{ inputs.publish }}
         shell: bash

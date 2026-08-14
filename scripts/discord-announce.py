@@ -90,6 +90,19 @@ def _get(url: str, *, headers: dict[str, str] | None = None) -> bytes:
         return response.read()
 
 
+def _github_headers() -> dict[str, str]:
+    """Auth for api.github.com, used only inside GitHub Actions.
+
+    Hosted runners share IP pools that routinely exhaust the unauthenticated rate
+    limit, so CI sends the workflow's own token. Local runs stay unauthenticated:
+    the repos are public and a locally exported GITHUB_TOKEN may well be stale.
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if token and os.environ.get("GITHUB_ACTIONS") == "true":
+        return {"Authorization": f"Bearer {token}"}
+    return {}
+
+
 def fetch_whats_new(source: str) -> str:
     """Read whats-new.mdx from a local path or over https."""
     if source.startswith(("http://", "https://")):
@@ -202,7 +215,7 @@ def check_release(version: str) -> None:
     """
     tag = f"vacs-client-v{version}"
     try:
-        payload = json.loads(_get(f"{REPO_API}/releases/tags/{tag}"))
+        payload = json.loads(_get(f"{REPO_API}/releases/tags/{tag}", headers=_github_headers()))
     except urllib.error.HTTPError as err:
         if err.code == 404:
             raise AnnounceError(f"no GitHub release tagged {tag}") from err
