@@ -505,6 +505,13 @@ impl Catalog for GitHubCatalog {
             }
         }
     }
+
+    #[instrument(level = "debug", skip(self), err)]
+    async fn refresh(&self) -> Result<(), AppError> {
+        // fetch_releases also prefetches signatures for the newest release of each
+        // channel, so the updater does not pay for that download on the first check.
+        self.fetch_releases().await
+    }
 }
 
 impl Debug for GitHubCatalog {

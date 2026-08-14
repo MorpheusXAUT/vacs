@@ -20,6 +20,12 @@ pub trait Catalog: Send + Sync + 'static {
         meta: &ReleaseMeta,
         asset: &ReleaseAsset,
     ) -> Result<String, AppError>;
+
+    /// Repopulate the catalog from its backing source, ignoring any cache TTL.
+    ///
+    /// Called by the admin reload endpoint once a release is published, so clients
+    /// see the new version immediately instead of after the TTL expires.
+    async fn refresh(&self) -> Result<(), AppError>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

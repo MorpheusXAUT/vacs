@@ -1,5 +1,5 @@
 use crate::auth::layer::setup_mock_auth_layer;
-use crate::config::{AppConfig, AuthConfig, VatsimConfig};
+use crate::config::{AdminConfig, AppConfig, AuthConfig, VatsimConfig};
 use crate::ice::provider::stun::StunOnlyProvider;
 use crate::ratelimit::RateLimiters;
 use crate::release::UpdateChecker;
@@ -31,7 +31,24 @@ impl TestApp {
     }
 
     pub async fn new_with_network(network: Network) -> Self {
+        Self::new_with_config(Self::config(), network).await
+    }
+
+    /// Enables the release catalog reload endpoint, which is otherwise unavailable.
+    pub async fn new_with_admin_releases_sub(sub: impl Into<String>) -> Self {
         let config = AppConfig {
+            admin: AdminConfig {
+                oidc_allowed_sub_releases: Some(sub.into()),
+                ..Default::default()
+            },
+            ..Self::config()
+        };
+
+        Self::new_with_config(config, Network::default()).await
+    }
+
+    fn config() -> AppConfig {
+        AppConfig {
             auth: AuthConfig {
                 login_flow_timeout_millis: 100,
                 ..Default::default()
@@ -47,8 +64,10 @@ impl TestApp {
                 data_feed_position_grace_period: Duration::from_secs(90),
             },
             ..Default::default()
-        };
+        }
+    }
 
+    async fn new_with_config(config: AppConfig, network: Network) -> Self {
         let mock_data_feed = Arc::new(MockDataFeed::default());
 
         let (shutdown_tx, shutdown_rx) = watch::channel(());

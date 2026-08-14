@@ -241,11 +241,20 @@ impl Default for UpdatesConfig {
 pub struct AdminConfig {
     /// Expected audience for GitHub OIDC tokens.
     pub oidc_audience: String,
-    /// Allowed subject claim for GitHub OIDC tokens.
+    /// Allowed subject claim for GitHub OIDC tokens on the dataset reload endpoint.
     /// With GitHub Environments, the format is:
     /// `repo:<owner>/<repo>:environment:<environment_name>`
     /// e.g. `repo:vacs-project/vacs-data:environment:production`
     pub oidc_allowed_sub: String,
+    /// Allowed subject claim for the release catalog reload endpoint, which is
+    /// triggered from the `vacs` repository rather than `vacs-data`,
+    /// e.g. `repo:vacs-project/vacs:environment:production`.
+    ///
+    /// Left unset, the endpoint is unavailable. It deliberately does not fall back
+    /// to [`Self::oidc_allowed_sub`], so that granting one repository the ability to
+    /// reload the dataset never also grants it the release catalog.
+    #[serde(default)]
+    pub oidc_allowed_sub_releases: Option<String>,
     /// Configuration for the dataset repository. If omitted, the server
     /// will only load the dataset from the local `coverage_dir` on disk
     /// and the admin reload endpoint will be unavailable.
@@ -258,6 +267,7 @@ impl Default for AdminConfig {
         Self {
             oidc_audience: "https://vacs.network".to_string(),
             oidc_allowed_sub: String::new(),
+            oidc_allowed_sub_releases: None,
             dataset: None,
         }
     }
