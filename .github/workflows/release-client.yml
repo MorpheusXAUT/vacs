@@ -440,6 +440,34 @@ jobs:
           files: |
             dist/**
 
+  # The server caches the GitHub release list for hours, so a new version stays
+  # invisible to the updater until told otherwise. Prereleases reload too, since the
+  # rc channel serves them.
+  reload-releases:
+    needs: [prep, release]
+    if: needs.prep.outputs.draft == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: ${{ vars.VACS_SERVER_URL }}
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Checkout actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Reload release catalog
+        uses: ./.github/actions/reload-releases
+        with:
+          oidc-audience: ${{ vars.VACS_OIDC_AUDIENCE }}
+          server-url: ${{ vars.VACS_SERVER_URL }}
+
   update-brew-tap:
     needs: [prep, release]
     if: |
@@ -517,10 +545,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
 
-  # Announce last, so the release has its installers and the cask points at the new
-  # version before anyone is told to go and download it.
+  # Announce last, so the release has its installers, the server offers the update and
+  # the cask points at the new version before anyone is told to go and get it.
   announce:
-    needs: [prep, release, update-brew-tap]
+    needs: [prep, release, reload-releases, update-brew-tap]
     if: |
       needs.prep.outputs.draft == 'false' &&
       needs.prep.outputs.prerelease == 'false'
