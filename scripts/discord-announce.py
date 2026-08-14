@@ -258,7 +258,9 @@ def wait_for_docs(version: str, timeout: int) -> None:
 # --------------------------------------------------------------------------------------
 
 
-def render(version: str, lead: str, highlights: list[str], role_id: str | None) -> str:
+def render(
+    version: str, lead: str, highlights: list[str], role_id: str | None, whats_new_url: str
+) -> str:
     template = string.Template(TEMPLATE_FILE.read_text(encoding="utf-8"))
 
     if len(highlights) >= MIN_HIGHLIGHTS:
@@ -273,7 +275,7 @@ def render(version: str, lead: str, highlights: list[str], role_id: str | None) 
         release_url=f"{RELEASE_URL_PREFIX}/vacs-client-v{version}",
         lead=lead,
         highlights=highlight_block,
-        whats_new_url=f"{WHATS_NEW_URL}#{anchor_slug(version)}",
+        whats_new_url=whats_new_url,
     ).lstrip()
 
     if len(message) > MAX_MESSAGE_LENGTH:
@@ -383,6 +385,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.blurb:
             override = args.blurb.strip()
 
+        documented = True
         if override is None:
             raw_lead, highlights = extract_section(fetch_whats_new(args.whats_new), version)
             lead = mdx_to_discord(raw_lead, version)
@@ -395,9 +398,18 @@ def main(argv: list[str] | None = None) -> int:
             except AnnounceError as err:
                 print(f"no highlights: {err}", file=sys.stderr)
                 highlights = []
+                documented = False
+
+        # An undocumented release has no section anchor to link or to wait for, so the
+        # What's New link points at the page top and the docs gate below is skipped.
+        # Without this, the --blurb escape hatch would fail its own docs check.
+        if documented:
+            whats_new_url = f"{WHATS_NEW_URL}#{anchor_slug(version)}"
+        else:
+            whats_new_url = WHATS_NEW_URL
 
         role_id = os.environ.get("DISCORD_RELEASE_ROLE_ID") or None
-        message = render(version, lead, highlights, role_id)
+        message = render(version, lead, highlights, role_id, whats_new_url)
 
         if args.dry_run:
             print(message)
@@ -411,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if not args.skip_release_check:
             check_release(version)
-        if not args.skip_docs_check:
+        if not args.skip_docs_check and documented:
             wait_for_docs(version, args.docs_timeout)
 
         message_id = post(message, token, channel_id, role_id)

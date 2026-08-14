@@ -122,7 +122,7 @@ documentation rules anyway.
 Two guards stop the announcement going out early, on the automatic and the manual path alike:
 
 1. The GitHub release must exist, be published, and carry at least one installer asset.
-2. `https://docs.vacs.network/whats-new` must actually show the version's section. The job waits up to ten minutes for the docs deploy and then fails rather than linking to a page that does not mention the release.
+2. `https://docs.vacs.network/whats-new` must actually show the version's section. The job waits up to ten minutes for the docs deploy and then fails rather than linking to a page that does not mention the release. A version the page does not cover at all, announced with `blurb`, skips this gate and links to the top of the page instead of a section anchor.
 
 A failure in either guard leaves the release itself untouched. Fix the cause and announce by hand,
 below.
@@ -136,7 +136,7 @@ Run the **Announce • vacs-client** workflow from the Actions tab. Inputs:
 | Input | Meaning |
 | --- | --- |
 | `version` | `X.Y.Z`, without the `vacs-client-v` prefix |
-| `blurb` | replaces the lead paragraph, for when the docs do not say what you want to say |
+| `blurb` | replaces the lead paragraph, for when the docs do not say what you want to say. For a version without a What's New section it also waives the docs gate |
 | `dry_run` | on by default; renders the message into the job summary and posts nothing |
 | `publish` | also presses Publish, if the channel is an Announcement channel |
 
