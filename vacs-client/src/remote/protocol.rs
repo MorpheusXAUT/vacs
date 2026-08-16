@@ -242,8 +242,9 @@ pub enum RemoteCommand {
 
     SignalingConnect,
     SignalingDisconnect,
+    SignalingDropTarget,
     SignalingTerminate,
-    SignalingStartCall,
+    SignalingInviteToCall,
     SignalingAcceptCall,
     SignalingEndCall,
     SignalingGetIgnoredClients,
