@@ -6,6 +6,8 @@ pub mod data_feed;
 pub mod slurper;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::str::FromStr;
 use thiserror::Error;
 use vacs_protocol::vatsim::ClientId;
@@ -39,6 +41,39 @@ pub struct ControllerInfo {
     pub callsign: String,
     pub frequency: String,
     pub facility_type: FacilityType,
+}
+
+impl ControllerInfo {
+    /// Indexes controllers by CID.
+    ///
+    /// A CID can hold several connections at once, for example a controller
+    /// staffing a position while also running TowerView as an observer. Only
+    /// one of those is the position the controller is working, so entries
+    /// whose callsign resolves to a facility type win over
+    /// [`FacilityType::Unknown`] ones regardless of their order in the feed.
+    pub fn index_by_cid<I>(controllers: I) -> HashMap<ClientId, ControllerInfo>
+    where
+        I: IntoIterator<Item = ControllerInfo>,
+    {
+        let mut by_cid: HashMap<ClientId, ControllerInfo> = HashMap::new();
+
+        for controller in controllers {
+            match by_cid.entry(controller.cid.clone()) {
+                Entry::Occupied(mut entry) => {
+                    if entry.get().facility_type == FacilityType::Unknown
+                        && controller.facility_type != FacilityType::Unknown
+                    {
+                        entry.insert(controller);
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(controller);
+                }
+            }
+        }
+
+        by_cid
+    }
 }
 
 /// Enum representing the different VATSIM facility types as parsed from their respective callsign suffixes
@@ -167,6 +202,58 @@ impl<'de> Deserialize<'de> for FacilityType {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    fn controller(cid: &str, callsign: &str) -> ControllerInfo {
+        ControllerInfo {
+            cid: ClientId::from(cid),
+            callsign: callsign.to_string(),
+            frequency: "119.400".to_string(),
+            facility_type: FacilityType::from(callsign),
+        }
+    }
+
+    #[test]
+    fn index_by_cid_prefers_a_known_facility_type_over_an_observer() {
+        for entries in [
+            vec![
+                controller("1000001", "LOWW_OBS"),
+                controller("1000001", "LOWW_TWR"),
+            ],
+            vec![
+                controller("1000001", "LOWW_TWR"),
+                controller("1000001", "LOWW_OBS"),
+            ],
+        ] {
+            let by_cid = ControllerInfo::index_by_cid(entries);
+
+            assert_eq!(by_cid.len(), 1);
+            assert_eq!(
+                by_cid[&ClientId::from("1000001")].callsign,
+                "LOWW_TWR",
+                "the worked position must win over the observer connection"
+            );
+        }
+    }
+
+    #[test]
+    fn index_by_cid_keeps_an_observer_when_it_is_the_only_connection() {
+        let by_cid = ControllerInfo::index_by_cid(vec![controller("1000001", "LOWW_OBS")]);
+
+        assert_eq!(
+            by_cid[&ClientId::from("1000001")].facility_type,
+            FacilityType::Unknown
+        );
+    }
+
+    #[test]
+    fn index_by_cid_keeps_separate_cids_apart() {
+        let by_cid = ControllerInfo::index_by_cid(vec![
+            controller("1000001", "LOWW_TWR"),
+            controller("1000000", "LOWW_GND"),
+        ]);
+
+        assert_eq!(by_cid.len(), 2);
+    }
 
     #[test]
     fn facility_type_parse_valid() {

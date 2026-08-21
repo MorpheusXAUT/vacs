@@ -13,7 +13,7 @@ use crate::state::calls::CallManager;
 use crate::state::clients::{ClientManager, ClientSession};
 use crate::store::{Store, StoreBackend};
 use anyhow::Context;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, watch};
@@ -331,11 +331,11 @@ impl AppState {
         tracing::trace!(elapsed = ?fetch_elapsed, "Finished retrieving VATSIM controllers");
 
         let start_sync = std::time::Instant::now();
-        let current: HashMap<ClientId, ControllerInfo> = controllers
-            .into_iter()
-            .filter(|c| !c.callsign.ends_with("_SUP"))
-            .map(|c| (c.cid.clone(), c))
-            .collect();
+        let current = ControllerInfo::index_by_cid(
+            controllers
+                .into_iter()
+                .filter(|c| !c.callsign.ends_with("_SUP")),
+        );
 
         VatsimSyncMetrics::set_controllers_seen(current.len());
 
