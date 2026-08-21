@@ -919,14 +919,37 @@ impl ClientManager {
             positions_changed: false,
         };
 
+        let grace_period = self.position_grace_period;
+
+        #[derive(Debug, Clone, Copy)]
+        enum MissingConnection {
+            NotInDataFeed,
+            UnknownFacilityType,
+        }
+
         fn disconnect_or_mark_pending(
             cid: &ClientId,
+            session: &ClientSession,
+            grace_period: Duration,
+            cause: MissingConnection,
             pending_disconnect: &mut HashSet<ClientId>,
             disconnected_clients: &mut Vec<(ClientId, DisconnectReason)>,
         ) {
+            // The datafeed trails the slurper, so a client that just logged in
+            // is legitimately absent from the feed for the first sync ticks.
+            if session.is_within_position_grace_period(&grace_period) {
+                tracing::debug!(
+                    ?cid,
+                    ?cause,
+                    "No usable VATSIM connection in the data feed, but client is within grace period after connecting, skipping disconnect"
+                );
+                return;
+            }
+
             if pending_disconnect.remove(cid) {
                 tracing::trace!(
                     ?cid,
+                    ?cause,
                     "No active VATSIM connection found after grace period, disconnecting client and sending broadcast"
                 );
                 disconnected_clients
@@ -934,11 +957,16 @@ impl ClientManager {
             } else {
                 tracing::trace!(
                     ?cid,
-                    "Client not found in data feed, but active VATSIM connection is required, marking for disconnect"
+                    ?cause,
+                    "No usable VATSIM connection in the data feed, but active VATSIM connection is required, marking for disconnect"
                 );
                 pending_disconnect.insert(cid.clone());
             }
         }
+
+        // remove_client cannot reach this set, so a client that leaves while
+        // marked would keep its mark into its next session.
+        pending_disconnect.retain(|cid| clients.contains_key(cid));
 
         for (cid, session) in clients.iter_mut() {
             tracing::trace!(?cid, ?session, "Checking session for client info update");
@@ -948,6 +976,9 @@ impl ClientManager {
                     if require_active_connection {
                         disconnect_or_mark_pending(
                             cid,
+                            session,
+                            grace_period,
+                            MissingConnection::UnknownFacilityType,
                             pending_disconnect,
                             &mut result.disconnected_clients,
                         );
@@ -957,6 +988,9 @@ impl ClientManager {
                     if require_active_connection {
                         disconnect_or_mark_pending(
                             cid,
+                            session,
+                            grace_period,
+                            MissingConnection::NotInDataFeed,
                             pending_disconnect,
                             &mut result.disconnected_clients,
                         );
@@ -975,7 +1009,7 @@ impl ClientManager {
                     // resolves the correct position immediately, but the
                     // datafeed may still report a stale frequency for a
                     // few update cycles.
-                    if session.is_within_position_grace_period(&self.position_grace_period) {
+                    if session.is_within_position_grace_period(&grace_period) {
                         tracing::debug!(
                             ?cid,
                             ?controller,
@@ -5067,5 +5101,133 @@ controlled_by = ["LOWW_DEL"]
                 println!("Scenario passed: {name}");
             }
         }
+    }
+
+    #[tokio::test]
+    async fn client_missing_from_data_feed_is_kept_within_grace_period() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        let (_client, _rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        let mut pending = HashSet::new();
+        for _ in 0..3 {
+            let disconnected = manager
+                .sync_vatsim_state(&HashMap::new(), &mut pending, true)
+                .await;
+            assert!(disconnected.is_empty());
+        }
+
+        assert!(
+            pending.is_empty(),
+            "client within the grace period must not be marked for disconnect"
+        );
+    }
+
+    #[tokio::test]
+    async fn client_missing_from_data_feed_is_disconnected_after_grace_period() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        let (_client, _rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        manager.expire_position_grace_period(&cid("client0")).await;
+
+        let mut pending = HashSet::new();
+        let disconnected = manager
+            .sync_vatsim_state(&HashMap::new(), &mut pending, true)
+            .await;
+        assert!(
+            disconnected.is_empty(),
+            "first tick after the grace period only marks the client"
+        );
+        assert!(pending.contains(&cid("client0")));
+
+        let disconnected = manager
+            .sync_vatsim_state(&HashMap::new(), &mut pending, true)
+            .await;
+        assert_eq!(
+            disconnected,
+            vec![(cid("client0"), DisconnectReason::NoActiveVatsimConnection)]
+        );
+    }
+
+    #[tokio::test]
+    async fn client_back_in_data_feed_clears_pending_disconnect() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        let (_client, _rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        manager.expire_position_grace_period(&cid("client0")).await;
+
+        let mut pending = HashSet::new();
+        manager
+            .sync_vatsim_state(&HashMap::new(), &mut pending, true)
+            .await;
+        assert!(pending.contains(&cid("client0")));
+
+        let controllers = HashMap::from([(
+            cid("client0"),
+            controller("client0", "LOWW_APP", "134.675", FacilityType::Approach),
+        )]);
+        let disconnected = manager
+            .sync_vatsim_state(&controllers, &mut pending, true)
+            .await;
+
+        assert!(disconnected.is_empty());
+        assert!(pending.is_empty());
+    }
+
+    #[tokio::test]
+    async fn pending_disconnect_marks_of_gone_clients_are_dropped() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        let (_client, _rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        manager.expire_position_grace_period(&cid("client0")).await;
+
+        let mut pending = HashSet::from([cid("client0"), cid("gone")]);
+        let disconnected = manager
+            .sync_vatsim_state(&HashMap::new(), &mut pending, true)
+            .await;
+
+        assert_eq!(
+            disconnected,
+            vec![(cid("client0"), DisconnectReason::NoActiveVatsimConnection)]
+        );
+        assert!(
+            !pending.contains(&cid("gone")),
+            "marks of clients that are no longer connected must be pruned"
+        );
     }
 }
