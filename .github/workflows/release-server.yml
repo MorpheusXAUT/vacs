@@ -18,6 +18,11 @@ on:
 
 permissions: {}
 
+# Never cancel a half-finished release.
+concurrency:
+  group: release-server-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -70,6 +75,28 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }},match=(\d+\.\d+\.\d+.*),enable=${{ github.event_name == 'workflow_dispatch' }}
             type=semver,pattern={{major}},value=${{ inputs.version }},match=(\d+\.\d+\.\d+.*),enable=${{ github.event_name == 'workflow_dispatch' }}
 
+      # Scan before pushing, so a CRITICAL/HIGH finding never reaches GHCR; the pushed
+      # build below reuses this build's layers from the buildx cache.
+      - name: Build image for scan
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: vacs-server/Dockerfile
+          load: true
+          push: false
+          tags: vacs-server:scan
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE_NAME }}:latest
+
+      - name: Trivy scan (pre-push gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: vacs-server:scan
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+
       - name: Build and push
         id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -83,16 +110,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.CACHE_IMAGE_NAME }}:latest
           cache-to: type=registry,ref=${{ env.CACHE_IMAGE_NAME }}:latest,mode=max
-
-      - name: Trivy scan
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-          format: "table"
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: "os,library"
-          severity: "CRITICAL,HIGH"
 
       - name: Attest build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
