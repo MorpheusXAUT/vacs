@@ -65,9 +65,9 @@ impl ClientSession {
         self.client_info.position_id.as_ref()
     }
 
-    /// Returns `true` if the client connected recently enough that position
-    /// changes from the datafeed should be ignored (the datafeed may not have
-    /// caught up with the slurper-derived position yet).
+    /// Returns `true` if the client connected recently enough that the datafeed
+    /// may not have caught up with the slurper yet. During this window, position
+    /// changes are ignored and missing-connection disconnects are suppressed.
     #[inline]
     pub fn is_within_position_grace_period(&self, grace_period: &Duration) -> bool {
         self.connected_at.elapsed() < *grace_period
