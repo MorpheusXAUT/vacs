@@ -325,11 +325,7 @@ impl AppState {
         tracing::trace!(elapsed = ?fetch_elapsed, "Finished retrieving VATSIM controllers");
 
         let start_sync = std::time::Instant::now();
-        let current = ControllerInfo::index_by_cid(
-            controllers
-                .into_iter()
-                .filter(|c| !c.callsign.ends_with("_SUP")),
-        );
+        let current = ControllerInfo::index_by_cid(controllers);
 
         VatsimSyncMetrics::set_controllers_seen(current.len());
 

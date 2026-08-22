@@ -57,6 +57,8 @@ impl ControllerInfo {
     /// zero one, then the higher facility type wins. Remaining ties are
     /// broken by callsign, so the result never depends on the order of
     /// entries in the feed.
+    ///
+    /// Supervisor (`_SUP`) connections are dropped entirely.
     pub fn index_by_cid<I>(controllers: I) -> HashMap<ClientId, ControllerInfo>
     where
         I: IntoIterator<Item = ControllerInfo>,
@@ -90,6 +92,10 @@ impl ControllerInfo {
         let mut by_cid: HashMap<ClientId, ControllerInfo> = HashMap::new();
 
         for controller in controllers {
+            if controller.callsign.ends_with("_SUP") {
+                continue;
+            }
+
             match by_cid.entry(controller.cid.clone()) {
                 Entry::Occupied(mut entry) => {
                     if rank(&controller) > rank(entry.get()) {
@@ -430,6 +436,17 @@ mod tests {
             by_cid[&ClientId::from("1000001")].facility_type,
             FacilityType::Unknown
         );
+    }
+
+    #[test]
+    fn index_by_cid_drops_supervisor_connections() {
+        let by_cid = ControllerInfo::index_by_cid(vec![
+            controller("1000001", "XX_SUP"),
+            controller("1000000", "LOWW_TWR"),
+        ]);
+
+        assert_eq!(by_cid.len(), 1);
+        assert!(!by_cid.contains_key(&ClientId::from("1000001")));
     }
 
     #[test]

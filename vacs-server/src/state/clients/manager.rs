@@ -297,11 +297,7 @@ impl ClientManager {
                     let became_vatsim_only = if let Some((Some(controllers), vacs_client_ids)) =
                         prefetched_vatsim_transition
                     {
-                        let controllers = ControllerInfo::index_by_cid(
-                            controllers
-                                .into_iter()
-                                .filter(|c| !c.callsign.ends_with("_SUP")),
-                        );
+                        let controllers = ControllerInfo::index_by_cid(controllers);
                         let vacs_client_ids: HashSet<&ClientId> = vacs_client_ids.iter().collect();
                         let mut vacs_positions = online_positions.clone();
                         vacs_positions.remove(position_id);
