@@ -773,7 +773,6 @@ impl ClientManager {
     pub async fn sync_vatsim_state(
         &self,
         controllers: &HashMap<ClientId, ControllerInfo>,
-        pending_disconnect: &mut HashSet<ClientId>,
         require_active_connection: bool,
     ) -> Vec<(ClientId, DisconnectReason)> {
         let mut coverage_changes: Vec<StationChange> = Vec::new();
@@ -796,7 +795,6 @@ impl ClientManager {
 
             let mut sync = self.sync_client_positions(
                 controllers,
-                pending_disconnect,
                 require_active_connection,
                 &mut clients,
                 &mut online_positions,
@@ -897,6 +895,15 @@ impl ClientManager {
         sync.disconnected_clients
     }
 
+    pub async fn pending_disconnect_count(&self) -> usize {
+        self.clients
+            .read()
+            .await
+            .values()
+            .filter(|session| session.is_pending_disconnect())
+            .count()
+    }
+
     /// Iterates all connected vacs clients and checks each against the VATSIM
     /// datafeed. Handles disconnect decisions, position changes (including
     /// updating `online_positions`), and collects session info updates,
@@ -904,7 +911,6 @@ impl ClientManager {
     fn sync_client_positions(
         &self,
         controllers: &HashMap<ClientId, ControllerInfo>,
-        pending_disconnect: &mut HashSet<ClientId>,
         require_active_connection: bool,
         clients: &mut HashMap<ClientId, ClientSession>,
         online_positions: &mut HashMap<PositionId, HashSet<ClientId>>,
@@ -929,14 +935,15 @@ impl ClientManager {
 
         fn disconnect_or_mark_pending(
             cid: &ClientId,
-            session: &ClientSession,
+            session: &mut ClientSession,
             grace_period: Duration,
             cause: MissingConnection,
-            pending_disconnect: &mut HashSet<ClientId>,
             disconnected_clients: &mut Vec<(ClientId, DisconnectReason)>,
         ) {
             // The datafeed trails the slurper, so a client that just logged in
             // is legitimately absent from the feed for the first sync ticks.
+            // No mark can exist here: marks are only set after the grace
+            // period expired, and connected_at never changes.
             if session.is_within_position_grace_period(&grace_period) {
                 tracing::debug!(
                     ?cid,
@@ -946,7 +953,7 @@ impl ClientManager {
                 return;
             }
 
-            if pending_disconnect.remove(cid) {
+            if session.take_pending_disconnect() {
                 tracing::trace!(
                     ?cid,
                     ?cause,
@@ -960,13 +967,9 @@ impl ClientManager {
                     ?cause,
                     "No usable VATSIM connection in the data feed, but active VATSIM connection is required, marking for disconnect"
                 );
-                pending_disconnect.insert(cid.clone());
+                session.mark_pending_disconnect();
             }
         }
-
-        // remove_client cannot reach this set, so a client that leaves while
-        // marked would keep its mark into its next session.
-        pending_disconnect.retain(|cid| clients.contains_key(cid));
 
         for (cid, session) in clients.iter_mut() {
             tracing::trace!(?cid, ?session, "Checking session for client info update");
@@ -979,7 +982,6 @@ impl ClientManager {
                             session,
                             grace_period,
                             MissingConnection::UnknownFacilityType,
-                            pending_disconnect,
                             &mut result.disconnected_clients,
                         );
                     }
@@ -991,13 +993,12 @@ impl ClientManager {
                             session,
                             grace_period,
                             MissingConnection::NotInDataFeed,
-                            pending_disconnect,
                             &mut result.disconnected_clients,
                         );
                     }
                 }
                 Some(controller) => {
-                    if pending_disconnect.remove(cid) {
+                    if session.take_pending_disconnect() {
                         tracing::trace!(
                             ?cid,
                             "Found active VATSIM connection for client again, removing pending disconnect"
@@ -1043,7 +1044,6 @@ impl ClientManager {
                                 ?new_positions,
                                 "Multiple positions found for updated client info, disconnecting as ambiguous"
                             );
-                            pending_disconnect.remove(cid);
                             result.disconnected_clients.push((
                                 cid.clone(),
                                 DisconnectReason::AmbiguousVatsimPosition(
@@ -1491,6 +1491,15 @@ impl ClientManager {
             session.expire_position_grace_period();
         }
     }
+
+    #[cfg(test)]
+    pub async fn is_pending_disconnect(&self, client_id: &ClientId) -> bool {
+        self.clients
+            .read()
+            .await
+            .get(client_id)
+            .is_some_and(|session| session.is_pending_disconnect())
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1800,9 +1809,7 @@ mod tests {
             ),
         ]);
 
-        let disconnected = manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        let disconnected = manager.sync_vatsim_state(&vatsim_controllers, false).await;
         assert!(disconnected.is_empty());
 
         let stations = manager
@@ -1877,9 +1884,7 @@ mod tests {
                 controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         // LOWW_TWR station is NOT callable (VATSIM-only)
         let stations = manager
@@ -2020,9 +2025,7 @@ mod tests {
                 controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         // After sync, LOWW_TWR becomes VATSIM-only → CTR client sees it go Offline
         let changes_after_sync = drain_messages(&mut rx_ctr).station_changes;
@@ -2166,9 +2169,7 @@ mod tests {
                 controller("vatsim_twr", "LOWW_TWR", "119.400", FacilityType::Tower),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         // Stations now go Offline for the CTR client (VATSIM-only is invisible)
         let changes_after_sync = drain_messages(&mut rx_ctr).station_changes;
@@ -2372,9 +2373,7 @@ mod tests {
                 ),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         let stations = manager
             .list_stations(&ActiveProfile::Custom, Some(&pos("LOVV_CTR")))
@@ -2443,9 +2442,7 @@ mod tests {
                 controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         assert!(!manager.vatsim_only_positions.read().await.is_empty());
         assert!(!manager.online_stations.read().await.is_empty());
@@ -2491,9 +2488,7 @@ mod tests {
                 controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         // LOWW_TWR station exists internally but has no callable clients
         let clients = manager.clients_for_station(&station("LOWW_TWR")).await;
@@ -2754,9 +2749,7 @@ mod tests {
                 controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         assert!(
             manager
@@ -2821,9 +2814,7 @@ mod tests {
                 ),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         assert!(
             manager
@@ -3283,9 +3274,7 @@ controlled_by = ["LOWW_DEL"]
                 controller("vatsim_client1", "LOWW_TWR", "119.400", FacilityType::Tower),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         // Client received Offline for LOWW_TWR/GND/DEL (now VATSIM-only)
         let changes_after_sync = drain_messages(&mut rx).station_changes;
@@ -3458,9 +3447,7 @@ controlled_by = ["LOWW_DEL"]
                 ),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&vatsim_controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&vatsim_controllers, false).await;
 
         // No station changes - LOVV_CTR is VATSIM-only but controls nothing
         // (all stations already covered by higher-priority LOWW_APP)
@@ -3727,9 +3714,7 @@ controlled_by = ["LOWW_DEL"]
                 controller("client0", "LOWW_APP", "134.675", FacilityType::Approach),
             ),
         ]);
-        let disconnected = manager
-            .sync_vatsim_state(&controllers, &mut HashSet::new(), false)
-            .await;
+        let disconnected = manager.sync_vatsim_state(&controllers, false).await;
         assert!(disconnected.is_empty());
 
         let messages = drain_messages(&mut rx);
@@ -3809,9 +3794,7 @@ controlled_by = ["LOWW_DEL"]
                 controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&controllers, false).await;
         let messages = drain_messages(&mut rx);
         // Profile changed from None to Specific(CTR_PROFILE)
         assert_eq!(messages.session_infos.len(), 1);
@@ -3832,9 +3815,7 @@ controlled_by = ["LOWW_DEL"]
                 controller("client0", "LOWW_APP", "134.675", FacilityType::Approach),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&controllers2, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&controllers2, false).await;
         let messages2 = drain_messages(&mut rx);
 
         // Should get a new SessionInfo and a new StationList for the APP profile
@@ -3872,9 +3853,7 @@ controlled_by = ["LOWW_DEL"]
             cid("client0"),
             controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
         )]);
-        manager
-            .sync_vatsim_state(&controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&controllers, false).await;
 
         let messages = drain_messages(&mut rx);
         assert!(
@@ -3919,9 +3898,7 @@ controlled_by = ["LOWW_DEL"]
             cid("client0"),
             controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
         )]);
-        manager
-            .sync_vatsim_state(&controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&controllers, false).await;
 
         let messages = drain_messages(&mut rx);
         assert_eq!(
@@ -3960,9 +3937,7 @@ controlled_by = ["LOWW_DEL"]
             cid("client0"),
             controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
         )]);
-        manager
-            .sync_vatsim_state(&controllers, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&controllers, false).await;
 
         let messages = drain_messages(&mut rx);
         assert!(
@@ -4146,9 +4121,7 @@ controlled_by = ["LOWW_DEL"]
                 controller("vatsim1", "LOWW_TWR", "119.400", FacilityType::Tower),
             ),
         ]);
-        manager
-            .sync_vatsim_state(&controllers1, &mut HashSet::new(), false)
-            .await;
+        manager.sync_vatsim_state(&controllers1, false).await;
         drain_messages(&mut rx);
 
         let vatsim_only = manager.vatsim_only_positions.read().await;
@@ -4179,9 +4152,7 @@ controlled_by = ["LOWW_DEL"]
                 controller("vatsim2", "LOWW_APP", "134.675", FacilityType::Approach),
             ),
         ]);
-        let disconnected = manager
-            .sync_vatsim_state(&controllers2, &mut HashSet::new(), false)
-            .await;
+        let disconnected = manager.sync_vatsim_state(&controllers2, false).await;
         assert!(disconnected.is_empty());
 
         // LOWW_TWR should now be a vacs position
@@ -4243,8 +4214,7 @@ controlled_by = ["LOWW_DEL"]
                     cid("client0"),
                     controller("client0", "LOVV_CTR", "132.600", FacilityType::Enroute),
                 )]);
-                m2.sync_vatsim_state(&controllers, &mut HashSet::new(), false)
-                    .await
+                m2.sync_vatsim_state(&controllers, false).await
             }
         );
 
@@ -4360,8 +4330,7 @@ controlled_by = ["LOWW_DEL"]
                     cid("other"),
                     controller("other", "LOVV_CTR", "132.600", FacilityType::Enroute),
                 )]);
-                let mut pending = HashSet::new();
-                m.sync_vatsim_state(&controllers, &mut pending, false).await;
+                m.sync_vatsim_state(&controllers, false).await;
             })
         };
 
@@ -4436,8 +4405,7 @@ controlled_by = ["LOWW_DEL"]
                     cid("c0"),
                     controller("c0", "LOVV_CTR", "132.600", FacilityType::Enroute),
                 )]);
-                m.sync_vatsim_state(&controllers, &mut HashSet::new(), false)
-                    .await;
+                m.sync_vatsim_state(&controllers, false).await;
             }));
         }
 
@@ -4681,7 +4649,6 @@ controlled_by = ["LOWW_DEL"]
         struct ScenarioContext {
             manager: ClientManager,
             receivers: HashMap<String, mpsc::Receiver<ServerMessage>>,
-            pending_disconnect: HashSet<ClientId>,
             /// Present when using a synthetic network (tempdir-backed).
             _dir: Option<tempfile::TempDir>,
         }
@@ -4729,7 +4696,6 @@ controlled_by = ["LOWW_DEL"]
             ScenarioContext {
                 manager,
                 receivers: HashMap::new(),
-                pending_disconnect: HashSet::new(),
                 _dir: dir,
             }
         }
@@ -4877,16 +4843,12 @@ controlled_by = ["LOWW_DEL"]
                     }
                     Step::Datafeed(s) => {
                         let controllers = controllers_from_vec(&s.controllers);
-                        ctx.manager
-                            .sync_vatsim_state(&controllers, &mut ctx.pending_disconnect, false)
-                            .await;
+                        ctx.manager.sync_vatsim_state(&controllers, false).await;
                     }
                     Step::DatafeedFile(relative_path) => {
                         let feed = load_datafeed_file(scenario_dir, relative_path);
                         let controllers = controllers_from_vec(&feed);
-                        ctx.manager
-                            .sync_vatsim_state(&controllers, &mut ctx.pending_disconnect, false)
-                            .await;
+                        ctx.manager.sync_vatsim_state(&controllers, false).await;
                     }
                     Step::DrainMessages(s) => {
                         let rx = ctx.receivers.get_mut(&s.client_id).unwrap_or_else(|| {
@@ -5117,16 +5079,13 @@ controlled_by = ["LOWW_DEL"]
             .await
             .unwrap();
 
-        let mut pending = HashSet::new();
         for _ in 0..3 {
-            let disconnected = manager
-                .sync_vatsim_state(&HashMap::new(), &mut pending, true)
-                .await;
+            let disconnected = manager.sync_vatsim_state(&HashMap::new(), true).await;
             assert!(disconnected.is_empty());
         }
 
         assert!(
-            pending.is_empty(),
+            !manager.is_pending_disconnect(&cid("client0")).await,
             "client within the grace period must not be marked for disconnect"
         );
     }
@@ -5147,19 +5106,14 @@ controlled_by = ["LOWW_DEL"]
 
         manager.expire_position_grace_period(&cid("client0")).await;
 
-        let mut pending = HashSet::new();
-        let disconnected = manager
-            .sync_vatsim_state(&HashMap::new(), &mut pending, true)
-            .await;
+        let disconnected = manager.sync_vatsim_state(&HashMap::new(), true).await;
         assert!(
             disconnected.is_empty(),
             "first tick after the grace period only marks the client"
         );
-        assert!(pending.contains(&cid("client0")));
+        assert!(manager.is_pending_disconnect(&cid("client0")).await);
 
-        let disconnected = manager
-            .sync_vatsim_state(&HashMap::new(), &mut pending, true)
-            .await;
+        let disconnected = manager.sync_vatsim_state(&HashMap::new(), true).await;
         assert_eq!(
             disconnected,
             vec![(cid("client0"), DisconnectReason::NoActiveVatsimConnection)]
@@ -5182,26 +5136,21 @@ controlled_by = ["LOWW_DEL"]
 
         manager.expire_position_grace_period(&cid("client0")).await;
 
-        let mut pending = HashSet::new();
-        manager
-            .sync_vatsim_state(&HashMap::new(), &mut pending, true)
-            .await;
-        assert!(pending.contains(&cid("client0")));
+        manager.sync_vatsim_state(&HashMap::new(), true).await;
+        assert!(manager.is_pending_disconnect(&cid("client0")).await);
 
         let controllers = HashMap::from([(
             cid("client0"),
             controller("client0", "LOWW_APP", "134.675", FacilityType::Approach),
         )]);
-        let disconnected = manager
-            .sync_vatsim_state(&controllers, &mut pending, true)
-            .await;
+        let disconnected = manager.sync_vatsim_state(&controllers, true).await;
 
         assert!(disconnected.is_empty());
-        assert!(pending.is_empty());
+        assert!(!manager.is_pending_disconnect(&cid("client0")).await);
     }
 
     #[tokio::test]
-    async fn pending_disconnect_marks_of_gone_clients_are_dropped() {
+    async fn pending_disconnect_mark_does_not_survive_a_reconnect() {
         let (_dir, network) = create_lovv_network();
         let manager = client_manager(network);
 
@@ -5216,18 +5165,31 @@ controlled_by = ["LOWW_DEL"]
 
         manager.expire_position_grace_period(&cid("client0")).await;
 
-        let mut pending = HashSet::from([cid("client0"), cid("gone")]);
-        let disconnected = manager
-            .sync_vatsim_state(&HashMap::new(), &mut pending, true)
-            .await;
+        manager.sync_vatsim_state(&HashMap::new(), true).await;
+        assert!(manager.is_pending_disconnect(&cid("client0")).await);
 
+        manager.remove_client(cid("client0"), None).await;
+        let (_client, _rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+        manager.expire_position_grace_period(&cid("client0")).await;
+
+        let disconnected = manager.sync_vatsim_state(&HashMap::new(), true).await;
+        assert!(
+            disconnected.is_empty(),
+            "a reconnected client must get the full mark-then-confirm cycle again"
+        );
+        assert!(manager.is_pending_disconnect(&cid("client0")).await);
+
+        let disconnected = manager.sync_vatsim_state(&HashMap::new(), true).await;
         assert_eq!(
             disconnected,
             vec![(cid("client0"), DisconnectReason::NoActiveVatsimConnection)]
-        );
-        assert!(
-            !pending.contains(&cid("gone")),
-            "marks of clients that are no longer connected must be pruned"
         );
     }
 }

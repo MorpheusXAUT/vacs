@@ -32,6 +32,8 @@ pub struct ClientSession {
     client_shutdown_tx: watch::Sender<Option<DisconnectReason>>,
     client_connection_guard: Arc<Mutex<ClientConnectionGuard>>,
     connected_at: Instant,
+    /// Only the copy in `ClientManager::clients` is authoritative; clones go stale.
+    pending_disconnect: bool,
 }
 
 impl ClientSession {
@@ -49,6 +51,7 @@ impl ClientSession {
             client_shutdown_tx,
             client_connection_guard: Arc::new(Mutex::new(client_connection_guard)),
             connected_at: Instant::now(),
+            pending_disconnect: false,
         }
     }
 
@@ -68,6 +71,23 @@ impl ClientSession {
     #[inline]
     pub fn is_within_position_grace_period(&self, grace_period: &Duration) -> bool {
         self.connected_at.elapsed() < *grace_period
+    }
+
+    /// Marks the session for disconnect. The mark dies with the session, so a
+    /// reconnect always starts unmarked.
+    #[inline]
+    pub fn mark_pending_disconnect(&mut self) {
+        self.pending_disconnect = true;
+    }
+
+    /// Clears a pending disconnect mark, returning whether one was set.
+    #[inline]
+    pub fn take_pending_disconnect(&mut self) -> bool {
+        std::mem::take(&mut self.pending_disconnect)
+    }
+
+    pub fn is_pending_disconnect(&self) -> bool {
+        self.pending_disconnect
     }
 
     #[inline]
