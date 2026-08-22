@@ -518,8 +518,10 @@ impl ClientSession {
     }
 
     #[cfg(test)]
-    pub fn expire_position_grace_period(&mut self) {
-        self.connected_at = Instant::now() - Duration::from_secs(90);
+    pub fn expire_position_grace_period(&mut self, grace_period: &Duration) {
+        self.connected_at = Instant::now()
+            .checked_sub(*grace_period)
+            .expect("monotonic clock too young to rewind past the grace period");
     }
 }
 

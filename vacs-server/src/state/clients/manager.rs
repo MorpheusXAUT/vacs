@@ -1484,7 +1484,7 @@ impl ClientManager {
     #[cfg(test)]
     pub async fn expire_position_grace_period(&self, client_id: &ClientId) {
         if let Some(session) = self.clients.write().await.get_mut(client_id) {
-            session.expire_position_grace_period();
+            session.expire_position_grace_period(&self.position_grace_period);
         }
     }
 
@@ -5114,6 +5114,63 @@ controlled_by = ["LOWW_DEL"]
         assert!(manager.is_pending_disconnect(&cid("client0")).await);
 
         let disconnected = manager.sync_vatsim_state(&HashMap::new(), true).await;
+        assert_eq!(
+            disconnected,
+            vec![(cid("client0"), DisconnectReason::NoActiveVatsimConnection)]
+        );
+    }
+
+    #[tokio::test]
+    async fn observer_only_client_is_kept_within_grace_period() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        let (_client, _rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        let controllers = HashMap::from([(
+            cid("client0"),
+            controller("client0", "LOWW_OBS", "199.998", FacilityType::Unknown),
+        )]);
+        for _ in 0..3 {
+            let disconnected = manager.sync_vatsim_state(&controllers, true).await;
+            assert!(disconnected.is_empty());
+        }
+
+        assert!(!manager.is_pending_disconnect(&cid("client0")).await);
+    }
+
+    #[tokio::test]
+    async fn observer_only_client_is_disconnected_after_grace_period() {
+        let (_dir, network) = create_lovv_network();
+        let manager = client_manager(network);
+
+        let (_client, _rx) = manager
+            .add_client(
+                client_info("client0", "LOWW_APP", "134.675"),
+                ActiveProfile::Custom,
+                ClientConnectionGuard::default(),
+            )
+            .await
+            .unwrap();
+
+        manager.expire_position_grace_period(&cid("client0")).await;
+
+        let controllers = HashMap::from([(
+            cid("client0"),
+            controller("client0", "LOWW_OBS", "199.998", FacilityType::Unknown),
+        )]);
+        let disconnected = manager.sync_vatsim_state(&controllers, true).await;
+        assert!(disconnected.is_empty());
+        assert!(manager.is_pending_disconnect(&cid("client0")).await);
+
+        let disconnected = manager.sync_vatsim_state(&controllers, true).await;
         assert_eq!(
             disconnected,
             vec![(cid("client0"), DisconnectReason::NoActiveVatsimConnection)]
