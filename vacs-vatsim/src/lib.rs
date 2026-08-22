@@ -48,21 +48,25 @@ impl ControllerInfo {
     ///
     /// A CID can hold several connections at once, for example a controller
     /// staffing a position while also running TowerView as an observer. Only
-    /// one of those is the position the controller is working, so entries
-    /// whose callsign resolves to a facility type win over
-    /// [`FacilityType::Unknown`] ones regardless of their order in the feed.
+    /// one of those is the position the controller is working: a resolvable
+    /// facility type wins over [`FacilityType::Unknown`], and the core
+    /// hierarchy (ramp through flight service station) outranks auxiliary
+    /// facilities (radio, traffic flow). Ties are broken by callsign, so the
+    /// result never depends on the order of entries in the feed.
     pub fn index_by_cid<I>(controllers: I) -> HashMap<ClientId, ControllerInfo>
     where
         I: IntoIterator<Item = ControllerInfo>,
     {
+        fn rank(controller: &ControllerInfo) -> (FacilityType, &str) {
+            (controller.facility_type, controller.callsign.as_str())
+        }
+
         let mut by_cid: HashMap<ClientId, ControllerInfo> = HashMap::new();
 
         for controller in controllers {
             match by_cid.entry(controller.cid.clone()) {
                 Entry::Occupied(mut entry) => {
-                    if entry.get().facility_type == FacilityType::Unknown
-                        && controller.facility_type != FacilityType::Unknown
-                    {
+                    if rank(&controller) > rank(entry.get()) {
                         entry.insert(controller);
                     }
                 }
@@ -78,10 +82,16 @@ impl ControllerInfo {
 
 /// Enum representing the different VATSIM facility types as parsed from their respective callsign suffixes
 /// (in accordance with the [VATSIM GCAP](https://vatsim.net/docs/policy/global-controller-administration-policy).
+///
+/// Variants are declared in ascending priority order: the derived [`Ord`] picks
+/// the worked position among simultaneous connections, with auxiliary
+/// facilities below the core controlling hierarchy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub enum FacilityType {
     #[default]
     Unknown,
+    TrafficFlow,
+    Radio,
     Ramp,
     Delivery,
     Ground,
@@ -90,8 +100,6 @@ pub enum FacilityType {
     Departure,
     Enroute,
     FlightServiceStation,
-    Radio,
-    TrafficFlow,
 }
 
 impl FacilityType {
@@ -232,6 +240,83 @@ mod tests {
                 "LOWW_TWR",
                 "the worked position must win over the observer connection"
             );
+        }
+    }
+
+    #[test]
+    fn index_by_cid_resolves_known_facility_duplicates_order_independently() {
+        for entries in [
+            vec![
+                controller("1000001", "LOWW_GND"),
+                controller("1000001", "LOWW_TWR"),
+            ],
+            vec![
+                controller("1000001", "LOWW_TWR"),
+                controller("1000001", "LOWW_GND"),
+            ],
+        ] {
+            let by_cid = ControllerInfo::index_by_cid(entries);
+
+            assert_eq!(by_cid.len(), 1);
+            assert_eq!(
+                by_cid[&ClientId::from("1000001")].callsign,
+                "LOWW_TWR",
+                "the highest facility type must win regardless of feed order"
+            );
+        }
+    }
+
+    #[test]
+    fn index_by_cid_ranks_auxiliary_facilities_below_the_core_hierarchy() {
+        for entries in [
+            vec![
+                controller("1000001", "LOVV_FMP"),
+                controller("1000001", "LOVV_CTR"),
+            ],
+            vec![
+                controller("1000001", "LOVV_CTR"),
+                controller("1000001", "LOVV_FMP"),
+            ],
+        ] {
+            let by_cid = ControllerInfo::index_by_cid(entries);
+
+            assert_eq!(by_cid[&ClientId::from("1000001")].callsign, "LOVV_CTR");
+        }
+    }
+
+    #[test]
+    fn index_by_cid_ranks_flight_service_station_above_enroute() {
+        for entries in [
+            vec![
+                controller("1000001", "LOVV_CTR"),
+                controller("1000001", "LOVV_FSS"),
+            ],
+            vec![
+                controller("1000001", "LOVV_FSS"),
+                controller("1000001", "LOVV_CTR"),
+            ],
+        ] {
+            let by_cid = ControllerInfo::index_by_cid(entries);
+
+            assert_eq!(by_cid[&ClientId::from("1000001")].callsign, "LOVV_FSS");
+        }
+    }
+
+    #[test]
+    fn index_by_cid_breaks_facility_ties_by_callsign() {
+        for entries in [
+            vec![
+                controller("1000001", "LOWW_TWR"),
+                controller("1000001", "LOWW_W_TWR"),
+            ],
+            vec![
+                controller("1000001", "LOWW_W_TWR"),
+                controller("1000001", "LOWW_TWR"),
+            ],
+        ] {
+            let by_cid = ControllerInfo::index_by_cid(entries);
+
+            assert_eq!(by_cid[&ClientId::from("1000001")].callsign, "LOWW_W_TWR");
         }
     }
 
