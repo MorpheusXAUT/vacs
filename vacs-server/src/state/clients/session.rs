@@ -530,6 +530,8 @@ impl Debug for ClientSession {
         f.debug_struct("ClientSession")
             .field("client_info", &self.client_info)
             .field("active_profile", &self.active_profile)
+            .field("connected_at", &self.connected_at)
+            .field("pending_disconnect", &self.pending_disconnect)
             .finish_non_exhaustive()
     }
 }
