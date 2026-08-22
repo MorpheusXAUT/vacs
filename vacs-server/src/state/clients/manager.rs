@@ -4703,11 +4703,11 @@ controlled_by = ["LOWW_DEL"]
         fn controllers_from_vec(
             datafeed_controllers: &[DatafeedController],
         ) -> HashMap<ClientId, ControllerInfo> {
-            datafeed_controllers
-                .iter()
-                .filter(|c| !c.callsign.ends_with("_SUP"))
-                .map(|c| c.to_controller_info())
-                .collect()
+            ControllerInfo::index_by_cid(
+                datafeed_controllers
+                    .iter()
+                    .map(|c| c.to_controller_info().1),
+            )
         }
 
         fn load_datafeed_file(scenario_dir: &Path, relative_path: &str) -> Vec<DatafeedController> {
