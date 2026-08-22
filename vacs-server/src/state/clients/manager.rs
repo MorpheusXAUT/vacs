@@ -1550,6 +1550,7 @@ mod tests {
             callsign: callsign.to_string(),
             frequency: freq.to_string(),
             facility_type: ft,
+            visual_range: None,
         }
     }
 
@@ -4523,6 +4524,8 @@ controlled_by = ["LOWW_DEL"]
             pub frequency: String,
             #[serde(default)]
             pub facility: Option<u8>,
+            #[serde(default)]
+            pub visual_range: Option<u32>,
         }
 
         impl DatafeedController {
@@ -4541,6 +4544,7 @@ controlled_by = ["LOWW_DEL"]
                     callsign: self.callsign.clone(),
                     frequency: self.frequency.clone(),
                     facility_type,
+                    visual_range: self.visual_range,
                 };
                 (cid, info)
             }
