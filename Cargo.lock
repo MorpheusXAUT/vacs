@@ -5098,8 +5098,9 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "opus"
-version = "0.3.1"
-source = "git+https://github.com/SpaceManiac/opus-rs?rev=559876660603dc8079a053e03e6438766f669e69#559876660603dc8079a053e03e6438766f669e69"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33718946cc77d4032911d4efe03a66dbcbfbd2bb16c3da06aaeadcc637c32216"
 dependencies = [
  "opusic-sys",
 ]

@@ -56,8 +56,7 @@ objc2-core-foundation = "0.3.1"
 objc2-core-graphics = "0.3.1"
 oauth2 = { version = "5.0.0", default-features = false }
 octocrab = "0.54.0"
-# Source-patched to an unreleased upstream commit, see [patch.crates-io].
-opus = "=0.3.1"
+opus = "0.4.0"
 parking_lot = "0.12.5"
 pipewire = "0.10.0"
 pretty_assertions = "1.4.1"
@@ -163,9 +162,6 @@ cpal = { git = "https://github.com/RustAudio/cpal", rev = "23ec3f74d0a05166e896f
 # https://github.com/maxcountryman/axum-login/pull/315 but has not published since; this fork is
 # 0.18.0 plus that PR. Drop once upstream releases a version containing it.
 axum-login = { git = "https://github.com/MorpheusXAUT/axum-login", rev = "ce98c33e1fe6db4a11ece0afa307ba880ff033a5" }
-# opus 0.3.1 still pulls the deprecated audiopus_sys. Upstream replaced it after that release,
-# so this rev is 0.3.1 plus the replacement. Drop once 0.3.2 is published.
-opus = { git = "https://github.com/SpaceManiac/opus-rs", rev = "559876660603dc8079a053e03e6438766f669e69" }
 # tower-sessions-redis-store 0.16.0 depends on tower-sessions-core 0.14 and blocks our
 # tower-sessions 0.15 bump. Upstream main carries the 0.15 support under the same, still
 # unpublished, 0.16.0 version number. Drop once a release newer than 0.16.0 is published.
