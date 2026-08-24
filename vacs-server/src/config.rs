@@ -180,7 +180,9 @@ pub struct VatsimConfig {
     pub data_feed_url: String,
     pub data_feed_timeout: Duration,
     /// After connecting, a client's position is frozen for this duration to allow the
-    /// VATSIM datafeed to catch up with the slurper-derived position assignment.
+    /// VATSIM datafeed to catch up with the slurper-derived position assignment. The
+    /// same window also suppresses missing-connection disconnects, so a client the
+    /// datafeed does not list yet is not kicked right after logging in.
     pub data_feed_position_grace_period: Duration,
     pub controller_update_interval: Duration,
     /// Path to the dataset coverage directory. Must be a **subdirectory** of
