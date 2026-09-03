@@ -32,6 +32,11 @@ pub(crate) mod window;
 pub fn handle_deep_link(app: AppHandle, url: String) {
     let url = url.to_string();
     tauri::async_runtime::spawn(async move {
+        if app.try_state::<AppState>().is_none() {
+            log::warn!("Ignoring deep link, app startup has not finished yet");
+            return;
+        }
+
         if let Err(err) = auth::handle_auth_callback(&app, &url).await {
             app.emit("auth:error", Value::Null).ok();
             app.emit::<FrontendError>("error", err.into()).ok();
