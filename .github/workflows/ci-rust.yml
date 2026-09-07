@@ -85,7 +85,7 @@ jobs:
           persist-credentials: false
 
       - name: Install build dependencies (Linux)
-        uses: ./.github/actions/install-linux-deps
+        uses: $/.github/actions/install-linux-deps
 
       - name: Free disk space on runner
         run: rm -rf /opt/hostedtoolcache
@@ -144,7 +144,7 @@ jobs:
 
       - name: Install build dependencies (Linux)
         if: matrix.platform == 'ubuntu-24.04'
-        uses: ./.github/actions/install-linux-deps
+        uses: $/.github/actions/install-linux-deps
 
       - name: Install build dependencies (macOS, aarch64)
         if: matrix.platform == 'macos-latest' && matrix.arch == 'aarch64'
@@ -154,7 +154,7 @@ jobs:
 
       - name: Install build dependencies (Windows)
         if: matrix.platform == 'windows-latest'
-        uses: ./.github/actions/install-windows-deps
+        uses: $/.github/actions/install-windows-deps
 
       - name: Rust toolchain
         run: |
